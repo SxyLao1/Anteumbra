@@ -18,10 +18,10 @@
 - **threat_graph dataclasses**: deduplicated — canonical definitions in `infrastructure/models.py`
 
 ### Fixed
-- **P0-3: ScanResult triple definition** — `domain/entities.py`, `domain/detector.py`, `infrastructure/models.py` → unified dataclass in `domain/entities.py` (10 fields merged)
-- **P2-3: html_escape** — custom implementation → `markupsafe.escape()` (Flask standard)
-- **P2-4: EmergencyScanner** — `advanced_bypass` module ImportError → safe fallback
-- **P2-5: DummyEngine** — `__getattr__` implicit return → explicit `compiled_rules`/`match` methods
+- **ScanResult definitions unified** — three separate definitions (`domain/entities.py`, `domain/detector.py`, `infrastructure/models.py`) merged into single dataclass in `domain/entities.py` with all 10 fields
+- **html_escape** — custom implementation replaced with `markupsafe.escape()` (Flask standard library)
+- **EmergencyScanner** — `advanced_bypass` module import wrapped in try/except to prevent crash when module is unavailable
+- **DummyEngine (YARA fallback)** — replaced `__getattr__` catch-all with explicit `compiled_rules`/`match` methods for safer fallback behavior
 - **Jinja2 syntax errors** × 2: nested `{{ }}` in notify_config.html, `_()` inside string literal in monitor_content.html
 - **Version drift**: config.toml (1.0.1) / __init__.py (1.0.2) / pyproject.toml (1.0.4) → all unified
 
