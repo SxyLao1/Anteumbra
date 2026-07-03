@@ -30,7 +30,7 @@
          hx-get="/admin/records?compact=1"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading records...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
     </div>
   </div>
 
@@ -40,7 +40,7 @@
          hx-get="/admin/quarantine?status=quarantined"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading quarantine...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading quarantine...') }}</p></div>
     </div>
   </div>
 
@@ -50,7 +50,7 @@
          hx-get="/admin/records?audit=true&compact=1"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading audit log...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading audit log...') }}</p></div>
     </div>
   </div>
 
@@ -60,7 +60,7 @@
          hx-get="/admin/file-clusters"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading clusters...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading clusters...') }}</p></div>
     </div>
   </div>
 </div>

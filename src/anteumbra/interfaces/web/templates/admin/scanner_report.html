@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Scan Report — {{ result.scan_id }}</title>
+<title>{{ _('Scan Report') }} — {{ result.scan_id }}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a0a; color: #ccc; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.6; padding: 20px; }
@@ -39,58 +39,58 @@
 <body>
 <div class="container">
   <div class="toolbar">
-    <button onclick="window.print()">Print / Save PDF</button>
-    <button onclick="window.close()">Close</button>
+    <button onclick="window.print()">{{ _('Print / Save PDF') }}</button>
+    <button onclick="window.close()">{{ _('Close') }}</button>
   </div>
 
-  <h1>◎ Anteumbra Manual Scan Report</h1>
+  <h1>{{ _('Anteumbra Manual Scan Report') }}</h1>
   <div class="meta">
-    Scan ID: {{ result.scan_id }} | Generated: {{ generated_at }} |
-    Duration: {{ "%.1f"|format(result.end_time - result.start_time) if result.end_time else 'N/A' }}s
+    {{ _('Scan ID:') }} {{ result.scan_id }} | {{ _('Generated:') }} {{ generated_at }} |
+    {{ _('Duration:') }} {{ "%.1f"|format(result.end_time - result.start_time) if result.end_time else _('N/A') }}{{ _('s') }}
   </div>
 
-  <h2>Scan Summary</h2>
+  <h2>{{ _('Scan Summary') }}</h2>
   <div class="summary">
     <div class="summary-item">
       <div class="val">{{ result.total_files }}</div>
-      <div class="lbl">Total Files</div>
+      <div class="lbl">{{ _('Total Files') }}</div>
     </div>
     <div class="summary-item">
       <div class="val" style="color: #ff4444;">{{ result.new_findings }}</div>
-      <div class="lbl">New Findings</div>
+      <div class="lbl">{{ _('New Findings') }}</div>
     </div>
     <div class="summary-item">
       <div class="val" style="color: #ffaa00;">{{ result.known_findings }}</div>
-      <div class="lbl">Known (in Registry)</div>
+      <div class="lbl">{{ _('Known (in Registry)') }}</div>
     </div>
     <div class="summary-item">
       <div class="val">{{ result.clean }}</div>
-      <div class="lbl">Clean Files</div>
+      <div class="lbl">{{ _('Clean Files') }}</div>
     </div>
     <div class="summary-item">
       <div class="val">{{ result.errors }}</div>
-      <div class="lbl">Errors</div>
+      <div class="lbl">{{ _('Errors') }}</div>
     </div>
     <div class="summary-item">
       <div class="val">{{ result.target_dir }}</div>
-      <div class="lbl">Target Directory</div>
+      <div class="lbl">{{ _('Target Directory') }}</div>
     </div>
     <div class="summary-item">
       <div class="val">{{ result.scanned_files }}</div>
-      <div class="lbl">Files Scanned</div>
+      <div class="lbl">{{ _('Files Scanned') }}</div>
     </div>
     <div class="summary-item">
       <div class="val">{{ result.status.upper() }}</div>
-      <div class="lbl">Status</div>
+      <div class="lbl">{{ _('Status') }}</div>
     </div>
   </div>
 
   {% set new_findings = result.findings|selectattr('classification', 'equalto', 'new')|list %}
   {% if new_findings %}
-  <h2>New Detections ({{ new_findings|length }})</h2>
+  <h2>{{ _('New Detections') }} ({{ new_findings|length }})</h2>
   <table>
     <thead>
-      <tr><th>File</th><th>Path</th><th>Engine</th><th>Features</th><th>Score</th></tr>
+      <tr><th>{{ _('File') }}</th><th>{{ _('Path') }}</th><th>{{ _('Engine') }}</th><th>{{ _('Features') }}</th><th>{{ _('Score') }}</th></tr>
     </thead>
     <tbody>
       {% for f in new_findings %}
@@ -108,10 +108,10 @@
 
   {% set known_findings = result.findings|selectattr('classification', 'equalto', 'known')|list %}
   {% if known_findings %}
-  <h2>Known Detections ({{ known_findings|length }})</h2>
+  <h2>{{ _('Known Detections') }} ({{ known_findings|length }})</h2>
   <table>
     <thead>
-      <tr><th>File</th><th>Path</th><th>Engine</th><th>First Detected</th><th>Source</th></tr>
+      <tr><th>{{ _('File') }}</th><th>{{ _('Path') }}</th><th>{{ _('Engine') }}</th><th>{{ _('First Detected') }}</th><th>{{ _('Source') }}</th></tr>
     </thead>
     <tbody>
       {% for f in known_findings %}
@@ -128,11 +128,11 @@
   {% endif %}
 
   {% if result.status == 'error' %}
-  <div style="color:#ff4444;margin-top:20px;">Error: {{ result.error_message }}</div>
+  <div style="color:#ff4444;margin-top:20px;">{{ _('Error:') }} {{ result.error_message }}</div>
   {% endif %}
 
   <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #1a1a1a; color: #555; font-size: 10px;">
-    Anteumbra v1.9.0 — Manual Scanner Report — {{ generated_at }}
+    {{ _('Anteumbra v1.9.0 — Manual Scanner Report —') }} {{ generated_at }}
   </div>
 </div>
 </body>

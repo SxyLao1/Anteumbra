@@ -9,7 +9,7 @@
          hx-get="/admin/dashboard_content"
          hx-trigger="load, every 10s"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
     </div>
   </div>
 
@@ -17,13 +17,13 @@
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
       <span><span class="card-header-icon">◆</span> {{ _('System Metrics') }}</span>
-      <span class="badge badge-info">Live</span>
+      <span class="badge badge-info">{{ _('Live') }}</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-metrics"
          hx-get="/admin/metrics/data"
          hx-trigger="load, every 10s"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading metrics...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading metrics...') }}</p></div>
     </div>
   </div>
 
@@ -31,14 +31,14 @@
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
       <span><span class="card-header-icon">⚡</span> {{ _('Active Threats') }}</span>
-      <span class="badge badge-danger">Needs Attention</span>
+      <span class="badge badge-danger">{{ _('Needs Attention') }}</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;">
       <div id="overview-active-threats" style="padding: 16px;"
            hx-get="/admin/records?compact=1"
            hx-trigger="load, every 30s"
            hx-swap="innerHTML">
-        <div class="empty-state"><div class="spinner"></div><p>Loading records...</p></div>
+        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
       </div>
     </div>
   </div>
@@ -48,14 +48,14 @@
     <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
       <span style="flex: 1;"><span class="card-header-icon">◆</span> {{ _('LIVE LOG STREAM') }}</span>
       <input type="text" class="form-input" style="width: 140px; font-size: 10px; padding: 3px 6px;"
-             placeholder="Quick filter..." oninput="filterLogStream()" id="log-filter-input">
-      <span class="badge badge-info">SSE</span>
+             placeholder="{{ _('Quick filter...') }}" oninput="filterLogStream()" id="log-filter-input">
+      <span class="badge badge-info">{{ _('SSE') }}</span>
       <button class="btn btn-ghost btn-sm" style="font-size: 10px; padding: 3px 8px;"
-              onclick="openLogAnalyzer()">Analyze</button>
+              onclick="openLogAnalyzer()">{{ _('Analyze') }}</button>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
          id="live-log-stream">
-      {{ log_history|safe if log_history else '<div class="empty-state"><p>Connecting to log stream...</p></div>' }}
+      {{ log_history|safe if log_history else '<div class="empty-state"><p>' + _('Connecting to log stream...') + '</p></div>' }}
     </div>
   </div>
 
@@ -63,58 +63,58 @@
 <div id="log-analyzer-modal" class="modal-overlay" style="display:none; z-index:2000;" onclick="if(event.target===this)closeLogAnalyzer()">
   <div class="modal-container" style="width:95vw; height:90vh; max-width:1400px; display:flex; flex-direction:column;">
     <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
-      <h3 style="color:#00ff41; margin:0; flex:1;">Log Analyzer</h3>
+      <h3 style="color:#00ff41; margin:0; flex:1;">{{ _('Log Analyzer') }}</h3>
       <div style="display:flex; gap:8px; align-items:center;">
         <input type="text" class="form-input" style="width:200px; font-size:11px; padding:4px 8px;"
-               placeholder="Search keyword..." oninput="filterLogAnalyzer()" id="analyzer-filter-input">
+               placeholder="{{ _('Search keyword...') }}" oninput="filterLogAnalyzer()" id="analyzer-filter-input">
         <select id="analyzer-level-filter" onchange="filterLogAnalyzer()"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">All</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
-          <option value="CRITICAL">CRITICAL</option>
+          <option value="all">{{ _('All') }}</option>
+          <option value="INFO">{{ _('INFO') }}</option>
+          <option value="WARNING">{{ _('WARNING') }}</option>
+          <option value="ERROR">{{ _('ERROR') }}</option>
+          <option value="CRITICAL">{{ _('CRITICAL') }}</option>
         </select>
         <select id="analyzer-module-filter" onchange="filterLogAnalyzer()"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">All</option>
-          <option value="MONITOR">MONITOR</option>
-          <option value="SCAN">SCAN</option>
-          <option value="QUARANTINE">QUARANTINE</option>
-          <option value="REGISTRY">REGISTRY</option>
-          <option value="NOTIFIER">NOTIFIER</option>
-          <option value="SECURITY">SECURITY</option>
-          <option value="ALERT">ALERT</option>
+          <option value="all">{{ _('All') }}</option>
+          <option value="MONITOR">{{ _('MONITOR') }}</option>
+          <option value="SCAN">{{ _('SCAN') }}</option>
+          <option value="QUARANTINE">{{ _('QUARANTINE') }}</option>
+          <option value="REGISTRY">{{ _('REGISTRY') }}</option>
+          <option value="NOTIFIER">{{ _('NOTIFIER') }}</option>
+          <option value="SECURITY">{{ _('SECURITY') }}</option>
+          <option value="ALERT">{{ _('ALERT') }}</option>
         </select>
         <select id="analyzer-time-filter" onchange="analyzerTimePreset()"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">All Time</option>
-          <option value="1h">Last 1h</option>
-          <option value="6h">Last 6h</option>
-          <option value="24h">Last 24h</option>
-          <option value="7d">Last 7d</option>
-          <option value="30d">Last 30d</option>
-          <option value="custom">Custom...</option>
+          <option value="all">{{ _('All Time') }}</option>
+          <option value="1h">{{ _('Last 1h') }}</option>
+          <option value="6h">{{ _('Last 6h') }}</option>
+          <option value="24h">{{ _('Last 24h') }}</option>
+          <option value="7d">{{ _('Last 7d') }}</option>
+          <option value="30d">{{ _('Last 30d') }}</option>
+          <option value="custom">{{ _('Custom...') }}</option>
         </select>
         <span id="analyzer-custom-time" style="display:none; gap:2px; align-items:center; flex-wrap:wrap;">
-          <span style="color:#666; font-size:10px;">From</span>
+          <span style="color:#666; font-size:10px;">{{ _('From') }}</span>
           <input type="date" id="analyzer-time-from-date" onchange="filterLogAnalyzer()"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
           <input type="time" id="analyzer-time-from-time" step="1" onchange="filterLogAnalyzer()"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
-          <span style="color:#666; font-size:10px;">to</span>
+          <span style="color:#666; font-size:10px;">{{ _('to') }}</span>
           <input type="date" id="analyzer-time-to-date" onchange="filterLogAnalyzer()"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
           <input type="time" id="analyzer-time-to-time" step="1" onchange="filterLogAnalyzer()"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
         </span>
-        <span style="font-size:10px; color:#666;" id="analyzer-count">0 lines</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="closeLogAnalyzer()">Close</button>
+        <span style="font-size:10px; color:#666;" id="analyzer-count">{{ _('0 lines') }}</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="closeLogAnalyzer()">{{ _('Close') }}</button>
       </div>
     </div>
     <div class="modal-body" style="flex:1; padding:16px; overflow-y:auto; font-family:var(--font-mono); font-size:12px; line-height:1.7;"
          id="analyzer-log-content">
-      <div class="empty-state"><p>Loading logs...</p></div>
+      <div class="empty-state"><p>{{ _('Loading logs...') }}</p></div>
     </div>
   </div>
 </div>

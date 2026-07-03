@@ -3,82 +3,82 @@
 
   <!-- Account -->
   <div class="card">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> ACCOUNT</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("ACCOUNT") }}</span></div>
     <div class="card-body" style="padding: 16px;"
          hx-get="/admin/account"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading...") }}</p></div>
     </div>
   </div>
 
   <!-- System -->
   <div class="card" style="display: flex; flex-direction: column;">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> SYSTEM</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("SYSTEM") }}</span></div>
     <div class="card-body" style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 8px;">
       <button class="btn btn-ghost btn-sm" style="text-align: left; justify-content: flex-start;"
-              onclick="openSystemModal('registry')">Registry Status</button>
+              onclick="openSystemModal('registry')">{{ _("Registry Status") }}</button>
       <button class="btn btn-ghost btn-sm" style="text-align: left; justify-content: flex-start;"
-              onclick="openSystemModal('wal')">WAL Management</button>
+              onclick="openSystemModal('wal')">{{ _("WAL Management") }}</button>
       <button class="btn btn-ghost btn-sm" style="text-align: left; justify-content: flex-start;"
-              onclick="openSystemModal('session')">Session Management</button>
+              onclick="openSystemModal('session')">{{ _("Session Management") }}</button>
       <button class="btn btn-ghost btn-sm" style="text-align: left; justify-content: flex-start;"
-              onclick="openSystemModal('config')">Config Reload</button>
+              onclick="openSystemModal('config')">{{ _("Config Reload") }}</button>
     </div>
   </div>
 
   <!-- Export & SIEM -->
   <div class="card">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> EXPORT &amp; SIEM</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("EXPORT & SIEM") }}</span></div>
     <div class="card-body" style="padding: 16px;" id="settings-siem"
          hx-get="/admin/settings/siem-status"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading...") }}</p></div>
     </div>
   </div>
 
   <!-- Storage Status -->
   <div class="card">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> STORAGE</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("STORAGE") }}</span></div>
     <div class="card-body" style="padding: 16px;" id="settings-storage"
          hx-get="/admin/settings/storage-status"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading...") }}</p></div>
     </div>
   </div>
 
   <!-- Plugin Status -->
   <div class="card" style="grid-column: 1 / -1;">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> PLUGINS</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("PLUGINS") }}</span></div>
     <div class="card-body" style="padding: 16px;" id="settings-plugins"
          hx-get="/admin/settings/plugin-status"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading plugin status...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading plugin status...") }}</p></div>
     </div>
   </div>
 
   <!-- Config Editor (full width) -->
   <div class="card" style="grid-column: 1 / -1;">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> CONFIG EDITOR</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("CONFIG EDITOR") }}</span></div>
     <div class="card-body" style="padding: 16px;" id="settings-config"
          hx-get="/admin/settings/config/editor"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading config editor...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading config editor...") }}</p></div>
     </div>
   </div>
 
   <!-- Notifications (full width) -->
   <div class="card" style="grid-column: 1 / -1;">
-    <div class="card-header"><span><span class="card-header-icon">◆</span> NOTIFICATIONS</span></div>
+    <div class="card-header"><span><span class="card-header-icon">◆</span> {{ _("NOTIFICATIONS") }}</span></div>
     <div class="card-body" style="padding: 16px;" id="settings-notify"
          hx-get="/admin/settings/notifications"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading notification settings...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading notification settings...") }}</p></div>
     </div>
   </div>
 </div>
@@ -87,12 +87,12 @@
 <div id="system-modal" class="modal-overlay" style="display:none; z-index:2000;" onclick="if(event.target===this)closeSystemModal()">
   <div class="modal-container" style="width:700px; max-height:80vh; display:flex; flex-direction:column;">
     <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
-      <h3 style="color:#00ff41; margin:0; flex:1;" id="system-modal-title">System</h3>
+      <h3 style="color:#00ff41; margin:0; flex:1;" id="system-modal-title">{{ _("System") }}</h3>
       <span id="system-modal-actions" style="display:flex; gap:6px;"></span>
-      <button class="btn btn-ghost btn-sm" onclick="closeSystemModal()" style="margin-left:8px;">Close</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeSystemModal()" style="margin-left:8px;">{{ _("Close") }}</button>
     </div>
     <div class="modal-body" id="system-modal-body" style="flex:1; padding:20px; overflow-y:auto; min-height:300px;">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _("Loading...") }}</p></div>
     </div>
   </div>
 </div>

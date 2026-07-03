@@ -1,6 +1,6 @@
 <div class="metrics-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 24px;">
   <div class="metric-card">
-    <div class="metric-label">Registry Records</div>
+    <div class="metric-label">{{ _('Registry Records') }}</div>
     <div class="metric-value" id="registry-count"
          hx-get="/admin/registry/count"
          hx-trigger="load, every 5s"
@@ -9,7 +9,7 @@
     </div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">Async Save Queue</div>
+    <div class="metric-label">{{ _('Async Save Queue') }}</div>
     <div class="metric-value" id="registry-queue"
          hx-get="/admin/registry/queue"
          hx-trigger="load, every 5s"
@@ -18,7 +18,7 @@
     </div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">Last Save Time</div>
+    <div class="metric-label">{{ _('Last Save Time') }}</div>
     <div class="metric-value" id="registry-last-save"
          hx-get="/admin/registry/last-save"
          hx-trigger="load, every 5s"
@@ -28,7 +28,7 @@
     </div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">WAL Replay Status</div>
+    <div class="metric-label">{{ _('WAL Replay Status') }}</div>
     <div class="metric-value" id="registry-wal-status"
          hx-get="/admin/registry/wal-status"
          hx-trigger="load"

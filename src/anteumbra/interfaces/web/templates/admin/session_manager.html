@@ -2,27 +2,27 @@
   <div class="session-page-header">
     <div class="session-page-stats">
       <div class="stat-pill">
-        <span class="stat-pill-label">Total</span>
+        <span class="stat-pill-label">{{ _('Total') }}</span>
         <span class="stat-pill-value" id="session-total-count">-</span>
       </div>
       <div class="stat-pill active">
-        <span class="stat-pill-label">Active 30d</span>
+        <span class="stat-pill-label">{{ _('Active 30d') }}</span>
         <span class="stat-pill-value" id="session-active-count">-</span>
       </div>
     </div>
     <div class="session-page-actions">
       <button class="btn btn-danger btn-sm"
               hx-post="/admin/system/session/cleanup"
-              hx-confirm="Cleanup expired sessions?"
+              hx-confirm="{{ _('Cleanup expired sessions?') }}"
               hx-target="#session-list-full"
               hx-swap="innerHTML">
-        Cleanup
+        {{ _('Cleanup') }}
       </button>
       <button class="btn btn-ghost btn-sm"
               hx-get="/admin/session/list"
               hx-target="#session-list-full"
               hx-swap="innerHTML">
-        Refresh
+        {{ _('Refresh') }}
       </button>
     </div>
   </div>
@@ -34,7 +34,7 @@
        hx-swap="innerHTML">
     <div class="empty-state">
       <div class="spinner"></div>
-      <p>Loading sessions...</p>
+      <p>{{ _('Loading sessions...') }}</p>
     </div>
   </div>
 </div>

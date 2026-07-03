@@ -2,19 +2,19 @@
 <div style="display:flex;flex-direction:column;gap:8px;">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="color:#00ff41;font-size:14px;">{{ '&#9679;' if db_exists else '&#9675;' | safe }}</span>
-    <span style="color:#888;font-size:11px;">Backend: <strong style="color:#00ff41;">{{ backend | upper }}</strong></span>
+    <span style="color:#888;font-size:11px;">{{ _('Backend:') }} <strong style="color:#00ff41;">{{ backend | upper }}</strong></span>
   </div>
   <div style="font-size:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-    <div><span style="color:#555;">SQLite DB:</span> <span style="color:{{ '#00ff41' if db_exists else '#888' }};">{{ 'OK (' + db_size|string + ' MB)' if db_exists else 'Not created' }}</span></div>
-    <div><span style="color:#555;">JSON files:</span> <span style="color:#888;">{{ json_files }} ({{ json_mb }} MB)</span></div>
+    <div><span style="color:#555;">{{ _('SQLite DB:') }}</span> <span style="color:{{ '#00ff41' if db_exists else '#888' }};">{{ _('OK (%(size)s MB)', size=db_size|string) if db_exists else _('Not created') }}</span></div>
+    <div><span style="color:#555;">{{ _('JSON files:') }}</span> <span style="color:#888;">{{ json_files }} ({{ _('%(size)s MB', size=json_mb) }})</span></div>
   </div>
   <div style="font-size:9px;color:#555;margin-top:2px;">
     {% if backend == 'both' %}
-    Dual-write active: JSON safety net + SQLite read priority
+    {{ _('Dual-write active: JSON safety net + SQLite read priority') }}
     {% elif backend == 'sqlite' %}
-    SQLite WAL mode — high performance concurrency
+    {{ _('SQLite WAL mode — high performance concurrency') }}
     {% else %}
-    JSON file storage — default, zero-dependency
+    {{ _('JSON file storage — default, zero-dependency') }}
     {% endif %}
   </div>
 </div>

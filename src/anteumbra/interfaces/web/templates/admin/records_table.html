@@ -2,16 +2,16 @@
 <div id="{{ container_id }}" style="padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column;" data-all-paths='{{ all_paths|default([])|tojson }}'>
   <!-- Unified Toolbar -->
   <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid #1a1a1a; flex-shrink:0; background:#050505; flex-wrap:wrap;">
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selRecPage(this)">Sel Page</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selRecAll(this)">All {{ total }}</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="clearRecSel(this)">Clear</button>
-    <span class="rec-count" style="font-size:10px;color:#888;min-width:50px;">0 selected</span>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selRecPage(this)">{{ _("Sel Page") }}</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selRecAll(this)">{{ _("All") }} {{ total }}</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="clearRecSel(this)">{{ _("Clear") }}</button>
+    <span class="rec-count" style="font-size:10px;color:#888;min-width:50px;">{{ _("0 selected") }}</span>
     <span style="color:#1a1a1a;">|</span>
-    <button class="btn btn-danger btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchRecAction('quarantine')">Quar Sel</button>
-    <button class="btn btn-warning btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchRecAction('false_positive')">FP Sel</button>
-    <button class="btn btn-ghost btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;color:#ff4444;" disabled onclick="batchRecAction('delete')">Del Sel</button>
+    <button class="btn btn-danger btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchRecAction('quarantine')">{{ _("Quar Sel") }}</button>
+    <button class="btn btn-warning btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchRecAction('false_positive')">{{ _("FP Sel") }}</button>
+    <button class="btn btn-ghost btn-sm rec-batch-btn" style="font-size:10px;padding:3px 6px;color:#ff4444;" disabled onclick="batchRecAction('delete')">{{ _("Del Sel") }}</button>
     <span style="flex:1;"></span>
-    <input type="text" class="form-input rec-search" style="width:160px;font-size:10px;padding:3px 6px;" placeholder="Search..."
+    <input type="text" class="form-input rec-search" style="width:160px;font-size:10px;padding:3px 6px;" placeholder="{{ _("Search...") }}"
            oninput="filterRecordsTable(this)"
            data-container="{{ container_id }}">
   </div>
@@ -25,36 +25,36 @@
         <div class="record-title">{{ record.display_name }}</div>
         <div class="record-meta">
           {% if record.marked_false_positive %}
-          <span class="badge" style="background:#9b59b6;color:#fff;font-size:9px;padding:1px 5px;">FP</span>
+          <span class="badge" style="background:#9b59b6;color:#fff;font-size:9px;padding:1px 5px;">{{ _("FP") }}</span>
           {% elif record.deleted_at and not record.file_exists %}
-          <span class="badge" style="background:#666;color:#fff;font-size:9px;padding:1px 5px;">DEL</span>
+          <span class="badge" style="background:#666;color:#fff;font-size:9px;padding:1px 5px;">{{ _("DEL") }}</span>
           {% elif record.alerted %}
-          <span class="badge" style="background:#e74c3c;color:#fff;font-size:9px;padding:1px 5px;">ALERT</span>
+          <span class="badge" style="background:#e74c3c;color:#fff;font-size:9px;padding:1px 5px;">{{ _("ALERT") }}</span>
           {% else %}
-          <span class="badge" style="background:#27ae60;color:#fff;font-size:9px;padding:1px 5px;">ACTIVE</span>
+          <span class="badge" style="background:#27ae60;color:#fff;font-size:9px;padding:1px 5px;">{{ _("ACTIVE") }}</span>
           {% endif %}
           <span style="color: var(--color-text-muted);">|</span>
           <span>{{ record.detected_at }}</span>
           <span style="color: var(--color-text-muted);">|</span>
-          <span>Comm: {{ record.communication_count }}</span>
+          <span>{{ _("Comm:") }} {{ record.communication_count }}</span>
           <span style="color: var(--color-text-muted);">|</span>
-          <span>{{ record.features|join(', ') if record.features else 'None' }}</span>
-          {% if record.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">| Q:{{ record.quarantine_id[:12] }}</span>{% endif %}
-          {% if record.deleted_at %}<span style="color:#888;font-size:9px;">| Del</span>{% endif %}
+          <span>{{ record.features|join(', ') if record.features else _("None") }}</span>
+          {% if record.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">| {{ _("Q:") }}{{ record.quarantine_id[:12] }}</span>{% endif %}
+          {% if record.deleted_at %}<span style="color:#888;font-size:9px;">| {{ _("Del") }}</span>{% endif %}
         </div>
       </div>
       <div style="display:flex; gap:3px; flex-shrink:0;">
         <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 6px;"
-                onclick="openFileViewerByPath(this.closest('.record-item').dataset.path)">Source</button>
+                onclick="openFileViewerByPath(this.closest('.record-item').dataset.path)">{{ _("Source") }}</button>
         <button class="btn btn-sm btn-info" style="font-size:10px;padding:2px 6px;"
                 hx-get="/admin/records/detail?file_path={{ record.file_path|urlencode }}"
                 hx-target="#record-detail-modal"
                 hx-swap="innerHTML"
-                hx-on::after-swap="showRecordDetail()">Detail</button>
+                hx-on::after-swap="showRecordDetail()">{{ _("Detail") }}</button>
       </div>
     </div>
     {% else %}
-    <div class="empty-state"><div class="empty-state-icon">⚡</div><p>No detection records found</p></div>
+    <div class="empty-state"><div class="empty-state-icon">⚡</div><p>{{ _("No detection records found") }}</p></div>
     {% endfor %}
   </div>
 
@@ -62,15 +62,15 @@
   <div class="pagination-bar" style="flex-shrink:0; padding: 4px 0;">
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
             hx-get="/admin/records?page={{ page - 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}"
-            hx-target="#{{ container_id }}" hx-swap="outerHTML">← Prev</button>
-    <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+            hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _("← Prev") }}</button>
+    <span class="page-info">{{ _("Page") }} {{ page }} / {{ total_pages }} ({{ total }} {{ _("total") }})</span>
     <div class="page-jump">
       <input type="number" class="form-input" style="width:50px;text-align:center;" min="1" max="{{ total_pages }}" value="{{ page }}"
              onkeydown="if(event.key==='Enter'){var p=this.value,u='/admin/records?page='+p+'{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}';htmx.ajax('GET',u,{target:'#{{ container_id }}',swap:'outerHTML'})}">
     </div>
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
             hx-get="/admin/records?page={{ page + 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}"
-            hx-target="#{{ container_id }}" hx-swap="outerHTML">Next →</button>
+            hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _("Next →") }}</button>
   </div>
   {% endif %}
 </div>

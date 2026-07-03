@@ -5,23 +5,23 @@
 <div id="quarantine-list-container" class="quarantine-list" style="padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column;" data-all-qids='{{ all_qids|default([])|tojson }}'>
   <!-- Unified Toolbar -->
   <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid #1a1a1a; flex-shrink:0; background:#050505; flex-wrap:wrap;">
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selQPage(this)">Sel Page</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selQAll(this)">All {{ total }}</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="clearQSel(this)">Clear</button>
-    <span class="q-count" style="font-size:10px;color:#888;min-width:50px;">0 selected</span>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selQPage(this)">{{ _("Sel Page") }}</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selQAll(this)">{{ _("All") }} {{ total }}</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="clearQSel(this)">{{ _("Clear") }}</button>
+    <span class="q-count" style="font-size:10px;color:#888;min-width:50px;">{{ _("0 selected") }}</span>
     <span style="color:#1a1a1a;">|</span>
-    <button class="btn btn-success btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('restore')">Restore Sel</button>
-    <button class="btn btn-danger btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('delete')">Delete Sel</button>
+    <button class="btn btn-success btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('restore')">{{ _("Restore Sel") }}</button>
+    <button class="btn btn-danger btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('delete')">{{ _("Delete Sel") }}</button>
     <span style="flex:1;"></span>
     <button class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
-            hx-get="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">All</button>
+            hx-get="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _("All") }}</button>
     <button class="btn btn-sm {% if current_status == 'quarantined' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
-            hx-get="/admin/quarantine?status=quarantined{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">Active</button>
+            hx-get="/admin/quarantine?status=quarantined{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _("Active") }}</button>
     <button class="btn btn-sm {% if current_status == 'restored' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
-            hx-get="/admin/quarantine?status=restored{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">Restored</button>
+            hx-get="/admin/quarantine?status=restored{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _("Restored") }}</button>
     <button class="btn btn-sm {% if current_status == 'deleted' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
-            hx-get="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">Deleted</button>
-    <input type="text" class="form-input" style="width:140px;font-size:10px;padding:3px 6px;" placeholder="Search..."
+            hx-get="/admin/quarantine?status=deleted{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _("Deleted") }}</button>
+    <input type="text" class="form-input" style="width:140px;font-size:10px;padding:3px 6px;" placeholder="{{ _("Search...") }}"
            oninput="filterQuarantineTable(this)">
   </div>
 
@@ -29,19 +29,19 @@
   <div class="quarantine-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 12px; flex-shrink: 0;">
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 16px; text-align: center;">
       <div style="color: #00ff41; font-size: 24px; font-weight: bold;">{{ stats.total }}</div>
-      <div style="color: #888; font-size: 12px;">Total</div>
+      <div style="color: #888; font-size: 12px;">{{ _("Total") }}</div>
     </div>
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff6b35; border-radius: 4px; padding: 16px; text-align: center;">
       <div style="color: #ff6b35; font-size: 24px; font-weight: bold;">{{ stats.quarantined }}</div>
-      <div style="color: #888; font-size: 12px;">Quarantined</div>
+      <div style="color: #888; font-size: 12px;">{{ _("Quarantined") }}</div>
     </div>
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 16px; text-align: center;">
       <div style="color: #00ff41; font-size: 24px; font-weight: bold;">{{ stats.restored }}</div>
-      <div style="color: #888; font-size: 12px;">Restored</div>
+      <div style="color: #888; font-size: 12px;">{{ _("Restored") }}</div>
     </div>
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #888; border-radius: 4px; padding: 16px; text-align: center;">
       <div style="color: #888; font-size: 24px; font-weight: bold;">{{ stats.deleted }}</div>
-      <div style="color: #888; font-size: 12px;">Deleted</div>
+      <div style="color: #888; font-size: 12px;">{{ _("Deleted") }}</div>
     </div>
   </div>
 
@@ -66,7 +66,7 @@
           <button class="btn btn-sm btn-ghost"
                   style="font-size:10px;padding:2px 6px;"
                   onclick="openFileViewerByQid('{{ record.quarantine_id }}')">
-            Source
+            {{ _("Source") }}
           </button>
           <button class="btn btn-sm btn-info"
                   style="font-size:10px;padding:2px 6px;"
@@ -74,7 +74,7 @@
                   hx-target="#quarantine-detail-content"
                   hx-swap="innerHTML"
                   onclick="document.getElementById('quarantine-detail-modal').style.display='block'">
-            Detail
+            {{ _("Detail") }}
           </button>
           {% if record.status == 'quarantined' %}
           <button class="btn btn-sm btn-success"
@@ -83,7 +83,7 @@
                   hx-confirm="Restore {{ record.quarantine_id }}?"
                   hx-target="#quarantine-list-container"
                   hx-swap="outerHTML">
-            Restore
+            {{ _("Restore") }}
           </button>
           <button class="btn btn-sm btn-danger"
                   style="font-size:10px;padding:2px 6px;"
@@ -91,13 +91,13 @@
                   hx-confirm="PERMANENTLY delete {{ record.quarantine_id }}?"
                   hx-target="#quarantine-list-container"
                   hx-swap="outerHTML">
-            Delete
+            {{ _("Delete") }}
           </button>
           {% endif %}
         </div>
       </div>
       {% else %}
-      <p style="color: #888; text-align: center; padding: 40px;">No quarantine records found</p>
+      <p style="color: #888; text-align: center; padding: 40px;">{{ _("No quarantine records found") }}</p>
       {% endfor %}
     </div>
   </div>
@@ -105,11 +105,11 @@
   {% if total_pages > 1 %}
   <div class="pagination" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; flex-shrink: 0;">
     {% if page > 1 %}
-    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page - 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">Prev</button>
+    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page - 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">{{ _("Prev") }}</button>
     {% endif %}
-    <span style="color: #888;">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+    <span style="color: #888;">{{ _("Page") }} {{ page }} / {{ total_pages }} ({{ total }} {{ _("total") }})</span>
     {% if page < total_pages %}
-    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page + 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">Next</button>
+    <button class="btn btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page + 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container">{{ _("Next") }}</button>
     {% endif %}
   </div>
   {% endif %}

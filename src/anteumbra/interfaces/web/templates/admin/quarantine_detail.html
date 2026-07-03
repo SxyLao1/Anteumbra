@@ -1,38 +1,38 @@
 <div class="quarantine-detail-modal">
   <div class="modal-header">
-    <h3>🛡️ 隔离详情</h3>
+    <h3>{{ _('隔离详情') }}</h3>
     <button class="modal-close" onclick="document.getElementById('quarantine-detail-modal').style.display='none'">&times;</button>
   </div>
   <div class="modal-body">
     <div class="detail-section">
-      <h4>隔离信息</h4>
+      <h4>{{ _('隔离信息') }}</h4>
       <table class="detail-table">
-        <tr><td>隔离ID</td><td><code>{{ record.quarantine_id }}</code></td></tr>
-        <tr><td>状态</td><td><span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'safe' if record.status == 'restored' else 'gray' }}">{{ record.status.upper() }}</span></td></tr>
-        <tr><td>隔离时间</td><td>{{ record.quarantine_time }}</td></tr>
+        <tr><td>{{ _('隔离ID') }}</td><td><code>{{ record.quarantine_id }}</code></td></tr>
+        <tr><td>{{ _('状态') }}</td><td><span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'safe' if record.status == 'restored' else 'gray' }}">{{ record.status.upper() }}</span></td></tr>
+        <tr><td>{{ _('隔离时间') }}</td><td>{{ record.quarantine_time }}</td></tr>
         {% if record.restore_time %}
-        <tr><td>恢复时间</td><td>{{ record.restore_time }}</td></tr>
+        <tr><td>{{ _('恢复时间') }}</td><td>{{ record.restore_time }}</td></tr>
         {% endif %}
         {% if record.delete_time %}
-        <tr><td>删除时间</td><td>{{ record.delete_time }}</td></tr>
+        <tr><td>{{ _('删除时间') }}</td><td>{{ record.delete_time }}</td></tr>
         {% endif %}
       </table>
     </div>
 
     <div class="detail-section">
-      <h4>文件信息</h4>
+      <h4>{{ _('文件信息') }}</h4>
       <table class="detail-table">
-        <tr><td>原始路径</td><td><code>{{ record.original_path }}</code></td></tr>
-        <tr><td>隔离路径</td><td><code>{{ record.quarantine_path }}</code></td></tr>
-        <tr><td>文件大小</td><td>{{ "%.2f"|format(record.file_size / 1024) }} KB</td></tr>
+        <tr><td>{{ _('原始路径') }}</td><td><code>{{ record.original_path }}</code></td></tr>
+        <tr><td>{{ _('隔离路径') }}</td><td><code>{{ record.quarantine_path }}</code></td></tr>
+        <tr><td>{{ _('文件大小') }}</td><td>{{ "%.2f"|format(record.file_size / 1024) }} {{ _('KB') }}</td></tr>
       </table>
     </div>
 
     <div class="detail-section">
-      <h4>检测信息</h4>
+      <h4>{{ _('检测信息') }}</h4>
       <table class="detail-table">
-        <tr><td>命中规则</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
-        <tr><td>特征列表</td><td>
+        <tr><td>{{ _('命中规则') }}</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
+        <tr><td>{{ _('特征列表') }}</td><td>
           {% for feature in record.features %}
             <span class="badge badge-blue">{{ feature }}</span>
           {% endfor %}

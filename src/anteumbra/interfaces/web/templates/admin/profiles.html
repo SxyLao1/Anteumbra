@@ -1,33 +1,33 @@
 <!-- v1.8.1: Attacker Profiles — server-rendered -->
 <div style="padding:16px; display:flex; flex-direction:column; gap:12px; height:100%;">
   <div style="display:flex; align-items:center; gap:12px;">
-    <h3 style="color:#00ff41; margin:0; flex:1;">ATTACKER PROFILES</h3>
+    <h3 style="color:#00ff41; margin:0; flex:1;">{{ _("ATTACKER PROFILES") }}</h3>
     <input type="text" class="form-input" style="width:200px;font-size:11px;padding:4px 8px;"
-           placeholder="Search UA / IP / Tool..." value="{{ query }}" name="q"
+           placeholder="{{ _("Search UA / IP / Tool...") }}" value="{{ query }}" name="q"
            hx-get="/admin/profiles" hx-trigger="keyup changed delay:400ms"
            hx-target="#main-content" hx-swap="innerHTML">
-    <span style="font-size:11px; color:#888;">{{ total }} total</span>
+    <span style="font-size:11px; color:#888;">{{ total }} {{ _("total") }}</span>
     <button class="btn btn-ghost btn-sm" style="font-size:10px;"
             hx-get="/admin/profiles?sort=risk{% if query %}&q={{ query }}{% endif %}"
-            hx-target="#main-content" hx-swap="innerHTML">Risk</button>
+            hx-target="#main-content" hx-swap="innerHTML">{{ _("Risk") }}</button>
     <button class="btn btn-ghost btn-sm" style="font-size:10px;"
             hx-get="/admin/profiles?sort=time{% if query %}&q={{ query }}{% endif %}"
-            hx-target="#main-content" hx-swap="innerHTML">Time</button>
+            hx-target="#main-content" hx-swap="innerHTML">{{ _("Time") }}</button>
     <button class="btn btn-ghost btn-sm" style="font-size:10px;"
             hx-get="/admin/profiles?sort=traffic{% if query %}&q={{ query }}{% endif %}"
-            hx-target="#main-content" hx-swap="innerHTML">Traffic</button>
-    <button class="btn btn-ghost btn-sm" onclick="htmx.ajax('GET','/admin/profiles',{target:'#main-content',swap:'innerHTML'})">Refresh</button>
+            hx-target="#main-content" hx-swap="innerHTML">{{ _("Traffic") }}</button>
+    <button class="btn btn-ghost btn-sm" onclick="htmx.ajax('GET','/admin/profiles',{target:'#main-content',swap:'innerHTML'})">{{ _("Refresh") }}</button>
   </div>
   <!-- v1.8.2: Block Status Panel (server-rendered placeholder, JS updates values) -->
   <div id="block-status-panel" style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:10px 14px; font-size:11px;">
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-      <span style="color:#00ff41; font-weight:bold;">BLOCK STATUS</span>
-      <span id="bs-auto" style="color:#888;">Auto: OFF</span>
-      <span id="bs-devices" style="color:#888;">Devices: —</span>
-      <span id="bs-queue" style="color:#888;">Queue: —</span>
-      <span id="bs-blocked" style="color:#888;">Blocked: —</span>
+      <span style="color:#00ff41; font-weight:bold;">{{ _("BLOCK STATUS") }}</span>
+      <span id="bs-auto" style="color:#888;">{{ _("Auto: OFF") }}</span>
+      <span id="bs-devices" style="color:#888;">{{ _("Devices: —") }}</span>
+      <span id="bs-queue" style="color:#888;">{{ _("Queue: —") }}</span>
+      <span id="bs-blocked" style="color:#888;">{{ _("Blocked: —") }}</span>
       <span style="flex:1;"></span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="toggleBlockDetail()">Detail</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="toggleBlockDetail()">{{ _("Detail") }}</button>
     </div>
     <div id="block-detail" style="display:none; margin-top:8px; border-top:1px solid #1a1a1a; padding-top:8px;">
       <div id="block-queue-list" style="font-size:10px; color:#888; max-height:200px; overflow-y:auto;"></div>
@@ -38,7 +38,7 @@
     {% if profiles %}
     {% for p in profiles %}
     {% set statusColor = '#ff4444' if p.status == 'active' else '#ffaa00' if p.status == 'dormant' else '#555' %}
-    {% set statusLabel = 'ACTIVE' if p.status == 'active' else 'DORMANT' if p.status == 'dormant' else 'EXPIRED' %}
+    {% set statusLabel = _("ACTIVE") if p.status == 'active' else _("DORMANT") if p.status == 'dormant' else _("EXPIRED") %}
     <div class="profile-card" onclick="loadContent('profiles/{{ p.profile_id }}','Profile: {{ p.profile_id[:8] }}')"
          style="background:#0a0a0a;border:1px solid #1a1a1a;border-left:3px solid {{ statusColor }};padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;{% if p.status == 'expired' %}opacity:0.5;{% endif %}">
       <div style="flex:1;">
@@ -46,33 +46,33 @@
           <code style="color:#00ff41;font-size:12px;">{{ p.profile_id }}</code>
           <span style="color:{{ statusColor }};font-size:10px;font-weight:bold;">{{ statusLabel }}</span>
           {% if p.hours_ago is not none %}
-          <span style="color:#666;font-size:9px;">{{ '%.1fh ago'|format(p.hours_ago) if p.hours_ago < 24 else '%.1fd ago'|format(p.hours_ago/24) }}</span>
+          <span style="color:#666;font-size:9px;">{{ _("%.1fh ago")|format(p.hours_ago) if p.hours_ago < 24 else _("%.1fd ago")|format(p.hours_ago/24) }}</span>
           {% endif %}
         </div>
         <div style="font-size:11px;color:#888;">
-          UA: <span style="color:#ccc;">{{ p.ua_fingerprint or 'unknown' }}</span> |
-          IPs: <span style="color:#ccc;">{{ p.ip_count }}</span> |
-          Files: <span style="color:#ccc;">{{ p.file_count }}</span> |
-          Seen: <span style="color:#ccc;">{{ p.last_seen }}</span>
+          {{ _("UA:") }} <span style="color:#ccc;">{{ p.ua_fingerprint or _("unknown") }}</span> |
+          {{ _("IPs:") }} <span style="color:#ccc;">{{ p.ip_count }}</span> |
+          {{ _("Files:") }} <span style="color:#ccc;">{{ p.file_count }}</span> |
+          {{ _("Seen:") }} <span style="color:#ccc;">{{ p.last_seen }}</span>
         </div>
-        <div style="font-size:10px;color:#666;margin-top:2px;">Sample IPs: {{ p.sample_ips|join(', ') }}</div>
+        <div style="font-size:10px;color:#666;margin-top:2px;">{{ _("Sample IPs:") }} {{ p.sample_ips|join(', ') }}</div>
       </div>
       <div style="text-align:center;min-width:60px;">
         <div style="font-size:24px;font-weight:bold;color:{{ '#ff4444' if p.risk_score > 80 else '#ffaa00' if p.risk_score > 50 else '#00ff41' }};">{{ p.risk_score|int }}</div>
-        <div style="font-size:9px;color:#888;">RISK</div>
+        <div style="font-size:9px;color:#888;">{{ _("RISK") }}</div>
       </div>
       <span style="color:#666;font-size:16px;">&gt;</span>
     </div>
     {% endfor %}
     {% else %}
     <div class="empty-state" style="padding:60px;">
-      <p style="color:#888;">No active profiles yet</p>
+      <p style="color:#888;">{{ _("No active profiles yet") }}</p>
       <p style="color:#666;font-size:12px;margin-top:8px;">
-        Start the Mock WAF server and run a scenario, then check back.
+        {{ _("Start the Mock WAF server and run a scenario, then check back.") }}
       </p>
       <p style="color:#555;font-size:11px;margin-top:4px;">
         <code>python tests/mock_waf_server.py --speed 120</code><br>
-        Open http://127.0.0.1:9999 and click Start
+        {{ _("Open http://127.0.0.1:9999 and click Start") }}
       </p>
     </div>
     {% endif %}
@@ -82,14 +82,14 @@
   <div class="pagination-bar" style="margin-top:12px;">
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
             hx-get="/admin/profiles?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"
-            hx-target="#main-content" hx-swap="innerHTML">Prev</button>
-    <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+            hx-target="#main-content" hx-swap="innerHTML">{{ _("Prev") }}</button>
+    <span class="page-info">{{ _("Page") }} {{ page }} / {{ total_pages }} ({{ total }} {{ _("total") }})</span>
     <input type="number" class="form-input" style="width:55px;text-align:center;font-size:11px;padding:2px 4px;"
            min="1" max="{{ total_pages }}" value="{{ page }}"
            onkeydown="if(event.key==='Enter'){var p=this.value;var u='/admin/profiles?page='+p+'{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}';htmx.ajax('GET',u,{target:'#main-content',swap:'innerHTML'})}">
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
             hx-get="/admin/profiles?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}"
-            hx-target="#main-content" hx-swap="innerHTML">Next</button>
+            hx-target="#main-content" hx-swap="innerHTML">{{ _("Next") }}</button>
   </div>
   {% endif %}
 </div>

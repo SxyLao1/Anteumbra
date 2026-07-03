@@ -2,30 +2,30 @@
 <div style="display:flex;flex-direction:column;gap:10px;">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{% if enabled %}#00ff41{% else %}#ff4444{% endif %};"></span>
-    <span style="color:#888;font-size:11px;">Status: <strong style="color:{% if enabled %}#00ff41{% else %}#ff4444{% endif %};">{{ 'ACTIVE' if enabled else 'DISABLED' }}</strong></span>
+    <span style="color:#888;font-size:11px;">{{ _('Status:') }} <strong style="color:{% if enabled %}#00ff41{% else %}#ff4444{% endif %};">{{ _('ACTIVE') if enabled else _('DISABLED') }}</strong></span>
   </div>
   {% if enabled %}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;">
-    <div><span style="color:#555;">Format:</span> <span style="color:#00ff41;">{{ format | upper }}</span></div>
-    <div><span style="color:#555;">Exported:</span> <span style="color:#ccc;">{{ total_exported }} events</span></div>
-    <div><span style="color:#555;">File:</span> <span style="color:#888;font-size:9px;word-break:break-all;">{{ export_file }}</span></div>
-    <div><span style="color:#555;">Size:</span> <span style="color:#888;">{{ file_size_mb }} MB</span></div>
+    <div><span style="color:#555;">{{ _('Format:') }}</span> <span style="color:#00ff41;">{{ format | upper }}</span></div>
+    <div><span style="color:#555;">{{ _('Exported:') }}</span> <span style="color:#ccc;">{{ _('%(count)s events', count=total_exported) }}</span></div>
+    <div><span style="color:#555;">{{ _('File:') }}</span> <span style="color:#888;font-size:9px;word-break:break-all;">{{ export_file }}</span></div>
+    <div><span style="color:#555;">{{ _('Size:') }}</span> <span style="color:#888;">{{ _('%(size)s MB', size=file_size_mb) }}</span></div>
     {% if syslog_active %}
-    <div style="grid-column:1/-1;"><span style="color:#00ff41;">Syslog streaming active</span></div>
+    <div style="grid-column:1/-1;"><span style="color:#00ff41;">{{ _('Syslog streaming active') }}</span></div>
     {% endif %}
   </div>
   <div style="display:flex;gap:6px;margin-top:4px;">
     <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
             onclick="fetch('/admin/siem/export').then(r=>r.json()).then(d=>alert('Exported '+d.exported+' events to\\n'+d.file))">
-      Export JSON Lines</button>
+      {{ _('Export JSON Lines') }}</button>
     <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
             onclick="fetch('/admin/siem/export?format=cef').then(r=>r.json()).then(d=>alert('Exported '+d.exported+' events (CEF)'))">
-      Export CEF</button>
+      {{ _('Export CEF') }}</button>
     {% if has_data %}
-    <a href="/admin/siem/export?format=csv" class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;">CSV</a>
+    <a href="/admin/siem/export?format=csv" class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;">{{ _('CSV') }}</a>
     {% endif %}
   </div>
   {% else %}
-  <p style="color:#555;font-size:11px;">Enable in config.toml: <code>[siem] enabled = true</code></p>
+  <p style="color:#555;font-size:11px;">{{ _('Enable in config.toml:') }} <code>[siem] enabled = true</code></p>
   {% endif %}
 </div>

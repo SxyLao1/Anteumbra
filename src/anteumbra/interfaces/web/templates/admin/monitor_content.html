@@ -2,8 +2,8 @@
   <!-- Metrics Panel -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">◆</span> METRICS</span>
-      <span class="badge badge-info">Live</span>
+      <span><span class="card-header-icon">◆</span> {{ _('METRICS') }}</span>
+      <span class="badge badge-info">{{ _('Live') }}</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="metrics-panel"
          hx-get="/admin/metrics/data"
@@ -11,7 +11,7 @@
          hx-swap="innerHTML">
       <div class="empty-state">
         <div class="spinner"></div>
-        <p>Loading metrics...</p>
+        <p>{{ _('Loading metrics...') }}</p>
       </div>
     </div>
   </div>
@@ -19,14 +19,14 @@
   <!-- LIVE LOG STREAM -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">●</span> LIVE LOG STREAM</span>
+      <span><span class="card-header-icon">●</span> {{ _('LIVE LOG STREAM') }}</span>
       <input type="text" class="form-input" style="width: 160px; font-size: 12px; padding: 6px 10px;"
-             placeholder="Filter logs..." id="log-search-input"
+             placeholder="{{ _('Filter logs...') }}" id="log-search-input"
              onkeyup="filterLogStream(this.value)">
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
       <div id="log-stream" class="log-terminal" style="height: 100%; max-height: none; border: none; border-radius: 0;">
-        {{ log_history|safe if log_history else '<div class="log-line info">[INFO] Initializing log stream...</div>' }}
+        {{ log_history|safe if log_history else ('<div class="log-line info">' ~ _('[INFO] Initializing log stream...') ~ '</div>')|safe }}
       </div>
     </div>
   </div>
@@ -34,16 +34,16 @@
   <!-- YARA RULES -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">🛡</span> YARA RULES</span>
+      <span><span class="card-header-icon">🛡</span> {{ _('YARA RULES') }}</span>
       <div style="display: flex; gap: 8px; align-items: center;">
         <input type="text" class="form-input" style="width: 140px; font-size: 11px; padding: 5px 8px;"
-               placeholder="Filter..." name="q"
+               placeholder="{{ _('Filter...') }}" name="q"
                hx-get="/admin/yara/search?compact=1"
                hx-trigger="keyup changed delay:500ms"
                hx-target="#yara-rules-container"
                hx-swap="innerHTML">
         <button class="btn btn-primary btn-sm" style="font-size: 11px; padding: 5px 10px;"
-                onclick="window._yaraShowUploadModal()">Upload</button>
+                onclick="window._yaraShowUploadModal()">{{ _('Upload') }}</button>
       </div>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
@@ -51,7 +51,7 @@
            hx-get="/admin/yara/rules?compact=1"
            hx-trigger="load"
            hx-swap="innerHTML">
-        <div class="empty-state"><div class="spinner"></div><p>Loading YARA rules...</p></div>
+        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading YARA rules...') }}</p></div>
       </div>
     </div>
   </div>
@@ -59,16 +59,16 @@
   <!-- DETECTION RECORDS -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
-      <span><span class="card-header-icon">⚡</span> DETECTION RECORDS</span>
+      <span><span class="card-header-icon">⚡</span> {{ _('DETECTION RECORDS') }}</span>
       <div style="display: flex; gap: 8px; align-items: center;">
         <input type="text" class="form-input" style="width: 140px; font-size: 11px; padding: 5px 8px;"
-               placeholder="Filter..." name="q"
+               placeholder="{{ _('Filter...') }}" name="q"
                hx-get="/admin/search?compact=1"
                hx-trigger="keyup changed delay:500ms"
                hx-target="#records-table-container"
                hx-swap="innerHTML">
         <button class="btn btn-ghost btn-sm" id="dash-audit-btn" style="font-size: 11px; padding: 5px 10px;"
-                onclick="toggleDashboardAudit()">Audit</button>
+                onclick="toggleDashboardAudit()">{{ _('Audit') }}</button>
       </div>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
@@ -76,7 +76,7 @@
            hx-get="/admin/records?compact=1"
            hx-trigger="load, every 10s"
            hx-swap="innerHTML">
-        <div class="empty-state"><div class="spinner"></div><p>Loading records...</p></div>
+        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
       </div>
     </div>
   </div>

@@ -1,11 +1,11 @@
 <div style="max-width: 560px; margin: 0 auto;">
   <div class="card">
     <div class="card-header" style="justify-content: center;">
-      <span style="font-size: 16px;">🔐 Change Admin Password</span>
+      <span style="font-size: 16px;">{{ _('🔐 Change Admin Password') }}</span>
     </div>
     <div class="card-body">
       <p style="text-align: center; color: var(--color-text-muted); font-size: 12px; margin-bottom: 20px;">
-        Session will be invalidated immediately after password change
+        {{ _('Session will be invalidated immediately after password change') }}
       </p>
 
       {% if error %}
@@ -24,28 +24,28 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <div class="form-group">
-          <label class="form-label">Current Password</label>
-          <input type="password" name="current_password" class="form-input" placeholder="Enter current password" required>
+          <label class="form-label">{{ _('Current Password') }}</label>
+          <input type="password" name="current_password" class="form-input" placeholder="{{ _('Enter current password') }}" required>
         </div>
 
         <div class="form-group">
-          <label class="form-label">New Password</label>
-          <input type="password" name="new_password" class="form-input" placeholder="8-64 chars, mixed case + digits + symbols" required>
+          <label class="form-label">{{ _('New Password') }}</label>
+          <input type="password" name="new_password" class="form-input" placeholder="{{ _('8-64 chars, mixed case + digits + symbols') }}" required>
         </div>
 
         <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 20px; font-family: var(--font-mono);">
-          <div style="margin-bottom: 4px;">Requirements:</div>
-          <div>○ Length: 8-64 chars</div>
-          <div>○ Mixed case + digits + symbols (≥3 types)</div>
-          <div>○ Not in top 1000 common passwords</div>
+          <div style="margin-bottom: 4px;">{{ _('Requirements:') }}</div>
+          <div>○ {{ _('Length: 8-64 chars') }}</div>
+          <div>○ {{ _('Mixed case + digits + symbols (≥3 types)') }}</div>
+          <div>○ {{ _('Not in top 1000 common passwords') }}</div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Confirm New Password</label>
-          <input type="password" name="confirm_password" class="form-input" placeholder="Re-enter new password" required>
+          <label class="form-label">{{ _('Confirm New Password') }}</label>
+          <input type="password" name="confirm_password" class="form-input" placeholder="{{ _('Re-enter new password') }}" required>
         </div>
 
-        <button type="submit" class="login-btn" style="width: 100%; margin-top: 8px;">UPDATE PASSWORD</button>
+        <button type="submit" class="login-btn" style="width: 100%; margin-top: 8px;">{{ _('UPDATE PASSWORD') }}</button>
       </form>
     </div>
   </div>

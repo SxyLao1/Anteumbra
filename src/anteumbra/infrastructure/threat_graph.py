@@ -21,93 +21,15 @@ v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
 
 import hashlib, json, os, re, threading, time
 from collections import defaultdict
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-
-
-# ═══════════════════════════════════════════════════════════════
-# Data Classes
-# ═══════════════════════════════════════════════════════════════
-
-@dataclass
-class AttackEvent:
-    """单次攻击事件"""
-    timestamp: datetime
-    event_type: str          # "waf_alert" | "file_detect"
-    src_ip: str
-    user_agent: str
-    url: str = ""
-    file_path: str = ""
-    waf_rule_id: str = ""
-    waf_score: float = 0.0
-
-@dataclass
-class AttackerProfile:
-    """攻击者画像"""
-    profile_id: str
-    created_at: datetime
-    updated_at: datetime
-
-    # 动态特征
-    ip_pool: Set[str] = field(default_factory=set)
-    target_files: Set[str] = field(default_factory=set)
-    target_urls: Set[str] = field(default_factory=set)
-
-    # 静态指纹
-    ua_fingerprint: str = ""
-    tool_signature: str = ""
-    file_pattern: str = ""          # URL 路径模式（如 /uploads/*.php）
-
-    # 时间线
-    attack_chain: List[AttackEvent] = field(default_factory=list)
-
-    # 评分
-    risk_score: float = 0.0
-    raw_score: float = 0.0          # 衰减前原始分
-    decay_factor: float = 1.0
-    last_decayed: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
-
-    # 状态
-    status: str = "active"          # active | dormant | expired
-
-    # 冷却控制
-    last_alert_sent: Optional[datetime] = None
-    alert_cooldown_seconds: int = 60
-
-
-@dataclass
-class IPReputation:
-    """IP 信誉"""
-    ip: str
-    first_seen: datetime
-    last_seen: datetime
-    event_count: int = 0
-    unique_files: Set[str] = field(default_factory=set)
-    unique_urls: Set[str] = field(default_factory=set)
-    waf_score_avg: float = 0.0
-    reputation_score: float = 0.0
-    cluster_level: int = 0          # 0=normal, 1=suspicious, 2=proxy_pool, 3=confirmed_attacker
-    profile_ids: Set[str] = field(default_factory=set)
-
-
-@dataclass
-class FileReputation:
-    """文件信誉"""
-    path: str
-    first_seen: datetime
-    last_seen: datetime
-    detection_count: int = 0
-    unique_ips: Set[str] = field(default_factory=set)
-    yara_rules: List[str] = field(default_factory=list)
-    file_exists: bool = True
-    quarantine_id: Optional[str] = None
-    profile_ids: Set[str] = field(default_factory=set)
+from anteumbra.infrastructure.models import (
+    AttackEvent, AttackerProfile, IPReputation, FileReputation
+)
 
 
 # ═══════════════════════════════════════════════════════════════

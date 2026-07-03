@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>错误 - Anteumbra Admin</title>
+    <title>{{ _('错误 - Anteumbra Admin') }}</title>
     <meta charset="utf-8">
     <style>
         body { font-family: Arial; margin: 40px; background: #1a1a1a; color: #ff0000; }
@@ -10,12 +10,12 @@
     </style>
 </head>
 <body>
-    <h1>❌ 系统错误</h1>
+    <h1>{{ _('❌ 系统错误') }}</h1>
     <div class="error-container">
         <p>{{ error }}</p>
         <hr>
-        <pre>{{ detail|default('无详细错误信息') }}</pre>
+        <pre>{{ detail|default(_('无详细错误信息')) }}</pre>
     </div>
-    <button onclick="location.href='/admin'">返回首页</button>
+    <button onclick="location.href='/admin'">{{ _('返回首页') }}</button>
 </body>
 </html>

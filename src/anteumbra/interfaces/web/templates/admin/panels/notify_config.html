@@ -2,29 +2,29 @@
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
   <!-- Email -->
   <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">Email</h4>
+    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('Email') }}</h4>
     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
       <input type="checkbox" {% if email.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "email", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">Enable Email</span>
+      <span style="font-size: 13px; color: #ccc;">{{ _('Enable Email') }}</span>
     </label>
     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
       <div>
-        <label style="color: #888;">SMTP Host</label>
+        <label style="color: #888;">{{ _('SMTP Host') }}</label>
         <div style="color: #ccc;">{{ email.get('smtp_host', 'smtp.163.com') }}</div>
       </div>
       <div>
-        <label style="color: #888;">Username</label>
+        <label style="color: #888;">{{ _('Username') }}</label>
         <div style="color: #ccc;">{{ email.get('username', '') }}</div>
       </div>
       <div>
-        <label style="color: #888;">Password</label>
-        <div style="color: #888;">•••••••• (set via TRIDENT_EMAIL_PASSWORD env var)</div>
+        <label style="color: #888;">{{ _('Password') }}</label>
+        <div style="color: #888;">•••••••• {{ _('(set via TRIDENT_EMAIL_PASSWORD env var)') }}</div>
       </div>
       <div>
-        <label style="color: #888;">To</label>
+        <label style="color: #888;">{{ _('To') }}</label>
         <div style="color: #ccc;">{{ email.get('to_addrs', [''])[0] }}</div>
       </div>
     </div>
@@ -32,43 +32,43 @@
 
   <!-- WeChat (Server酱) -->
   <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">WeChat (Server酱)</h4>
+    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('WeChat (Server酱)') }}</h4>
     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
       <input type="checkbox" {% if wechat.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "wechat", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">Enable WeChat</span>
+      <span style="font-size: 13px; color: #ccc;">{{ _('Enable WeChat') }}</span>
     </label>
     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
       <div>
-        <label style="color: #888;">API Key</label>
-        <div style="color: #888;">•••••••• (set via TRIDENT_WECHAT_API_KEY env var)</div>
+        <label style="color: #888;">{{ _('API Key') }}</label>
+        <div style="color: #888;">•••••••• {{ _('(set via TRIDENT_WECHAT_API_KEY env var)') }}</div>
       </div>
     </div>
   </div>
 
   <!-- Webhook -->
   <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">Webhook</h4>
+    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('Webhook') }}</h4>
     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
       <input type="checkbox" {% if webhook.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "webhook", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">Enable Webhook</span>
+      <span style="font-size: 13px; color: #ccc;">{{ _('Enable Webhook') }}</span>
     </label>
     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
       <div>
-        <label style="color: #888;">URL</label>
-        <div style="color: #888;">{{ webhook.get('url', 'Not configured') }}</div>
+        <label style="color: #888;">{{ _('URL') }}</label>
+        <div style="color: #888;">{{ webhook.get('url', _('Not configured')) }}</div>
       </div>
     </div>
   </div>
 </div>
 
 <div style="margin-top: 16px; padding: 12px; background: #0a0a0a; border-left: 3px solid #ffaa00; font-size: 12px; color: #888;">
-  Sensitive credentials (passwords, API keys) are managed via <code>.env</code> file for security.
-  Toggle switches above enable/disable each notification channel in <code>config.toml</code>.
-  Full credential configuration via browser is planned for v1.9.0.
+  {{ _('Sensitive credentials (passwords, API keys) are managed via') }} <code>.env</code> {{ _('file for security.') }}
+  {{ _('Toggle switches above enable/disable each notification channel in') }} <code>config.toml</code>.
+  {{ _('Full credential configuration via browser is planned for v1.9.0.') }}
 </div>

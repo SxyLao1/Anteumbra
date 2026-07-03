@@ -9,7 +9,7 @@ v1.7.4增强：ScanOptions支持access_log_path配置
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
@@ -36,9 +36,9 @@ class AttackerProfile:
     profile_id: str
     created_at: 'datetime'
     updated_at: 'datetime'
-    ip_pool: set = field(default_factory=set)
-    target_files: set = field(default_factory=set)
-    target_urls: set = field(default_factory=set)
+    ip_pool: Set[str] = field(default_factory=set)
+    target_files: Set[str] = field(default_factory=set)
+    target_urls: Set[str] = field(default_factory=set)
     ua_fingerprint: str = ""
     tool_signature: str = ""
     file_pattern: str = ""
@@ -59,12 +59,12 @@ class IPReputation:
     first_seen: 'datetime'
     last_seen: 'datetime'
     event_count: int = 0
-    unique_files: set = field(default_factory=set)
-    unique_urls: set = field(default_factory=set)
+    unique_files: Set[str] = field(default_factory=set)
+    unique_urls: Set[str] = field(default_factory=set)
     waf_score_avg: float = 0.0
     reputation_score: float = 0.0
     cluster_level: int = 0
-    profile_ids: set = field(default_factory=set)
+    profile_ids: Set[str] = field(default_factory=set)
 
 @dataclass
 class FileReputation:
@@ -73,12 +73,12 @@ class FileReputation:
     first_seen: 'datetime'
     last_seen: 'datetime'
     detection_count: int = 0
-    unique_ips: set = field(default_factory=set)
+    unique_ips: Set[str] = field(default_factory=set)
     yara_rules: list = field(default_factory=list)
     file_exists: bool = True
     quarantine_id: Optional[str] = None
     cluster_id: Optional[str] = None
-    profile_ids: set = field(default_factory=set)
+    profile_ids: Set[str] = field(default_factory=set)
 
 
 @dataclass

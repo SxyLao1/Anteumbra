@@ -1,59 +1,59 @@
 <!-- v1.8.1: Attacker Profile Detail -->
 <div style="padding:16px; display:flex; flex-direction:column; gap:16px; height:100%;">
   <div style="display:flex; align-items:center; gap:12px;">
-    <a href="#" onclick="loadContent('profiles','Profiles');return false;" style="color:#00ff41; text-decoration:none; font-size:12px;">&larr; Back to Profiles</a>
+    <a href="#" onclick="loadContent('profiles','Profiles');return false;" style="color:#00ff41; text-decoration:none; font-size:12px;">&larr; {{ _('Back to Profiles') }}</a>
     <span style="flex:1;"></span>
-    <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="window.open('/admin/profiles/{{ profile.profile_id }}/report','_blank')">Generate Report</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="window.open('/admin/profiles/{{ profile.profile_id }}/report','_blank')">{{ _('Generate Report') }}</button>
     <span class="badge badge-{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">
-      {{ 'CRITICAL' if profile.risk_score > 0.8 else 'HIGH' if profile.risk_score > 0.5 else 'MEDIUM' }}
+      {{ _('CRITICAL') if profile.risk_score > 0.8 else _('HIGH') if profile.risk_score > 0.5 else _('MEDIUM') }}
     </span>
   </div>
 
   <!-- Profile header -->
   <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:20px; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:20px;">
     <div>
-      <div style="color:#888;font-size:10px;">PROFILE ID</div>
+      <div style="color:#888;font-size:10px;">{{ _('PROFILE ID') }}</div>
       <code style="color:#00ff41;font-size:14px;">{{ profile.profile_id }}</code>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">RISK SCORE</div>
+      <div style="color:#888;font-size:10px;">{{ _('RISK SCORE') }}</div>
       <div style="font-size:28px;font-weight:bold; color:{{ '#ff4444' if profile.risk_score > 0.8 else '#ffaa00' if profile.risk_score > 0.5 else '#00ff41' }};">
         {{ "%.0f"|format(profile.risk_score * 100) }}
       </div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">TOOL FINGERPRINT</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.ua_fingerprint or 'Unknown' }}</div>
+      <div style="color:#888;font-size:10px;">{{ _('TOOL FINGERPRINT') }}</div>
+      <div style="color:#ccc;font-size:14px;">{{ profile.ua_fingerprint or _('Unknown') }}</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">STATUS</div>
+      <div style="color:#888;font-size:10px;">{{ _('STATUS') }}</div>
       <div style="color:{{ '#00ff41' if profile.status == 'active' else '#ffaa00' }};font-size:14px;">{{ profile.status.upper() }}</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">IP POOL</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.ip_pool|length }} IPs</div>
+      <div style="color:#888;font-size:10px;">{{ _('IP POOL') }}</div>
+      <div style="color:#ccc;font-size:14px;">{{ profile.ip_pool|length }} {{ _('IPs') }}</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">TARGET FILES</div>
+      <div style="color:#888;font-size:10px;">{{ _('TARGET FILES') }}</div>
       <div style="color:#ccc;font-size:14px;">{{ profile.target_files|length }}</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">TARGET URLs</div>
+      <div style="color:#888;font-size:10px;">{{ _('TARGET URLs') }}</div>
       <div style="color:#ccc;font-size:14px;">{{ profile.target_urls|length }}</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">FILE CLUSTERS</div>
+      <div style="color:#888;font-size:10px;">{{ _('FILE CLUSTERS') }}</div>
       <div style="color:#ccc;font-size:14px;" id="profile-cluster-count">—</div>
     </div>
     <div>
-      <div style="color:#888;font-size:10px;">LAST SEEN</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.last_seen.strftime('%m-%d %H:%M') if profile.last_seen else 'N/A' }}</div>
+      <div style="color:#888;font-size:10px;">{{ _('LAST SEEN') }}</div>
+      <div style="color:#ccc;font-size:14px;">{{ profile.last_seen.strftime('%m-%d %H:%M') if profile.last_seen else _('N/A') }}</div>
     </div>
   </div>
 
   <!-- Attack Chain Timeline -->
   <div style="flex:1; overflow-y:auto; min-height:250px;">
-    <h4 style="color:#00ff41; margin:0 0 12px 0;">ATTACK CHAIN</h4>
+    <h4 style="color:#00ff41; margin:0 0 12px 0;">{{ _('ATTACK CHAIN') }}</h4>
     {% if events %}
     <div style="position:relative; padding-left:24px;">
       <div style="position:absolute; left:8px; top:0; bottom:0; width:2px; background:#1a1a1a;"></div>
@@ -61,40 +61,40 @@
       <div style="position:relative; margin-bottom:12px; padding:8px 12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px;">
         <div style="position:absolute; left:-20px; top:12px; width:10px; height:10px; border-radius:50%; background:{{ '#ff4444' if evt.waf_score > 0.9 else '#ffaa00' if evt.waf_score > 0.7 else '#00ff41' }}; border:2px solid #0a0a0a;"></div>
         <div style="display:flex; gap:12px; align-items:center; margin-bottom:4px;">
-          <span style="color:#888;font-size:10px;">{{ evt.timestamp.strftime('%H:%M:%S') if evt.timestamp else 'N/A' }}</span>
+          <span style="color:#888;font-size:10px;">{{ evt.timestamp.strftime('%H:%M:%S') if evt.timestamp else _('N/A') }}</span>
           <span style="color:#00ff41;font-size:10px;">{{ evt.event_type.upper() }}</span>
-          <span class="badge" style="font-size:9px;">{{ evt.waf_rule_id or 'detection' }}</span>
-          <span style="color:#888;font-size:10px;">score: {{ "%.2f"|format(evt.waf_score) }}</span>
+          <span class="badge" style="font-size:9px;">{{ evt.waf_rule_id or _('detection') }}</span>
+          <span style="color:#888;font-size:10px;">{{ _('score: ') }}{{ "%.2f"|format(evt.waf_score) }}</span>
         </div>
         <div style="font-size:11px;color:#ccc;">
-          <span style="color:#888;">IP:</span> {{ evt.src_ip }}
-          <span style="color:#888;margin-left:12px;">URL:</span> <code style="color:#ccc;font-size:10px;">{{ evt.url[:60] }}</code>
+          <span style="color:#888;">{{ _('IP:') }}</span> {{ evt.src_ip }}
+          <span style="color:#888;margin-left:12px;">{{ _('URL:') }}</span> <code style="color:#ccc;font-size:10px;">{{ evt.url[:60] }}</code>
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state"><p>No attack events recorded yet</p></div>
+    <div class="empty-state"><p>{{ _('No attack events recorded yet') }}</p></div>
     {% endif %}
   </div>
 
   <!-- v1.8.3: File Clusters -->
   {% if file_clusters %}
   <div>
-    <h4 style="color:#00ff41; margin:0 0 8px 0;">FILE CLUSTERS ({{ file_clusters|length }})</h4>
+    <h4 style="color:#00ff41; margin:0 0 8px 0;">{{ _('FILE CLUSTERS') }} ({{ file_clusters|length }})</h4>
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
       {% for fc in file_clusters %}
       <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 12px; font-size:11px; max-width:350px;">
         <div style="color:#00ff41; margin-bottom:4px;">
           <code style="font-size:10px;">{{ fc.cluster_id[:10] }}</code>
-          <span style="color:#888; margin-left:6px;">{{ fc.cluster_size }} files</span>
+          <span style="color:#888; margin-left:6px;">{{ fc.cluster_size }} {{ _('files') }}</span>
         </div>
         <div style="color:#666; font-size:10px; max-height:80px; overflow-y:auto;">
           <div style="color:#ccc;">{{ fc.file[:55] }}</div>
           {% if fc.quarantined %}
-          <div style="color:#ffaa00; font-size:9px;">Quarantined → {{ fc.quarantine_path[:40] }}</div>
+          <div style="color:#ffaa00; font-size:9px;">{{ _('Quarantined') }} → {{ fc.quarantine_path[:40] }}</div>
           {% else %}
-          <div style="color:#00ff41; font-size:9px;">Active</div>
+          <div style="color:#00ff41; font-size:9px;">{{ _('Active') }}</div>
           {% endif %}
           {% for s in fc.samples[:3] %}
           {% if s != fc.file %}
@@ -111,7 +111,7 @@
   <!-- v1.9.0: Linked Detection Records -->
   {% if linked_records %}
   <div>
-    <h4 style="color:#00ff41; margin:0 0 8px 0;">LINKED DETECTION RECORDS ({{ linked_records|length }})</h4>
+    <h4 style="color:#00ff41; margin:0 0 8px 0;">{{ _('LINKED DETECTION RECORDS') }} ({{ linked_records|length }})</h4>
     <div style="display:flex; flex-wrap:wrap; gap:6px;">
       {% for lr in linked_records[:20] %}
       <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:6px 10px; font-size:10px; display:flex; align-items:center; gap:8px;">
@@ -122,7 +122,7 @@
       </div>
       {% endfor %}
       {% if linked_records|length > 20 %}
-      <span style="color:#555;font-size:10px;">... and {{ linked_records|length - 20 }} more</span>
+      <span style="color:#555;font-size:10px;">{{ _('... and ') }}{{ linked_records|length - 20 }}{{ _(' more') }}</span>
       {% endif %}
     </div>
   </div>
@@ -131,28 +131,28 @@
   <!-- IP Table -->
   <div id="ip-table-section" data-all-ips='{{ all_ips|tojson }}'>
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <h4 style="color:#00ff41; margin:0;">ASSOCIATED IPs ({{ ip_total }})</h4>
+      <h4 style="color:#00ff41; margin:0;">{{ _('ASSOCIATED IPs') }} ({{ ip_total }})</h4>
       <span style="flex:1;"></span>
-      <span style="font-size:10px;color:#888;" id="ip-selected-count">0 selected</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">Select Page</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPsAll()">Select All {{ ip_total }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="clearIPSelection()">Clear</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copySelectedIPs()">Copy Selected</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copyAllIPs()">Copy All</button>
+      <span style="font-size:10px;color:#888;" id="ip-selected-count">{{ _('0 selected') }}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">{{ _('Select Page') }}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPsAll()">{{ _('Select All') }} {{ ip_total }}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="clearIPSelection()">{{ _('Clear') }}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copySelectedIPs()">{{ _('Copy Selected') }}</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copyAllIPs()">{{ _('Copy All') }}</button>
       <button class="btn btn-danger btn-sm" style="font-size:10px;" id="block-ips-btn" disabled
-              onclick="blockSelectedIPs()">Block Selected</button>
+              onclick="blockSelectedIPs()">{{ _('Block Selected') }}</button>
     </div>
     <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; max-height:300px; overflow-y:auto;">
       <table style="width:100%; font-size:11px; border-collapse:collapse;">
         <thead>
           <tr style="border-bottom:1px solid #1a1a1a; color:#888; font-size:10px; position:sticky; top:0; background:#0a0a0a;">
             <th style="padding:6px 10px; width:30px; text-align:center;"><input type="checkbox" onchange="toggleAllIPs(this)"></th>
-            <th style="padding:6px 10px; text-align:left;">IP Address</th>
-            <th style="padding:6px 10px; text-align:right;">Events</th>
-            <th style="padding:6px 10px; text-align:right;">WAF Score</th>
-            <th style="padding:6px 10px; text-align:center;">Level</th>
-            <th style="padding:6px 10px; text-align:left;">First Seen</th>
-            <th style="padding:6px 10px; text-align:left;">Last Seen</th>
+            <th style="padding:6px 10px; text-align:left;">{{ _('IP Address') }}</th>
+            <th style="padding:6px 10px; text-align:right;">{{ _('Events') }}</th>
+            <th style="padding:6px 10px; text-align:right;">{{ _('WAF Score') }}</th>
+            <th style="padding:6px 10px; text-align:center;">{{ _('Level') }}</th>
+            <th style="padding:6px 10px; text-align:left;">{{ _('First Seen') }}</th>
+            <th style="padding:6px 10px; text-align:left;">{{ _('Last Seen') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -165,7 +165,7 @@
             <td style="padding:4px 10px;">
               <code style="color:#ccc; font-size:10px;" class="ip-addr">{{ ipd.ip }}</code>
               <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:0 4px;margin-left:4px;"
-                      onclick="event.stopPropagation();copyIP('{{ ipd.ip }}')" title="Copy IP">Copy</button>
+                      onclick="event.stopPropagation();copyIP('{{ ipd.ip }}')" title="{{ _('Copy IP') }}">{{ _('Copy') }}</button>
             </td>
             <td style="padding:4px 10px; text-align:right; color:#ccc;">{{ ipd.event_count }}</td>
             <td style="padding:4px 10px; text-align:right; color:{{ '#ff4444' if ipd.waf_score_avg > 0.9 else '#ffaa00' if ipd.waf_score_avg > 0.7 else '#00ff41' }};">{{ "%.2f"|format(ipd.waf_score_avg) }}</td>
@@ -174,8 +174,8 @@
                 {{ ipd.cluster_level }}
               </span>
             </td>
-            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else 'N/A' }}</td>
-            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else 'N/A' }}</td>
+            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else _('N/A') }}</td>
+            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else _('N/A') }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -185,14 +185,14 @@
     <div class="pagination-bar" style="margin-top:8px;">
       <button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %}
               hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page - 1 }}"
-              hx-target="#main-content" hx-swap="innerHTML">Prev</button>
-      <span class="page-info">Page {{ ip_page }} / {{ ip_total_pages }}</span>
+              hx-target="#main-content" hx-swap="innerHTML">{{ _('Prev') }}</button>
+      <span class="page-info">{{ _('Page') }} {{ ip_page }} / {{ ip_total_pages }}</span>
       <input type="number" class="form-input" style="width:45px;text-align:center;font-size:10px;padding:2px 4px;"
              min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}"
              onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/profiles/{{ profile.profile_id }}?ip_page='+p,{target:'#main-content',swap:'innerHTML'})}">
       <button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %}
               hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page + 1 }}"
-              hx-target="#main-content" hx-swap="innerHTML">Next</button>
+              hx-target="#main-content" hx-swap="innerHTML">{{ _('Next') }}</button>
     </div>
     {% endif %}
   </div>

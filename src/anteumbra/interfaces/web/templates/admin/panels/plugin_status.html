@@ -2,10 +2,10 @@
 <div style="display:flex;flex-direction:column;gap:8px;">
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ '#00ff41' if enabled else '#ff4444' }};"></span>
-    <span style="color:#888;font-size:11px;">System: <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ 'ENABLED' if enabled else 'DISABLED' }}</strong></span>
-    <span style="color:#555;font-size:10px;">Detectors: <strong style="color:#00ff41;">{{ detector_count }}</strong></span>
-    <span style="color:#555;font-size:10px;">Notifiers: <strong style="color:#00ff41;">{{ notifier_count }}</strong></span>
-    <span style="color:#555;font-size:10px;">Sources: <strong style="color:#00ff41;">{{ source_count }}</strong></span>
+    <span style="color:#888;font-size:11px;">{{ _('System:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('ENABLED') if enabled else _('DISABLED') }}</strong></span>
+    <span style="color:#555;font-size:10px;">{{ _('Detectors:') }} <strong style="color:#00ff41;">{{ detector_count }}</strong></span>
+    <span style="color:#555;font-size:10px;">{{ _('Notifiers:') }} <strong style="color:#00ff41;">{{ notifier_count }}</strong></span>
+    <span style="color:#555;font-size:10px;">{{ _('Sources:') }} <strong style="color:#00ff41;">{{ source_count }}</strong></span>
   </div>
   {% if plugins %}
   <div style="display:flex;flex-direction:column;gap:3px;">
@@ -23,9 +23,9 @@
   {% else %}
   <p style="color:#555;font-size:11px;text-align:center;padding:8px;">
     {% if enabled %}
-    No plugins loaded. Add to <code>[plugins] builtin</code> in config.toml.
+    {{ _('No plugins loaded. Add to') }} <code>[plugins] builtin</code> {{ _('in config.toml.') }}
     {% else %}
-    Enable in config.toml: <code>[plugins] enabled = true</code>
+    {{ _('Enable in config.toml:') }} <code>[plugins] enabled = true</code>
     {% endif %}
   </p>
   {% endif %}

@@ -2,11 +2,11 @@
 <div style="display:flex; flex-direction:column; gap:12px; overflow:visible;">
   <!-- Toolbar -->
   <div style="display:flex; align-items:center; gap:12px;">
-    <input type="text" class="form-input" placeholder="Search config..." style="flex:1; max-width:300px; font-size:11px; padding:4px 8px;"
+    <input type="text" class="form-input" placeholder="{{ _('Search config...') }}" style="flex:1; max-width:300px; font-size:11px; padding:4px 8px;"
            oninput="searchConfig(this.value)">
     <span style="flex:1;"></span>
-    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
-    <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save config.toml</button>
+    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">{{ _('Saved') }}</span>
+    <button class="btn btn-primary btn-sm" onclick="saveConfig()">{{ _('Save config.toml') }}</button>
   </div>
 
   <!-- Tree -->
@@ -17,7 +17,7 @@
       <div class="cfg-section-hdr" onclick="toggleCfgSection(this)" style="padding:4px 12px; padding-left:{{ 12 + indent }}px; cursor:pointer; display:flex; align-items:center; gap:8px;">
         <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
         <span style="color:#00ff41; font-weight:bold;">[{{ sec_name }}]</span>
-        <span style="color:#555; font-size:10px;">{{ fields|length }} fields</span>
+        <span style="color:#555; font-size:10px;">{{ _('%(count)s fields', count=fields|length) }}</span>
       </div>
       <div class="cfg-section-body">
         {% for f in fields %}
@@ -31,10 +31,10 @@
           {% if f.is_env %}
           <input type="text" value="{{ f.display }}" data-key="{{ sec_name }}.{{ f.key }}" disabled
                  style="flex:1; background:#111; color:#555; border:1px solid #222; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono); cursor:not-allowed;">
-          <span style="color:#666; font-size:10px; white-space:nowrap;">(env var)</span>
+          <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('(env var)') }}</span>
           {% elif f.type == 'bool' %}
           <input type="checkbox" data-key="{{ sec_name }}.{{ f.key }}" {% if f.value %}checked{% endif %} onchange="markDirty()">
-          <span style="color:#888; font-size:10px;">{{ 'true' if f.value else 'false' }}</span>
+          <span style="color:#888; font-size:10px;">{{ _('true') if f.value else _('false') }}</span>
           {% elif f.type in ('int', 'float') %}
           <input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="max-width:180px; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
           {% elif f.type == 'array' %}
@@ -57,8 +57,8 @@
   <div class="config-section collapsed">
     <div class="config-section-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex;align-items:center;padding:8px 14px;cursor:pointer;border-bottom:1px solid #1a1a1a;background:#0a0a0a;border-radius:4px 4px 0 0;">
       <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
-      <h4 style="color:#00ff41; margin:0; font-size:13px; flex:1;">.env File</h4>
-      <span style="color:#666; font-size:10px;">sensitive credentials</span>
+      <h4 style="color:#00ff41; margin:0; font-size:13px; flex:1;">{{ _('.env File') }}</h4>
+      <span style="color:#666; font-size:10px;">{{ _('sensitive credentials') }}</span>
     </div>
     <div class="config-section-body" style="padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; flex-direction:column; gap:14px; overflow:visible;">
 
@@ -67,8 +67,8 @@
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_PASSWORD_HASH</span>
         <span class="cfg-info" data-tooltip="scrypt-hashed admin login password. Use Generate Hash button, don't paste raw password.">i</span>
         <code id="env-pwd-display" style="flex:1; background:#000; color:#888; padding:4px 8px; font-size:10px; border-radius:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px;">{{ env_vars.get('TRIDENT_PASSWORD_HASH', 'Not set')[:60] }}...</code>
-        <input type="text" id="env-pwd-input" placeholder="New password" style="width:140px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <button class="btn btn-ghost btn-sm" onclick="generatePwdHash()" style="white-space:nowrap;">Generate Hash</button>
+        <input type="text" id="env-pwd-input" placeholder="{{ _('New password') }}" style="width:140px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <button class="btn btn-ghost btn-sm" onclick="generatePwdHash()" style="white-space:nowrap;">{{ _('Generate Hash') }}</button>
       </div>
 
       <!-- Server酱 key -->
@@ -76,7 +76,7 @@
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_WECHAT_API_KEY</span>
         <span class="cfg-info" data-tooltip="ServerChan API key for WeChat push notifications. Get from sct.ftqq.com">i</span>
         <input type="text" id="env-wechat-key" value="{{ env_vars.get('TRIDENT_WECHAT_API_KEY', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <a href="https://sct.ftqq.com/" target="_blank" style="color:#00ff41; font-size:10px; white-space:nowrap; text-decoration:none;">Get Key</a>
+        <a href="https://sct.ftqq.com/" target="_blank" style="color:#00ff41; font-size:10px; white-space:nowrap; text-decoration:none;">{{ _('Get Key') }}</a>
       </div>
 
       <!-- Email: Username -->
@@ -90,7 +90,7 @@
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_PASSWORD</span>
         <span class="cfg-info" data-tooltip="SMTP authorization code (not login password). 163: Settings > POP3/SMTP > Add auth code">i</span>
         <input type="password" id="env-TRIDENT_EMAIL_PASSWORD" value="{{ env_vars.get('TRIDENT_EMAIL_PASSWORD', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <span style="color:#666; font-size:10px; white-space:nowrap;">SMTP auth code</span>
+        <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('SMTP auth code') }}</span>
       </div>
       <!-- Email: From -->
       <div style="display:flex; align-items:center; gap:8px;">
@@ -102,8 +102,8 @@
       <div style="display:flex; align-items:center; gap:8px;">
         <span style="color:#ccc; font-size:11px; min-width:150px;">TRIDENT_EMAIL_TO</span>
         <span class="cfg-info" data-tooltip="Recipients, comma-separated. e.g. alice@qq.com,bob@163.com">i</span>
-        <input type="text" id="env-TRIDENT_EMAIL_TO" value="{{ env_vars.get('TRIDENT_EMAIL_TO', '') }}" placeholder="a@qq.com,b@163.com" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <span style="color:#666; font-size:10px; white-space:nowrap;">comma-separated</span>
+        <input type="text" id="env-TRIDENT_EMAIL_TO" value="{{ env_vars.get('TRIDENT_EMAIL_TO', '') }}" placeholder="{{ _('a@qq.com,b@163.com') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
+        <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('comma-separated') }}</span>
       </div>
 
       <!-- Webhook -->
@@ -114,9 +114,9 @@
       </div>
 
       <div style="display:flex; gap:8px; align-items:center;">
-        <button class="btn btn-primary btn-sm" onclick="saveEnvVars()">Save .env</button>
-        <span id="env-saved" style="color:#00ff41; font-size:12px; display:none;">Saved</span>
-        <span style="color:#888; font-size:10px;">Credentials never committed to git.</span>
+        <button class="btn btn-primary btn-sm" onclick="saveEnvVars()">{{ _('Save .env') }}</button>
+        <span id="env-saved" style="color:#00ff41; font-size:12px; display:none;">{{ _('Saved') }}</span>
+        <span style="color:#888; font-size:10px;">{{ _('Credentials never committed to git.') }}</span>
       </div>
     </div>
   </div>

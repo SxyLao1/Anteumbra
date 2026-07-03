@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
-<title>Anteumbra — Attacker Profile Report</title>
+<title>{{ _('Anteumbra — Attacker Profile Report') }}</title>
 <style>
   @media print { body { -webkit-print-color-adjust: exact; } .no-print { display:none; } }
   body { background:#fff; color:#222; font-family:'Segoe UI',Arial,sans-serif; max-width:900px; margin:0 auto; padding:30px; font-size:13px; line-height:1.6; }
@@ -28,37 +28,37 @@
 </style></head><body>
 
 <div class="no-print" style="background:#cc0000;color:#fff;padding:8px 16px;display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-  <span style="flex:1;">Report Preview</span>
-  <button onclick="window.print()" style="background:#fff;color:#cc0000;border:none;padding:6px 16px;cursor:pointer;font-weight:bold;">Print / Save PDF</button>
-  <a href="#" onclick="loadContent('profiles/{{ profile.profile_id }}','Profile');return false;" style="color:#fff;">Back</a>
+  <span style="flex:1;">{{ _('Report Preview') }}</span>
+  <button onclick="window.print()" style="background:#fff;color:#cc0000;border:none;padding:6px 16px;cursor:pointer;font-weight:bold;">{{ _('Print / Save PDF') }}</button>
+  <a href="#" onclick="loadContent('profiles/{{ profile.profile_id }}','Profile');return false;" style="color:#fff;">{{ _('Back') }}</a>
 </div>
 
-<h1>Attacker Profile Report</h1>
-<p style="color:#888;">Generated: {{ generated_at }} | Profile ID: <code>{{ profile.profile_id }}</code></p>
+<h1>{{ _('Attacker Profile Report') }}</h1>
+<p style="color:#888;">{{ _('Generated:') }} {{ generated_at }} | {{ _('Profile ID:') }} <code>{{ profile.profile_id }}</code></p>
 
 <div class="disclaimer">
-  Detection Event Timeline — based on WAF alerts and file system monitoring.
-  Full attack chain reconstruction requires SIEM/NDR integration.
+  {{ _('Detection Event Timeline — based on WAF alerts and file system monitoring.') }}
+  {{ _('Full attack chain reconstruction requires SIEM/NDR integration.') }}
 </div>
 
 <!-- Summary -->
 <div class="summary-grid">
-  <div class="summary-item"><div class="label">Risk Score</div><div class="value" style="color:#cc0000;">{{ "%.0f"|format(profile.risk_score * 100) }}</div></div>
-  <div class="summary-item"><div class="label">IP Pool Size</div><div class="value">{{ profile.ip_pool|length }}</div></div>
-  <div class="summary-item"><div class="label">Files Targeted</div><div class="value">{{ profile.target_files|length }}</div></div>
-  <div class="summary-item"><div class="label">Attack Type</div><div class="value" style="font-size:14px;">{{ attack_type }}</div></div>
+  <div class="summary-item"><div class="label">{{ _('Risk Score') }}</div><div class="value" style="color:#cc0000;">{{ "%.0f"|format(profile.risk_score * 100) }}</div></div>
+  <div class="summary-item"><div class="label">{{ _('IP Pool Size') }}</div><div class="value">{{ profile.ip_pool|length }}</div></div>
+  <div class="summary-item"><div class="label">{{ _('Files Targeted') }}</div><div class="value">{{ profile.target_files|length }}</div></div>
+  <div class="summary-item"><div class="label">{{ _('Attack Type') }}</div><div class="value" style="font-size:14px;">{{ attack_type }}</div></div>
 </div>
 
 <table>
-  <tr><td style="width:140px;"><strong>Tool Fingerprint</strong></td><td><code>{{ profile.ua_fingerprint or 'Unknown' }}</code></td></tr>
-  <tr><td><strong>First Seen</strong></td><td>{{ profile.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
-  <tr><td><strong>Last Seen</strong></td><td>{{ profile.last_seen.strftime('%Y-%m-%d %H:%M') if profile.last_seen else 'N/A' }}</td></tr>
-  <tr><td><strong>Status</strong></td><td>{{ profile.status.upper() }}</td></tr>
-  <tr><td><strong>Total Events</strong></td><td>{{ events|length }}</td></tr>
+  <tr><td style="width:140px;"><strong>{{ _('Tool Fingerprint') }}</strong></td><td><code>{{ profile.ua_fingerprint or _('Unknown') }}</code></td></tr>
+  <tr><td><strong>{{ _('First Seen') }}</strong></td><td>{{ profile.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+  <tr><td><strong>{{ _('Last Seen') }}</strong></td><td>{{ profile.last_seen.strftime('%Y-%m-%d %H:%M') if profile.last_seen else _('N/A') }}</td></tr>
+  <tr><td><strong>{{ _('Status') }}</strong></td><td>{{ profile.status.upper() }}</td></tr>
+  <tr><td><strong>{{ _('Total Events') }}</strong></td><td>{{ events|length }}</td></tr>
 </table>
 
 <!-- MITRE ATT&CK -->
-<h2>MITRE ATT&CK Mapping</h2>
+<h2>{{ _('MITRE ATT&CK Mapping') }}</h2>
 <div>
   {% for tag in mitre_tags %}
   <span class="mitre-tag"><span class="tid">{{ tag.id }}</span> {{ tag.name }} <span style="color:#888;">[{{ tag.tactic }}]</span></span>
@@ -66,30 +66,30 @@
 </div>
 
 <!-- Detection Timeline -->
-<h2>Detection Event Timeline</h2>
+<h2>{{ _('Detection Event Timeline') }}</h2>
 {% if events %}
 <div class="timeline">
   {% for evt in (events|reverse|list)[:50] %}
   <div class="tl-item">
     <div class="tl-dot"></div>
-    <div class="tl-time">{{ evt.timestamp.strftime('%Y-%m-%d %H:%M:%S') if evt.timestamp else 'N/A' }}</div>
-    <div><strong>{{ evt.event_type.upper() }}</strong> — {{ evt.waf_rule_id or evt.file_path or 'Detection' }}</div>
+    <div class="tl-time">{{ evt.timestamp.strftime('%Y-%m-%d %H:%M:%S') if evt.timestamp else _('N/A') }}</div>
+    <div><strong>{{ evt.event_type.upper() }}</strong> — {{ evt.waf_rule_id or evt.file_path or _('Detection') }}</div>
     <div style="font-size:11px;color:#666;">
-      IP: <code>{{ evt.src_ip }}</code>
-      {% if evt.url %} URL: <code>{{ evt.url[:80] }}</code>{% endif %}
-      {% if evt.waf_score > 0 %} Score: {{ "%.2f"|format(evt.waf_score) }}{% endif %}
+      {{ _('IP:') }} <code>{{ evt.src_ip }}</code>
+      {% if evt.url %} {{ _('URL:') }} <code>{{ evt.url[:80] }}</code>{% endif %}
+      {% if evt.waf_score > 0 %} {{ _('Score:') }} {{ "%.2f"|format(evt.waf_score) }}{% endif %}
     </div>
   </div>
   {% endfor %}
 </div>
 {% else %}
-<p style="color:#888;">No detection events recorded.</p>
+<p style="color:#888;">{{ _('No detection events recorded.') }}</p>
 {% endif %}
 
 <!-- Associated IPs -->
-<h2>Associated IPs ({{ profile.ip_pool|length }})</h2>
+<h2>{{ _('Associated IPs') }} ({{ profile.ip_pool|length }})</h2>
 <table>
-  <thead><tr><th>IP Address</th><th>Events</th><th>Cluster Level</th></tr></thead>
+  <thead><tr><th>{{ _('IP Address') }}</th><th>{{ _('Events') }}</th><th>{{ _('Cluster Level') }}</th></tr></thead>
   <tbody>
     {% for ip in (profile.ip_pool|list)[:50] %}
     <tr><td><code>{{ ip }}</code></td><td>—</td><td>—</td></tr>
@@ -98,7 +98,7 @@
 </table>
 
 <!-- Recommendations -->
-<h2>Disposal Recommendations</h2>
+<h2>{{ _('Disposal Recommendations') }}</h2>
 {% for rec in recs %}
 <div style="background:#f8f8f8; padding:10px; margin:6px 0; border-left:3px solid #cc0000;">
   <strong>{{ rec.action }}</strong>
@@ -107,6 +107,6 @@
 {% endfor %}
 
 <div class="footer">
-  Generated by Anteumbra WebShell Detection System v1.8.3 | MIT License
+  {{ _('Generated by Anteumbra WebShell Detection System v1.8.3 | MIT License') }}
 </div>
 </body></html>

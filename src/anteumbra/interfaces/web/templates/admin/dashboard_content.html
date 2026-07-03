@@ -3,44 +3,44 @@
 
     <!-- 检测统计 -->
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 20px;">
-      <div class="stat-label" style="color: #00ff41; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Total Detections</div>
+      <div class="stat-label" style="color: #00ff41; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">{{ _('Total Detections') }}</div>
       <div class="stat-value" style="color: #fff; font-size: 36px; font-weight: bold; margin-top: 8px;" id="stat-detections">{{ stats.total_detections }}</div>
-      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">All time</div>
+      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">{{ _('All time') }}</div>
     </div>
 
     <!-- 隔离统计 -->
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff6b35; border-radius: 4px; padding: 20px;">
-      <div class="stat-label" style="color: #ff6b35; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Quarantined</div>
+      <div class="stat-label" style="color: #ff6b35; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">{{ _('Quarantined') }}</div>
       <div class="stat-value" style="color: #fff; font-size: 36px; font-weight: bold; margin-top: 8px;" id="stat-quarantined">{{ stats.quarantined }}</div>
-      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">Active in quarantine</div>
+      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">{{ _('Active in quarantine') }}</div>
     </div>
 
     <!-- 误报统计 -->
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ffd700; border-radius: 4px; padding: 20px;">
-      <div class="stat-label" style="color: #ffd700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">False Positives</div>
+      <div class="stat-label" style="color: #ffd700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">{{ _('False Positives') }}</div>
       <div class="stat-value" style="color: #fff; font-size: 36px; font-weight: bold; margin-top: 8px;" id="stat-false-pos">{{ stats.false_positives }}</div>
-      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">Marked by admin</div>
+      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">{{ _('Marked by admin') }}</div>
     </div>
 
     <!-- 防护率 -->
     <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 20px;">
-      <div class="stat-label" style="color: #00ff41; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Protection Rate</div>
+      <div class="stat-label" style="color: #00ff41; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">{{ _('Protection Rate') }}</div>
       <div class="stat-value" style="color: #fff; font-size: 36px; font-weight: bold; margin-top: 8px;" id="stat-protection">{{ stats.protection_rate }}%</div>
-      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">Quarantined / Total</div>
+      <div class="stat-trend" style="color: #888; font-size: 12px; margin-top: 4px;">{{ _('Quarantined / Total') }}</div>
     </div>
 
   </div>
 
   <!-- 最近检测事件 -->
   <div class="recent-events" style="background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 20px;">
-    <h3 style="color: #00ff41; margin: 0 0 16px 0; font-size: 16px;">📋 Recent Detections</h3>
+    <h3 style="color: #00ff41; margin: 0 0 16px 0; font-size: 16px;">{{ _('📋 Recent Detections') }}</h3>
     <table class="event-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
       <thead>
         <tr style="border-bottom: 1px solid #333;">
-          <th style="text-align: left; padding: 8px; color: #888;">Time</th>
-          <th style="text-align: left; padding: 8px; color: #888;">File</th>
-          <th style="text-align: left; padding: 8px; color: #888;">Rule</th>
-          <th style="text-align: left; padding: 8px; color: #888;">Status</th>
+          <th style="text-align: left; padding: 8px; color: #888;">{{ _('Time') }}</th>
+          <th style="text-align: left; padding: 8px; color: #888;">{{ _('File') }}</th>
+          <th style="text-align: left; padding: 8px; color: #888;">{{ _('Rule') }}</th>
+          <th style="text-align: left; padding: 8px; color: #888;">{{ _('Status') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -51,11 +51,11 @@
           <td style="padding: 8px;"><span class="badge badge-yellow">{{ event.rule }}</span></td>
           <td style="padding: 8px;">
             {% if event.quarantined %}
-              <span class="badge badge-green">🛡️ Quarantined</span>
+              <span class="badge badge-green">{{ _('🛡️ Quarantined') }}</span>
             {% elif event.false_positive %}
-              <span class="badge badge-yellow">⚠️ FP</span>
+              <span class="badge badge-yellow">{{ _('⚠️ FP') }}</span>
             {% else %}
-              <span class="badge badge-red">🔴 Active</span>
+              <span class="badge badge-red">{{ _('🔴 Active') }}</span>
             {% endif %}
           </td>
         </tr>

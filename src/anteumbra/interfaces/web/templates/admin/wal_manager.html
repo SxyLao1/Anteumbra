@@ -1,27 +1,27 @@
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-header">
-    <span><span class="card-header-icon">▤</span> Current WAL File</span>
+    <span><span class="card-header-icon">▤</span> {{ _('Current WAL File') }}</span>
   </div>
   <div class="card-body">
     <div id="wal-current"
          hx-get="/admin/wal/current"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
     </div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <span><span class="card-header-icon">▤</span> WAL Archive List (Last 20)</span>
+    <span><span class="card-header-icon">▤</span> {{ _('WAL Archive List (Last 20)') }}</span>
   </div>
   <div class="card-body">
     <div id="wal-list"
          hx-get="/admin/wal/list"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
     </div>
   </div>
 </div>

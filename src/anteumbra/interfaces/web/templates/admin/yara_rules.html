@@ -2,19 +2,19 @@
 <div id="yara-rules-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
   <!-- Unified toolbar: search + batch + upload (always visible, v2.0 fix) -->
   <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
-    <input type="text" class="form-input" style="flex: 1; min-width: 200px; max-width: 400px;" placeholder="Search rules..."
+    <input type="text" class="form-input" style="flex: 1; min-width: 200px; max-width: 400px;" placeholder="{{ _('Search rules...') }}"
            name="q" value="{{ request.args.get('q', '') }}"
            oninput="yaraClientFilter(this)">
     <span style="display: flex; gap: 8px; align-items: center;">
       <button id="yara-select-all-btn" class="btn btn-ghost btn-sm" style="font-size: 11px;"
-              onclick="yaraSelectAll()">Select All</button>
+              onclick="yaraSelectAll()">{{ _('Select All') }}</button>
       <button id="yara-deselect-btn" class="btn btn-ghost btn-sm" style="font-size: 11px; display: none;"
-              onclick="yaraDeselectAll()">Clear</button>
-      <span id="yara-selected-count" style="font-size: 11px; color: #00ff41; display: none; white-space: nowrap;">0 selected</span>
+              onclick="yaraDeselectAll()">{{ _('Clear') }}</button>
+      <span id="yara-selected-count" style="font-size: 11px; color: #00ff41; display: none; white-space: nowrap;">{{ _('0 selected') }}</span>
       <button id="yara-batch-delete-btn" class="btn btn-danger btn-sm" style="font-size: 11px; display: none;"
-              onclick="yaraBatchDelete()">Delete Selected</button>
+              onclick="yaraBatchDelete()">{{ _('Delete Selected') }}</button>
       <span style="color: #333; margin: 0 4px;">|</span>
-      <button class="btn btn-primary btn-sm" onclick="window._yaraShowUploadModal()">[+] Upload</button>
+      <button class="btn btn-primary btn-sm" onclick="window._yaraShowUploadModal()">{{ _('[+] Upload') }}</button>
     </span>
   </div>
 
@@ -28,14 +28,14 @@
       <div class="record-info">
         <div class="record-title">{{ rule.filename }}</div>
         <div class="record-meta">
-          <span class="badge badge-info">{{ rule.rule_count }} rules</span>
+          <span class="badge badge-info">{{ rule.rule_count }} {{ _('rules') }}</span>
           <span style="color: var(--color-text-muted);">|</span>
           <span>{{ rule.size_kb }}KB</span>
           <span style="color: var(--color-text-muted);">|</span>
           <span>{{ rule.modified[:19] }}</span>
           {% if rule.error %}
           <span style="color: var(--color-text-muted);">|</span>
-          <span style="color: var(--color-danger);">Error: {{ rule.error[:30] }}</span>
+          <span style="color: var(--color-danger);">{{ _('Error:') }} {{ rule.error[:30] }}</span>
           {% endif %}
         </div>
       </div>
@@ -46,21 +46,21 @@
                 hx-target="#yara-edit-modal .modal-body"
                 hx-swap="innerHTML"
                 onclick="document.getElementById('yara-edit-modal').querySelector('.modal-header span').textContent = 'Edit: {{ rule.filename }}'; AnteumbraUtils.modal.show('yara-edit-modal');">
-          Edit
+          {{ _('Edit') }}
         </button>
         <button class="btn btn-danger btn-sm"
                 style="{% if compact %}font-size: 10px; padding: 3px 8px;{% endif %}"
                 hx-post="/admin/yara/rules/delete/{{ rule.filename }}"
-                hx-confirm="Delete {{ rule.filename }}?"
+                hx-confirm="{{ _('Delete') }} {{ rule.filename }}?"
                 hx-target="#yara-rules-container"
                 hx-swap="outerHTML">
-          Delete
+          {{ _('Delete') }}
         </button>
       </div>
     </div>
     {% else %}
     <div class="empty-state">
-      <p>No YARA rules installed</p>
+      <p>{{ _('No YARA rules installed') }}</p>
     </div>
     {% endfor %}
   </div>
@@ -70,8 +70,8 @@
     <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
             hx-get="/admin/yara/rules?page={{ page - 1 }}{% if compact %}&compact=1{% endif %}"
             hx-target="#yara-rules-container"
-            hx-swap="outerHTML">Prev</button>
-    <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+            hx-swap="outerHTML">{{ _('Prev') }}</button>
+    <span class="page-info">{{ _('Page') }} {{ page }} / {{ total_pages }} ({{ total }} {{ _('total') }})</span>
     <div class="page-jump">
       <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
              onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/yara/rules?page='+p+'{% if compact %}&compact=1{% endif %}',{target:'#yara-rules-container',swap:'outerHTML'})}">
@@ -79,7 +79,7 @@
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
             hx-get="/admin/yara/rules?page={{ page + 1 }}{% if compact %}&compact=1{% endif %}"
             hx-target="#yara-rules-container"
-            hx-swap="outerHTML">Next</button>
+            hx-swap="outerHTML">{{ _('Next') }}</button>
   </div>
   {% endif %}
 </div>

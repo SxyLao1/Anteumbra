@@ -67,8 +67,8 @@
       <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %}
               hx-get="/admin/system/config_panel?page={{ page - 1 }}"
               hx-target="#system-config-panel"
-              hx-swap="innerHTML">← Prev</button>
-      <span class="page-info">Page {{ page }} / {{ total_pages }} ({{ total }} total)</span>
+              hx-swap="innerHTML">{{ _('← Prev') }}</button>
+      <span class="page-info">{{ _('Page %(page)s / %(total_pages)s (%(total)s total)', page=page, total_pages=total_pages, total=total) }}</span>
       <div class="page-jump">
         <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
                onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/system/config_panel?page='+p,{target:'#system-config-panel',swap:'innerHTML'})}">
@@ -76,7 +76,7 @@
       <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
               hx-get="/admin/system/config_panel?page={{ page + 1 }}"
               hx-target="#system-config-panel"
-              hx-swap="innerHTML">Next →</button>
+              hx-swap="innerHTML">{{ _('Next →') }}</button>
     </div>
     {% endif %}
   </div>

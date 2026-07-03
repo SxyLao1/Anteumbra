@@ -1,55 +1,55 @@
 <div class="record-detail-modal">
   <div class="modal-header">
-    <h3>🔍 检测详情</h3>
+    <h3>{{ _('检测详情') }}</h3>
     <button class="modal-close" onclick="closeRecordDetail()">&times;</button>
   </div>
   <div class="modal-body">
     <div class="detail-section">
-      <h4>文件信息</h4>
+      <h4>{{ _('文件信息') }}</h4>
       <table class="detail-table">
-        <tr><td>文件名</td><td>{{ record.display_name }}</td></tr>
-        <tr><td>完整路径</td><td><code>{{ record.file_path }}</code></td></tr>
-        <tr><td>文件大小</td><td>{{ "%.2f"|format(record.file_size / 1024) }} KB</td></tr>
-        <tr><td>文件状态</td><td>
+        <tr><td>{{ _('文件名') }}</td><td>{{ record.display_name }}</td></tr>
+        <tr><td>{{ _('完整路径') }}</td><td><code>{{ record.file_path }}</code></td></tr>
+        <tr><td>{{ _('文件大小') }}</td><td>{{ "%.2f"|format(record.file_size / 1024) }} {{ _('KB') }}</td></tr>
+        <tr><td>{{ _('文件状态') }}</td><td>
           {% if record.file_exists %}
-            <span class="badge badge-green">存在</span>
+            <span class="badge badge-green">{{ _('存在') }}</span>
           {% else %}
-            <span class="badge badge-red">已删除</span>
+            <span class="badge badge-red">{{ _('已删除') }}</span>
           {% endif %}
         </td></tr>
       </table>
     </div>
 
     <div class="detail-section">
-      <h4>检测信息</h4>
+      <h4>{{ _('检测信息') }}</h4>
       <table class="detail-table">
-        <tr><td>检测时间</td><td>{{ record.detected_at }}</td></tr>
-        <tr><td>命中规则</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
-        <tr><td>特征列表</td><td>
+        <tr><td>{{ _('检测时间') }}</td><td>{{ record.detected_at }}</td></tr>
+        <tr><td>{{ _('命中规则') }}</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
+        <tr><td>{{ _('特征列表') }}</td><td>
           {% for feature in record.features %}
             <span class="badge badge-blue">{{ feature }}</span>
           {% endfor %}
         </td></tr>
-        <tr><td>通信次数</td><td>{{ record.communication_count }}</td></tr>
-        <tr><td>首次发现IP</td><td>{{ record.first_seen_ip }}</td></tr>
+        <tr><td>{{ _('通信次数') }}</td><td>{{ record.communication_count }}</td></tr>
+        <tr><td>{{ _('首次发现IP') }}</td><td>{{ record.first_seen_ip }}</td></tr>
       </table>
     </div>
 
     <div class="detail-section">
-      <h4>告警状态</h4>
+      <h4>{{ _('告警状态') }}</h4>
       <table class="detail-table">
-        <tr><td>已告警</td><td>
+        <tr><td>{{ _('已告警') }}</td><td>
           {% if record.alerted %}
-            <span class="badge badge-green">是</span>
+            <span class="badge badge-green">{{ _('是') }}</span>
           {% else %}
-            <span class="badge badge-gray">否</span>
+            <span class="badge badge-gray">{{ _('否') }}</span>
           {% endif %}
         </td></tr>
-        <tr><td>误报标记</td><td>
+        <tr><td>{{ _('误报标记') }}</td><td>
           {% if record.marked_false_positive %}
-            <span class="badge badge-yellow">已标记</span>
+            <span class="badge badge-yellow">{{ _('已标记') }}</span>
           {% else %}
-            <span class="badge badge-gray">未标记</span>
+            <span class="badge badge-gray">{{ _('未标记') }}</span>
           {% endif %}
         </td></tr>
       </table>
@@ -57,31 +57,31 @@
 
     {% if record.quarantine_info %}
     <div class="detail-section">
-      <h4>🛡️ 隔离信息</h4>
+      <h4>{{ _('隔离信息') }}</h4>
       <table class="detail-table">
-        <tr><td>隔离ID</td><td><code>{{ record.quarantine_info.quarantine_id }}</code></td></tr>
-        <tr><td>隔离路径</td><td><code>{{ record.quarantine_info.quarantine_path }}</code></td></tr>
-        <tr><td>隔离时间</td><td>{{ record.quarantine_info.quarantine_time }}</td></tr>
+        <tr><td>{{ _('隔离ID') }}</td><td><code>{{ record.quarantine_info.quarantine_id }}</code></td></tr>
+        <tr><td>{{ _('隔离路径') }}</td><td><code>{{ record.quarantine_info.quarantine_path }}</code></td></tr>
+        <tr><td>{{ _('隔离时间') }}</td><td>{{ record.quarantine_info.quarantine_time }}</td></tr>
       </table>
     </div>
     {% endif %}
 
     {% if record.linked_profiles %}
     <div class="detail-section">
-      <h4>◉ 关联威胁画像</h4>
+      <h4>{{ _('关联威胁画像') }}</h4>
       <div style="display: flex; flex-direction: column; gap: 6px;">
         {% for lp in record.linked_profiles %}
         <div style="display: flex; align-items: center; justify-content: space-between; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 8px 12px;">
           <div style="display: flex; align-items: center; gap: 10px;">
             <code style="color: #00ff41; font-size: 11px;">{{ lp.profile_id }}</code>
-            <span style="color: {{ '#ff4444' if lp.risk_score >= 0.7 else '#ffaa00' if lp.risk_score >= 0.4 else '#888' }}; font-size: 11px;">Risk: {{ lp.risk_score }}</span>
-            <span style="color: #888; font-size: 10px;">{{ lp.ip_count }} IPs</span>
+            <span style="color: {{ '#ff4444' if lp.risk_score >= 0.7 else '#ffaa00' if lp.risk_score >= 0.4 else '#888' }}; font-size: 11px;">{{ _('Risk:') }} {{ lp.risk_score }}</span>
+            <span style="color: #888; font-size: 10px;">{{ lp.ip_count }} {{ _('IPs') }}</span>
             <span style="color: #555; font-size: 10px;">{{ lp.tool_signature }}</span>
           </div>
           <button class="btn btn-sm btn-ghost"
                   style="font-size: 10px; padding: 2px 8px;"
                   onclick="closeRecordDetail(); loadContent('profiles/{{ lp.profile_id }}', 'Profile {{ lp.profile_id[:8] }}')">
-            View →
+            {{ _('View') }} →
           </button>
         </div>
         {% endfor %}
