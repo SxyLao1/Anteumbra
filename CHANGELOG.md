@@ -4,7 +4,7 @@
 
 ---
 
-## [1.0.5-dev] — 2026-07-03
+## [1.0.5] — 2026-07-03
 
 ### Added
 - **CI/CD (GitHub Actions)**: test matrix (Python 3.10/3.11/3.12) + Playwright UI tests + Docker build + PyPI publish via Trusted Publishing (OIDC)

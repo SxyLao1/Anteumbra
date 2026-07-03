@@ -1,8 +1,8 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.4 (2026-07-03)  
+> **Current Version**: v1.0.5 (2026-07-03)  
 > **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
-> **Status**: PyPI published, 144/144 tests passing, DDD architecture complete
+> **Status**: PyPI published, ~217 tests passing, DDD + EDA architecture complete, CI/CD operational
 
 ---
 
@@ -10,49 +10,58 @@
 
 | Milestone | Status | Version |
 |-----------|--------|---------|
-| Trident v1.9.5 → Anteumbra rename | Done | v1.0.0 |
-| DDD four-layer architecture | Done | v1.0.0 |
-| `pip install anteumbra` package | Done | v1.0.0 |
-| Unified CLI (`anteumbra run|start|stop|status|config`) | Done | v1.0.0 |
-| Flask-Babel i18n (en/zh, auto-detect) | Done | v1.0.0 |
-| PluginManager + EDA event-driven (95%+ coverage) | Done | v1.0.1 |
-| emit/dispatch semantic separation (async Fire-and-Forget) | Done | v1.0.1 |
-| Repository bridge (JSON + SQLite dual-write) | Done | v1.0.2–v1.0.3 |
-| Block Ledger + Bidirectional Links + Broadcast | Done | v1.0.2–v1.0.3 |
-| Blueprint split (admin → 5 route modules) | Done | v1.0.2 |
-| SQLite FK constraints (3 FKs) + index optimization (13) | Done | v1.0.4 |
-| Docker multi-stage build (3 hash engines active) | Done | v1.0.4 |
-| PyPI official publish | Done | v1.0.4 |
-| 144/144 tests (88 unit + 21 E2E backend + 34 E2E UI + 1 WAF) | Done | v1.0.4 |
+| Trident v1.9.5 → Anteumbra rename | ✅ Done | v1.0.0 |
+| DDD four-layer architecture | ✅ Done | v1.0.0 |
+| `pip install anteumbra` package | ✅ Done | v1.0.0 |
+| Unified CLI (`anteumbra run\|start\|stop\|status\|config`) | ✅ Done | v1.0.0 |
+| Flask-Babel i18n (en/zh, auto-detect) | ✅ Done | v1.0.0 |
+| PluginManager + EDA event-driven (95%+ coverage) | ✅ Done | v1.0.1 |
+| emit/dispatch semantic separation (async Fire-and-Forget) | ✅ Done | v1.0.1 |
+| Repository bridge (JSON + SQLite dual-write) | ✅ Done | v1.0.2–v1.0.3 |
+| Block Ledger + Bidirectional Links + Broadcast | ✅ Done | v1.0.2–v1.0.3 |
+| Blueprint split (admin → 5+ route modules) | ✅ Done | v1.0.2 |
+| SQLite FK constraints (3 FKs) + index optimization (13) + auto-migration | ✅ Done | v1.0.4 |
+| Docker multi-stage build (3 hash engines active) | ✅ Done | v1.0.4 |
+| PyPI official publish (Trusted Publishing OIDC) | ✅ Done | v1.0.4 |
 
 ---
 
-## v1.0.5 — Polish & Test Hardening (In Progress)
+## v1.0.5 — Polish & Test Hardening (Released 2026-07-03)
 
 | Priority | Feature | Status |
-|----------|---------|--------|
-| P0 | Template `_()` i18n full coverage (34/40 templates) | In Progress |
-| P0 | threat_graph dataclass → models.py migration cleanup | ✅ Done |
-| P0 | ROADMAP + CHANGELOG update | In Progress |
-| P1 | 13 manual tests → automated (deploy 4 + security 4 + profiling 5) | Pending |
-| P1 | Full-chain E2E scenario (Mock WAF → Block Ledger) | Pending |
-| P2 | CLAUDE.md / PROJECT_MASTER / Memory docs sync | Pending |
+|----------|---------|:---:|
+| P0 | Template i18n full coverage — 36/40 templates, ~490 `{{ _(...) }}` | ✅ |
+| P0 | Version unification — `__init__.__version__` single source of truth (PEP 440) | ✅ |
+| P0 | ScanResult triple-definition unified → `domain/entities.py` dataclass (10 fields) | ✅ |
+| P0 | `html_escape` → `markupsafe.escape()` (Flask standard library) | ✅ |
+| P0 | `DummyEngine` (YARA fallback) — explicit `compiled_rules`/`match` replacing `__getattr__` | ✅ |
+| P0 | `EmergencyScanner` — `advanced_bypass` import wrapped in try/except safe fallback | ✅ |
+| P0 | `FileRecord.from_dict` — filter unknown keys from SQLite rows (`id` column) | ✅ |
+| P1 | 73 new automated tests (deployment 11 + security 52 + profiling E2E 8 + full-chain 1) | ✅ |
+| P1 | CI/CD — GitHub Actions: test matrix (3.10/3.11/3.12) + Playwright UI + Build + Docker + PyPI publish (OIDC) | ✅ |
+| P1 | `threat_graph` dataclasses → `infrastructure/models.py` migration | ✅ |
+| P1 | ROADMAP.md + CHANGELOG.md created and updated | ✅ |
+| P1 | Docker build fixes — ssdeep/py-tlsh optional fallback, shell redirect escaping | ✅ |
+| P2 | Project documentation sync (CLAUDE.md + PROJECT_MASTER + Memory) | ✅ |
 
 ---
 
-## v1.1.0 — Multi-Site + Intelligence
+## v1.1.0 — Multi-Site + Intelligence (Planned)
 
 | Priority | Feature |
 |----------|---------|
-| P0 | Multi-site support (`[[website]]` array) |
-| P0 | CI/CD pipeline (GitHub Actions: test + build + Docker) |
+| P0 | admin_bp further split (~1800 lines → settings_bp / monitor_bp / system_bp) |
+| P0 | Full-chain E2E test fix (Registry data isolation) |
+| P0 | `/admin/debug/routes` security fix — add `@require_auth` |
+| P1 | UI test stabilization (Playwright parallel run timeouts) |
 | P1 | Geo-IP integration (MaxMind GeoLite2) |
-| P1 | Java Memory Shell Agent PoC |
-| P2 | Admin 2FA (TOTP) + API key management |
-| P2 | MISP / AbuseIPDB threat intelligence feed |
-| P3 | EventBus (asyncio) + Pydantic Schema migration |
+| P1 | Admin 2FA (TOTP) + API key management |
+| P2 | Multi-site support (`[[website]]` array) |
+| P2 | MISP / AbuseIPDB threat intelligence feed integration |
 
-## v1.2.0 — Production Hardening
+---
+
+## v1.2.0 — Production Hardening (Planned)
 
 | Priority | Feature |
 |----------|---------|
