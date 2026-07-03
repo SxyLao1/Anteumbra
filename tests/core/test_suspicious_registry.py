@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""v1.1.0: Unit tests for suspicious_registry.py — the central persistence module.
+"""v1.0.8: Unit tests for suspicious_registry.py — the central persistence module.
 
 Tests cover: add, get, get_all, mark_quarantined, mark_false_positive,
 soft_delete_record, remove, increment_access, compact_registry,
-clear_memory_cache, and the v1.1.0 public getter functions.
+clear_memory_cache, and the v1.0.8 public getter functions.
 """
 import os
 from pathlib import Path
