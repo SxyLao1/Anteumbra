@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir --user ssdeep 2>/dev/null || echo "[Docker] ssdeep skipped (build incompatible)" \
     && pip install --no-cache-dir --user py-tlsh 2>/dev/null || echo "[Docker] py-tlsh skipped (build incompatible)" \
     && pip install --no-cache-dir --user \
-    flask>=2.3.3,<3.0.0 \
+    'flask>=2.3.3,<3.0.0' \
     flask-wtf>=1.2.1 \
     flask-session>=0.5.0 \
     flask-babel>=3.1.0 \
