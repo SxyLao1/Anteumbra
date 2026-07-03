@@ -17,6 +17,9 @@
 ### Fixed
 - **Security**: `/admin/debug/routes` and `/admin/test` now require `@require_auth` (previously accessible without login)
 - **Unused imports**: cleaned up ~10 dead imports in admin_bp.py after split
+- **Registry test isolation**: `_is_tool_script()` now natively detects pytest via `PYTEST_CURRENT_TEST`; `_ensure_initialized()` unconditionally overrides production path in test mode — fixes import-timing bug where `wal_manager` import chain locked production path before env vars were set
+- **Full-chain E2E**: `test_full_chain_waf_to_block_ledger` now PASSES (was skipped) — fixed path lookup to use `path_to_key()` matching stored registry format
+- **Test count**: 186 backend + 34 UI = 220 tests passing (was ~217)
 
 ### Security
 - `/admin/debug/routes` — route table exposure prevented for unauthenticated users
