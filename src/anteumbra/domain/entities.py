@@ -99,7 +99,10 @@ if _HAS_PYDANTIC:
 
         @classmethod
         def from_dict(cls, data: Dict[str, Any]) -> "FileRecord":
-            return cls(**data)
+            # Filter to known model fields only (SQLite rows include 'id', etc.)
+            valid_fields = set(cls.model_fields.keys())
+            filtered = {k: v for k, v in data.items() if k in valid_fields}
+            return cls(**filtered)
 
 else:
     # Fallback: dataclass implementation
@@ -148,10 +151,13 @@ else:
 
         @classmethod
         def from_dict(cls, data: Dict[str, Any]) -> "FileRecord":
+            from dataclasses import fields as dc_fields
             if "detection_source" in data and isinstance(data["detection_source"], str):
-                data = dict(data)
                 data["detection_source"] = DetectionSource(data["detection_source"])
-            return cls(**data)
+            # Filter to known fields only (SQLite rows include 'id', etc.)
+            valid_fields = {f.name for f in dc_fields(cls)}
+            filtered = {k: v for k, v in data.items() if k in valid_fields}
+            return cls(**filtered)
 
 
 # ── Value Objects ────────────────────────────────────────
