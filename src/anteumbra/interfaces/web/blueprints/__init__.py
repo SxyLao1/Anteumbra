@@ -40,3 +40,13 @@ def register_blueprints(app: 'Flask'):
 
     from anteumbra.interfaces.web.blueprints.records_bp import records_bp
     app.register_blueprint(records_bp)
+
+    # v1.0.6: Blueprint split from admin_bp (settings / monitor / system)
+    from anteumbra.interfaces.web.blueprints.settings_bp import settings_bp
+    app.register_blueprint(settings_bp)
+
+    from anteumbra.interfaces.web.blueprints.monitor_bp import monitor_bp
+    app.register_blueprint(monitor_bp)
+
+    from anteumbra.interfaces.web.blueprints.system_bp import system_bp
+    app.register_blueprint(system_bp)

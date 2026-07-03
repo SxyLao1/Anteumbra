@@ -92,12 +92,14 @@ _PROTECTED_ROUTES = [
     "/admin/settings/plugin-status",
     # Logs
     "/admin/logs/history",
+    # Debug (now protected as of v1.0.6)
+    "/admin/test",
+    "/admin/debug/routes",
 ]
 
 # Routes that are intentionally public (no auth required)
 _PUBLIC_ROUTES = [
     "/admin/login",
-    "/admin/test",
     "/admin/api/v1/health",
     "/api/v1/health",
 ]
@@ -184,18 +186,11 @@ class TestAuthRequired:
             )
 
     def test_debug_routes_lacks_auth(self, client):
-        """KNOWN GAP: /admin/debug/routes is not protected by @require_auth.
-
-        This route returns a list of all registered admin routes as JSON.
-        While not sensitive in itself, it leaks internal route structure and
-        should require authentication per defense-in-depth.
-        """
+        """v1.0.6: /admin/debug/routes is now protected by @require_auth."""
         resp = client.get("/admin/debug/routes")
-        if resp.status_code == 200:
-            pytest.skip(
-                "KNOWN GAP: /admin/debug/routes returns 200 without auth. "
-                "Add @require_auth decorator to admin_bp.debug_routes()."
-            )
+        assert resp.status_code in (302, 403), (
+            f"Expected 302/403 for protected route, got {resp.status_code}"
+        )
 
     def test_post_protected_routes_reject_unauth(self, client):
         """POST to protected action endpoints should be rejected without auth."""
