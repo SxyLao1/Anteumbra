@@ -151,7 +151,7 @@ class HTTPDevice(BlockDevice):
         try:
             payload = {
                 "ip": decision.ip,
-                "comment": f"Trident: {decision.reason} (profile: {decision.profile_id[:8]})",
+                "comment": f"Anteumbra: {decision.reason} (profile: {decision.profile_id[:8]})",
                 "permanent": decision.permanent,
                 "duration": decision.duration_seconds,
                 "risk_score": decision.risk_score,

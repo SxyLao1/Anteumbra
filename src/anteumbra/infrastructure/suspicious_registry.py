@@ -999,9 +999,13 @@ def get(path: Path) -> Optional[Dict]:
     _ensure_initialized()  # 确保初始化
 
     try:
-        abs_path = str(path.resolve())
-        for item in get_all(include_deleted=True):
-            if item["file_path"] == abs_path:
+        # v1.1.0 fix: 使用 path_to_key() 确保与 add() 的键一致
+        # 之前 str(path.resolve()) 在 Windows 上保留原始大小写，
+        # 而 add() 使用 path_to_key() 进行小写规范化，导致查找失败。
+        abs_path = path_to_key(path)
+        # v1.1.0 fix: include false positives so marked records are still findable
+        for item in get_all(include_deleted=True, include_false_positive=True):
+            if item.get("file_path") == abs_path:
                 return item
     except Exception as e:
         log_with_symbol("error", "error", f"异常: {e}")
@@ -1050,6 +1054,66 @@ def compact_registry():
     except Exception as e:
         log_with_symbol("error", "error", f"Registry压缩失败: {e}")
         return {"error": str(e)}
+
+# ── v1.1.0: Public status getters (replaces direct access to private module globals) ──
+
+def soft_delete_record(file_path: Union[Path, str]) -> bool:
+    """v1.1.0: 软删除记录 — 标记 file_exists=False 并记录删除时间。
+
+    Blueprint 层应使用此函数，而非直接操作 _load_registry()/_save_registry()。
+    """
+    _ensure_initialized()
+    if isinstance(file_path, Path):
+        abs_path = path_to_key(file_path)
+    else:
+        abs_path = file_path
+
+    try:
+        registry = _load_registry()
+        for item in registry:
+            if item.get("file_path") == abs_path:
+                item["file_exists"] = False
+                item["deleted_at"] = datetime.now().isoformat()
+                _save_registry(registry)
+
+                # v1.1.0: Emit event for PluginManager handlers
+                try:
+                    from anteumbra.application.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    if pm.is_enabled:
+                        pm.emit("registry_changed", "suspicious_registry", {
+                            "operation": "soft_delete",
+                            "file_path": abs_path,
+                        })
+                except Exception:
+                    pass
+
+                return True
+        return False
+    except Exception:
+        _logger_error(f"soft_delete_record failed: {file_path}")
+        return False
+
+
+def is_async_save_enabled() -> bool:
+    """v1.1.0: 公共 getter — 异步保存是否启用"""
+    return _async_save_enabled
+
+
+def get_async_save_queue_size() -> int:
+    """v1.1.0: 公共 getter — 异步保存队列大小"""
+    if _async_save_queue is None:
+        return 0
+    try:
+        return _async_save_queue.qsize()
+    except Exception:
+        return 0
+
+
+def get_registry_path() -> Optional[Path]:
+    """v1.1.0: 公共 getter — Registry 文件路径"""
+    return _REGISTRY_PATH
+
 
 def _auto_compact_worker():
     """自动压缩工作线程"""
@@ -1108,6 +1172,11 @@ def _clear_memory_cache():
             logger.info(f"[REGISTRY] 内存缓存已清空（原记录数: {old_count}）")
         else:
             logger.debug("[REGISTRY] 内存缓存已为空")
+
+
+def clear_memory_cache():
+    """v1.1.0: 公共 API — 清空内存缓存，强制下次从磁盘加载"""
+    _clear_memory_cache()
 
 # 优雅关闭注册
 atexit.register(_shutdown_async_saver)

@@ -385,7 +385,7 @@ def settings_storage_status():
     try:
         cfg = ConfigRegistry.get_raw_config().get("storage", {})
         backend = cfg.get("backend", "json")
-        db_path = cfg.get("db_path", "data/trident.db")
+        db_path = cfg.get("db_path", "data/anteumbra.db")
         db = Path(db_path)
         db_exists = db.exists()
         db_size = round(db.stat().st_size / 1024 / 1024, 2) if db_exists else 0

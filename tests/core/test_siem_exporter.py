@@ -32,7 +32,7 @@ class TestSIEMFormatter:
     def test_cef_format(self, sample_event):
         fmt = SIEMFormatter({"format": "cef"})
         line = fmt.format_event(sample_event)
-        assert line.startswith("CEF:0|Trident|")
+        assert line.startswith("CEF:0|Anteumbra|")
         assert "fpath=/var/www/uploads/webshell.php" in line
 
     def test_syslog_format(self, sample_event):

@@ -35,11 +35,10 @@ import shutil
 
 import anteumbra.infrastructure as core  # compat
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.suspicious_registry import get_all, remove, _async_save_enabled, _async_save_queue
+from anteumbra.infrastructure.suspicious_registry import get_all, remove
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import check_port_reachable
-from anteumbra.interfaces.web.blueprints.yara_bp import yara_bp
 from anteumbra.infrastructure.utils.sse_manager import register_sse_client, unregister_sse_client, _sse_clients, \
     _registry_update_queue, trigger_registry_update
 from anteumbra.infrastructure.utils.password_utils import check_password_strength, update_password_hash_in_config
@@ -682,7 +681,7 @@ def public_health():
     return jsonify(status), http_code
 
 
-@admin_bp.route('/admin/health', methods=['GET'])
+@admin_bp.route('/health', methods=['GET'])
 def admin_health():
     """Authenticated health check with full diagnostics.
 

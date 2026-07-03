@@ -604,7 +604,7 @@ def format_alert_message(context: dict) -> str:
     status = context  # 直接传整个 context 给子函数
 
     # -- 公共头部 --
-    header = f"[Trident {level}] {ts}"
+    header = f"[Anteumbra {level}] {ts}"
 
     if alert_type == "local_detection":
         body = (

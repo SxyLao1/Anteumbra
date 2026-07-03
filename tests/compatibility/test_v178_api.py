@@ -98,7 +98,7 @@ class TestSIEMFormatter(unittest.TestCase):
         fmt = SIEMFormatter({"format": "cef"})
         event = {"file_path": "/tmp/shell.php", "rule_name": "test", "severity": "high"}
         output = fmt.format_event(event)
-        self.assertTrue(output.startswith("CEF:0|Trident|WebShellDetector|"))
+        self.assertTrue(output.startswith("CEF:0|Anteumbra|WebShellDetector|"))
 
 
 class TestYaraEngineAPI(unittest.TestCase):

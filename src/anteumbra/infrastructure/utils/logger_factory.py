@@ -102,7 +102,7 @@ def _load_from_registry(symbol_key: str) -> str:
 
     except Exception as e:
         # 仅在工具模式打印调试信息（避免生产环境噪音）
-        if _is_tool_mode() or os.environ.get("TRIDENT_DEBUG") == "true":
+        if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true" or os.environ.get("TRIDENT_DEBUG") == "true":
             print(f"[CONFIG REGISTRY] 加载失败: {e}", file=sys.stderr)
         return f"[UNKNOWN][{symbol_key}]"
 
@@ -220,7 +220,7 @@ def get_access_logger() -> logging.Logger:
     logging_cfg = config.get("logging", {})
     flask_cfg = logging_cfg.get("flask", {})
 
-    flask_log_path = flask_cfg.get("flask_log_path", "logs/Trident/access.log")
+    flask_log_path = flask_cfg.get("flask_log_path", "logs/Anteumbra/access.log")
     log_file = normalize_path(flask_log_path)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -255,7 +255,7 @@ def get_flask_runtime_logger() -> logging.Logger:
     config = ConfigRegistry.get_raw_config()
     filesizes_cfg = config.get("filesizes", {})
 
-    log_dir = normalize_path("logs/Trident")
+    log_dir = normalize_path("logs/Anteumbra")
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger("flask.runtime")
@@ -296,7 +296,7 @@ def get_system_logger() -> logging.Logger:
         logger.handlers.clear()
         return logger
 
-    log_dir = normalize_path("logs/Trident")
+    log_dir = normalize_path("logs/Anteumbra")
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger("system")

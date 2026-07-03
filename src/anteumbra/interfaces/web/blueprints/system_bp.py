@@ -14,7 +14,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app, ses
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.suspicious_registry import (
-    get_all, _REGISTRY_PATH,
+    get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
@@ -73,18 +73,12 @@ def system_registry_panel():
         wal_info = wal_manager.get_wal_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
-        queue_status = "Sync mode"
-        if hasattr(core.suspicious_registry, '_async_save_enabled') and core.suspicious_registry._async_save_enabled:
-            try:
-                from anteumbra.infrastructure.suspicious_registry import _async_save_queue
-                if _async_save_queue:
-                    queue_status = "Async mode"
-            except Exception:
-                pass
+        queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
 
         last_save = "Never saved"
-        if _REGISTRY_PATH and _REGISTRY_PATH.exists():
-            mtime = _REGISTRY_PATH.stat().st_mtime
+        rp = get_registry_path()
+        if rp and rp.exists():
+            mtime = rp.stat().st_mtime
             last_save = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
 
         return render_template(
@@ -299,18 +293,12 @@ def system_registry_compact():
         wal_info = wal_manager.get_wal_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
-        queue_status = "Sync mode"
-        if hasattr(core.suspicious_registry, '_async_save_enabled') and core.suspicious_registry._async_save_enabled:
-            try:
-                from anteumbra.infrastructure.suspicious_registry import _async_save_queue
-                if _async_save_queue:
-                    queue_status = "Async mode"
-            except Exception:
-                pass
+        queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
 
         last_save = "Never saved"
-        if _REGISTRY_PATH and _REGISTRY_PATH.exists():
-            mtime = _REGISTRY_PATH.stat().st_mtime
+        rp = get_registry_path()
+        if rp and rp.exists():
+            mtime = rp.stat().st_mtime
             last_save = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
 
         message = None

@@ -27,7 +27,7 @@ def blocklist_add():
         data = request.get_json()
         ips = data.get('ips', [])
         profile_id = data.get('profile_id', '')
-        reason = data.get('reason', '') or 'Manual block from Trident'
+        reason = data.get('reason', '') or 'Manual block from Anteumbra'
         source = data.get('source', 'manual')
 
         if not ips:

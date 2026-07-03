@@ -189,7 +189,7 @@ class SqliteRepository(EventRepository):
     threat_profiles) was hardcoded to INSERT INTO ``registry``.
     """
 
-    def __init__(self, db_path: str = "data/trident.db", table_name: str = "registry",
+    def __init__(self, db_path: str = "data/anteumbra.db", table_name: str = "registry",
                  key_column: str = "record_id", sort_column: str = "detected_at"):
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -530,7 +530,7 @@ class DualWriteRepository:
     用法：
         from anteumbra.infrastructure.persistence.json_repository import JsonRepository
         json_repo = JsonRepository(Path("data/registry.json"), key_field="file_path")
-        sql_repo = SqliteRepository("data/trident.db")
+        sql_repo = SqliteRepository("data/anteumbra.db")
         repo = DualWriteRepository(json_repo, sql_repo)
     """
 

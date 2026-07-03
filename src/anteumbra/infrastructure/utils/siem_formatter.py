@@ -48,7 +48,7 @@ class SIEMFormatter:
         self.config = config or {}
         self.format_type = self.config.get("format", "json_lines")
         self.include_raw = self.config.get("include_raw_sample", False)
-        self.vendor = "Trident"
+        self.vendor = "Anteumbra"
         self.product = "WebShellDetector"
         self.version = self._get_version()
 
@@ -159,7 +159,7 @@ class SIEMFormatter:
             f"cs2={','.join(normalized['detection']['features'])} "
             f"cs2Label=Features "
             f"cs3={normalized['trident']['version']} "
-            f"cs3Label=TridentVersion "
+            f"cs3Label=AnteumbraVersion "
             f"fp={normalized['detection']['false_positive']} "
             f"confidence={normalized['confidence']}"
         )

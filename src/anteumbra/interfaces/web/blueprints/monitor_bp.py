@@ -20,7 +20,8 @@ from flask import (
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.suspicious_registry import (
-    get_all, _REGISTRY_PATH, _async_save_enabled, _async_save_queue, compact_registry,
+    get_all, compact_registry,
+    get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
@@ -199,7 +200,7 @@ def logs_history():
                 current_app.logger.warning(f"[LOGS_HISTORY] Buffer read failed: {e}")
 
         if not lines:
-            log_file = normalize_path("logs/Trident/monitor.log")
+            log_file = normalize_path("logs/Anteumbra/monitor.log")
             if log_file.exists():
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                     f.seek(0, 2)
@@ -321,10 +322,10 @@ def registry_count():
 @require_auth
 def registry_queue():
     """Return async save queue status"""
-    if not _async_save_enabled:
+    if not is_async_save_enabled():
         return "Sync mode"
     try:
-        size = _async_save_queue.qsize()
+        size = get_async_save_queue_size()
         return f"{size} pending saves"
     except Exception:
         return "Queue not initialized"
@@ -334,8 +335,9 @@ def registry_queue():
 @require_auth
 def registry_last_save():
     """Return last save timestamp"""
-    if _REGISTRY_PATH and _REGISTRY_PATH.exists():
-        mtime = _REGISTRY_PATH.stat().st_mtime
+    rp = get_registry_path()
+    if rp and rp.exists():
+        mtime = rp.stat().st_mtime
         return datetime.fromtimestamp(mtime).strftime('%H:%M:%S')
     return "Never saved"
 
@@ -449,7 +451,7 @@ def config_watcher_status():
 @require_auth
 def config_history():
     """Return config reload history (paginated)"""
-    log_file = normalize_path("logs/Trident/system.log")
+    log_file = normalize_path("logs/Anteumbra/system.log")
     if not log_file.exists():
         return "<p style='color: #888;'>No config reload history</p>"
 

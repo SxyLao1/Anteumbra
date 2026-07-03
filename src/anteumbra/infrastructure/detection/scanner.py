@@ -20,7 +20,8 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.monitoring.metrics import get_metrics
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-from anteumbra.infrastructure.models import ScanResult, ScanOptions
+from anteumbra.domain.entities import ScanResult
+from anteumbra.infrastructure.models import ScanOptions
 
 # 抽象基类
 class BaseScanner(ABC):

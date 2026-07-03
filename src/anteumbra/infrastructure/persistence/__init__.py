@@ -77,9 +77,9 @@ def get_repository(namespace: str = "registry") -> Repository:
         try:
             from anteumbra.infrastructure.config.registry import ConfigRegistry
             config = ConfigRegistry.get_raw_config()
-            db_path = config.get("storage", {}).get("sqlite_path", "data/trident.db")
+            db_path = config.get("storage", {}).get("sqlite_path", "data/anteumbra.db")
         except Exception:
-            db_path = "data/trident.db"
+            db_path = "data/anteumbra.db"
 
         logger.info("Repository[%s]: backend=%s json=%s table=%s",
                      namespace, backend, json_file, sqlite_table)

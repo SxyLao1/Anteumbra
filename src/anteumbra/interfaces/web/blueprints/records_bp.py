@@ -7,7 +7,6 @@ v1.9.0: Records Blueprint — 检测记录 + 审计日志 + 文件查看器
          /admin/mark_false_positive/*, /admin/audit, /admin/file/*
 """
 import json
-from datetime import datetime as _dt
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -18,8 +17,10 @@ from flask import (
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.infrastructure.suspicious_registry import get_all, remove as registry_remove, mark_quarantined, \
-    mark_false_positive, _load_registry, _save_registry, _clear_memory_cache
+from anteumbra.infrastructure.suspicious_registry import (
+    get_all, remove as registry_remove, mark_quarantined,
+    mark_false_positive, soft_delete_record, clear_memory_cache,
+)
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.sse_manager import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
@@ -95,7 +96,7 @@ def get_records():
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         if force_reload:
-            _clear_memory_cache()
+            clear_memory_cache()
             current_app.logger.info("[RECORDS] 强制刷新：已清除内存缓存")
 
         all_records = get_all(include_deleted=audit_mode, include_false_positive=audit_mode)
@@ -206,47 +207,25 @@ def records_batch():
                 except Exception:
                     results['failed'] += 1
         elif action == 'false_positive':
-            # v2.0 fix: Load registry once, not per file
-            registry = _load_registry()
+            # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
-                    target = path_to_key(fp)
-                    found = False
-                    for item in registry:
-                        if item.get('file_path') == target:
-                            item['marked_false_positive'] = True
-                            item['false_positive_at'] = _dt.now().isoformat()
-                            found = True
-                            break
-                    if found:
+                    if mark_false_positive(fp, ''):
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
                 except Exception:
                     results['failed'] += 1
-            if results['success'] > 0:
-                _save_registry(registry)
         elif action == 'delete':
-            # v2.0 fix: Load registry once, not per file
-            registry = _load_registry()
+            # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
-                    target = path_to_key(fp)
-                    found = False
-                    for item in registry:
-                        if item.get('file_path') == target:
-                            item['file_exists'] = False
-                            item['deleted_at'] = _dt.now().isoformat()
-                            found = True
-                            break
-                    if found:
+                    if soft_delete_record(fp):
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
                 except Exception:
                     results['failed'] += 1
-            if results['success'] > 0:
-                _save_registry(registry)
         else:
             return jsonify({'error': 'unknown action'}), 400
 
