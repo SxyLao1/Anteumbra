@@ -115,15 +115,20 @@ class TestFullChain:
             from anteumbra.infrastructure.suspicious_registry import (
                 add, _clear_memory_cache,
             )
+            from anteumbra.infrastructure.utils.path_utils import path_to_key
 
             _clear_memory_cache()
             add(webshell_path, ["eval", "POST", "base64_decode"],
                 first_seen_ip=attacker_ip)
 
             # Verify registry entry
+            # v1.0.6 fix: use path_to_key for lookup — add() stores
+            # paths via path_to_key (resolved + normalized + lowercase),
+            # so the lookup key must match the stored format.
             from anteumbra.infrastructure.suspicious_registry import get_all
+            lookup_key = path_to_key(webshell_path)
             records = get_all(include_deleted=True)
-            found = [r for r in records if str(webshell_path) in r.get("file_path", "")]
+            found = [r for r in records if r.get("file_path", "") == lookup_key]
             assert len(found) >= 1, "Step 3 FAIL: Registry did not create a record"
 
             # Update profile with target file

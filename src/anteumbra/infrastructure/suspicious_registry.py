@@ -34,8 +34,21 @@ from anteumbra.infrastructure import wal_manager
 # FIX v1.7.3: 工具脚本模式检测（静默运行）
 # ============================================================================
 def _is_tool_script() -> bool:
-    """检测是否为工具脚本运行模式（测试环境也视为工具模式）"""
-    return os.environ.get("TRIDENT_TOOL_MODE", "false") == "true"
+    """检测是否为工具脚本运行模式（测试环境也视为工具模式）
+
+    v1.0.6 fix: 原生检测 pytest (PYTEST_CURRENT_TEST)，不再依赖 TRIDENT_TOOL_MODE。
+    解决 import 时序问题 — 当 suspicious_registry 在 env var 设置前被导入时，
+    仍然能正确识别测试环境并隔离数据路径。
+    """
+    if os.environ.get("TRIDENT_TOOL_MODE", "false") == "true":
+        return True
+    # pytest sets PYTEST_CURRENT_TEST when running tests (even during collection)
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    # Fallback: detect pytest / test runner from command-line
+    if "pytest" in sys.argv[0].lower() or "test" in sys.argv[0].lower():
+        return True
+    return False
 # ============================================================================
 
 _logger_instance = None
@@ -102,7 +115,13 @@ _registry_update_lock = threading.Lock()
 _REGISTRY_UPDATE_DEBOUNCE_SECONDS = 2.0  # 防抖延迟（可调整）
 
 def _ensure_initialized():
-    """v1.7.0新增：确保所有必要组件已初始化（公共函数入口调用）"""
+    """v1.7.0新增：确保所有必要组件已初始化（公共函数入口调用）
+
+    v1.0.6 fix: 测试环境下强制覆盖 _REGISTRY_PATH，无论是否已被 import 链设置。
+    之前的 `if _REGISTRY_PATH is None` 守卫在 import 时序问题下失效 —
+    wal_manager 等模块的 import 链可能在 env var 设置前触发 _init_paths()，
+    导致生产路径被锁定。
+    """
     global _REGISTRY_PATH, _REGISTRY_BACKUP_PATH, _async_save_enabled
 
     # v1.7.3重构：统一处理工具脚本模式（包含测试和工具脚本）
@@ -111,12 +130,14 @@ def _ensure_initialized():
         _async_save_enabled = False
 
         # 如果是测试环境，使用测试专用路径
+        # v1.0.6: 移除 `if _REGISTRY_PATH is None` 守卫 —
+        # 当 import 链提前触发了 _init_paths() 时，生产路径已被写入，
+        # 必须无条件覆盖为测试隔离路径。
         if os.environ.get("PYTEST_CURRENT_TEST") or "test" in sys.argv[0].lower():
-            if _REGISTRY_PATH is None:
-                test_dir = normalize_path("temp/registry_test_isolated/data")
-                test_dir.mkdir(parents=True, exist_ok=True)
-                _REGISTRY_PATH = test_dir / "test_registry.json"
-                _REGISTRY_BACKUP_PATH = _REGISTRY_PATH.with_suffix('.json.bak')
+            test_dir = normalize_path("temp/registry_test_isolated/data")
+            test_dir.mkdir(parents=True, exist_ok=True)
+            _REGISTRY_PATH = test_dir / "test_registry.json"
+            _REGISTRY_BACKUP_PATH = _REGISTRY_PATH.with_suffix('.json.bak')
 
     _init_paths()
     _enable_async_save()
