@@ -4,11 +4,11 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.4-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.6-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-<img src="https://img.shields.io/badge/tests-144%2F144-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/tests-217%2F217-brightgreen?style=flat-square" alt="Tests">
 
 **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -42,7 +42,7 @@ Anteumbra（前身 Trident）是一款面向 Linux 和 Windows 的**生产级 We
 - **Web 管理面板** — 暗色终端风界面，SSE 实时日志流，HTMX 驱动，SPA 导航
 - **企业安全** — CSRF 防护，IP 白名单，Scrypt 密码哈希，静态 JS 鉴权守卫
 - **生产部署** — Docker 多阶段构建，Gunicorn 多 Worker，systemd 服务，`pip install -e .` 开发模式
-- **全面测试** — 144 个测试：88 单元 + 21 E2E 后端 + 34 E2E UI (Playwright) + 1 WAF 代理
+- **全面测试** — ~217 个测试：88 单元 + 94 E2E 后端 + 34 E2E UI (Playwright) + 1 WAF 代理
 
 ## 快速开始
 
@@ -161,5 +161,5 @@ MIT License。自由用于生产环境、学术研究和个人使用。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.4 — MIT License</sub>
+  <sub>Anteumbra v1.0.6 — MIT License</sub>
 </div>

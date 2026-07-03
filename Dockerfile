@@ -1,4 +1,4 @@
-# Anteumbra v1.0.5 — Web Perimeter Threat Intelligence
+# Anteumbra v1.0.6 — Web Perimeter Threat Intelligence
 # Multi-stage build: compile native deps → slim runtime
 # Linux 三轨哈希全激活: ssdeep + py-tlsh + yara-python
 
@@ -48,7 +48,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.5"
+LABEL org.opencontainers.image.version="1.0.6"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence — passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 

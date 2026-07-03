@@ -1,8 +1,8 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.5 (2026-07-03)  
+> **Current Version**: v1.0.6 (2026-07-03)  
 > **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
-> **Status**: PyPI published, ~217 tests passing, DDD + EDA architecture complete, CI/CD operational
+> **Status**: PyPI published, ~217 tests passing, DDD + EDA architecture complete, CI/CD operational, admin blueprint fully modularized
 
 ---
 
@@ -46,13 +46,24 @@
 
 ---
 
+## v1.0.6 — Blueprint Modularization & Security (Released 2026-07-03)
+
+| Priority | Feature | Status |
+|----------|---------|:---:|
+| P0 | admin_bp split — 2280 lines → admin_bp (776) + settings_bp (350) + monitor_bp (500) + system_bp (450) | ✅ |
+| P0 | `/admin/debug/routes` + `/admin/test` @require_auth security fix | ✅ |
+| P1 | Unused import cleanup in admin_bp.py after split | ✅ |
+| P1 | Version bump + all docs sync (README/ROADMAP/CHANGELOG/memory) | ✅ |
+
+**Zero template changes, zero URL changes** — all routes retain `/admin/*` paths across 4 blueprints.
+
+---
+
 ## v1.1.0 — Multi-Site + Intelligence (Planned)
 
 | Priority | Feature |
 |----------|---------|
-| P0 | admin_bp further split (~1800 lines → settings_bp / monitor_bp / system_bp) |
 | P0 | Full-chain E2E test fix (Registry data isolation) |
-| P0 | `/admin/debug/routes` security fix — add `@require_auth` |
 | P1 | UI test stabilization (Playwright parallel run timeouts) |
 | P1 | Geo-IP integration (MaxMind GeoLite2) |
 | P1 | Admin 2FA (TOTP) + API key management |
