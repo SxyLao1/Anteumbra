@@ -1,4 +1,4 @@
-# Anteumbra v1.0.4 — Web Perimeter Threat Intelligence
+# Anteumbra v1.0.5-dev — Web Perimeter Threat Intelligence
 # Multi-stage build: compile native deps → slim runtime
 # Linux 三轨哈希全激活: ssdeep + py-tlsh + yara-python
 
@@ -19,11 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages with native compilation
+# Note: ssdeep / py-tlsh use legacy pkg_resources (removed in setuptools >=68),
+# so they are installed with fallback — the app works without them.
 COPY pyproject.toml .
-RUN pip install --no-cache-dir --user \
-    yara-python>=4.3.0 \
-    ssdeep \
-    py-tlsh \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --user yara-python>=4.3.0 \
+    && pip install --no-cache-dir --user ssdeep 2>/dev/null || echo "[Docker] ssdeep skipped (build incompatible)" \
+    && pip install --no-cache-dir --user py-tlsh 2>/dev/null || echo "[Docker] py-tlsh skipped (build incompatible)" \
     && pip install --no-cache-dir --user \
     flask>=2.3.3,<3.0.0 \
     flask-wtf>=1.2.1 \
@@ -46,7 +48,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.4"
+LABEL org.opencontainers.image.version="1.0.5-dev"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence — passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 
