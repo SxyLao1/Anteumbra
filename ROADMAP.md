@@ -1,6 +1,6 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.6 (2026-07-03)  
+> **Current Version**: v1.0.7 (2026-07-03)  
 > **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
 > **Status**: PyPI published, ~217 tests passing, DDD + EDA architecture complete, CI/CD operational, admin blueprint fully modularized
 
@@ -43,6 +43,16 @@
 | P1 | ROADMAP.md + CHANGELOG.md created and updated | ✅ |
 | P1 | Docker build fixes — ssdeep/py-tlsh optional fallback, shell redirect escaping | ✅ |
 | P2 | Project documentation sync (CLAUDE.md + PROJECT_MASTER + Memory) | ✅ |
+
+---
+
+## v1.0.7 — Registry Test Isolation & Full-Chain E2E (Released 2026-07-03)
+
+| Priority | Feature | Status |
+|----------|---------|:---:|
+| P0 | Registry test isolation — `_is_tool_script()` native pytest detection + unconditional path override | ✅ |
+| P0 | Full-chain E2E fix — `test_full_chain_waf_to_block_ledger` now PASSES | ✅ |
+| P1 | Test count: 186 backend + 34 UI = 220 (was ~217 with 1 skip + 1 intermittent) | ✅ |
 
 ---
 
