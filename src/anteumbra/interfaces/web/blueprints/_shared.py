@@ -106,14 +106,8 @@ def verify_file_in_quarantine(qid: str) -> Optional[Path]:
         return None
 
 
-def html_escape(text: str) -> str:
-    """HTML 实体转义（防 XSS）"""
-    return (text
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;"))
+# v1.0.5: Use markupsafe.escape() instead of custom implementation (Kimi P2-3)
+from markupsafe import escape as html_escape
 
 
 # ── SSE Token 生成 ──────────────────────────────────────

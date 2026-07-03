@@ -20,17 +20,8 @@ class ScanRequest:
     context: dict = field(default_factory=dict)  # 额外上下文（来源IP等）
 
 
-@dataclass
-class ScanResult:
-    """扫描结果"""
-    file_path: Path
-    is_suspicious: bool
-    confidence: float             # 0.0 ~ 1.0
-    engine: str                   # 检测引擎名称
-    features: List[str] = field(default_factory=list)
-    score: float = 0.0
-    detection_source: str = "passive"  # passive | active | waf | log
-    metadata: dict = field(default_factory=dict)
+# v1.0.5: ScanResult unified → canonical definition in domain/entities.py
+from anteumbra.domain.entities import ScanResult  # noqa: F401 — re-export for backward compat
 
 
 class Detector(ABC):

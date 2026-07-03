@@ -2275,12 +2275,4 @@ def _verify_file_in_quarantine(qid: str) -> Optional[Path]:
         return None
 
 
-def _html_escape(text: str) -> str:
-    """HTML 实体转义，防 XSS"""
-    return (
-        text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;")
-    )
+# v1.0.5: _html_escape removed — use _shared.html_escape (markupsafe.escape) instead

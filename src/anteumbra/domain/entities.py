@@ -9,6 +9,7 @@ Design principles:
   - Zero infrastructure dependencies (no DB, no Flask, no filesystem)
 """
 from datetime import datetime, timezone
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -155,25 +156,45 @@ else:
 
 # ── Value Objects ────────────────────────────────────────
 
+@dataclass
 class ScanResult:
-    """Value object: result of a single file scan."""
-    def __init__(self, file_path: Path, is_suspicious: bool, score: float = 0.0,
-                 engine: str = "", features: List[str] = None,
-                 detection_source: DetectionSource = DetectionSource.PASSIVE):
-        self.file_path = file_path
-        self.is_suspicious = is_suspicious
-        self.score = score
-        self.engine = engine
-        self.features = features or []
-        self.detection_source = detection_source
+    """Unified scan result — canonical definition (v1.0.5: triple-merge fix).
 
-    def to_record(self) -> FileRecord:
+    All detection engines return this type:
+      - StaticScanner (regex pattern matching)
+      - YaraScanner (YARA rule matching)
+      - EmergencyScanner (fallback when YARA unavailable)
+      - ApiEngine (remote API scan)
+      - Decoder (deobfuscated re-scan)
+      - ScannerChain (orchestrated multi-engine pipeline)
+
+    Field order is intentional — matches historical callers' positional args:
+      ScanResult(file_path, is_suspicious, features, engine=..., error=...)
+    """
+    file_path: Path
+    is_suspicious: bool
+    features: List[str] = field(default_factory=list)
+    score: float = 0.0
+    engine: str = "static"
+    error: Optional[str] = None
+    analysis_data: Optional[dict] = None
+    detection_source: str = "unknown"  # passive | active | waf | log | unknown
+    confidence: float = 0.0           # 0.0~1.0 (detector.py version)
+    metadata: dict = field(default_factory=dict)  # extra context
+
+    def to_record(self) -> "FileRecord":
         """Convert scan result to a FileRecord for persistence."""
+        ds = DetectionSource.PASSIVE
+        try:
+            if self.detection_source in ("passive", "active", "waf", "log"):
+                ds = DetectionSource(self.detection_source)
+        except ValueError:
+            pass
         return FileRecord(
             file_path=str(self.file_path),
             display_name=self.file_path.name,
             features=list(self.features),
-            detection_source=self.detection_source,
+            detection_source=ds,
         )
 
 

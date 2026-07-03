@@ -102,17 +102,8 @@ class ScanOptions:
                 return int(size_str.replace(unit, '')) * multiplier
         return int(size_str)
 
-@dataclass
-class ScanResult:
-    """扫描结果对象"""
-    file_path: Path
-    is_suspicious: bool
-    features: List[str]
-    score: float = 0.0
-    engine: str = "static"
-    error: Optional[str] = None
-    analysis_data: Optional[dict] = None
-    detection_source: str = "unknown"  # v1.9.0: "passive" | "active" | "unknown"
+# v1.0.5: ScanResult unified → canonical definition in domain/entities.py
+from anteumbra.domain.entities import ScanResult  # noqa: F401 — re-export for backward compat
 
 @dataclass
 class Website:

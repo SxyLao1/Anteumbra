@@ -139,16 +139,27 @@ class TestVersionSource:
     """Verify version is single-source, not hardcoded in multiple places."""
 
     def test_version_in_pyproject_matches_get_version(self):
-        """Version in pyproject.toml should match get_version() from code.
+        """Version single source of truth: anteumbra.__version__.
 
-        get_version() reads from config.toml [system].version — that should be
-        the single source. pyproject.toml is the build-time source. If they
-        differ, there is a drift that needs fixing.
+        pyproject.toml uses dynamic version via attr directive:
+          [tool.setuptools.dynamic] version = {attr = "anteumbra.__version__"}
+        get_version() imports from anteumbra.__version__.
+        Both must agree — changing __init__.py is the only place needed.
         """
+        import anteumbra
         from anteumbra.infrastructure.config.version import get_version
+
+        pkg_version = anteumbra.__version__
         code_version = get_version()
 
-        # Read pyproject.toml
+        # Both must read from the same source
+        assert pkg_version == code_version, (
+            f"Version mismatch: __init__.__version__={pkg_version} != "
+            f"get_version()={code_version}. Both must read from "
+            f"anteumbra.__version__ as single source of truth."
+        )
+
+        # Verify pyproject.toml uses dynamic version pointing to package
         pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         if not pyproject_path.exists():
             pytest.skip(f"pyproject.toml not found at {pyproject_path}")
@@ -163,20 +174,28 @@ class TestVersionSource:
 
         with open(pyproject_path, "rb") as f:
             pp = tomllib.load(f)
-        pp_version = pp.get("project", {}).get("version", "")
 
-        assert pp_version, "pyproject.toml should have a version under [project]"
-        # Known drift: config.toml vs pyproject.toml may differ during dev.
-        # This test documents the expectation that they SHOULD match.
-        if code_version != pp_version:
-            pytest.skip(
-                f"Version drift detected: get_version()={code_version} != "
-                f"pyproject.toml={pp_version}. Fix config.toml [system].version "
-                f"or pyproject.toml to use a single source."
-            )
+        # With dynamic version, [project] has "dynamic" key instead of "version"
+        dynamic_fields = pp.get("project", {}).get("dynamic", [])
+        assert "version" in dynamic_fields, (
+            "pyproject.toml should have dynamic = ['version'] under [project]"
+        )
+
+        # The attr directive must point to anteumbra.__version__
+        setuptools_dynamic = pp.get("tool", {}).get("setuptools", {}).get("dynamic", {})
+        version_attr = setuptools_dynamic.get("version", {}).get("attr", "")
+        assert version_attr == "anteumbra.__version__", (
+            f"pyproject.toml [tool.setuptools.dynamic] version attr should be "
+            f"'anteumbra.__version__', got '{version_attr}'"
+        )
 
     def test_package_version_matches_pyproject(self):
-        """anteumbra.__version__ should match pyproject.toml [project].version."""
+        """anteumbra.__version__ must be resolvable from pyproject.toml dynamic attr.
+
+        pyproject.toml uses dynamic version via:
+          [tool.setuptools.dynamic] version = {attr = "anteumbra.__version__"}
+        This test verifies the attr path correctly resolves to the package version.
+        """
         import anteumbra
         pkg_version = anteumbra.__version__
 
@@ -194,12 +213,22 @@ class TestVersionSource:
 
         with open(pyproject_path, "rb") as f:
             pp = tomllib.load(f)
-        pp_version = pp.get("project", {}).get("version", "")
 
-        if pkg_version != pp_version:
-            pytest.skip(
-                f"Version drift: __init__.__version__={pkg_version} != "
-                f"pyproject.toml={pp_version}. These should match."
+        setuptools_dynamic = pp.get("tool", {}).get("setuptools", {}).get("dynamic", {})
+        version_attr = setuptools_dynamic.get("version", {}).get("attr", "")
+
+        if not version_attr:
+            pytest.skip("pyproject.toml does not use dynamic version attr")
+
+        # Resolve the attr path (e.g., "anteumbra.__version__" → actual value)
+        parts = version_attr.split(".")
+        if len(parts) >= 2:
+            import importlib
+            mod = importlib.import_module(parts[0])
+            resolved = getattr(mod, parts[1])
+            assert resolved == pkg_version, (
+                f"pyproject.toml attr {version_attr} resolves to '{resolved}' "
+                f"but package has '{pkg_version}'"
             )
 
     def test_cli_version_not_hardcoded(self):

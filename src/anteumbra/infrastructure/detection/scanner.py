@@ -247,10 +247,13 @@ class EmergencyScanner(BaseScanner):
                 logger.critical(f"[SCAN][SUSPICIOUS][PERM] 权限混淆: {file_path}")
 
                 # v1.6.9 模块化：调用高级绕过检测
-                from anteumbra.infrastructure.advanced_bypass import VMwareBypassDetector
-                bypass_result = VMwareBypassDetector.detect_permission_confusion(file_path)
-                if bypass_result:
-                    return bypass_result
+                try:
+                    from anteumbra.infrastructure.advanced_bypass import VMwareBypassDetector
+                    bypass_result = VMwareBypassDetector.detect_permission_confusion(file_path)
+                    if bypass_result:
+                        return bypass_result
+                except ImportError:
+                    logger.debug("[SCAN] advanced_bypass module not available, using basic detection")
 
                 # 基础权限混淆检测
                 return ScanResult(

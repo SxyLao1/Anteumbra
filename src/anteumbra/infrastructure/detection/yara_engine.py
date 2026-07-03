@@ -235,11 +235,14 @@ def get_yara_engine(logger: logging.Logger = None) -> YaraEngine:
         else:
             # 返回空引擎（避免None检查）
             class DummyEngine:
+                """v1.0.5: Explicit methods replace __getattr__ (Kimi P2-5)."""
+                compiled_rules = None
+
                 def scan(self, path): return []
 
                 def get_rule_stats(self): return {}
 
-                def __getattr__(self, name): return lambda *args, **kwargs: None
+                def match(self, data=None, filepath=None): return []
 
             _yara_engine = DummyEngine()
             logger.warning("[YARA] 引擎未启用，返回空引擎")

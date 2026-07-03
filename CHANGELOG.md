@@ -4,6 +4,29 @@
 
 ---
 
+## [1.0.5-dev] — 2026-07-03
+
+### Added
+- **CI/CD (GitHub Actions)**: test matrix (Python 3.10/3.11/3.12) + Playwright UI tests + Docker build + PyPI publish via Trusted Publishing (OIDC)
+- **73 new automated tests**: deployment (11) + security (52) + profiling E2E (8) + full-chain SOP (1)
+- **i18n full coverage**: 36/40 templates → ~490 `{{ _(...) }}` markers (Flask-Babel, en/zh)
+- **CHANGELOG.md**: full changelog v1.0.0 → present
+
+### Changed
+- **Version: single source of truth** — `anteumbra.__version__` (PEP 440) is the only place to change; `pyproject.toml` reads via `attr` directive; `config.toml` version field removed
+- **ROADMAP.md**: rewritten to reflect v1.0.4 reality + v1.0.5/v1.1.0/v2.0.0 roadmap
+- **threat_graph dataclasses**: deduplicated — canonical definitions in `infrastructure/models.py`
+
+### Fixed
+- **P0-3: ScanResult triple definition** — `domain/entities.py`, `domain/detector.py`, `infrastructure/models.py` → unified dataclass in `domain/entities.py` (10 fields merged)
+- **P2-3: html_escape** — custom implementation → `markupsafe.escape()` (Flask standard)
+- **P2-4: EmergencyScanner** — `advanced_bypass` module ImportError → safe fallback
+- **P2-5: DummyEngine** — `__getattr__` implicit return → explicit `compiled_rules`/`match` methods
+- **Jinja2 syntax errors** × 2: nested `{{ }}` in notify_config.html, `_()` inside string literal in monitor_content.html
+- **Version drift**: config.toml (1.0.1) / __init__.py (1.0.2) / pyproject.toml (1.0.4) → all unified
+
+---
+
 ## [1.0.4] — 2026-07-03
 
 ### Added

@@ -28,7 +28,7 @@ class TestConfigAPI(unittest.TestCase):
         from anteumbra.infrastructure.config.version import get_version
         version = get_version()
         self.assertIsInstance(version, str)
-        self.assertRegex(version, r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$")
+        self.assertRegex(version, r"^\d+\.\d+\.\d+([.-][a-zA-Z0-9.]+)?$")
         self.assertNotEqual(version, "unknown")
 
     def test_config_load(self):

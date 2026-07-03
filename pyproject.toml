@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anteumbra"
-version = "1.0.4"
+dynamic = ["version"]
 description = "Anteumbra — Web Perimeter Threat Intelligence. Passive detection, semi-active response, attacker profiling."
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -57,6 +57,9 @@ anteumbra = "anteumbra.__main__:main"
 Homepage = "https://github.com/SxyLao1/Anteumbra"
 Repository = "https://github.com/SxyLao1/Anteumbra.git"
 Issues = "https://github.com/SxyLao1/Anteumbra/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "anteumbra.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
