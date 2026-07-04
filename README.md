@@ -4,11 +4,11 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.7-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.9-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-<img src="https://img.shields.io/badge/tests-217%2F217-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/tests-340%2F340-brightgreen?style=flat-square" alt="Tests">
 
 **Lightweight Web Perimeter Security** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -42,7 +42,7 @@ Key capabilities:
 - **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven, SPA navigation
 - **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing, static JS auth guard
 - **Production deployment** — Docker multi-stage build, Gunicorn multi-worker, systemd service, `pip install -e .`
-- **Comprehensive test suite** — ~217 tests: 88 unit + 94 E2E backend + 34 E2E UI (Playwright) + 1 WAF proxy
+- **Comprehensive test suite** — ~340 tests: 88 unit + 94 E2E backend + 34 E2E UI (Playwright) + 1 WAF proxy
 
 ## Quick Start
 
@@ -161,5 +161,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.7 — MIT License</sub>
+  <sub>Anteumbra v1.0.9 — MIT License</sub>
 </div>
