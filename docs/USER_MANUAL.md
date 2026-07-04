@@ -2,6 +2,8 @@
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
+[中文](USER_MANUAL_zh.md)
+
 ---
 
 ## Table of Contents

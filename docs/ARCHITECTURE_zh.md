@@ -1,32 +1,32 @@
-# Anteumbra Technical White Paper v1.0.9
+# Anteumbra 技术白皮书 v1.0.9
 
-> **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
+> **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
-[中文](ARCHITECTURE_zh.md)
-
----
-
-## Table of Contents
-
-1. [Architecture Overview](#1-architecture-overview)
-2. [DDD Four-Layer Architecture](#2-ddd-four-layer-architecture)
-3. [Event-Driven Architecture (EDA)](#3-event-driven-architecture-eda)
-4. [Database Design](#4-database-design)
-5. [Data Flow Panorama](#5-data-flow-panorama)
-6. [Plugin System](#6-plugin-system)
-7. [Key Algorithms](#7-key-algorithms)
-8. [Security Design](#8-security-design)
-9. [Development Decision Guide](#9-development-decision-guide)
+[English](ARCHITECTURE.md)
 
 ---
 
-## 1. Architecture Overview
+## 目录
 
-Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer architecture** + **Event-Driven Architecture (EDA)**.
+1. [架构概览](#1-架构概览)
+2. [DDD 四层架构](#2-ddd-四层架构)
+3. [事件驱动架构 (EDA)](#3-事件驱动架构-eda)
+4. [数据库设计](#4-数据库设计)
+5. [数据流全景](#5-数据流全景)
+6. [插件系统](#6-插件系统)
+7. [关键算法](#7-关键算法)
+8. [安全设计](#8-安全设计)
+9. [开发决策指南](#9-开发决策指南)
+
+---
+
+## 1. 架构概览
+
+Anteumbra 采用 **领域驱动设计 (DDD) 四层架构** + **事件驱动架构 (EDA)** 的混合模式。
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                  INTERFACES Layer                  │
+│                  INTERFACES 层                     │
 │  Flask Blueprints / CLI / Templates / SSE         │
 │  ┌─────────┐ ┌──────────┐ ┌──────────────────┐   │
 │  │ admin_bp │ │records_bp│ │  ... 11 blueprints │   │
@@ -34,7 +34,7 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 │       │             │               │              │
 ├───────┼─────────────┼───────────────┼──────────────┤
 │       ▼             ▼               ▼              │
-│              APPLICATION Layer                       │
+│              APPLICATION 层                         │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────┐  │
 │  │PluginManager │ │ 16 Services  │ │ Event Bus │  │
 │  │ (singleton)  │ │ (thin facade)│ │ (emit/dis)│  │
@@ -42,7 +42,7 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 │         │                │               │         │
 ├─────────┼────────────────┼───────────────┼─────────┤
 │         ▼                ▼               ▼         │
-│              INFRASTRUCTURE Layer                    │
+│              INFRASTRUCTURE 层                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
 │  │Detection │ │Monitoring│ │Persistence       │   │
 │  │ YARA     │ │ FileWatch│ │ JSON / SQLite    │   │
@@ -51,7 +51,7 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 │  └──────────┘ └──────────┘ └──────────────────┘   │
 │                                                     │
 ├─────────────────────────────────────────────────────┤
-│                   DOMAIN Layer                        │
+│                   DOMAIN 层                          │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
 │  │ Entities │ │ Ports    │ │ Value Objects    │   │
 │  │FileRecord│ │Plugin ABC│ │ ScanResult       │   │
@@ -61,23 +61,23 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 └─────────────────────────────────────────────────────┘
 ```
 
-### Core Design Principles
+### 核心设计原则
 
-1. **Dependency direction**: Interfaces → Application → Infrastructure; all layers may depend on Domain
-2. **Domain has zero external dependencies**: The Domain layer does not import any Anteumbra modules
-3. **Application is the orchestration layer**: Contains no business logic, only module orchestration and event routing
-4. **Infrastructure implements Domain interfaces**: Repository, Detector, Notifier are all implementations of ABCs defined in Domain
-5. **Event bus decoupling**: Infrastructure modules communicate with each other via EDA events, never through direct calls
+1. **依赖方向**：Interfaces → Application → Infrastructure，所有层可依赖 Domain
+2. **Domain 零外部依赖**：Domain 层不 import 任何 Anteumbra 模块
+3. **Application 是编排层**：不包含业务逻辑，只做模块编排和事件路由
+4. **Infrastructure 实现 Domain 接口**：Repository、Detector、Notifier 都是 Domain 中 ABC 的实现
+5. **事件总线解耦**：基础设施模块通过 EDA 事件相互通信，不直接调用
 
 ---
 
-## 2. DDD Four-Layer Architecture
+## 2. DDD 四层架构
 
-### 2.1 Domain Layer
+### 2.1 Domain 层（领域层）
 
-**Responsibility**: Define business entities, value objects, domain events, and port interfaces.
+**职责**：定义业务实体、值对象、领域事件和端口接口。
 
-**Files**:
+**文件**：
 ```
 domain/
 ├── entities.py       # FileRecord, ScanResult, QuarantineRecord, DetectionSource
@@ -89,7 +89,7 @@ domain/
 └── repository.py     # Repository, EventRepository (ABCs)
 ```
 
-**Core entity relationships**:
+**核心实体关系**：
 
 ```
 FileRecord ──→ DetectionSource (PASSIVE | ACTIVE | WAF | LOG | MEMORY)
@@ -105,44 +105,44 @@ DomainEvent (frozen)
     └── payload: Dict[str, Any]
 ```
 
-**Design constraints**:
-- The Domain layer **must never** import from infrastructure, application, or interfaces
-- All domain types are exported uniformly through `domain/__init__.py`
-- `DomainEvent` is a frozen dataclass — events are immutable
+**设计约束**：
+- Domain 层**绝不能** import infrastructure、application、interfaces
+- 所有 domain 类型通过 `domain/__init__.py` 统一导出
+- `DomainEvent` 是 frozen dataclass — 事件不可变
 
-### 2.2 Application Layer
+### 2.2 Application 层（应用层）
 
-**Responsibility**: Orchestrate business processes, manage plugin lifecycle, provide service facades for Infrastructure.
+**职责**：编排业务流程，管理插件生命周期，提供 Infrastructure 的服务外观。
 
-**Core components**:
+**核心组件**：
 
-#### PluginManager (Event Bus Core)
+#### PluginManager（事件总线核心）
 
 ```python
 class PluginManager:
-    """Singleton, thread-safe"""
+    """单例，线程安全"""
     _instance: Optional[PluginManager]
-    _rwlock: threading.RLock         # protects all dicts
-    _plugins: Dict[str, Plugin]      # all registered plugins
-    _detectors: Dict[str, Detector]  # detectors
-    _notifiers: Dict[str, Notifier]  # notifiers
+    _rwlock: threading.RLock         # 保护所有 dict
+    _plugins: Dict[str, Plugin]      # 所有已注册插件
+    _detectors: Dict[str, Detector]  # 检测器
+    _notifiers: Dict[str, Notifier]  # 通知器
     _event_sources: Dict[str, EventSource]
     _event_handlers: Dict[str, List[Plugin]]  # event_type → handlers
-    _event_queue: queue.Queue        # Fire-and-Forget queue
-    _abandoned_threads: List[Thread] # timed-out zombie thread tracking
+    _event_queue: queue.Queue        # Fire-and-Forget 队列
+    _abandoned_threads: List[Thread] # 超时僵尸线程追踪
 ```
 
-**API**:
-- `emit(event_type, source, payload) → None` — Async Fire-and-Forget (pushes to queue, returns immediately)
-- `dispatch(event) → List[DomainEvent]` — Synchronous distribution (each handler has a 30s timeout)
-- `register(plugin) / unregister(name)` — Plugin lifecycle management
+**API**：
+- `emit(event_type, source, payload) → None` — 异步 Fire-and-Forget（放队列，立即返回）
+- `dispatch(event) → List[DomainEvent]` — 同步分发（每个 handler 有 30s 超时）
+- `register(plugin) / unregister(name)` — 插件生命周期管理
 
-#### 16 Application Service Modules
+#### 16 个 Application Service 模块
 
-Each service is a thin facade that re-exports public APIs from infrastructure:
+每个 service 是一个薄外观，从 infrastructure 重导出公共 API：
 
 ```python
-# application/sse_service.py (example)
+# application/sse_service.py（示例）
 from anteumbra.infrastructure.utils.sse_manager import (
     register_sse_client, unregister_sse_client,
     trigger_registry_update, persist_log_line, ...
@@ -150,54 +150,54 @@ from anteumbra.infrastructure.utils.sse_manager import (
 __all__ = ["register_sse_client", ...]
 ```
 
-**Purpose**: Fix DDD dependency direction. The Interfaces layer accesses Infrastructure through the Application layer instead of importing directly.
+**目的**：修复 DDD 依赖方向。Interface 层通过 Application 层访问 Infrastructure，而不是直接 import。
 
-### 2.3 Infrastructure Layer
+### 2.3 Infrastructure 层（基础设施层）
 
-**Responsibility**: Implement the port interfaces defined in Domain, providing concrete technical capabilities.
+**职责**：实现 Domain 定义的端口接口，提供具体的技术能力。
 
-**Sub-modules**:
+**子模块**：
 
-| Sub-module | Files | Responsibility |
-|------------|-------|---------------|
-| **Detection** | scanner, yara_engine, file_cluster, hash_engine, manual_scanner, decoder, memory_shell_tracer | File scanning, YARA matching, similarity clustering |
-| **Monitoring** | monitor, log_monitor, log_analyzer, metrics, notifier, siem_exporter | File monitoring, log analysis, alerting, SIEM export |
-| **Persistence** | json_repository, sqlite_repository, `__init__` | Dual storage backends + factory |
-| **Config** | registry (ConfigRegistry), loader (TOML+env), version | Configuration management |
-| **Utils** | sse_manager, password_utils, platform_utils, logger_factory, path_utils | Utility library |
-| **Core** | suspicious_registry, quarantine, threat_graph, block_ledger, wal_manager, ip_blocker, decay_engine | Core business modules |
+| 子模块 | 文件 | 职责 |
+|--------|------|------|
+| **Detection** | scanner, yara_engine, file_cluster, hash_engine, manual_scanner, decoder, memory_shell_tracer | 文件扫描、YARA 匹配、相似度聚类 |
+| **Monitoring** | monitor, log_monitor, log_analyzer, metrics, notifier, siem_exporter | 文件监控、日志分析、告警、SIEM 导出 |
+| **Persistence** | json_repository, sqlite_repository, `__init__` | 双存储后端 + 工厂 |
+| **Config** | registry (ConfigRegistry), loader (TOML+env), version | 配置管理 |
+| **Utils** | sse_manager, password_utils, platform_utils, logger_factory, path_utils | 工具库 |
+| **Core** | suspicious_registry, quarantine, threat_graph, block_ledger, wal_manager, ip_blocker, decay_engine | 核心业务模块 |
 
-### 2.4 Interfaces Layer
+### 2.4 Interfaces 层（接口层）
 
-**Responsibility**: Expose HTTP APIs, web interface, and CLI commands to the outside world.
+**职责**：对外暴露 HTTP API、Web 界面、CLI 命令。
 
-**Web Blueprints (12)**:
+**Web Blueprints（12 个）**：
 
-| Blueprint | URL Prefix | Route Count | Responsibility |
-|-----------|------------|:-----------:|---------------|
-| `admin_bp` | `/admin` | ~12 | Dashboard, authentication, account management |
-| `records_bp` | `/admin` | ~8 | Detection record CRUD + batch operations |
-| `quarantine_bp` | `/admin` | ~10 | Quarantined file management |
-| `profiles_bp` | `/admin` | ~7 | Threat profiling + file clustering |
-| `blocklist_bp` | `/admin` | ~6 | IP block ledger |
-| `yara_bp` | `/admin/yara` | ~8 | YARA rule management |
-| `scanner_bp` | `/admin` | ~7 | Active scanning |
-| `settings_bp` | `/admin` | ~13 | Settings + SIEM export |
-| `monitor_bp` | `/admin` | ~18 | Real-time monitoring + log streaming |
-| `system_bp` | `/admin` | ~9 | System management (4 quadrants) |
-| `metrics_bp` | `/api/v1` | ~5 | Health checks + metrics API |
-| `_shared.py` | — | — | Shared utility functions |
+| Blueprint | URL 前缀 | 路由数 | 职责 |
+|-----------|---------|:-----:|------|
+| `admin_bp` | `/admin` | ~12 | 仪表板主页、认证、账户管理 |
+| `records_bp` | `/admin` | ~8 | 检测记录 CRUD + 批量操作 |
+| `quarantine_bp` | `/admin` | ~10 | 隔离文件管理 |
+| `profiles_bp` | `/admin` | ~7 | 威胁画像 + 文件聚类 |
+| `blocklist_bp` | `/admin` | ~6 | IP 封禁台账 |
+| `yara_bp` | `/admin/yara` | ~8 | YARA 规则管理 |
+| `scanner_bp` | `/admin` | ~7 | 主动扫描 |
+| `settings_bp` | `/admin` | ~13 | 设置 + SIEM 导出 |
+| `monitor_bp` | `/admin` | ~18 | 实时监控 + 日志流 |
+| `system_bp` | `/admin` | ~9 | 系统管理四象限 |
+| `metrics_bp` | `/api/v1` | ~5 | 健康检查 + 指标 API |
+| `_shared.py` | — | — | 共享工具函数 |
 
 ---
 
-## 3. Event-Driven Architecture (EDA)
+## 3. 事件驱动架构 (EDA)
 
-### 3.1 Event Bus
+### 3.1 事件总线
 
-Anteumbra uses an **implicit event bus** pattern — `PluginManager` serves as both the plugin container and the event router.
+Anteumbra 使用 **隐式事件总线** 模式 — `PluginManager` 同时是插件容器和事件路由器。
 
 ```
-Emitter (Infrastructure modules)                  Consumer (Plugin)
+发射端（Infrastructure 模块）              消费端（Plugin）
 
 pm.emit("alert_requested", ...)  ──→  stdout_logger.on_event()
                                    ├─→  notifier_handler.on_event()
@@ -217,47 +217,47 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 
 ### 3.2 emit() vs dispatch()
 
-| Feature | `emit()` | `dispatch()` |
-|---------|---------|-------------|
-| Semantics | Fire-and-Forget | Synchronous request-response |
-| Returns | `None` (immediately) | `List[DomainEvent]` (waits for completion) |
-| Execution | Async (queue → worker thread) | Sync (calling thread) |
-| Timeout | None (unbounded queue) | 30s per handler |
-| Use case | Notifications, state changes | Queries, chained events |
+| 特性 | `emit()` | `dispatch()` |
+|------|---------|-------------|
+| 语义 | Fire-and-Forget | 同步请求-响应 |
+| 返回 | `None`（立即） | `List[DomainEvent]`（等待完成） |
+| 执行 | 异步（队列 → 工作线程） | 同步（调用线程） |
+| 超时 | 无（队列无界） | 每 handler 30s |
+| 用途 | 通知、状态变更 | 查询、需要链式事件 |
 
-### 3.3 Event Flow
+### 3.3 事件流
 
 ```
-1. Infrastructure module detects an event
+1. 基础设施模块检测到事件
    monitor.py: _emit_alert()
         │
-2. Lazy-import PluginManager (avoids circular imports)
+2. 惰性导入 PluginManager（避免循环导入）
    from anteumbra.application.plugin_manager import get_plugin_manager
         │
-3. Emit event
+3. 发射事件
    pm.emit("alert_requested", "monitor", {...})
         │
-4. Event enqueued
+4. 事件入队
    DomainEvent → _event_queue (queue.Queue)
         │
-5. Worker thread picks up event
+5. 工作线程取事件
    _event_worker(): event = _event_queue.get()
         │
-6. Dispatch to registered handlers
+6. 分发到注册的 handlers
    dispatch(event):
      for plugin in _event_handlers[event.event_type]:
          t = Thread(plugin.on_event, event)
          t.start()
          t.join(timeout=30.0)
         │
-7. Handle
+7. 处理
    plugin.on_event(event) → Optional[List[DomainEvent]]
 ```
 
-### 3.4 Event Type Catalog
+### 3.4 事件类型目录
 
 | Event Type | Emitter | Handlers |
-|------------|---------|----------|
+|-----------|---------|----------|
 | `alert_requested` | monitor.py, quarantine_handler | stdout_logger, notifier_handler |
 | `file_quarantined` | monitor.py | stdout_logger, quarantine_handler |
 | `file_scanned` | monitor.py | stdout_logger |
@@ -270,9 +270,9 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 
 ---
 
-## 4. Database Design
+## 4. 数据库设计
 
-### 4.1 Storage Architecture
+### 4.1 存储架构
 
 ```
 Config-Driven Backend Selection
@@ -280,11 +280,11 @@ Config-Driven Backend Selection
         ├── "json"    → JsonRepository
         ├── "sqlite"  → SqliteRepository
         └── "both"    → DualWriteRepository
-                            ├── JsonRepository (write + fallback)
-                            └── SqliteRepository (preferred read)
+                            ├── JsonRepository (写入 + 兜底)
+                            └── SqliteRepository (优先读)
 ```
 
-### 4.2 ER Diagram
+### 4.2 ER 图
 
 ```
 ┌─────────────────┐
@@ -354,28 +354,28 @@ Config-Driven Backend Selection
 └─────────────────┘
 ```
 
-### 4.3 Foreign Key Relationships
+### 4.3 外键关系
 
-| Child Table | Column | Parent Table | Parent Column | ON DELETE |
-|-------------|--------|--------------|---------------|-----------|
+| 子表 | 列 | 父表 | 父列 | ON DELETE |
+|------|-----|------|------|-----------|
 | `registry` | `quarantine_id` | `quarantine` | `quarantine_id` | SET NULL |
 | `registry` | `profile_id` | `threat_profiles` | `profile_id` | SET NULL |
 | `block_ledger` | `profile_id` | `threat_profiles` | `profile_id` | SET NULL |
 
-### 4.4 Index Strategy (13 Indexes)
+### 4.4 索引策略（13 个索引）
 
-| Table | Indexes | Purpose |
-|-------|---------|---------|
-| `registry` | `file_path`, `quarantine_id`, `profile_id`, `detected_at`, `deleted_at` | Record queries, relationship navigation, time sorting |
-| `threat_profiles` | `risk_score`, `status`, `last_seen` | High-risk sorting, status filtering, decay calculation |
-| `block_ledger` | `ip`, `source`, `blocked_at` | IP lookup, source filtering, timeline |
-| `quarantine` | `status` | Quarantine status filtering |
-| `scan_history` | `start_time` | Scan history sorting |
+| 表 | 索引 | 用途 |
+|----|------|------|
+| `registry` | `file_path`, `quarantine_id`, `profile_id`, `detected_at`, `deleted_at` | 检测记录查询、关联导航、时间排序 |
+| `threat_profiles` | `risk_score`, `status`, `last_seen` | 高风险排序、状态过滤、衰减计算 |
+| `block_ledger` | `ip`, `source`, `blocked_at` | IP 查询、来源过滤、时间线 |
+| `quarantine` | `status` | 隔离状态过滤 |
+| `scan_history` | `start_time` | 扫描历史排序 |
 
-### 4.5 Namespace Mapping
+### 4.5 命名空间映射
 
-| Namespace | JSON Path | SQLite Table | Key Column |
-|-----------|-----------|--------------|------------|
+| 命名空间 | JSON 路径 | SQLite 表 | 键列 |
+|----------|----------|-----------|------|
 | `registry` | `data/suspicious_registry.json` | `registry` | `record_id` |
 | `quarantine` | `data/quarantine/quarantine.json` | `quarantine` | `quarantine_id` |
 | `block_ledger` | `data/block_ledger.json` | `block_ledger` | `ip` |
@@ -383,14 +383,14 @@ Config-Driven Backend Selection
 
 ---
 
-## 5. Data Flow Panorama
+## 5. 数据流全景
 
-### 5.1 Main Data Flow: File Detection
+### 5.1 主数据流：文件检测
 
 ```
 Web Server (Nginx/Apache/IIS)
         │
-        │ File create/modify events
+        │ 文件创建/修改事件
         ▼
 ┌─────────────────────────┐
 │ FileMonitorHandler      │  infrastructure/monitoring/monitor.py
@@ -400,18 +400,16 @@ Web Server (Nginx/Apache/IIS)
 │ Linux:   InotifyObserver (kernel-level, 0 delay)
 └───────────┬─────────────┘
             │
-            │ Event deduplication (LRU dir_cache 100 items, 60s TTL)
-            │ Extension filtering (.php, .asp, .jsp, etc.)
-            │ Exclusion directory filtering (cache, logs, temp, data)
+            │ 事件去重 (LRU dir_cache 100 items, 60s TTL)
+            │ 扩展名过滤 (.php, .asp, .jsp, etc.)
+            │ 排除目录过滤 (cache, logs, temp, data)
             ▼
 ┌─────────────────────────┐
 │ Magic Byte Detection    │  infrastructure/monitoring/monitor.py
-│ (reads first 10MB of    │
-│  file header)           │
+│ (文件头 10MB 读取)       │
 │                         │
-│ Identifies: PHP, ASP,   │
-│   JSP                  │
-│ Failure: → error log    │
+│ 识别: PHP, ASP, JSP     │
+│ 失败: → error 日志       │
 └───────────┬─────────────┘
             │
             ▼
@@ -420,10 +418,9 @@ Web Server (Nginx/Apache/IIS)
 │                         │
 │ 1. YARA Scan (18+ rules)│
 │ 2. Hash Engine          │
-│ 3. Decoder              │
+│ 3. Decoder (编码检测)    │
 │                         │
-│ → ScanResult (unified   │
-│   structure)           │
+│ → ScanResult (统一结构)  │
 └───────────┬─────────────┘
             │
             │ is_suspicious?
@@ -434,30 +431,29 @@ Web Server (Nginx/Apache/IIS)
      │             │
      ▼             ▼
 ┌─────────────┐  ┌──────────┐
-│ Registry    │  │  Skip    │
+│ Registry    │  │ 跳过     │
 │ .add()      │  │ (safe)   │
-│ (dedup +    │  └──────────┘
-│  merge)     │
+│ (去重+合并) │  └──────────┘
 └──────┬──────┘
        │
        ├── suspicious_registry.add()
-       │   → Save to JSON / SQLite
-       │   → Write to WAL
+       │   → 保存到 JSON / SQLite
+       │   → 写入 WAL
        │   → emit("record_added", ...)
        │
-       ├── If quarantine.auto_quarantine_enabled:
+       ├── 如果 quarantine.auto_quarantine_enabled:
        │   → emit("file_quarantined", ...)
        │
        └── emit("alert_requested", ...)
             → notifier_handler → email/WeChat/webhook
 ```
 
-### 5.2 Threat Profiling Data Flow
+### 5.2 威胁画像数据流
 
 ```
 ┌──────────────────────┐    ┌──────────────────────┐
-│ WAF Events            │    │ Registry Events       │
-│ (waf_source adapter)  │    │ (record_added,         │
+│ WAF 事件              │    │ 注册表事件            │
+│ (waf_source 适配器)   │    │ (record_added,        │
 │                      │    │  registry_changed)    │
 └──────────┬───────────┘    └──────────┬───────────┘
            │                            │
@@ -477,49 +473,45 @@ Web Server (Nginx/Apache/IIS)
 ┌──────────────────────────────────────────────────┐
 │              ThreatGraph                          │
 │                                                  │
-│  1. UA normalization → tool_signature            │
-│  2. URL normalization → path patterns            │
-│  3. Profile ID generation (UA + time_window)     │
-│  4. IP → Profile association                     │
-│  5. IP merging (proxy pool detection)            │
-│  6. Risk scoring (event frequency × severity)    │
-│  7. Decay (24h → ×0.5, 72h → dormant)           │
+│  1. UA 规范化 → tool_signature                   │
+│  2. URL 规范化 → 路径模式                         │
+│  3. Profile ID 生成 (UA + time_window)            │
+│  4. IP → Profile 关联                            │
+│  5. IP 合并 (代理池检测)                          │
+│  6. 风险评分 (事件频率 × 严重度)                    │
+│  7. 衰减 (24h → ×0.5, 72h → dormant)             │
 └──────────────────────────────────────────────────┘
 ```
 
-### 5.3 Log Analysis Data Flow
+### 5.3 日志分析数据流
 
 ```
-Web Access Log (access.log)
+Web 访问日志 (access.log)
         │
         ▼
 ┌─────────────────────────┐
 │ LogHeuristicEngine       │  infrastructure/monitoring/log_monitor.py
 │                         │
-│ Detection patterns:     │
-│ • Brute force (high-freq 404)│
-│ • Scanners (path traversal)│
-│ • Error storms (500 burst)│
-│ • Tool fingerprints      │
-│   (UA matching)         │
-│ • Suspicious paths       │
-│   (/admin, etc.)        │
+│ 检测模式:               │
+│ • 暴力破解 (高频 404)    │
+│ • 扫描器 (路径遍历)      │
+│ • 错误风暴 (500 爆发)    │
+│ • 工具指纹 (UA 匹配)     │
+│ • 可疑路径 (/admin, etc) │
 └───────────┬─────────────┘
             │
-            │ Anomaly detected
+            │ 检测到异常
             ▼
 ┌─────────────────────────┐
 │ Notifier                 │
 │                         │
-│ • Exponential backoff   │
-│   cooldown              │
-│ • Circuit breaker       │
-│ • Email / WeChat /       │
-│   Webhook               │
+│ • 指数退避冷却           │
+│ • 熔断保护               │
+│ • Email / WeChat / Webhook│
 └─────────────────────────┘
 ```
 
-### 5.4 SSE Real-Time Push Flow
+### 5.4 SSE 实时推送流
 
 ```
 Flask View → SSE EventStream
@@ -537,18 +529,18 @@ Flask View → SSE EventStream
 
 ---
 
-## 6. Plugin System
+## 6. 插件系统
 
-### 6.1 Plugin Types
+### 6.1 插件类型
 
-| Type | ABC | Purpose | Example |
-|------|-----|---------|---------|
-| **Plugin** | `domain/plugin.py` | General-purpose event handler | stdout_logger, threat_graph_handler |
-| **Detector** | `domain/detector.py` | File scan engine | YARA engine |
-| **Notifier** | `domain/notifier.py` | Alert channel | email, wechat, webhook |
-| **EventSource** | `domain/event_source.py` | External event source | WAF adapters |
+| 类型 | ABC | 用途 | 示例 |
+|------|-----|------|------|
+| **Plugin** | `domain/plugin.py` | 通用事件处理器 | stdout_logger, threat_graph_handler |
+| **Detector** | `domain/detector.py` | 文件扫描引擎 | YARA engine |
+| **Notifier** | `domain/notifier.py` | 告警渠道 | email, wechat, webhook |
+| **EventSource** | `domain/event_source.py` | 外部事件源 | WAF adapters |
 
-### 6.2 Plugin Lifecycle
+### 6.2 插件生命周期
 
 ```
 config.toml [plugins].builtin = ["stdout_logger", ...]
@@ -556,28 +548,28 @@ config.toml [plugins].builtin = ["stdout_logger", ...]
         ▼
 PluginManager.init_from_config(config)
         │
-        ├── For each builtin name:
+        ├── 对每个 builtin 名称:
         │   _load_builtin(name)
         │   ├── import plugins.<name>
-        │   ├── find Plugin subclass
+        │   ├── 找到 Plugin 子类
         │   ├── instance = PluginClass()
         │   └── register(instance)
         │
         ▼
 register(plugin):
     ├── plugin.activate(config[plugin.name])
-    ├── classify by type (detector/notifier/event_source)
-    └── register event_type → handler mapping
+    ├── 按类型分类 (detector/notifier/event_source)
+    └── 注册 event_type → handler 映射
 
-At runtime:
+运行时:
     emit/dispatch → plugin.on_event(event)
 
 shutdown():
-    ├── stop worker thread
-    └── plugin.deactivate() + unregister() for each plugin
+    ├── 停止 worker thread
+    └── 逐个 plugin.deactivate() + unregister()
 ```
 
-### 6.3 Writing a New Plugin
+### 6.3 编写新插件
 
 ```python
 # plugins/my_plugin.py
@@ -604,7 +596,7 @@ class MyPlugin(Plugin):
         return None
 ```
 
-Configuration:
+配置：
 ```toml
 [plugins]
 builtin = ["my_plugin", ...]
@@ -615,185 +607,185 @@ webhook_url = "https://hooks.example.com/alerts"
 
 ---
 
-## 7. Key Algorithms
+## 7. 关键算法
 
-### 7.1 Risk Decay Engine
+### 7.1 风险衰减引擎
 
 ```
-Decay model (exponential backoff):
+衰减模型（指数退避）：
 
 decay_factor:
-  < 1h:   1.0  (no decay)
-  1-24h:  0.5  (half-life)
-  24-72h: 0.25 (accelerated decay)
-  > 72h:  0.1  (dormant)
+  < 1h:   1.0  (无衰减)
+  1-24h:  0.5  (半衰)
+  24-72h: 0.25 (衰减加速)
+  > 72h:  0.1  (休眠)
 
-Cooldown (adaptive):
+冷却时间（自适应）：
   cooldown = base × (1 + alpha)^events × beta^level × gamma^same_ip × delta^combo
-  where:
-    alpha = 0.1   (+10% per event)
-    beta  = 1.5   (×1.5 per level increase)
-    gamma = 1.2   (same IP, multiple files)
-    delta = 1.3   (WebShell + brute-force combo)
+  其中:
+    alpha = 0.1   (每次事件 +10%)
+    beta  = 1.5   (每升一级 ×1.5)
+    gamma = 1.2   (同 IP 多文件)
+    delta = 1.3   (WebShell + 爆破组合)
 ```
 
-### 7.2 File Clustering Algorithm
+### 7.2 文件聚类算法
 
 ```
-Three-track hashing:
-  ssdeep: CTPH (Context-Triggered Piecewise Hashing) — fuzzy hash
-  py-tlsh: Trend Micro Locality Sensitive Hash — locality-sensitive hash
-  SimHash: Google near-duplicate detection
+三轨哈希:
+  ssdeep: CTPH (Context-Triggered Piecewise Hashing) — 模糊哈希
+  py-tlsh: Trend Micro Locality Sensitive Hash — 局部敏感哈希
+  SimHash: Google 近似重复检测
 
-Clustering threshold: 0.80 (80% similarity → same group)
+聚类阈值: 0.80 (80% 相似度 → 同组)
 
-Process:
-  1. Compute ssdeep + TLSH + SimHash for file
-  2. Compare similarity against existing clusters
-  3. ≥80% → join existing cluster
-  4. <80% → create new cluster
+流程:
+  1. 计算文件 ssdeep + TLSH + SimHash
+  2. 与现有聚类比较相似度
+  3. ≥80% → 加入现有聚类
+  4. <80% → 创建新聚类
 ```
 
-### 7.3 Profile Merging Algorithm
+### 7.3 画像合并算法
 
 ```
-Proxy pool detection:
-  If 100 IPs use the same UA within the same time window:
-    → They belong to the same attacker
-    → Merge into 1 Profile
-    → All IPs join ip_pool
+代理池检测:
+  如果 100 个 IP 在同一个时间窗口内使用相同的 UA：
+    → 它们属于同一攻击者
+    → 合并为 1 个 Profile
+    → 所有 IP 加入 ip_pool
 
-Merge conditions:
+合并条件:
   same(ua_fingerprint) AND within(time_window_hours, default=4h)
 ```
 
 ---
 
-## 8. Security Design
+## 8. 安全设计
 
-| Layer | Measures |
-|-------|----------|
-| **Authentication** | Scrypt password hashing (werkzeug), IP whitelist |
-| **Session** | Flask Session (filesystem), HttpOnly Cookie, SameSite=Lax |
-| **CSRF** | Flask-WTF CSRFProtect, all POST requests carry token |
-| **Path Traversal** | Whitelist validation, `resolve()` + `relative_to()` double check |
-| **File Read** | 512KB cap, registry/quarantine validation, null byte filtering |
-| **Server Fingerprint** | WSGI middleware removes Server header, Werkzeug version set to empty |
-| **Environment Variables** | `${VAR:-default}` syntax, `.env` file loading |
-| **Log Injection** | HTML-escape all user input before writing to log streams |
+| 层面 | 措施 |
+|------|------|
+| **认证** | Scrypt 密码哈希 (werkzeug)，IP 白名单 |
+| **会话** | Flask Session (filesystem)，HttpOnly Cookie，SameSite=Lax |
+| **CSRF** | Flask-WTF CSRFProtect，所有 POST 请求带 token |
+| **路径穿越** | 白名单验证，`resolve()` + `relative_to()` 双重检查 |
+| **文件读取** | 512KB 上限，注册表/隔离验证，null byte 过滤 |
+| **服务器指纹** | WSGI 中间件移除 Server 头，Werkzeug version 置空 |
+| **环境变量** | `${VAR:-default}` 语法，`.env` 文件加载 |
+| **日志注入** | HTML 转义所有用户输入后再写入日志流 |
 
 ---
 
-## 9. Development Decision Guide
+## 9. 开发决策指南
 
-### 9.1 "Which layer should I put my code in?"
+### 9.1 "我应该把代码放在哪一层？"
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ Q: Is this defining "what it is"?                     │
-│ (entities, value objects, domain concepts)            │
+│ 问：这是在定义"是什么"吗？                              │
+│ （实体、值对象、领域概念）                              │
 │ → YES: domain/                                       │
-│   e.g.: Add AlertRule, RiskScore, DetectionPolicy     │
+│   例：添加 AlertRule, RiskScore, DetectionPolicy      │
 ├──────────────────────────────────────────────────────┤
-│ Q: Is this defining an interface for "what it can do"?│
-│ (abstract ports, no implementation)                   │
+│ 问：这是在定义"能做什么"的接口吗？                       │
+│ （抽象端口，无实现）                                   │
 │ → YES: domain/                                       │
-│   e.g.: Add domain/scorer.py → Scorer ABC            │
+│   例：添加 domain/scorer.py → Scorer ABC              │
 ├──────────────────────────────────────────────────────┤
-│ Q: Is this a concrete implementation of "how to do it"?│
-│ (algorithms, I/O, external system interaction)       │
+│ 问：这是"怎么做"的具体实现吗？                          │
+│ （算法、I/O、外部系统交互）                             │
 │ → YES: infrastructure/                               │
-│   e.g.: Add MLScorer implementing Scorer ABC         │
+│   例：添加 MLScorer 实现 Scorer ABC                   │
 ├──────────────────────────────────────────────────────┤
-│ Q: Is this orchestrating multiple infrastructure modules?│
-│ (one operation calling multiple lower-level modules) │
-│ → YES: application/ (create new service)             │
-│   e.g.: response_service.py orchestrating quarantine + block + alert│
+│ 问：这是在编排多个 infrastructure 模块吗？              │
+│ （一个操作调用多个底层模块）                             │
+│ → YES: application/ (新建 service)                   │
+│   例：response_service.py 编排 quarantine + block + alert│
 ├──────────────────────────────────────────────────────┤
-│ Q: Is this exposing a Web API / page?                │
+│ 问：这是在暴露 Web API / 页面吗？                       │
 │ → YES: interfaces/web/blueprints/                    │
-│   e.g.: Add /admin/threat-intel page                 │
+│   例：添加 /admin/threat-intel 页面                    │
 ├──────────────────────────────────────────────────────┤
-│ Q: Is this cross-module event consumption?            │
-│ (needs to listen to multiple event sources and react)│
+│ 问：这是跨模块的事件消费吗？                             │
+│ （需要监听多个事件源并做出响应）                         │
 │ → YES: plugins/                                      │
-│   e.g.: slack_notifier.py                            │
+│   例：slack_notifier.py                               │
 └──────────────────────────────────────────────────────┘
 ```
 
-### 9.2 "Should a new feature use EDA events or direct calls?"
+### 9.2 "新功能应该走 EDA 事件还是直接调用？"
 
-| Scenario | Recommended Approach | Reason |
-|----------|---------------------|--------|
-| Module A needs Module B's result to proceed | **Direct call** (via application service) | Synchronous dependency; emit cannot guarantee ordering |
-| Module A finishes something, notifies other modules | **EDA emit()** | Decoupled, async, extensible |
-| Multiple consumers need to react to the same event | **EDA emit()** | Plugin system natively supports this |
-| Transactional consistency required | **Direct call** (repository.transaction()) | EDA is Fire-and-Forget |
-| Audit/logging operations | **EDA emit()** | Does not block the main flow |
-| Real-time response (return value needed) | **Direct call** or **EDA dispatch()** | emit returns no result |
+| 场景 | 推荐方式 | 原因 |
+|------|---------|------|
+| 模块 A 需要模块 B 的结果才能继续 | **直接调用**（通过 application service） | 同步依赖，emit 无法保证顺序 |
+| 模块 A 做完某事，通知其他模块 | **EDA emit()** | 解耦，异步，可扩展 |
+| 需要多个消费者对同一事件做出反应 | **EDA emit()** | 插件系统天然支持 |
+| 需要保证事务一致性 | **直接调用**（repository.transaction()） | EDA 是 Fire-and-Forget |
+| 审计/日志类操作 | **EDA emit()** | 不阻塞主流程 |
+| 实时响应（需要返回值） | **直接调用** 或 **EDA dispatch()** | emit 不返回结果 |
 
-### 9.3 "How does a new module connect to the event bus?"
+### 9.3 "新模块如何接入事件总线？"
 
 ```
-1. If the module is in the infrastructure layer:
-   - Lazy-import PluginManager
+1. 如果模块在 infrastructure 层：
+   - 惰性导入 PluginManager
    - from anteumbra.application.plugin_manager import get_plugin_manager
-   - Call pm.emit("event_type", "source_name", payload)
-   - This is a known DDD design trade-off (13 lazy-import points)
+   - 调用 pm.emit("event_type", "source_name", payload)
+   - 这是已知的 DDD 设计权衡（13个惰性导入点）
 
-2. If adding a new event type:
-   - Ensure at least one plugin declares it in supported_events
-   - Keep payload field naming consistent (see existing event catalog)
+2. 如果新增事件类型：
+   - 确保至少一个插件在 supported_events 中声明
+   - payload 字段命名保持一致性（见现有事件目录）
 
-3. If adding a new plugin:
-   - Implement the Plugin ABC
-   - Place it in the plugins/ directory
-   - Register it in config.toml [plugins].builtin
+3. 如果新增插件：
+   - 实现 Plugin ABC
+   - 放在 plugins/ 目录
+   - 在 config.toml [plugins].builtin 中注册
 ```
 
-### 9.4 Version Number Decisions
+### 9.4 版本号决策
 
-| Change Type | Version Bump | Example |
-|-------------|:------------:|---------|
-| New feature (new blueprint, new detection engine, new export format) | MINOR | 1.1.0 |
-| Bug fix, code quality, performance optimization, refactoring | PATCH | 1.0.10 |
-| Incompatible API changes, architecture rewrite | MAJOR | 2.0.0 |
+| 变更类型 | 版本位 | 示例 |
+|---------|:------:|------|
+| 新增功能（新 blueprint、新检测引擎、新导出格式） | MINOR | 1.1.0 |
+| Bug 修复、代码质量、性能优化、重构 | PATCH | 1.0.10 |
+| 不兼容的 API 变更、架构重写 | MAJOR | 2.0.0 |
 
 ---
 
-## Appendix A: Key Technology Stack
+## 附录 A：关键技术栈
 
-| Technology | Purpose |
-|------------|---------|
-| **Python 3.10+** | Primary language |
-| **Flask 3.x** | Web framework |
-| **HTMX 2.x** | Frontend interactivity (no JS framework dependency) |
-| **Jinja2** | Template engine |
-| **YARA 4.x** | WebShell rule matching |
-| **ssdeep / py-tlsh / SimHash** | Three-track file similarity hashing |
-| **SQLite 3.x (WAL)** | Relational persistence |
-| **watchdog** | Cross-platform filesystem monitoring |
-| **Click** | CLI framework |
-| **Werkzeug** | WSGI utility library (password hashing) |
-| **Flask-Babel** | i18n internationalization (en/zh) |
-| **pytest** | Test framework |
-| **Playwright** | E2E UI testing |
-| **TOML** | Configuration format |
+| 技术 | 用途 |
+|------|------|
+| **Python 3.10+** | 主语言 |
+| **Flask 3.x** | Web 框架 |
+| **HTMX 2.x** | 前端交互（无 JS 框架依赖） |
+| **Jinja2** | 模板引擎 |
+| **YARA 4.x** | WebShell 规则匹配 |
+| **ssdeep / py-tlsh / SimHash** | 文件相似度三轨哈希 |
+| **SQLite 3.x (WAL)** | 关系型持久化 |
+| **watchdog** | 跨平台文件系统监控 |
+| **Click** | CLI 框架 |
+| **Werkzeug** | WSGI 工具库（密码哈希） |
+| **Flask-Babel** | i18n 国际化 (en/zh) |
+| **pytest** | 测试框架 |
+| **Playwright** | E2E UI 测试 |
+| **TOML** | 配置格式 |
 
-## Appendix B: Common File Quick Reference
+## 附录 B：常用文件速查
 
-| Looking for... | File |
-|----------------|------|
-| Version number | `src/anteumbra/__init__.py:__version__` |
-| All exception handling | grep `except.*:` → `pass` has been eliminated |
-| All event emission points | grep `pm.emit(` |
-| All thread locks | grep `Lock()` |
-| All database tables | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
-| All blueprint routes | grep `@.*_bp.route(` |
-| All configuration keys | `config.toml` (130+ keys, 27 sections) |
+| 想找... | 文件 |
+|---------|------|
+| 版本号 | `src/anteumbra/__init__.py:__version__` |
+| 所有异常处理 | grep `except.*:` → `pass` 已清零 |
+| 所有事件发射点 | grep `pm.emit(` |
+| 所有线程锁 | grep `Lock()` |
+| 所有数据库表 | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
+| 所有蓝图路由 | grep `@.*_bp.route(` |
+| 所有配置键 | `config.toml` (130+ keys, 27 sections) |
 
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.9 — Evolving alongside the code</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.9 — 随代码一起演进</sub>
 </div>
