@@ -75,7 +75,7 @@ def verify_file_in_registry(file_path: str) -> bool:
     original-case paths from scanner findings.
     """
     try:
-        from anteumbra.infrastructure.suspicious_registry import get_all
+        from anteumbra.application.registry_service import get_all
         from anteumbra.infrastructure.utils.path_utils import path_to_key
         raw_key = path_to_key(file_path)
         records = get_all()
@@ -179,3 +179,25 @@ def require_auth_except_sse(f):
 # ── 扫描结果内存缓存 ────────────────────────────────────
 
 _scan_results_cache: dict = {}
+_scan_results_lock = threading.Lock()
+
+
+def _cache_put(key: str, value) -> None:
+    """Thread-safe cache write."""
+    with _scan_results_lock:
+        _scan_results_cache[key] = value
+
+
+def _cache_get(key: str):
+    """Thread-safe cache read."""
+    with _scan_results_lock:
+        return _scan_results_cache.get(key)
+
+
+def _cache_cleanup_stale(max_age: float = 3600) -> None:
+    """Thread-safe removal of entries older than max_age seconds."""
+    with _scan_results_lock:
+        stale = [k for k, v in _scan_results_cache.items()
+                 if time.time() - v.end_time > max_age]
+        for k in stale:
+            del _scan_results_cache[k]

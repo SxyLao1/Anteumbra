@@ -13,7 +13,7 @@ from pathlib import Path
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.suspicious_registry import (
+from anteumbra.application.registry_service import (
     get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
@@ -63,14 +63,14 @@ def system_management():
 def system_registry_panel():
     """Registry status monitoring data (independent refresh)"""
     try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-        from core import wal_manager
-        import anteumbra.infrastructure as core
+        from anteumbra.application.metrics_service import get_metrics
+        from anteumbra.application.wal_service import get_wal_info
+
 
         all_records = get_all(include_deleted=True)
         active_records = get_all(include_deleted=False)
 
-        wal_info = wal_manager.get_wal_info()
+        wal_info = get_wal_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
         queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
@@ -101,11 +101,11 @@ def system_registry_panel():
 def system_wal_panel():
     """WAL management data panel"""
     try:
-        from core import wal_manager
+        from anteumbra.application.wal_service import get_wal_info, list_archives, get_status_text
 
-        wal_info = wal_manager.get_wal_info()
-        archives = wal_manager.list_archives()
-        wal_status, wal_status_text, wal_size_mb = wal_manager.get_status_text()
+        wal_info = get_wal_info()
+        archives = list_archives()
+        wal_status, wal_status_text, wal_size_mb = get_status_text()
 
         current_wal = None
         if wal_info:
@@ -248,7 +248,7 @@ def system_config_panel():
         end = start + per_page
         paginated_history = formatted_history[start:end]
 
-        from anteumbra.infrastructure.detection.yara_engine import get_yara_engine
+        from anteumbra.application.yara_service import get_yara_engine
         engine = get_yara_engine(current_app.logger)
         rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
 
@@ -273,9 +273,9 @@ def system_config_panel():
 def system_registry_compact():
     """Manual registry compaction (enhanced feedback)"""
     try:
-        from anteumbra.infrastructure.suspicious_registry import compact_registry
-        from core import wal_manager
-        import anteumbra.infrastructure as core
+        from anteumbra.application.registry_service import compact_registry
+        from anteumbra.application.wal_service import get_wal_info
+
 
         if hasattr(current_app, '_registry_compacting'):
             return render_template(
@@ -290,7 +290,7 @@ def system_registry_compact():
         all_records = get_all(include_deleted=True)
         active_records = get_all(include_deleted=False)
 
-        wal_info = wal_manager.get_wal_info()
+        wal_info = get_wal_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
         queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
@@ -343,14 +343,13 @@ def system_registry_compact():
 def system_wal_replay():
     """Manual WAL replay (returns rendered panel HTML)"""
     try:
-        from anteumbra.infrastructure.wal_manager import replay
-        from core import wal_manager
+        from anteumbra.application.wal_service import replay, get_wal_info, list_archives, get_status_text
 
         recovered = replay()
 
-        wal_status, wal_status_text, wal_size_mb = wal_manager.get_status_text()
-        wal_info = wal_manager.get_wal_info()
-        archives = wal_manager.list_archives()
+        wal_status, wal_status_text, wal_size_mb = get_status_text()
+        wal_info = get_wal_info()
+        archives = list_archives()
 
         current_wal = None
         if wal_info:
@@ -457,9 +456,7 @@ def system_session_cleanup():
 def system_config_reload():
     """Manual config hot-reload (returns rendered panel HTML)"""
     try:
-        from core.config_watcher import ConfigReloadHandler
-        handler = ConfigReloadHandler(ConfigRegistry, current_app.logger)
-        handler.on_modified(type('Event', (), {'src_path': ConfigRegistry._config_path})())
+        ConfigRegistry.initialize(force=True)
 
         config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
         config_signature = hashlib.md5(config_data.encode()).hexdigest()[:8]
@@ -477,7 +474,7 @@ def system_config_reload():
                 item += f" | Duration: {record['duration_ms']}ms"
             formatted_history.append(item)
 
-        from anteumbra.infrastructure.detection.yara_engine import get_yara_engine
+        from anteumbra.application.yara_service import get_yara_engine
         engine = get_yara_engine(current_app.logger)
         rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
 

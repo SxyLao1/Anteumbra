@@ -40,7 +40,7 @@ class StdoutLoggerPlugin(Plugin, Notifier):
 
     @property
     def supported_events(self) -> List[str]:
-        return ["alert.sent", "scan.completed", "block.executed", "quarantine.action"]
+        return ["alert_requested", "file_scanned", "block_executed", "file_quarantined", "threat_graph_updated"]
 
     def activate(self, config: Dict[str, Any]) -> None:
         self._color = config.get("color", True)
@@ -51,10 +51,32 @@ class StdoutLoggerPlugin(Plugin, Notifier):
         logger.info("StdoutLogger: 已停用")
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
-        if self._verbose:
-            ts = datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S")
-            payload_str = json.dumps(event.payload, ensure_ascii=False, default=str)[:200]
-            print(f"[PLUGIN][{ts}] {event.event_type} ← {event.source}: {payload_str}")
+        ts = datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S")
+        payload = event.payload or {}
+        if event.event_type == "alert_requested":
+            level = payload.get("level", "INFO")
+            alert_type = payload.get("alert_type", "unknown")
+            file_path = payload.get("file_path", "")
+            batch = payload.get("batch_count")
+            extra = f" (x{batch})" if batch else f" -> {file_path}" if file_path else ""
+            print(f"[STDOUT][{ts}] {level:8s} {alert_type}{extra}")
+        elif event.event_type == "file_scanned":
+            fp = payload.get("file_path", "?")
+            tag = "HIT" if payload.get("is_suspicious") else "SAFE"
+            print(f"[STDOUT][{ts}] SCAN    [{tag}] {fp}")
+        elif event.event_type == "block_executed":
+            ip = payload.get("ip", "?")
+            print(f"[STDOUT][{ts}] BLOCK   {ip}")
+        elif event.event_type == "file_quarantined":
+            fp = payload.get("file_path", "?")
+            print(f"[STDOUT][{ts}] QUAR    {fp}")
+        elif event.event_type == "threat_graph_updated":
+            count = payload.get("active_profile_count", 0)
+            top = payload.get("top_risk_score", 0)
+            print(f"[STDOUT][{ts}] GRAPH   {count} profiles, top risk={top:.2f}")
+        elif self._verbose:
+            payload_str = json.dumps(payload, ensure_ascii=False, default=str)[:200]
+            print(f"[STDOUT][{ts}] {event.event_type} <- {event.source}: {payload_str}")
         return None
 
     def send(self, message: AlertMessage) -> bool:

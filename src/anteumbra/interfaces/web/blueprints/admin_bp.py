@@ -33,14 +33,14 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 import shutil
 
-import anteumbra.infrastructure as core  # compat
+
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.suspicious_registry import get_all, remove
+from anteumbra.application.registry_service import get_all, remove
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import check_port_reachable
-from anteumbra.infrastructure.utils.sse_manager import register_sse_client, unregister_sse_client, _sse_clients, \
-    _registry_update_queue, trigger_registry_update
+from anteumbra.infrastructure.utils.sse_manager import register_sse_client, unregister_sse_client, \
+    trigger_registry_update
 from anteumbra.infrastructure.utils.password_utils import check_password_strength, update_password_hash_in_config
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 
@@ -55,39 +55,6 @@ from flask_wtf.csrf import generate_csrf
 @admin_bp.context_processor
 def inject_csrf_token():
     return dict(csrf_token=generate_csrf)
-
-def start_registry_sse_worker():
-    """Registry更新推送工作线程（在app.py启动时调用）"""
-
-    def _worker():
-        logger = logging.getLogger("monitor.admin_sse")
-        logger.info("[SSE][WORKER] Registry推送工作线程已启动")
-
-        while True:
-            try:
-                signal = _registry_update_queue.get(timeout=1)
-                if signal == "registry_update":
-                    logger.debug(f"[SSE][WORKER] 广播Registry更新给 {len(_sse_clients)} 个客户端")
-                    dead_clients = []
-                    for client_queue in _sse_clients[:]:
-                        try:
-                            client_queue.put_nowait("registry_update")
-                        except queue.Full:
-                            dead_clients.append(client_queue)
-                        except Exception:
-                            dead_clients.append(client_queue)
-                    for dead in dead_clients:
-                        if dead in _sse_clients:
-                            _sse_clients.remove(dead)
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"[SSE][WORKER] 工作线程异常: {e}", exc_info=True)
-
-    worker = threading.Thread(target=_worker, daemon=True, name="RegistrySSEWorker")
-    worker.start()
-    return worker
-
 
 def generate_secure_sse_token(username: str) -> str:
     random_part = secrets.token_urlsafe(16)
@@ -190,8 +157,8 @@ def threats():
 def dashboard_content():
     """v1.7.9: 安全报告 Dashboard"""
     try:
-        from anteumbra.infrastructure.suspicious_registry import get_all
-        from anteumbra.infrastructure.quarantine import get_quarantine_stats
+        from anteumbra.application.registry_service import get_all
+        from anteumbra.application.quarantine_service import get_quarantine_stats
 
         all_records = get_all(include_deleted=True)
         quarantine_stats = get_quarantine_stats()
@@ -428,7 +395,7 @@ def dashboard():
 def get_metric(metric_name):
     """获取单个指标（v1.7.2修复：返回HTML片段）"""
     try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+        from anteumbra.application.metrics_service import get_metrics
         metrics = get_metrics()
 
         # 安全获取指标，避免psutil异常
@@ -491,7 +458,7 @@ def metrics_page():
     # is safe because dict.get() handles missing keys gracefully.
     data = {}
     try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+        from anteumbra.application.metrics_service import get_metrics
         m = get_metrics()
         data = m.get()
     except Exception:
@@ -508,7 +475,7 @@ def metrics_page():
 def metrics_data():
     """性能指标数据（v1.7.6-Patch12: 移除SSE属性，纯HTMX轮询）"""
     try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+        from anteumbra.application.metrics_service import get_metrics
         metrics = get_metrics()
 
         # 安全获取内存数据
@@ -672,8 +639,8 @@ def public_health():
         status["status"] = "degraded"
 
     try:
-        from core import wal_manager
-        wal_manager.get_wal_info()
+        from anteumbra.application.wal_service import get_wal_info
+        get_wal_info()
     except Exception:
         status["status"] = "degraded"
 
@@ -708,8 +675,8 @@ def admin_health():
 
     # Check WAL module (function-based, no class)
     try:
-        from core import wal_manager
-        wal_manager.get_wal_info()
+        from anteumbra.application.wal_service import get_wal_info
+        get_wal_info()
         status['checks']['wal'] = 'ok'
     except Exception as e:
         status['checks']['wal'] = f'error: {str(e)}'
@@ -717,8 +684,8 @@ def admin_health():
 
     # Check registry module (function-based, no class)
     try:
-        from core import suspicious_registry
-        suspicious_registry.get_all(include_deleted=False)
+        from anteumbra.application.registry_service import get_all
+        get_all(include_deleted=False)
         status['checks']['registry'] = 'ok'
     except Exception as e:
         status['checks']['registry'] = f'error: {str(e)}'
@@ -726,7 +693,7 @@ def admin_health():
 
     # Check YARA engine
     try:
-        from anteumbra.infrastructure.detection.yara_engine import get_yara_engine
+        from anteumbra.application.yara_service import get_yara_engine
         import logging
         get_yara_engine(logging.getLogger('health'))
         status['checks']['yara'] = 'ok'
@@ -748,7 +715,7 @@ MAX_VIEW_SIZE = 512 * 1024  # 512KB 上限
 def _verify_file_in_registry(file_path: str) -> bool:
     """验证文件是否在 Registry 中（白名单）"""
     try:
-        from anteumbra.infrastructure.suspicious_registry import get_all
+        from anteumbra.application.registry_service import get_all
         from anteumbra.infrastructure.utils.path_utils import path_to_key
         target = path_to_key(file_path)
         for record in get_all(include_deleted=True):
@@ -762,7 +729,7 @@ def _verify_file_in_registry(file_path: str) -> bool:
 def _verify_file_in_quarantine(qid: str) -> Optional[Path]:
     """验证 quarantine_id 是否在隔离库中，返回隔离路径或 None"""
     try:
-        from anteumbra.infrastructure.quarantine import get_quarantine_detail
+        from anteumbra.application.quarantine_service import get_quarantine_detail
         record = get_quarantine_detail(qid)
         if record:
             qpath = record.get("quarantine_path", "")

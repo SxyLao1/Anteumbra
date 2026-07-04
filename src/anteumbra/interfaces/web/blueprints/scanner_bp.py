@@ -23,7 +23,7 @@ from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.interfaces.web.blueprints._shared import (
     save_scan_to_disk, load_scans_from_disk,
-    _scan_results_cache as shared_cache,
+    _cache_put, _cache_get, _cache_cleanup_stale,
 )
 
 # ── Blueprint ──────────────────────────────────────────────
@@ -32,9 +32,7 @@ scanner_bp = Blueprint('scanner', __name__, url_prefix='/admin')
 
 _scan_logger = logging.getLogger("monitor.scanner_sse")
 
-# 模块级缓存引用（与 _shared 同步）
-def _get_cache():
-    return shared_cache
+# 模块级缓存引用（与 _shared 同步，线程安全）
 
 
 # ── Routes ─────────────────────────────────────────────────
@@ -81,7 +79,7 @@ def scanner_run_sse():
             yield f"data: {_json.dumps({'event': 'error', 'message': '缺少 target_dir 参数'})}\n\n"
         return Response(_err(), mimetype='text/event-stream')
 
-    from anteumbra.infrastructure.detection.manual_scanner import ManualScanner
+    from anteumbra.application.scanner_service import ManualScanner
 
     progress_queue = queue.Queue()
     cancel_flag = {"cancelled": False}
@@ -144,12 +142,9 @@ def scanner_run_sse():
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
                     yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
-                    _get_cache()[result.scan_id] = result
+                    _cache_put(result.scan_id, result)
                     # 清理过期缓存
-                    stale = [k for k, v in _get_cache().items()
-                             if time.time() - v.end_time > 3600]
-                    for k in stale:
-                        del _get_cache()[k]
+                    _cache_cleanup_stale()
                     save_scan_to_disk(result)
                     return
 
@@ -172,7 +167,7 @@ def scanner_run_sse():
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
                     yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
-                    _get_cache()[result.scan_id] = result
+                    _cache_put(result.scan_id, result)
                     save_scan_to_disk(result)
             except queue.Empty:
                 break
@@ -208,8 +203,8 @@ def scanner_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.infrastructure.suspicious_registry import get_all, mark_quarantined, add as reg_add
-        from anteumbra.infrastructure.quarantine import quarantine_file
+        from anteumbra.application.registry_service import get_all, mark_quarantined, add as reg_add
+        from anteumbra.application.quarantine_service import quarantine_file
         from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
 
         target = path_to_key(file_path)
@@ -315,8 +310,7 @@ def scanner_results_json():
 def scanner_report():
     """生成可打印扫描报告"""
     scan_id = request.args.get('scan_id', '')
-    cache = _get_cache()
-    result = cache.get(scan_id)
+    result = _cache_get(scan_id)
 
     if not result:
         disk_file = Path("data") / "scans" / f"{scan_id}.json"
@@ -324,7 +318,7 @@ def scanner_report():
             try:
                 import json
                 raw = json.loads(disk_file.read_text(encoding='utf-8'))
-                from anteumbra.infrastructure.detection.manual_scanner import ManualScanResult
+                from anteumbra.application.scanner_service import ManualScanResult
                 result = ManualScanResult(
                     scan_id=raw.get("scan_id", scan_id),
                     target_dir=raw.get("target_dir", ""),

@@ -122,7 +122,7 @@ class Website:
 
     def is_reachable(self) -> bool:
         """检查端口是否可达"""
-        from core.scanner import check_port
+        from anteumbra.infrastructure.detection.scanner import check_port
         return check_port("127.0.0.1", self.port)
 
     def __str__(self):

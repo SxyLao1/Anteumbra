@@ -11,7 +11,7 @@ v1.7.9 新增：隔离管理后台蓝图
 """
 from flask import Blueprint, render_template, request, jsonify, current_app
 
-from anteumbra.infrastructure.quarantine import (
+from anteumbra.application.quarantine_service import (
     get_quarantine_list, get_quarantine_detail, get_quarantine_stats,
     restore_file, delete_quarantine
 )

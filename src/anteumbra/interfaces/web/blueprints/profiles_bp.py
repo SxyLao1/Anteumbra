@@ -27,7 +27,7 @@ profiles_bp = Blueprint('profiles', __name__, url_prefix='/admin')
 def profiles_list():
     """画像列表页 — 服务端渲染 + 分页 + 搜索"""
     try:
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
+        from anteumbra.application.threat_graph_service import get_threat_graph
         graph = get_threat_graph()
         all_profiles = graph.get_active_profiles(min_score=0.1)
 
@@ -90,7 +90,7 @@ def profiles_list():
 def profiles_data():
     """画像数据 API"""
     try:
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
+        from anteumbra.application.threat_graph_service import get_threat_graph
         graph = get_threat_graph()
         profiles = graph.get_active_profiles(min_score=0.1)
         result = []
@@ -122,7 +122,7 @@ def profiles_data():
 def profile_detail_page(profile_id):
     """画像详情（攻击链时间线 + 关联文件 + 关联记录）"""
     try:
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
+        from anteumbra.application.threat_graph_service import get_threat_graph
         graph = get_threat_graph()
         profile = graph.query_profile(profile_id)
         if not profile:
@@ -157,8 +157,8 @@ def profile_detail_page(profile_id):
         # File clusters
         file_clusters = []
         try:
-            from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
-            from anteumbra.infrastructure.quarantine import get_quarantine_list
+            from anteumbra.application.file_cluster_service import get_file_cluster_engine
+            from anteumbra.application.quarantine_service import get_quarantine_list
             ce = get_file_cluster_engine()
             quarantined_map = {}
             for q in get_quarantine_list(status="quarantined", limit=500):
@@ -190,8 +190,8 @@ def profile_detail_page(profile_id):
         # Linked records (bidirectional link)
         linked_records = []
         try:
-            from anteumbra.infrastructure.suspicious_registry import get_all as reg_get_all
-            from anteumbra.infrastructure.quarantine import get_quarantine_list
+            from anteumbra.application.registry_service import get_all as reg_get_all
+            from anteumbra.application.quarantine_service import get_quarantine_list
             from anteumbra.infrastructure.utils.path_utils import path_to_key
             all_reg = reg_get_all(include_deleted=True)
             qmap = {}
@@ -231,7 +231,7 @@ def profile_detail_page(profile_id):
 def profile_report(profile_id):
     """攻击者画像报告（可打印 HTML）"""
     try:
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
+        from anteumbra.application.threat_graph_service import get_threat_graph
         graph = get_threat_graph()
         profile = graph.query_profile(profile_id)
         if not profile:
@@ -255,7 +255,7 @@ def profile_report(profile_id):
 def file_clusters_page():
     """文件聚类列表页面"""
     try:
-        from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
+        from anteumbra.application.file_cluster_service import get_file_cluster_engine
         engine = get_file_cluster_engine()
         clusters = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)
         enriched = []
@@ -291,7 +291,7 @@ def file_clusters_page():
 def clusters_stats():
     """文件聚类统计 API"""
     try:
-        from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
+        from anteumbra.application.file_cluster_service import get_file_cluster_engine
         engine = get_file_cluster_engine()
         stats = engine.get_stats()
         top = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)[:10]

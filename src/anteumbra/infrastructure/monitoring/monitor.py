@@ -32,9 +32,6 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_ke
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-from anteumbra.application.plugin_manager import get_plugin_manager
-
-
 class FileMonitorHandler(FileSystemEventHandler):
     """
     v1.8.1-Release: 跨平台文件监控处理器
@@ -350,6 +347,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                     features: list, first_seen_ip: str, level: str, **extra) -> None:
         """Emit alert_requested via event bus → notifier_handler plugin."""
         try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
             pm = get_plugin_manager()
             if pm.is_enabled:
                 pm.emit("alert_requested", "monitor", {
@@ -370,6 +368,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                first_seen_ip: str = "127.0.0.1") -> None:
         """Emit file_quarantined via event bus → quarantine_handler plugin."""
         try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
             pm = get_plugin_manager()
             if pm.is_enabled:
                 pm.emit("file_quarantined", "monitor", {
@@ -385,6 +384,7 @@ class FileMonitorHandler(FileSystemEventHandler):
     def _flush_batch_notify(self):
         """v1.0.9: emit batch notification via event bus → notifier_handler."""
         try:
+            from anteumbra.application.plugin_manager import get_plugin_manager
             pm = get_plugin_manager()
             if pm.is_enabled:
                 pm.emit("alert_requested", "monitor", {

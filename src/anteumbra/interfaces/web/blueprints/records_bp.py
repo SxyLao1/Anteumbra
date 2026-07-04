@@ -17,7 +17,7 @@ from flask import (
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.infrastructure.suspicious_registry import (
+from anteumbra.application.registry_service import (
     get_all, remove as registry_remove, mark_quarantined,
     mark_false_positive, soft_delete_record, clear_memory_cache,
 )
@@ -139,7 +139,7 @@ def manual_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.infrastructure.quarantine import quarantine_file
+        from anteumbra.application.quarantine_service import quarantine_file
 
         target = path_to_key(file_path)
         record = None
@@ -181,7 +181,7 @@ def records_batch():
         if not file_paths:
             return jsonify({'error': 'missing file_paths'}), 400
 
-        from anteumbra.infrastructure.quarantine import quarantine_file
+        from anteumbra.application.quarantine_service import quarantine_file
 
         results = {'success': 0, 'failed': 0, 'skipped': 0}
         if action == 'quarantine':
@@ -266,7 +266,7 @@ def get_record_detail():
             display_name = file_path.split("\\")[-1].split("/")[-1]
             file_size = 0
 
-        from anteumbra.infrastructure.quarantine import get_quarantine_list
+        from anteumbra.application.quarantine_service import get_quarantine_list
         quarantine_records = get_quarantine_list(status=None)
         quarantine_info = None
         for q in quarantine_records:
@@ -276,7 +276,7 @@ def get_record_detail():
 
         linked_profiles = []
         try:
-            from anteumbra.infrastructure.threat_graph import get_threat_graph
+            from anteumbra.application.threat_graph_service import get_threat_graph
             tg = get_threat_graph()
             for pid, profile in tg._profiles.items():
                 if file_path in profile.target_files:

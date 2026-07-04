@@ -25,7 +25,7 @@ metrics_bp = Blueprint('metrics', __name__, url_prefix='/api/v1')
 def health_check():
     """健康检查（容错版，避免500错误）"""
     try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+        from anteumbra.application.metrics_service import get_metrics
         metrics = get_metrics()
 
         # 安全获取指标，避免psutil异常

@@ -148,7 +148,7 @@ class RegistryRepository(Repository):
         registry = _load_registry()
         _increment_access_direct(registry, Path(file_path), ip)
         from anteumbra.infrastructure.suspicious_registry import _save_registry_sync
-        _save_registry_sync()
+        _save_registry_sync(registry)
 
     def get_stats(self) -> Dict[str, int]:
         """Get registry statistics."""

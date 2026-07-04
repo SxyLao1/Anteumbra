@@ -118,6 +118,7 @@ def add_entry(
                     entry["broadcast_devices"] = [r.get("device", "") for r in broadcast_results]
                     entry["broadcast_status"] = "success" if all(r.get("success") for r in broadcast_results) else "partial"
                 _save(entries)
+                _emit_block_event(entry)
                 return entry
 
         # 新条目
@@ -137,7 +138,25 @@ def add_entry(
         entries.append(entry)
         _save(entries)
         logger.info(f"[BLOCK_LEDGER] {ip} — {source} — {reason[:60]}")
+        _emit_block_event(entry)
         return entry
+
+
+def _emit_block_event(entry: Dict) -> None:
+    """Emit block_executed event through PluginManager (best-effort)."""
+    try:
+        from anteumbra.application.plugin_manager import get_plugin_manager
+        pm = get_plugin_manager()
+        if pm.is_enabled:
+            pm.emit("block_executed", "block_ledger", {
+                "ip": entry.get("ip", ""),
+                "source": entry.get("source", "manual"),
+                "reason": entry.get("reason", ""),
+                "profile_id": entry.get("profile_id", ""),
+                "broadcast_status": entry.get("broadcast_status", "pending"),
+            })
+    except Exception:
+        pass
 
 
 def update_notes(ip: str, notes: str) -> bool:

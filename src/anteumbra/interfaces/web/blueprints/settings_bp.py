@@ -326,8 +326,8 @@ def siem_export():
     """Export detection records as SIEM-formatted events (JSON Lines / CEF)."""
     fmt = request.args.get('format', '')
     try:
-        from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
-        from anteumbra.infrastructure.suspicious_registry import get_all
+        from anteumbra.application.siem_service import get_siem_exporter
+        from anteumbra.application.registry_service import get_all
         exporter = get_siem_exporter()
         if fmt:
             exporter._format = fmt
@@ -351,7 +351,7 @@ def siem_export():
 def siem_stats():
     """Get SIEM exporter statistics."""
     try:
-        from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
+        from anteumbra.application.siem_service import get_siem_exporter
         return jsonify(get_siem_exporter().get_stats())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -364,7 +364,7 @@ def siem_stats():
 def settings_siem_status():
     """SIEM export status panel for Settings page."""
     try:
-        from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
+        from anteumbra.application.siem_service import get_siem_exporter
         e = get_siem_exporter()
         s = e.get_stats()
         export_path = Path(s["export_file"])

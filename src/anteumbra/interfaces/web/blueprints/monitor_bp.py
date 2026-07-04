@@ -19,7 +19,7 @@ from flask import (
 )
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.suspicious_registry import (
+from anteumbra.application.registry_service import (
     get_all, compact_registry,
     get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
@@ -252,8 +252,8 @@ def wal_manager():
 @require_auth
 def wal_current():
     """Return current WAL file info"""
-    from core import wal_manager
-    info = wal_manager.get_wal_info()
+    from anteumbra.application.wal_service import get_wal_info
+    info = get_wal_info()
     if not info:
         return "<p style='color: #ff4444;'>WAL file not found</p>"
     size_mb = info['size_mb']
@@ -271,8 +271,8 @@ def wal_current():
 @require_auth
 def wal_list():
     """Return WAL archive list"""
-    from core import wal_manager
-    archives = wal_manager.list_archives()
+    from anteumbra.application.wal_service import list_archives
+    archives = list_archives()
     if not archives:
         return "<p style='color: #888;'>No archived WAL files</p>"
     html = ""
@@ -291,7 +291,7 @@ def wal_list():
 def wal_replay():
     """Manual WAL replay trigger"""
     try:
-        from anteumbra.infrastructure.wal_manager import replay
+        from anteumbra.application.wal_service import replay
         recovered = replay()
         log_with_symbol("notice", "info", f"Manual WAL replay done, recovered {recovered} records", current_app.logger)
         return jsonify({"success": True, "recovered": recovered})
@@ -529,8 +529,8 @@ def sse_history():
 def registry_wal_status():
     """Return registry + WAL combined status"""
     try:
-        from core import wal_manager
-        wal_info = wal_manager.get_wal_info()
+        from anteumbra.application.wal_service import get_wal_info
+        wal_info = get_wal_info()
         wal_size = wal_info['size_mb'] if wal_info else 0.0
         total = len(get_all(include_deleted=True))
         active = len(get_all(include_deleted=False))

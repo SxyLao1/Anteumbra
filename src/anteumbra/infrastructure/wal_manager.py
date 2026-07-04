@@ -110,10 +110,25 @@ def archive_current_wal() -> Optional[Path]:
         _WAL_PATH.touch()
         with open(_WAL_PATH, 'w', encoding='utf-8') as f:
             f.write(f"# WAL restarted at {datetime.now().isoformat()}\n")
+        _emit_wal_event("wal_archived", {"archive_path": str(wal_backup)})
         return wal_backup
     except Exception as e:
         log_with_symbol("error_wal_archive", "error", f"归档失败: {e}")
         return None
+
+
+def _emit_wal_event(event_type: str, extra: Dict = None) -> None:
+    """Emit WAL lifecycle event through PluginManager (best-effort)."""
+    try:
+        from anteumbra.application.plugin_manager import get_plugin_manager
+        pm = get_plugin_manager()
+        if pm.is_enabled:
+            payload = {"event_type": event_type}
+            if extra:
+                payload.update(extra)
+            pm.emit(event_type, "wal_manager", payload)
+    except Exception:
+        pass
 
 
 def _rotate_if_needed():
@@ -233,6 +248,7 @@ def replay(callbacks: Dict[str, callable]) -> int:
                     logger.error(f"重放行失败: {e}", exc_info=True)
 
             logger.info(f"重放完成，恢复 {recovered} 条记录")
+            _emit_wal_event("wal_replayed", {"recovered_count": recovered})
             archive_current_wal()
             return recovered
 

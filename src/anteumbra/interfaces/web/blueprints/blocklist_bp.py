@@ -35,7 +35,7 @@ def blocklist_add():
 
         if profile_id and not data.get('reason'):
             try:
-                from anteumbra.infrastructure.threat_graph import get_threat_graph
+                from anteumbra.application.threat_graph_service import get_threat_graph
                 tg = get_threat_graph()
                 profile = tg.query_profile(profile_id)
                 if profile:
@@ -47,14 +47,14 @@ def blocklist_add():
             except Exception:
                 pass
 
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()
         results = blocker.block(ips, reason=reason, profile_id=profile_id)
         success_count = sum(1 for r in results if r.success)
 
         for ip in ips:
             try:
-                from anteumbra.infrastructure.block_ledger import add_entry
+                from anteumbra.application.block_ledger_service import add_entry
                 add_entry(
                     ip=ip, source=source, reason=reason,
                     profile_id=profile_id, blocked_by="admin",
@@ -86,7 +86,7 @@ def blocklist_remove():
         if not ips:
             return jsonify({"success": False, "message": "No IPs provided"}), 400
 
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()
         results = blocker.unblock(ips)
         success_count = sum(1 for r in results if r.success)
@@ -105,7 +105,7 @@ def blocklist_remove():
 def blocklist_get():
     """获取当前黑名单"""
     try:
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()
         return jsonify({
             "blocklist": blocker.get_blocklist(),
@@ -124,7 +124,7 @@ def blocklist_get():
 def block_status():
     """封禁状态面板数据"""
     try:
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()
         return jsonify({
             "auto_block_enabled": blocker._auto_block_enabled,
@@ -157,7 +157,7 @@ def blocklist_page():
 def blocklist_data():
     """台账数据 JSON（分页 + 筛选）"""
     try:
-        from anteumbra.infrastructure.block_ledger import get_entries, get_stats
+        from anteumbra.application.block_ledger_service import get_entries, get_stats
         source = request.args.get('source', 'all')
         search = request.args.get('q', '')
         page = max(1, request.args.get('page', 1, type=int))
@@ -187,7 +187,7 @@ def blocklist_update_notes():
         notes = data.get('notes', '')
         if not ip:
             return jsonify({"error": "missing ip"}), 400
-        from anteumbra.infrastructure.block_ledger import update_notes
+        from anteumbra.application.block_ledger_service import update_notes
         ok = update_notes(ip, notes)
         return jsonify({"success": ok})
     except Exception as e:
@@ -199,7 +199,7 @@ def blocklist_update_notes():
 def blocklist_devices():
     """获取可用封禁设备列表"""
     try:
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()
         devices = [{'name': d.get_name(), 'available': d.is_available()} for d in blocker.devices]
         return jsonify({'devices': devices})
@@ -212,8 +212,8 @@ def blocklist_devices():
 def blocklist_manual_block():
     """手动封禁（从台账页）"""
     try:
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker, BlockDecision
-        from anteumbra.infrastructure.block_ledger import add_entry
+        from anteumbra.application.ip_blocker_service import get_ip_blocker, BlockDecision
+        from anteumbra.application.block_ledger_service import add_entry
         data = request.get_json() or {}
         ips = data.get('ips', [])
         reason = data.get('reason', 'Manual block')
@@ -244,7 +244,7 @@ def blocklist_manual_block():
 def blocklist_manual_unblock():
     """手动解封（从台账页）"""
     try:
-        from anteumbra.infrastructure.ip_blocker import get_ip_blocker
+        from anteumbra.application.ip_blocker_service import get_ip_blocker
         data = request.get_json() or {}
         ips = data.get('ips', [])
         devices_filter = data.get('devices', [])
@@ -271,7 +271,7 @@ def blocklist_manual_unblock():
 def blocklist_export():
     """导出台账"""
     fmt = request.args.get('format', 'json')
-    from anteumbra.infrastructure.block_ledger import export_ledger
+    from anteumbra.application.block_ledger_service import export_ledger
     data = export_ledger(fmt)
     if fmt == 'csv':
         return Response(data, mimetype='text/csv',
