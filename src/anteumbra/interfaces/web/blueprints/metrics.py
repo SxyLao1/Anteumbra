@@ -48,17 +48,15 @@ def health_check():
             **data
         })
     except Exception as e:
-        # 任何异常都返回服务端错误详情
+        # v1.0.9: remove traceback leak — only log internally, never expose to caller
         import traceback
-        error_detail = traceback.format_exc()
-        print(f"[ERROR][HEALTH] 健康检查崩溃: {e}\n{error_detail}", file=sys.stderr)
+        print(f"[ERROR][HEALTH] 健康检查崩溃: {e}\n{traceback.format_exc()}", file=sys.stderr)
 
         return jsonify({
             "status": "error",
-            "error": str(e),
-            "detail": error_detail,
+            "error": "Internal health check error",
             "version": get_version()
-        }), 500  # 显式返回500状态码
+        }), 500
 
 
 class MetricsCollector:

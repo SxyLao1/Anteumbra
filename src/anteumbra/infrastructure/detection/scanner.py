@@ -21,6 +21,7 @@ from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.monitoring.metrics import get_metrics
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.domain.entities import ScanResult
+from anteumbra.domain.plugin import DomainEvent
 from anteumbra.infrastructure.models import ScanOptions
 
 # 抽象基类
@@ -377,10 +378,15 @@ class ScannerChain:
             pm = get_plugin_manager()
             if not pm.is_enabled:
                 return None
-            results = pm.emit("file_scan_request", "scanner", {
-                "file_path": str(file_path),
-                "file_size": file_path.stat().st_size if file_path.exists() else 0,
-            })
+            results = pm.dispatch(DomainEvent(
+                event_type="file_scan_request",
+                timestamp=time.time(),
+                source="scanner",
+                payload={
+                    "file_path": str(file_path),
+                    "file_size": file_path.stat().st_size if file_path.exists() else 0,
+                },
+            ))
             # Check if any plugin returned a suspicious result
             for event in results:
                 payload = event.payload if hasattr(event, 'payload') else {}

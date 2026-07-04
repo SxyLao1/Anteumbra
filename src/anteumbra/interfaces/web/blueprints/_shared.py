@@ -142,7 +142,12 @@ def check_login_rate(client_ip: str) -> tuple:
 # ── Auth 装饰器（排除 SSE） ─────────────────────────────
 
 def require_auth_except_sse(f):
-    """与 require_auth 相同，但允许 SSE 端点通过 token 鉴权"""
+    """与 require_auth 相同，但允许 SSE 端点通过 token 鉴权。
+
+    v1.0.9: fixed token validation — now checks both username AND random part
+    of the base64-encoded token (format: base64(\"username:random\")).
+    Previously only checked username, allowing forged tokens with any random value.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         # SSE 端点通过 query param token 鉴权
@@ -150,12 +155,17 @@ def require_auth_except_sse(f):
             token = request.args.get("sse_token")
             try:
                 decoded = base64.b64decode(token.encode()).decode()
-                username = decoded.split(":")[0]
+                parts = decoded.split(":", 1)
+                if len(parts) != 2:
+                    return jsonify({"error": "Invalid token format"}), 401
+                username, random_part = parts
                 creds = get_admin_credentials()
-                if username == creds.get("username", "admin"):
+                expected_random = creds.get("sse_secret", "")
+                if username == creds.get("username", "admin") and random_part == expected_random:
                     return f(*args, **kwargs)
             except Exception:
                 pass
+            return jsonify({"error": "Unauthorized"}), 401
         # 普通鉴权
         if not session.get("authenticated"):
             return redirect(url_for("admin.login"))

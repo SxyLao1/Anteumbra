@@ -32,7 +32,7 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_ke
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-from anteumbra.infrastructure.quarantine import quarantine_file
+from anteumbra.application.plugin_manager import get_plugin_manager
 
 
 class FileMonitorHandler(FileSystemEventHandler):
@@ -93,13 +93,8 @@ class FileMonitorHandler(FileSystemEventHandler):
         self._alert_queue = queue.Queue(maxsize=0)
         self._alert_thread = None
 
-        self.notifier = None
-        self._init_notifier()
-
-        # v1.7.9: 批量通知 — 隔离成功聚合发送，避免邮件轰炸
-        self._batch_notify_queued = 0
-        self._batch_notify_threshold = 50  # 每50条成功隔离发一次聚合通知
-        self._batch_notify_last_flush = time.time()
+        # v1.0.9: batch notification moved to quarantine_handler plugin.
+        # notifier and quarantine paths now go through the event bus (emit).
 
         log_with_symbol("success", "debug",
                         f"处理器初始化完成 | 平台: {self._platform} | "
@@ -331,18 +326,6 @@ class FileMonitorHandler(FileSystemEventHandler):
         }
         return False
 
-    def _init_notifier(self):
-        """初始化notifier (保持原有逻辑)"""
-        if self.notifier is not None:
-            return
-
-        from anteumbra.infrastructure.monitoring.notifier import get_notifier
-        try:
-            self.notifier = get_notifier(self.logger)
-            log_with_symbol("success", "info", "Monitor initialized", self.logger)
-        except Exception as e:
-            log_with_symbol("error_notifier_init", "error", f"Monitor init failed: {e}", self.logger)
-
     def _get_system_status(self) -> dict:
         """v1.8.4: 读取系统运行状态（供通知消息使用）"""
         status = {
@@ -361,27 +344,56 @@ class FileMonitorHandler(FileSystemEventHandler):
             pass
         return status
 
-    def _flush_batch_notify(self):
-        """v1.8.4: 发送聚合的批量隔离成功通知（重构——使用统一消息构建器）"""
-        if self._batch_notify_queued <= 0:
-            return
-        count = self._batch_notify_queued
-        self._batch_notify_queued = 0
-        self._batch_notify_last_flush = time.time()
+    # ── v1.0.9: EDA bridge helpers (Surgery 4 completion) ─────
+
+    def _emit_alert(self, alert_type: str, file_path: str, engine: str,
+                    features: list, first_seen_ip: str, level: str, **extra) -> None:
+        """Emit alert_requested via event bus → notifier_handler plugin."""
         try:
-            self._init_notifier()
-            from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-            ctx = {
-                "alert_type": "quarantine_batch",
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "batch_count": count,
-                "level": "INFO",
-            }
-            ctx.update(self._get_system_status())
-            self.notifier._safe_notify(format_alert_message(ctx), level="INFO")
-            self.logger.info(f"[BATCH_NOTIFY] 聚合发送: {count} 条隔离成功")
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("alert_requested", "monitor", {
+                    "alert_type": alert_type,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "file_path": file_path,
+                    "engine": engine,
+                    "features": features,
+                    "first_seen_ip": first_seen_ip,
+                    "level": level,
+                    **extra,
+                })
+        except Exception:
+            pass
+
+    def _emit_file_quarantined(self, file_path: str, rule_name: str,
+                               features: list, original_path: str,
+                               first_seen_ip: str = "127.0.0.1") -> None:
+        """Emit file_quarantined via event bus → quarantine_handler plugin."""
+        try:
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("file_quarantined", "monitor", {
+                    "file_path": file_path,
+                    "rule_name": rule_name,
+                    "features": features,
+                    "original_path": original_path,
+                    "first_seen_ip": first_seen_ip,
+                })
+        except Exception:
+            pass
+
+    def _flush_batch_notify(self):
+        """v1.0.9: emit batch notification via event bus → notifier_handler."""
+        try:
+            pm = get_plugin_manager()
+            if pm.is_enabled:
+                pm.emit("alert_requested", "monitor", {
+                    "alert_type": "quarantine_batch",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "level": "INFO",
+                })
         except Exception as e:
-            self.logger.warning(f"[BATCH_NOTIFY] 发送失败: {e}")
+            self.logger.warning(f"[BATCH_NOTIFY] emit 失败: {e}")
 
     def _detect_script_magic_number(self, file_path: Path) -> bool:
         """魔术头检测 (保持原有逻辑)"""
@@ -542,10 +554,10 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("scan_hit", "critical",
                                 f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
 
-                # v1.7.9: 统一在此处完成 注册→隔离→回写，保证事务完整性
-                quarantined = False
+                # v1.0.9: 统一在此处完成 注册→事件化隔离，保证事务完整性
+                # Surgery 4 completion: quarantine + notification go through event bus.
                 try:
-                    from anteumbra.infrastructure.suspicious_registry import add, mark_quarantined
+                    from anteumbra.infrastructure.suspicious_registry import add
                     from anteumbra.infrastructure.quarantine import is_recently_restored
 
                     # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
@@ -555,10 +567,6 @@ class FileMonitorHandler(FileSystemEventHandler):
 
                     # Source 1: WAF events (waf_events.jsonl)
                     # v2.0 fix: Match by TIME WINDOW, not by filename.
-                    # WAF events log the upload endpoint URL (e.g. /upload.php),
-                    # NOT the resulting webshell filename. So we look for any
-                    # upload (POST/PUT) from a non-localhost IP within ±5s of
-                    # the file's detection time.
                     try:
                         waf_log = Path("data/waf_events.jsonl")
                         if waf_log.exists():
@@ -573,15 +581,12 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 src_ip = evt.get("src_ip", "")
                                 if not src_ip or src_ip in ("127.0.0.1", "::1"):
                                     continue
-                                # Check timestamp proximity (±5 seconds)
                                 evt_ts_str = evt.get("timestamp", "")
                                 if evt_ts_str:
                                     try:
-                                        # Parse ISO timestamp (e.g. "2026-06-29T22:16:00.041517")
                                         evt_dt = _dt.fromisoformat(evt_ts_str.replace("Z", "+00:00"))
                                         if abs((now_dt - evt_dt).total_seconds()) <= 15:
                                             method = evt.get("method", "") or evt.get("http_method", "")
-                                            # Prefer POST/PUT (upload actions); accept empty too
                                             if method.upper() in ("POST", "PUT", ""):
                                                 first_seen_ip = src_ip
                                                 self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name} (time-window match, Δ={abs((now_dt - evt_dt).total_seconds()):.1f}s)")
@@ -598,7 +603,6 @@ class FileMonitorHandler(FileSystemEventHandler):
                             analyzer = LogAnalyzer(self.website, self.logger)
                             result = analyzer.analyze_shell_access(event_path)
                             if result and result.get("suspicious_ips"):
-                                # Pick the IP with the most hits (most likely the attacker)
                                 best_ip = max(result["suspicious_ips"], key=result["suspicious_ips"].get)
                                 if best_ip and best_ip not in ("127.0.0.1", "::1"):
                                     first_seen_ip = best_ip
@@ -609,27 +613,15 @@ class FileMonitorHandler(FileSystemEventHandler):
                         except Exception:
                             pass
 
-                    # v1.8.4: 本地文件检测CRITICAL告警——内网边界突破风险
-                    self._init_notifier()
-                    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-                    ctx = {
-                        "alert_type": "local_detection",
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "file_path": str(event_path),
-                        "engine": scan_result.engine,
-                        "features": scan_result.features,
-                        "first_seen_ip": first_seen_ip,
-                        "level": "CRITICAL",
-                    }
-                    ctx.update(self._get_system_status())
-                    self.notifier._safe_notify(format_alert_message(ctx), level="CRITICAL")
+                    # v1.0.9: Critical detection alert via event bus → notifier_handler
+                    self._emit_alert("local_detection", str(event_path),
+                                     scan_result.engine, scan_result.features,
+                                     first_seen_ip, "CRITICAL")
 
-                    # Step 1: 注册到Registry（从scanner移至此，确保不遗漏），传入IP
-                    # v2.0: add() now emits record_added internally — threat_graph_handler
-                    # handles ThreatGraph ingestion via the event bus.
+                    # Step 1: 注册到Registry — add() emits record_added internally
                     add(event_path, scan_result.features, first_seen_ip=first_seen_ip, detection_source="passive")
 
-                    # Step 2: 检查隔离总开关
+                    # Step 2: 检查隔离总开关（日志用；quarantine_handler 也会检查）
                     quarantine_enabled = True
                     try:
                         from anteumbra.infrastructure.config.registry import ConfigRegistry
@@ -639,70 +631,25 @@ class FileMonitorHandler(FileSystemEventHandler):
 
                     if not quarantine_enabled:
                         self.logger.info(f"[QUARANTINE] 总开关关闭，跳过隔离: {event_path.name}")
+                        self._emit_alert("quarantine_skipped", str(event_path),
+                                         scan_result.engine, scan_result.features,
+                                         first_seen_ip, "WARNING",
+                                         reason="auto_quarantine_disabled")
                     elif is_recently_restored(str(event_path)):
                         self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
                     else:
-                        # Step 3: 隔离文件
+                        # Step 3: 事件化隔离 — quarantine_handler 处理全链路
+                        # (quarantine_file → mark_quarantined → batch/skip/failure alert)
                         rule_name = scan_result.features[0] if scan_result.features else "unknown"
-                        result = quarantine_file(
+                        self._emit_file_quarantined(
                             file_path=str(event_path),
                             rule_name=rule_name,
                             features=scan_result.features,
-                            original_path=str(event_path)
+                            original_path=str(event_path),
+                            first_seen_ip=first_seen_ip,
                         )
-                        if result is not None:
-                            # 隔离成功 → 回写quarantine_id到Registry
-                            mark_quarantined(str(event_path), result["quarantine_id"])
-                            quarantined = True
-                            log_with_symbol("quarantine_add", "info",
-                                            f"[QUARANTINE] 已隔离: {event_path.name} -> {result['quarantine_id']}", self.logger)
-                        else:
-                            self.logger.warning(f"[QUARANTINE] 隔离跳过: {event_path.name} (文件不存在)")
                 except Exception as qe:
                     self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
-
-                # v1.8.4: 智能通知策略（重构——感知系统状态）
-                self._init_notifier()
-                from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-                sys_status = self._get_system_status()
-
-                if quarantined:
-                    # 隔离成功: 批量聚合
-                    self._batch_notify_queued += 1
-                    elapsed = time.time() - self._batch_notify_last_flush
-                    if self._batch_notify_queued >= self._batch_notify_threshold or elapsed > 300:
-                        self._flush_batch_notify()
-                elif is_recently_restored(str(event_path)):
-                    # 刚恢复的文件不告警（30秒白名单）
-                    pass
-                elif not quarantine_enabled:
-                    # 隔离总开关关闭 → skipped 通知
-                    ctx = {
-                        "alert_type": "quarantine_skipped",
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "file_path": str(event_path),
-                        "engine": scan_result.engine,
-                        "features": scan_result.features,
-                        "first_seen_ip": first_seen_ip,
-                        "reason": "auto_quarantine_disabled",
-                        "level": "WARNING",
-                    }
-                    ctx.update(sys_status)
-                    self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
-                else:
-                    # 隔离失败（文件不存在或其他原因）
-                    ctx = {
-                        "alert_type": "quarantine_failed",
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "file_path": str(event_path),
-                        "engine": scan_result.engine,
-                        "features": scan_result.features,
-                        "first_seen_ip": first_seen_ip,
-                        "reason": "文件可能已被删除或权限不足",
-                        "level": "WARNING",
-                    }
-                    ctx.update(sys_status)
-                    self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
 
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
@@ -867,38 +814,20 @@ class FileMonitorHandler(FileSystemEventHandler):
             if dest_path.suffix.lower() in self.monitor_extensions:
                 if self._should_monitor(dest_path):
                     try:
-                        from anteumbra.infrastructure.suspicious_registry import add, mark_quarantined
-                        # quarantine_file already imported at top level (line 35)
+                        from anteumbra.infrastructure.suspicious_registry import add
                         result = self.scan_callback(dest_path, self.scan_options, self.logger)
                         if result and result.is_suspicious:
                             log_with_symbol("scan_hit", "critical",
                                             f"{dest_path.name} | 引擎: {result.engine}", self.logger)
                             # 注册 — v2.0: add() emits record_added, threat_graph_handler follows
                             add(dest_path, result.features, first_seen_ip="127.0.0.1")
-                            # 隔离
-                            qr = quarantine_file(str(dest_path), result.features[0] if result.features else "unknown", result.features, str(dest_path))
-                            if qr:
-                                mark_quarantined(str(dest_path), qr["quarantine_id"])
-                                # 成功走批量聚合
-                                self._batch_notify_queued += 1
-                                if self._batch_notify_queued >= self._batch_notify_threshold:
-                                    self._flush_batch_notify()
-                            else:
-                                # v1.8.4: 失败立即通知（使用统一消息构建器）
-                                self._init_notifier()
-                                from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-                                ctx = {
-                                    "alert_type": "quarantine_failed",
-                                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                    "file_path": str(dest_path),
-                                    "engine": result.engine,
-                                    "features": result.features,
-                                    "first_seen_ip": "127.0.0.1",
-                                    "reason": "改名文件隔离失败（文件可能已被移动或删除）",
-                                    "level": "WARNING",
-                                }
-                                ctx.update(self._get_system_status())
-                                self.notifier._safe_notify(format_alert_message(ctx), level="WARNING")
+                            # v1.0.9: 事件化隔离 — quarantine_handler 处理全链路
+                            self._emit_file_quarantined(
+                                file_path=str(dest_path),
+                                rule_name=result.features[0] if result.features else "unknown",
+                                features=result.features,
+                                original_path=str(dest_path),
+                            )
                     except Exception as e:
                         log_with_symbol("error_scan", "error", f"{dest_path}: {e}", self.logger)
             else:
@@ -1031,12 +960,8 @@ class WebsiteMonitor:
         if not self._is_running:
             return
 
-        # v1.7.9: 停止前发送剩余的聚合通知
-        if hasattr(self, 'handler') and hasattr(self.handler, '_flush_batch_notify'):
-            try:
-                self.handler._flush_batch_notify()
-            except Exception:
-                pass
+        # v1.0.9: batch notification is now handled by quarantine_handler plugin.
+        # Its deactivate() flushes any pending batch on PluginManager shutdown.
 
         self.observer.stop()
         self.observer.join(timeout=10.0)

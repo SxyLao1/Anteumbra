@@ -682,6 +682,7 @@ def public_health():
 
 
 @admin_bp.route('/health', methods=['GET'])
+@require_auth
 def admin_health():
     """Authenticated health check with full diagnostics.
 
