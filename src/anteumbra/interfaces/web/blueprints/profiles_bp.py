@@ -174,11 +174,11 @@ def profile_detail_page(profile_id):
                     is_quarantined = fp in quarantined_map
                     q_path = quarantined_map.get(fp, '')
                     file_clusters.append({
-                        "file": fp.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1],
+                        "file": Path(fp).name,
                         "full_path": fp, "cluster_id": cluster.cluster_id,
                         "cluster_size": cluster.size, "samples": cluster.sample_files,
                         "quarantined": is_quarantined,
-                        "quarantine_path": q_path.rsplit(chr(92), 1)[-1].rsplit('/', 1)[-1] if q_path else '',
+                        "quarantine_path": Path(q_path).name if q_path else '',
                     })
             seen_cids = set()
             unique_clusters = []

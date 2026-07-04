@@ -246,7 +246,7 @@ class ThreatGraph:
                 from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
                 cluster_id, hash_val = get_file_cluster_engine().cluster_file(file_path)
                 if cluster_id:
-                    logger.info(f"[PROFILE] File {file_path.rsplit(chr(92),1)[-1]} -> cluster {cluster_id[:8]}")
+                    logger.info(f"[PROFILE] File {Path(file_path).name} -> cluster {cluster_id[:8]}")
             except Exception as e:
                 logger.error(f"[PROFILE] Cluster failed for {file_path}: {e}")
 

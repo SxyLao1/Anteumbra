@@ -20,9 +20,12 @@ _LEDGER_CACHE: List[Dict] = []
 
 
 def _init_path():
+    """初始化台账路径（线程安全）"""
     global _LEDGER_PATH
     if _LEDGER_PATH is None:
-        _LEDGER_PATH = Path("data") / "block_ledger.json"
+        with _LEDGER_LOCK:
+            if _LEDGER_PATH is None:
+                _LEDGER_PATH = Path("data") / "block_ledger.json"
 
 
 def _load() -> List[Dict]:

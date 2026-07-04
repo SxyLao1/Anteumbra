@@ -144,6 +144,7 @@ class QuarantineHandlerPlugin(Plugin):
                     "first_seen_ip": first_seen_ip,
                     "features": features,
                     "level": level,
+                    "engine": "QuarantineHandler",
                     **extra,
                 })
         except Exception:

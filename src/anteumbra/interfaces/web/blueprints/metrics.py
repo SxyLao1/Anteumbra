@@ -7,7 +7,7 @@
 @Motto: HACK THE REAL
 Metrics Blueprint：提供健康检查和指标API
 """
-from anteumbra.infrastructure.config.version import get_version
+from anteumbra.application.config_service import get_version
 import json
 import logging
 import sys

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.infrastructure.config.loader import load_config
+from anteumbra.application.config_service import load_config
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
 

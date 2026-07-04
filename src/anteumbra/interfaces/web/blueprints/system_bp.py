@@ -17,7 +17,7 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.application.registry_service import (
     get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
 
 logger = logging.getLogger(__name__)

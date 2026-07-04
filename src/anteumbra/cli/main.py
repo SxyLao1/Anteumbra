@@ -10,6 +10,7 @@ Usage:
   anteumbra config           Interactive config wizard
   anteumbra --version        Show version
 """
+import logging
 import os
 import sys
 import time
@@ -42,7 +43,7 @@ def _read_pid() -> int | None:
         try:
             return int(pf.read_text().strip())
         except (ValueError, OSError):
-            pass
+            logging.getLogger(__name__).debug("Failed to read PID file", exc_info=True)
     return None
 
 
@@ -206,7 +207,7 @@ def stop():
                 os.kill(pid, signal.SIGKILL)
     except Exception as e:
         click.echo(f"Error stopping process: {e}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     (Path.cwd() / PID_FILE).unlink(missing_ok=True)
     click.echo("Anteumbra stopped.")
@@ -231,7 +232,7 @@ def status():
             click.echo(f"  Uptime: {time.time() - proc.create_time():.0f}s")
             click.echo(f"  Memory: {proc.memory_info().rss / 1024 / 1024:.1f} MB")
         except ImportError:
-            pass
+            logging.getLogger(__name__).debug("psutil not available for uptime/memory stats", exc_info=True)
     else:
         click.echo(f"Status: STOPPED (PID {pid} is dead — removing stale PID)")
         (Path.cwd() / PID_FILE).unlink(missing_ok=True)

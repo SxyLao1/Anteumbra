@@ -23,7 +23,7 @@ from anteumbra.application.registry_service import (
     mark_false_positive, soft_delete_record, clear_memory_cache,
 )
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
-from anteumbra.infrastructure.utils.sse_manager import trigger_registry_update
+from anteumbra.application.sse_service import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_registry, verify_file_in_quarantine, html_escape,
 )

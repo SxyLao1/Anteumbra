@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote
-from anteumbra.infrastructure.utils.sse_manager import persist_log_line
+from anteumbra.application.sse_service import persist_log_line
 
 from flask import (
     Blueprint, render_template, request, jsonify, abort,
@@ -34,12 +34,12 @@ import secrets
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.application.registry_service import get_all, remove
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
-from anteumbra.infrastructure.utils.platform_utils import check_port_reachable
-from anteumbra.infrastructure.utils.sse_manager import register_sse_client, unregister_sse_client, \
+from anteumbra.application.platform_service import check_port_reachable
+from anteumbra.application.sse_service import register_sse_client, unregister_sse_client, \
     trigger_registry_update
-from anteumbra.infrastructure.utils.password_utils import check_password_strength, update_password_hash_in_config
+from anteumbra.application.password_service import check_password_strength, update_password_hash_in_config
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 
 logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ def dashboard_content():
         recent = []
         for r in all_records[:5]:
             try:
-                file_name = r.get("file_path", "").split('\\')[-1].split("/")[-1]
+                file_name = Path(r.get("file_path", "")).name
             except Exception:
                 file_name = "unknown"
             recent.append({
@@ -632,7 +632,7 @@ def public_health():
 
     # Quick component checks
     try:
-        from anteumbra.infrastructure.config.loader import load_toml_config
+        from anteumbra.application.config_service import load_toml_config
         load_toml_config()
     except Exception:
         status["status"] = "degraded"
@@ -655,8 +655,7 @@ def admin_health():
     Requires login. Returns version, component status, and detailed checks.
     """
     """Health check endpoint for Docker HEALTHCHECK and monitoring systems."""
-    from anteumbra.infrastructure.config.version import get_version
-    from anteumbra.infrastructure.config.loader import load_toml_config as load_config
+    from anteumbra.application.config_service import get_version, load_config
     status = {
         'status': 'healthy',
         'version': get_version(),

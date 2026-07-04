@@ -25,6 +25,7 @@ class TestMockWAFFullChain:
         """Reset ThreatGraph singleton before each test."""
         from anteumbra.infrastructure import threat_graph as tg
         monkeypatch.setattr(tg, "_graph", None)
+        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
 
     def test_waf_events_create_profile(self, waf_events_file, reset_threat_graph):
         """Feed WAF events and verify at least one attacker profile is created."""
@@ -87,6 +88,7 @@ class TestProxyPoolClustering:
     def reset_threat_graph(self, monkeypatch):
         from anteumbra.infrastructure import threat_graph as tg
         monkeypatch.setattr(tg, "_graph", None)
+        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
 
     def test_proxy_pool_100_ip_to_1_profile(self, reset_threat_graph):
         """100 different IPs with same UA should merge into one profile."""
@@ -250,6 +252,8 @@ class TestDecayFormula:
     def reset_threat_graph(self, monkeypatch):
         from anteumbra.infrastructure import threat_graph as tg
         monkeypatch.setattr(tg, "_graph", None)
+        # Prevent load() from restoring persisted profiles from disk
+        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
 
     def test_decay_24h_reduces_score_by_half(self, reset_threat_graph):
         """After 24h inactivity, profile risk_score should be raw_score * 0.5."""

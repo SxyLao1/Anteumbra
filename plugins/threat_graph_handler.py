@@ -53,12 +53,10 @@ class ThreatGraphHandlerPlugin(Plugin):
             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "detection_source": payload.get("detection_source", "passive"),
         }
-        # registry_changed carries a "record" dict — merge relevant fields
-        record = payload.get("record")
-        if isinstance(record, dict):
-            for key in ("quarantine_id", "file_exists", "marked_false_positive"):
-                if key in record:
-                    entry[key] = record[key]
+        # registry_changed carries flat fields — extract quota/file state directly
+        for key in ("quarantine_id", "file_exists", "marked_false_positive"):
+            if key in payload:
+                entry[key] = payload[key]
 
         try:
             from anteumbra.infrastructure.threat_graph import get_threat_graph
@@ -90,4 +88,4 @@ class ThreatGraphHandlerPlugin(Plugin):
                     "top_risk_score": active[0].risk_score if active else 0,
                 })
         except Exception:
-            pass
+            logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)

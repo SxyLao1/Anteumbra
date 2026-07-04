@@ -152,6 +152,29 @@ def get_connected_client_count() -> int:
     logger.debug(f"[SSE] 当前连接: {current}/{limits['total']}")
     return current
 
+
+def get_ip_client_count(client_ip: str) -> int:
+    """获取指定IP的SSE客户端数量（线程安全）"""
+    with _sse_lock:
+        return sum(1 for q in _sse_clients if getattr(q, '_client_ip', None) == client_ip)
+
+
+def get_ip_clients(client_ip: str) -> list:
+    """获取指定IP的所有SSE客户端队列（线程安全，返回副本）"""
+    with _sse_lock:
+        return [q for q in _sse_clients if getattr(q, '_client_ip', None) == client_ip]
+
+
+def remove_dead_clients(dead_queues: list) -> int:
+    """批量移除已断开的SSE客户端（线程安全）"""
+    with _sse_lock:
+        removed = 0
+        for q in dead_queues:
+            if q in _sse_clients:
+                _sse_clients.remove(q)
+                removed += 1
+    return removed
+
 class LogBuffer:
     def __init__(self, max_size=100, buffer_path="data/sse_log_buffer.json"):
         self.max_size = max_size

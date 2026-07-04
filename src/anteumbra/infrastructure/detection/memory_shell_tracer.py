@@ -242,7 +242,7 @@ def emit_critical_alert(trace_result: Dict) -> bool:
         matched = trace_result.get("matched")
         title = "MEMORY SHELL: "
         if matched:
-            title += matched["fp"].replace("\\", "/").split("/")[-1]
+            title += Path(matched["fp"]).name
         else:
             title += trace_result["ip"]
 

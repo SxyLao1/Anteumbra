@@ -46,6 +46,7 @@ class PluginManager:
         self._event_queue: queue.Queue = queue.Queue()  # Fire-and-Forget event queue
         self._worker_running: bool = False
         self._worker_thread: Optional[threading.Thread] = None
+        self._abandoned_threads: List[threading.Thread] = []  # Track timed-out handler threads
 
     @classmethod
     def get_instance(cls) -> "PluginManager":
@@ -170,7 +171,11 @@ class PluginManager:
         v1.0.8 fix: _dispatch_timeout was declared but never applied.
         Each handler now runs in a daemon thread with join(timeout).
         If a plugin hangs or deadloops, it is skipped after the timeout.
+
+        v1.1.0: Track abandoned threads to prevent zombie accumulation.
         """
+        # Clean up previously abandoned threads
+        self._reap_abandoned()
         if not self._enabled:
             return []
         new_events: List[DomainEvent] = []
@@ -194,6 +199,7 @@ class PluginManager:
                     "PluginManager: 插件 '%s' 处理事件 '%s' 超时 (%ss)，跳过",
                     plugin.name, event.event_type, self._dispatch_timeout,
                 )
+                self._abandoned_threads.append(t)
                 continue
             if exc_container:
                 logger.error(
@@ -203,6 +209,15 @@ class PluginManager:
             elif result_container and result_container[0]:
                 new_events.extend(result_container[0])
         return new_events
+
+    def _reap_abandoned(self):
+        """清理已完成的被遗弃线程（防止僵尸线程累积）"""
+        self._abandoned_threads = [t for t in self._abandoned_threads if t.is_alive()]
+        if self._abandoned_threads:
+            logger.warning(
+                "PluginManager: %d abandoned plugin threads still alive",
+                len(self._abandoned_threads),
+            )
 
     def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> None:
         """Fire-and-Forget: 创建事件并入队（异步），立即返回 None"""

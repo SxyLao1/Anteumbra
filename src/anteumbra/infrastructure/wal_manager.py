@@ -21,20 +21,23 @@ logger = logging.getLogger("monitor.wal_manager")
 _WAL_PATH: Optional[Path] = None
 _replaying = False
 _replay_lock = threading.Lock()
+_init_lock = threading.Lock()
 
 
 def _init_wal_path():
-    """初始化 WAL 路径"""
+    """初始化 WAL 路径（线程安全）"""
     global _WAL_PATH
     if _WAL_PATH is None:
-        try:
-            config = ConfigRegistry.get_raw_config()
-            paths = config.get("paths", {})
-            data_dir = normalize_path(paths.get("data_dir", "data"))
-        except Exception:
-            data_dir = normalize_path("data")
-        data_dir.mkdir(parents=True, exist_ok=True)
-        _WAL_PATH = data_dir / "registry_wal.log"
+        with _init_lock:
+            if _WAL_PATH is None:
+                try:
+                    config = ConfigRegistry.get_raw_config()
+                    paths = config.get("paths", {})
+                    data_dir = normalize_path(paths.get("data_dir", "data"))
+                except Exception:
+                    data_dir = normalize_path("data")
+                data_dir.mkdir(parents=True, exist_ok=True)
+                _WAL_PATH = data_dir / "registry_wal.log"
 
 
 def get_wal_path() -> Optional[Path]:
@@ -94,9 +97,9 @@ def read_entries() -> List[Dict]:
                 try:
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
-                    pass
+                    logger.debug("Corrupt WAL entry skipped", exc_info=True)
     except FileNotFoundError:
-        pass
+        logger.debug("WAL file not found during _load_entries", exc_info=True)
     return entries
 
 

@@ -23,11 +23,11 @@ from anteumbra.application.registry_service import (
     get_all, compact_registry,
     get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-from anteumbra.infrastructure.utils.sse_manager import (
-    register_sse_client, unregister_sse_client, _sse_clients, persist_log_line,
-    _sse_lock,
+from anteumbra.application.sse_service import (
+    register_sse_client, unregister_sse_client, get_connected_client_count,
+    get_ip_client_count, get_ip_clients, persist_log_line,
 )
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 from anteumbra.interfaces.web.blueprints._shared import require_auth_except_sse
@@ -63,12 +63,8 @@ def stream_logs():
         'total': _to_int(web_admin_cfg.get("sse_max_total_clients", 20), 20)
     }
 
-    with _sse_lock:
-        ip_connections = [
-            q for q in _sse_clients
-            if getattr(q, '_client_ip', None) == client_ip
-        ]
-    ip_client_count = len(ip_connections)
+    ip_client_count = get_ip_client_count(client_ip)
+    ip_connections = get_ip_clients(client_ip)
 
     if ip_client_count >= limits['per_ip']:
         for old_queue in ip_connections:
@@ -170,8 +166,7 @@ def stream_logs():
         finally:
             if client_queue:
                 unregister_sse_client(client_queue)
-                with _sse_lock:
-                    remaining = len(_sse_clients)
+                remaining = get_connected_client_count()
                 logger.debug(f"[SSE] client {client_ip} disconnected, {remaining} remaining")
 
     response = Response(
@@ -519,7 +514,7 @@ def config_signature():
 def sse_history():
     """Return persisted log history"""
     try:
-        from anteumbra.infrastructure.utils.sse_manager import get_log_buffer
+        from anteumbra.application.sse_service import get_log_buffer
         config = ConfigRegistry.get_raw_config()
         web_admin_cfg = config.get("web_admin", {})
         allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])

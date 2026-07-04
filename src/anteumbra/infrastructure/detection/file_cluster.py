@@ -94,7 +94,7 @@ class FileClusterEngine:
         for cid, cluster in self._clusters.items():
             if cluster.add_file(file_path, hash_value):
                 self._file_index[file_path] = cid
-                logger.debug(f"[CLUSTER] {file_path.rsplit(chr(92),1)[-1].rsplit('/',1)[-1]} -> existing cluster {cid[:8]} ({cluster.size} files)")
+                logger.debug(f"[CLUSTER] {Path(file_path).name} -> existing cluster {cid[:8]} ({cluster.size} files)")
                 return cid, hash_value
 
         # Create new cluster
@@ -103,7 +103,7 @@ class FileClusterEngine:
         cluster.add_file(file_path, hash_value)
         self._clusters[cid] = cluster
         self._file_index[file_path] = cid
-        logger.info(f"[CLUSTER] New cluster {cid[:8]}: {file_path.rsplit(chr(92),1)[-1].rsplit('/',1)[-1]}")
+        logger.info(f"[CLUSTER] New cluster {cid[:8]}: {Path(file_path).name}")
         return cid, hash_value
 
     def get_cluster(self, file_path: str) -> Optional[FileCluster]:

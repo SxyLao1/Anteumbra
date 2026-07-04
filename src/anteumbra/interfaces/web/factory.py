@@ -34,7 +34,7 @@ def create_app() -> Flask:
         return _app_instance
 
     # 先静默werkzeug横幅
-    from anteumbra.infrastructure.utils.logger_factory import silence_werkzeug
+    from anteumbra.application.logging_service import silence_werkzeug
     silence_werkzeug()
 
     # 创建主应用
@@ -79,7 +79,7 @@ def create_app() -> Flask:
         pass  # Graceful: works without flask-babel installed
 
     # v2.0: 注入版本号到所有模板（重命名 trident_ → anteumbra_ 保持模板兼容）
-    from anteumbra.infrastructure.config.version import get_version, get_release_date
+    from anteumbra.application.config_service import get_version, get_release_date
     @app.context_processor
     def inject_version():
         return {
@@ -109,7 +109,7 @@ def create_app() -> Flask:
     Session(app)
 
     # v1.7.3关键修复：获取access logger并挂载到werkzeug
-    from anteumbra.infrastructure.utils.logger_factory import get_access_logger, get_flask_runtime_logger
+    from anteumbra.application.logging_service import get_access_logger, get_flask_runtime_logger
     access_logger = get_access_logger()
     flask_runtime_logger = get_flask_runtime_logger()
 

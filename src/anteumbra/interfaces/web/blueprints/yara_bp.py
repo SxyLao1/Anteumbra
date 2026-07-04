@@ -20,7 +20,7 @@ from flask import Blueprint, request, jsonify, render_template, abort, current_a
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.application.yara_service import YaraEngine, get_yara_engine
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 

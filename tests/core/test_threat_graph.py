@@ -230,7 +230,7 @@ class TestIngestRegistryEntry:
         """Entry with minimal fields should not crash."""
         pid = graph.ingest_registry_entry({"file_path": "/tmp/test.php"})
         # Should handle gracefully — may return None if no matching profile
-        # Just verify it doesn't crash
+        assert pid is None or isinstance(pid, str), f"Unexpected return: {pid!r}"
 
 
 # ── Query Tests ───────────────────────────────────────────────
@@ -424,8 +424,8 @@ class TestEdgeCases:
     def test_ingest_waf_event_no_src_ip(self, graph):
         event = {"timestamp": datetime.now().isoformat(), "user_agent": "test"}
         pid = graph.ingest_waf_event(event)
-        # Should handle missing IP gracefully
-        assert pid is None or pid is not None  # Don't crash
+        # Should handle missing IP gracefully — returns profile ID with no IP
+        assert isinstance(pid, str) and len(pid) > 0, f"Expected valid profile ID, got {pid!r}"
 
     def test_ingest_registry_entry_empty_features(self, graph):
         entry = {
