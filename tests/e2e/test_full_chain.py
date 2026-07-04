@@ -20,9 +20,6 @@ import pytest
 class TestFullChain:
     """Verify the complete security operations pipeline end-to-end."""
 
-    @pytest.mark.skip(reason="v1.0.9: hangs during ThreatGraph singleton init in "
-                             "pytest environment — profiling_e2e + deployment + "
-                             "security tests already cover the full pipeline")
     def test_full_chain_waf_to_block_ledger(self, tmp_path, monkeypatch):
         """
         Complete pipeline SOP verification:

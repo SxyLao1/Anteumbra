@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 logger = logging.getLogger("monitor.block_ledger")
 
 _LEDGER_PATH = None
-_LEDGER_LOCK = threading.Lock()
+_LEDGER_LOCK = threading.RLock()
 _LEDGER_CACHE: List[Dict] = []
 
 
