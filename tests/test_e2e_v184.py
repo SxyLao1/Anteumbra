@@ -29,18 +29,18 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # 使用测试实例路径（而非开发路径），确保数据目录一致
-RUNTIME_ROOT = Path(os.environ.get("TRIDENT_HOME", r"F:\Home\Recently\Trident_1.7.9"))
+RUNTIME_ROOT = Path(os.environ.get("ANTEUMBRA_HOME", r"F:\Home\Recently\Trident_1.7.9"))
 
 # Only apply path/CWD changes when run directly, not during pytest collection
 _IN_E2E_MAIN = (__name__ == "__main__")
 if _IN_E2E_MAIN:
     sys.path.insert(0, str(RUNTIME_ROOT))
-    os.environ["TRIDENT_TOOL_MODE"] = "true"
+    os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
     os.chdir(str(RUNTIME_ROOT))  # 确保 data/ 目录正确
 
 import requests
 
-BASE_URL = os.environ.get("TRIDENT_URL", "http://127.0.0.1:8080")
+BASE_URL = os.environ.get("ANTEUMBRA_URL", "http://127.0.0.1:8080")
 MOCK_WAF_PORT = 9999
 MOCK_WAF_URL = f"http://127.0.0.1:{MOCK_WAF_PORT}"
 TEST_DIR = PROJECT_ROOT / "tests" / "e2e_test_data"

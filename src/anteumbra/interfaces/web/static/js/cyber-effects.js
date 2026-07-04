@@ -1,10 +1,10 @@
-/* Trident v1.8.0 赛博特效 - Canvas粒子与矩阵雨 */
+/* Anteumbra 赛博特效 - Canvas粒子与矩阵雨 */
 (function(){
   // 仅在登录页启用矩阵雨
   if (!document.body.classList.contains('login-page')) return;
 
   // 检查用户是否之前关闭了特效
-  const fxDisabled = localStorage.getItem('trident_fx_disabled') === 'true';
+  const fxDisabled = localStorage.getItem('anteumbra_fx_disabled') === 'true';
 
   const canvas = document.createElement('canvas');
   canvas.className = 'matrix-bg';
@@ -90,12 +90,12 @@
       ctx.fillStyle = '#0a0a0f';
       ctx.fillRect(0, 0, W, H);
       toggleBtn.innerHTML = '▶ FX';
-      localStorage.setItem('trident_fx_disabled', 'true');
+      localStorage.setItem('anteumbra_fx_disabled', 'true');
     } else {
       isRunning = true;
       animationId = requestAnimationFrame(draw);
       toggleBtn.innerHTML = '⏸ FX';
-      localStorage.setItem('trident_fx_disabled', 'false');
+      localStorage.setItem('anteumbra_fx_disabled', 'false');
     }
   });
 })();

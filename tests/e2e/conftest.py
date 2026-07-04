@@ -17,12 +17,12 @@ import pytest
 def isolate_environment(monkeypatch):
     """Ensure tests don't touch real data directories.
 
-    Sets TRIDENT_TOOL_MODE=true and redirects data/ to a temp dir.
+    Sets ANTEUMBRA_TOOL_MODE=true and redirects data/ to a temp dir.
     """
-    monkeypatch.setenv("TRIDENT_TOOL_MODE", "true")
+    monkeypatch.setenv("ANTEUMBRA_TOOL_MODE", "true")
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "true")
-    # Prevent accidental imports from old Trident installation
-    monkeypatch.setenv("TRIDENT_HOME", "")
+    # Prevent accidental imports from old Anteumbra installation
+    monkeypatch.setenv("ANTEUMBRA_HOME", "")
 
 
 @pytest.fixture

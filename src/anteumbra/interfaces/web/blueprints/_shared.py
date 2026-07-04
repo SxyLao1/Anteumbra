@@ -8,6 +8,7 @@ import base64
 import json as _stdlib_json
 import logging
 import secrets
+import threading
 import time
 from pathlib import Path
 from functools import wraps
@@ -121,6 +122,7 @@ def generate_secure_sse_token(username: str) -> str:
 # ── 登录速率限制 ────────────────────────────────────────
 
 _login_attempts: dict = {}
+_login_attempts_lock = threading.Lock()
 
 def check_login_rate(client_ip: str) -> tuple:
     """检查登录速率限制。返回 (ok: bool, message: str)"""
@@ -128,15 +130,16 @@ def check_login_rate(client_ip: str) -> tuple:
     window = 60  # 1分钟窗口
     max_attempts = 10
 
-    if client_ip not in _login_attempts:
-        _login_attempts[client_ip] = []
-    attempts = [t for t in _login_attempts[client_ip] if now - t < window]
-    _login_attempts[client_ip] = attempts
+    with _login_attempts_lock:
+        if client_ip not in _login_attempts:
+            _login_attempts[client_ip] = []
+        attempts = [t for t in _login_attempts[client_ip] if now - t < window]
+        _login_attempts[client_ip] = attempts
 
-    if len(attempts) >= max_attempts:
-        return False, "Too many login attempts. Please try again later."
-    _login_attempts[client_ip].append(now)
-    return True, ""
+        if len(attempts) >= max_attempts:
+            return False, "Too many login attempts. Please try again later."
+        _login_attempts[client_ip].append(now)
+        return True, ""
 
 
 # ── Auth 装饰器（排除 SSE） ─────────────────────────────

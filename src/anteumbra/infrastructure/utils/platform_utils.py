@@ -39,5 +39,5 @@ def check_port_reachable(host: str, port: int, timeout: int = 3) -> bool:
             result = sock.connect_ex((host, port))
             sock.close()
             return result == 0
-        except:
+        except Exception:
             return False

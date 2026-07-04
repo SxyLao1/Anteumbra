@@ -61,7 +61,7 @@ class StaticScanner(BaseScanner):
             max_size_mb = filesizes_cfg.get("max_scan_file_size_mb", 5)
 
             return file_path.stat().st_size < max_size_mb * 1024 * 1024
-        except:
+        except Exception:
             return False
 
     def scan(self, file_path: Path, context: Dict) -> ScanResult:
@@ -166,7 +166,7 @@ class ApiScanner(BaseScanner):
     def can_scan(self, file_path: Path) -> bool:
         try:
             return file_path.stat().st_size > 10 * 1024 * 1024
-        except:
+        except Exception:
             return False
 
     def scan(self, file_path: Path, context: Dict) -> ScanResult:
@@ -214,7 +214,7 @@ class EmergencyScanner(BaseScanner):
             max_size_mb = filesizes_cfg.get("max_scan_file_size_mb", 5)
 
             return file_path.stat().st_size <= max_size_mb * 1024 * 1024
-        except:
+        except Exception:
             return False
 
     def scan(self, file_path: Path, context: Dict) -> ScanResult:

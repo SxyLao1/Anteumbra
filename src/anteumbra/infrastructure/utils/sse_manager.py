@@ -20,6 +20,7 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 # 模块级全局变量
 _registry_update_queue = queue.Queue(maxsize=0)
 _sse_clients: List[queue.Queue] = []
+_sse_lock = threading.Lock()
 _worker_thread = None
 
 def get_sse_limits():
@@ -54,12 +55,14 @@ def start_sse_worker():
                 if signal == "registry_update":
                     # 动态读取限制（支持配置热更新）
                     limits = get_sse_limits()
+                    with _sse_lock:
+                        clients_snapshot = list(_sse_clients)
                     logger.debug(
-                        f"[SSE] 广播Registry更新给 {len(_sse_clients)}/{limits['total']} 个客户端"
+                        f"[SSE] 广播Registry更新给 {len(clients_snapshot)}/{limits['total']} 个客户端"
                     )
 
                     dead_clients = []
-                    for client_queue in _sse_clients[:]:
+                    for client_queue in clients_snapshot:
                         try:
                             client_queue.put_nowait("registry_update")
                         except queue.Full:
@@ -67,9 +70,11 @@ def start_sse_worker():
                         except Exception:
                             dead_clients.append(client_queue)
 
-                    for dead in dead_clients:
-                        if dead in _sse_clients:
-                            _sse_clients.remove(dead)
+                    if dead_clients:
+                        with _sse_lock:
+                            for dead in dead_clients:
+                                if dead in _sse_clients:
+                                    _sse_clients.remove(dead)
 
             except queue.Empty:
                 continue
@@ -83,11 +88,11 @@ def start_sse_worker():
 def register_sse_client() -> queue.Queue:
     """注册新的SSE客户端，返回专属队列"""
     client_queue = queue.Queue(maxsize=100)
-    _sse_clients.append(client_queue)
+    with _sse_lock:
+        _sse_clients.append(client_queue)
+        current_total = len(_sse_clients)
 
     limits = get_sse_limits()
-    current_total = len(_sse_clients)
-
     logger = logging.getLogger("monitor.sse_worker")
     logger.info(
         f"[SSE] 新客户端注册，当前总数: {current_total}/{limits['total']}"
@@ -98,22 +103,25 @@ def register_sse_client() -> queue.Queue:
 
 def unregister_sse_client(client_queue: queue.Queue):
     """注销SSE客户端"""
-    if client_queue in _sse_clients:
-        _sse_clients.remove(client_queue)
-        # 清理队列内容
-        try:
-            while True:
-                client_queue.get_nowait()
-        except queue.Empty:
-            pass
+    with _sse_lock:
+        if client_queue in _sse_clients:
+            _sse_clients.remove(client_queue)
+    # 清理队列内容（无需锁 — 队列已经不在全局列表中了）
+    try:
+        while True:
+            client_queue.get_nowait()
+    except queue.Empty:
+        pass
 
 def cleanup_sse_connections(client_ip: str = None):
     """强制清理指定IP的所有SSE连接（确保计数同步）"""
-    global _sse_clients
     cleaned = 0
 
-    # 创建副本避免遍历时修改
-    for client_queue in _sse_clients[:]:
+    # 创建副本避免遍历时修改（锁快照）
+    with _sse_lock:
+        clients_snapshot = list(_sse_clients)
+
+    for client_queue in clients_snapshot:
         if client_ip is None or getattr(client_queue, '_client_ip', None) == client_ip:
             try:
                 # 强制关闭队列

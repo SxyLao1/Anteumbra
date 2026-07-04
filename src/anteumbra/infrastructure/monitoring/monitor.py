@@ -253,7 +253,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         """统一路径解析逻辑"""
         try:
             return path_to_key(path)
-        except:
+        except Exception:
             return str(path).lower()
 
     def _update_cache_on_move(self, src_path: Path, dest_path: Path):
@@ -292,7 +292,7 @@ class FileMonitorHandler(FileSystemEventHandler):
             if event_path.stat().st_size > self.scan_options.max_size_bytes:
                 log_with_symbol("skip_size", "info", f"大小超限: {event_path.name}", self.logger)
                 return False
-        except:
+        except Exception:
             pass
 
         config = ConfigRegistry.get_raw_config()

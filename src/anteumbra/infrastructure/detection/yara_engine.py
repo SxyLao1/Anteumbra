@@ -187,7 +187,7 @@ class YaraEngine:
                     "size": stats.st_size,
                     "modified": datetime.fromtimestamp(stats.st_mtime).isoformat()
                 })
-            except:
+            except Exception:
                 continue
         return files
 
@@ -207,7 +207,7 @@ def get_yara_engine(logger: logging.Logger = None) -> YaraEngine:
     """获取YARA引擎单例（延迟初始化）"""
     global _yara_engine
     if logger is None:
-        logger = logging.getLogger("trident.yara_engine")
+        logger = logging.getLogger("anteumbra.yara_engine")
         if not logger.handlers:
             logger.setLevel(logging.INFO)
             handler = logging.StreamHandler()

@@ -31,8 +31,8 @@ def _app():
     import anteumbra.interfaces.web.factory as _factory
     _factory._app_instance = None
 
-    # Ensure TRIDENT_TOOL_MODE is set so we don't touch real data
-    os.environ.setdefault("TRIDENT_TOOL_MODE", "true")
+    # Ensure ANTEUMBRA_TOOL_MODE is set so we don't touch real data
+    os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
     from anteumbra.interfaces.web.factory import create_app
     app = create_app()
@@ -343,7 +343,7 @@ class TestProcessLifecycle:
         env["PYTHONPATH"] = str(project_root) + os.pathsep + str(
             project_root / "src"
         )
-        env["TRIDENT_TOOL_MODE"] = "true"
+        env["ANTEUMBRA_TOOL_MODE"] = "true"
         env["FLASK_APP"] = "anteumbra.interfaces.web.factory:create_app"
         env.pop("FLASK_RUN_PORT", None)
         env.pop("FLASK_RUN_HOST", None)
@@ -398,7 +398,7 @@ class TestProcessLifecycle:
         env["PYTHONPATH"] = str(project_root) + os.pathsep + str(
             project_root / "src"
         )
-        env["TRIDENT_TOOL_MODE"] = "true"
+        env["ANTEUMBRA_TOOL_MODE"] = "true"
         env["FLASK_APP"] = "anteumbra.interfaces.web.factory:create_app"
 
         proc = subprocess.Popen(

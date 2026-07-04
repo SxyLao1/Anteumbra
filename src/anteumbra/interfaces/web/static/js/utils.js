@@ -1,5 +1,5 @@
-/* Trident v1.8.0 通用工具库 */
-const TridentUtils = {
+/* Anteumbra 通用工具库 */
+const AnteumbraUtils = {
   getCsrfToken() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';
@@ -40,5 +40,5 @@ const TridentUtils = {
     });
   }
 };
-window.TridentUtils = TridentUtils;
-window.AnteumbraUtils = TridentUtils;
+window.AnteumbraUtils = AnteumbraUtils;
+window.TridentUtils = AnteumbraUtils;  // backward compat

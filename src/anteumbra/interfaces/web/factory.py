@@ -81,8 +81,6 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_version():
         return {
-            'trident_version': get_version(),
-            'trident_release_date': get_release_date(),
             'anteumbra_version': get_version(),
             'anteumbra_release_date': get_release_date(),
         }

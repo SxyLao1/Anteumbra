@@ -24,7 +24,7 @@ v1.8.2: IP 封禁模块 — 多设备广播架构
     name = "Production WAF"
     type = "http"
     url = "https://waf.company.com/api/block"
-    api_key = "${TRIDENT_WAF_API_KEY:-}"
+    api_key = "${ANTEUMBRA_WAF_API_KEY:-}"
 """
 
 import json, logging, threading, time

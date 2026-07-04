@@ -19,7 +19,7 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 def _is_tool_mode() -> bool:
     """检测是否为工具脚本模式"""
-    return os.environ.get("TRIDENT_TOOL_MODE", "false") == "true"
+    return os.environ.get("ANTEUMBRA_TOOL_MODE", "false") == "true"
 
 
 def log_with_symbol(
@@ -102,7 +102,7 @@ def _load_from_registry(symbol_key: str) -> str:
 
     except Exception as e:
         # 仅在工具模式打印调试信息（避免生产环境噪音）
-        if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true" or os.environ.get("TRIDENT_DEBUG") == "true":
+        if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true":
             print(f"[CONFIG REGISTRY] 加载失败: {e}", file=sys.stderr)
         return f"[UNKNOWN][{symbol_key}]"
 

@@ -442,15 +442,15 @@ def edit_rule_modal(filename):
             .then(r => r.json())
             .then(data => {
               if (data.success) {
-                TridentUtils.toast('Rule updated successfully', 'success');
-                TridentUtils.modal.hide('yara-edit-modal');
+                AnteumbraUtils.toast('Rule updated successfully', 'success');
+                AnteumbraUtils.modal.hide('yara-edit-modal');
                 htmx.ajax('GET', '/admin/yara/rules', {target: '#main-content'});
               } else {
-                TridentUtils.toast('Update failed: ' + (data.error || 'Unknown'), 'error');
+                AnteumbraUtils.toast('Update failed: ' + (data.error || 'Unknown'), 'error');
               }
             })
             .catch(e => {
-              TridentUtils.toast('Save failed: ' + e.message, 'error');
+              AnteumbraUtils.toast('Save failed: ' + e.message, 'error');
             });
           };
         })();

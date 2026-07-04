@@ -236,10 +236,10 @@ class LogAnalyzer:
                 time_str = match.group("time")
                 try:
                     return datetime.strptime(time_str.split()[0], "%d/%B/%Y:%H:%M:%S")
-                except:
+                except Exception:
                     try:
                         return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-                    except:
+                    except Exception:
                         return None
         return None
 

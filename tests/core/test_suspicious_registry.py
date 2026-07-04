@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 # Ensure test isolation — set env before any imports happen inside suspicious_registry
-os.environ["TRIDENT_TOOL_MODE"] = "true"
+os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
 
 # Import path_to_key for test assertions (Windows normalizes paths)
 from anteumbra.infrastructure.utils.path_utils import path_to_key

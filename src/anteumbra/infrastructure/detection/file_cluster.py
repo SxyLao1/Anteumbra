@@ -42,7 +42,7 @@ class FileCluster:
                 import os as _os
                 def _safe_stat(p):
                     try: return _os.path.getsize(p)
-                    except: return 0
+                    except Exception: return 0
                 sz_new = _safe_stat(file_path)
                 first_file = next(iter(self.files.keys()))
                 sz_old = _safe_stat(first_file)

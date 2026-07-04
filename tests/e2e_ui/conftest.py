@@ -45,9 +45,9 @@ def browser():
 @pytest.fixture
 def server_url(monkeypatch):
     """Start a FRESH Flask app for each test — no state accumulation."""
-    os.environ["TRIDENT_TOOL_MODE"] = "true"
+    os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
     os.environ["PYTEST_CURRENT_TEST"] = "true"
-    os.environ.setdefault("TRIDENT_HOME", "")
+    os.environ.setdefault("ANTEUMBRA_HOME", "")
 
     # Monkey-patch credentials
     import anteumbra.interfaces.web.auth as auth_mod

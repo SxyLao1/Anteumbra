@@ -118,7 +118,7 @@ class SIEMFormatter:
             },
 
             # System metadata
-            "trident": {
+            "anteumbra": {
                 "version": self.version,
                 "hostname": raw.get("hostname", ""),
                 "instance_id": raw.get("instance_id", ""),
@@ -158,7 +158,7 @@ class SIEMFormatter:
             f"cs1Label=RuleName "
             f"cs2={','.join(normalized['detection']['features'])} "
             f"cs2Label=Features "
-            f"cs3={normalized['trident']['version']} "
+            f"cs3={normalized['anteumbra']['version']} "
             f"cs3Label=AnteumbraVersion "
             f"fp={normalized['detection']['false_positive']} "
             f"confidence={normalized['confidence']}"
@@ -183,10 +183,10 @@ class SIEMFormatter:
         pri = 1 * 8 + severity_num
 
         timestamp = normalized["event_time"]
-        hostname = normalized["trident"].get("hostname", "trident")
+        hostname = normalized["anteumbra"].get("hostname", "anteumbra")
         msg = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
 
-        return f"<{pri}>1 {timestamp} {hostname} trident - - - {msg}"
+        return f"<{pri}>1 {timestamp} {hostname} anteumbra - - - {msg}"
 
     def format_batch(self, events: List[Dict[str, Any]]) -> str:
         """Format multiple events (for file export or HTTP bulk push)."""

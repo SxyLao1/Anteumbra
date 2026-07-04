@@ -207,7 +207,7 @@ def dashboard_content():
         for r in all_records[:5]:
             try:
                 file_name = r.get("file_path", "").split('\\')[-1].split("/")[-1]
-            except:
+            except Exception:
                 file_name = "unknown"
             recent.append({
                 "time": r.get("detected_at", "N/A")[:16],

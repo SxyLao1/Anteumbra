@@ -43,12 +43,12 @@ class TestRegistryAPI(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        os.environ["TRIDENT_TOOL_MODE"] = "true"
+        os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
 
     def tearDown(self):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
-        os.environ.pop("TRIDENT_TOOL_MODE", None)
+        os.environ.pop("ANTEUMBRA_TOOL_MODE", None)
 
     def test_add_and_get_all(self):
         from anteumbra.infrastructure.suspicious_registry import add, get_all, _clear_memory_cache

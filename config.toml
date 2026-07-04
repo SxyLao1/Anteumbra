@@ -15,7 +15,7 @@ host = "127.0.0.1"
 port = 8080
 username = "admin"
 # 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
-password_hash = "${TRIDENT_PASSWORD_HASH:-}"
+password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"
 allowed_ips = ["127.0.0.1"]
 sse_log_levels = ["INFO", "ERROR", "CRITICAL"]
 items_per_page = 6
@@ -70,7 +70,7 @@ auto_block_enabled = false
 auto_block_min_score = 0.8
 
 # ---- 封禁设备列表 ----
-# Trident 将封禁决策同时广播到下面所有设备。
+# Anteumbra 将封禁决策同时广播到下面所有设备。
 # 设备类型说明：
 #   stdout = 仅终端日志输出（默认，开发/演示用）
 #   mock   = 内存黑名单（测试用，重启丢失）
@@ -81,13 +81,13 @@ auto_block_min_score = 0.8
 #   name = "Production WAF"
 #   type = "http"
 #   url = "https://waf.company.com/api/block"
-#   api_key = "${TRIDENT_WAF_API_KEY:-}"
+#   api_key = "${ANTEUMBRA_WAF_API_KEY:-}"
 #
-# HTTP 设备请求格式（Trident 自动发送）：
+# HTTP 设备请求格式（Anteumbra 自动发送）：
 #   POST {url}
 #   Content-Type: application/json
 #   Authorization: Bearer {api_key}
-#   Body: {"ip":"1.2.3.4", "comment":"Trident: webshell upload (profile: a1b2c3d4)", "permanent":false, "duration":86400, "risk_score":0.95}
+#   Body: {"ip":"1.2.3.4", "comment":"Anteumbra: webshell upload (profile: a1b2c3d4)", "permanent":false, "duration":86400, "risk_score":0.95}
 
 [[ip_blocker.devices]]
 name = "Stdout Logger"
@@ -103,7 +103,7 @@ auto_quarantine_enabled = false
 [security]
 csrf_enabled = true
 csrf_exclude_paths = ["/api/v1/health"]
-secret_key = "${TRIDENT_SECRET_KEY:-}"
+secret_key = "${ANTEUMBRA_SECRET_KEY:-}"
 
 [registry]
 async_save_enabled = true
@@ -443,7 +443,7 @@ enabled = true
 
 [notifier.wechat]
 enabled = true
-send_key = "${TRIDENT_WECHAT_API_KEY:-}"
+send_key = "${ANTEUMBRA_WECHAT_API_KEY:-}"
 verify_ssl = false
 timeout = 10
 channel = "9"
@@ -453,10 +453,10 @@ noip = false
 enabled = true
 smtp_host = "smtp.163.com"
 smtp_port = 465
-username = "${TRIDENT_EMAIL_USERNAME:-}"
-password = "${TRIDENT_EMAIL_PASSWORD:-}"
-from_addr = "${TRIDENT_EMAIL_FROM:-}"
-to_addrs = ["${TRIDENT_EMAIL_TO:-}"]
+username = "${ANTEUMBRA_EMAIL_USERNAME:-}"
+password = "${ANTEUMBRA_EMAIL_PASSWORD:-}"
+from_addr = "${ANTEUMBRA_EMAIL_FROM:-}"
+to_addrs = ["${ANTEUMBRA_EMAIL_TO:-}"]
 use_tls = false
 use_ssl = true
 timeout = 30
@@ -482,7 +482,7 @@ encoding = "utf-8"
 flask_log_enabled = true
 
 # Flask访问日志文件路径（独立于monitor.log）
-flask_log_path = "logs/Trident/access.log"
+flask_log_path = "logs/Anteumbra/access.log"
 
 # 日志滚动大小（MB）
 flask_log_rotation_mb = 10
@@ -497,7 +497,7 @@ flask_log_backup_count = 5
 # 存储后端: "json" (默认) | "sqlite" (WAL模式高性能) | "both" (双写: JSON兜底 + SQLite优先读)
 backend = "both"
 # SQLite 数据库文件路径 (backend = "sqlite" 或 "both" 时生效)
-db_path = "data/trident.db"
+db_path = "data/anteumbra.db"
 
 # ============================================================================
 # v1.9.3: 插件系统配置

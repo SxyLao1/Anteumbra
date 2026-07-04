@@ -149,8 +149,8 @@ class TestArchiveCurrentWal:
     def test_archive_empty_wal_returns_none(self, isolate_wal):
         wm = isolate_wal
         result = wm.archive_current_wal()
-        # Returns empty dict when no WAL to archive
-        assert result == {}
+        # Returns None when no WAL to archive
+        assert result is None
 
 
 # ── Rotation Tests ────────────────────────────────────────────

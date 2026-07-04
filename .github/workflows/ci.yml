@@ -59,7 +59,7 @@ jobs:
             --tb=short \
             -p no:warnings
         env:
-          TRIDENT_TOOL_MODE: "true"
+          ANTEUMBRA_TOOL_MODE: "true"
           CI: "true"
 
   # ── UI Tests (Playwright, single Python version) ───────────
@@ -91,7 +91,7 @@ jobs:
         run: |
           python -m pytest tests/e2e_ui/ -v --tb=short -p no:warnings
         env:
-          TRIDENT_TOOL_MODE: "true"
+          ANTEUMBRA_TOOL_MODE: "true"
 
   # ── Package Build Check ───────────────────────────────────
   build:

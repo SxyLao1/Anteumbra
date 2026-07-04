@@ -44,7 +44,7 @@ class Notifier:
         maxsize = queue_config.get("maxsize", 0)  # 0=无限制
 
         # 测试环境强制限制，生产环境读取配置
-        if os.environ.get("TRIDENT_TOOL_MODE") == "true":
+        if os.environ.get("ANTEUMBRA_TOOL_MODE") == "true":
             maxsize = 100  # 铁律1：测试环境必须限制
 
         self._alert_queue = queue.Queue(maxsize=maxsize)
@@ -232,7 +232,7 @@ class Notifier:
         email_password = email_cfg.get("password", "")
         if email_password.startswith("${") or not email_password:
             import os
-            email_password = os.environ.get("TRIDENT_EMAIL_PASSWORD", "")
+            email_password = os.environ.get("ANTEUMBRA_EMAIL_PASSWORD", "")
 
         return {
             "enabled": email_cfg.get("enabled", False),

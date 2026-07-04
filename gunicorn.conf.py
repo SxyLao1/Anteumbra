@@ -1,4 +1,4 @@
-# Trident v1.9.5: Gunicorn Production Configuration
+# Anteumbra Gunicorn Production Configuration
 # Usage: gunicorn -c gunicorn.conf.py "web.factory:create_app()"
 #
 # Workers: 2-4 x $(nproc) is a good default.
@@ -9,13 +9,13 @@ import os
 
 # ── Server Socket ───────────────────────────────────────
 
-bind = os.environ.get("TRIDENT_BIND", "127.0.0.1:8080")
+bind = os.environ.get("ANTEUMBRA_BIND", "127.0.0.1:8080")
 backlog = 2048
 
 # ── Worker Processes ────────────────────────────────────
 
-workers = int(os.environ.get("TRIDENT_WORKERS", min(4, multiprocessing.cpu_count() * 2)))
-threads = int(os.environ.get("TRIDENT_THREADS", 2))
+workers = int(os.environ.get("ANTEUMBRA_WORKERS", min(4, multiprocessing.cpu_count() * 2)))
+threads = int(os.environ.get("ANTEUMBRA_THREADS", 2))
 worker_class = "sync"  # sync workers + threads for I/O-bound YARA scans
 worker_connections = 1000
 timeout = 120  # YARA scanning can take a while
@@ -24,14 +24,14 @@ keepalive = 5
 
 # ── Process Naming ──────────────────────────────────────
 
-proc_name = "trident"
-default_proc_name = "trident"
+proc_name = "anteumbra"
+default_proc_name = "anteumbra"
 
 # ── Logging ─────────────────────────────────────────────
 
-accesslog = os.environ.get("TRIDENT_ACCESS_LOG", "logs/Trident/gunicorn_access.log")
-errorlog = os.environ.get("TRIDENT_ERROR_LOG", "logs/Trident/gunicorn_error.log")
-loglevel = os.environ.get("TRIDENT_LOG_LEVEL", "info")
+accesslog = os.environ.get("ANTEUMBRA_ACCESS_LOG", "logs/Anteumbra/gunicorn_access.log")
+errorlog = os.environ.get("ANTEUMBRA_ERROR_LOG", "logs/Anteumbra/gunicorn_error.log")
+loglevel = os.environ.get("ANTEUMBRA_LOG_LEVEL", "info")
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(L)s'
 
 # ── Server Mechanics ────────────────────────────────────
@@ -46,14 +46,14 @@ tmp_upload_dir = None
 # ── Hooks ───────────────────────────────────────────────
 
 def on_starting(server):
-    """Initialize Trident subsystems before workers fork."""
+    """Initialize Anteumbra subsystems before workers fork."""
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     from config.registry import ConfigRegistry
     ConfigRegistry.initialize()
 
 def when_ready(server):
-    server.log.info("Trident: Gunicorn ready — %d workers, %d threads", workers, threads)
+    server.log.info("Anteumbra: Gunicorn ready — %d workers, %d threads", workers, threads)
 
 def on_exit(server):
-    server.log.info("Trident: Gunicorn shutting down")
+    server.log.info("Anteumbra: Gunicorn shutting down")

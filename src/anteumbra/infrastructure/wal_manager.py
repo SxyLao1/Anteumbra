@@ -102,7 +102,7 @@ def archive_current_wal() -> Optional[Path]:
     """将当前 WAL 归档并创建新的空 WAL"""
     _init_wal_path()
     if not _WAL_PATH or not _WAL_PATH.exists():
-        return {}
+        return None
 
     try:
         wal_backup = _WAL_PATH.with_suffix(f".log.{int(time.time())}")

@@ -25,7 +25,7 @@ def _app():
     import anteumbra.interfaces.web.factory as _factory
     _factory._app_instance = None
 
-    os.environ.setdefault("TRIDENT_TOOL_MODE", "true")
+    os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
     from anteumbra.interfaces.web.factory import create_app
     app = create_app()

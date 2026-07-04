@@ -1,5 +1,5 @@
-/* Trident v1.8.0 SSE连接管理器 */
-window.TridentSSEManager = {
+/* Anteumbra SSE连接管理器 */
+window.AnteumbraSSEManager = {
   eventSource: null,
   isConnected: false,
   lastActivity: 0,
@@ -234,3 +234,4 @@ window.TridentSSEManager = {
     }
   }
 };
+window.TridentSSEManager = window.AnteumbraSSEManager;  // backward compat

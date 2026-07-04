@@ -121,7 +121,7 @@ class ConfigRegistry:
             logger.info(f"[CONFIG] ✓ 加载symbols配置: {symbol_count}条")
 
             # 打印前3个符号用于调试（仅非生产环境）
-            if os.environ.get("TRIDENT_PRODUCTION") != "true":
+            if os.environ.get("ANTEUMBRA_PRODUCTION") != "true":
                 symbols_preview = list(raw_config["logging"]["symbols"].items())[:3]
                 logger.debug(f"[CONFIG] symbols预览: {symbols_preview}")
 
@@ -314,7 +314,7 @@ class ConfigRegistry:
 
 def _is_tool_script() -> bool:
     """检测工具脚本模式"""
-    return os.environ.get("TRIDENT_TOOL_MODE", "false") == "true"
+    return os.environ.get("ANTEUMBRA_TOOL_MODE", "false") == "true"
 
 
 def _load_json_with_comments(file_path: str) -> Dict[str, Any]:
@@ -324,28 +324,7 @@ def _load_json_with_comments(file_path: str) -> Dict[str, Any]:
         content = re.sub(r'(?<!")//.*$', '', content, flags=re.MULTILINE)
         content = re.sub(r'(?<!")#.*$', '', content, flags=re.MULTILINE)
         return json.loads(content)
-    # ===== v1.7.9: 环境变量解析 =====
-    @staticmethod
-    def _resolve_env_vars(value):
-        """递归解析字符串中的 ${ENV_NAME:-default} 语法"""
-        import os
-        import re
-
-        if isinstance(value, str):
-            pattern = r'\$\{([^:-}]+):-([^}]*)\}'
-            def replacer(m):
-                env_name, default = m.group(1), m.group(2)
-                return os.environ.get(env_name, default)
-            resolved = re.sub(pattern, replacer, value)
-            return resolved
-        elif isinstance(value, dict):
-            return {k: ConfigRegistry._resolve_env_vars(v) for k, v in value.items()}
-        elif isinstance(value, list):
-            return [ConfigRegistry._resolve_env_vars(item) for item in value]
-        return value
-
-    @classmethod
-    def get_raw_config_resolved(cls):
-        """v1.7.9: 返回已解析环境变量的完整配置"""
-        return cls._resolve_env_vars(cls.get_raw_config())
+    # v1.0.9: removed unreachable _resolve_env_vars dead code after return on line 326.
+    # The _load_json_with_comments function (never called) had @staticmethod /
+    # @classmethod decorators after a return statement — unreachable and broken.
 

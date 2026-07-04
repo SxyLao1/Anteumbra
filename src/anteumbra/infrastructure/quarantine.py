@@ -106,7 +106,7 @@ def _load_db() -> List[Dict[str, Any]]:
             try:
                 from datetime import datetime
                 ts = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
-            except:
+            except Exception:
                 ts = datetime.fromtimestamp(f.stat().st_mtime)
             recovered.append({
                 "quarantine_id": qid,

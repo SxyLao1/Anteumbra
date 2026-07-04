@@ -24,8 +24,8 @@ def _resolve_env_value(value: str) -> str:
         ${VAR:?error}       → 读取环境变量 VAR，不存在则抛出异常
 
     示例：
-        secret_key = "${TRIDENT_SECRET_KEY:-YOUR_SECRET_KEY_HERE}"
-        → 如果环境变量 TRIDENT_SECRET_KEY 存在，用它的值
+        secret_key = "${ANTEUMBRA_SECRET_KEY:-YOUR_SECRET_KEY_HERE}"
+        → 如果环境变量 ANTEUMBRA_SECRET_KEY 存在，用它的值
         → 如果不存在，保留 "YOUR_SECRET_KEY_HERE"
     """
     if not isinstance(value, str):

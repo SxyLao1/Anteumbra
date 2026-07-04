@@ -1,5 +1,5 @@
-/* Trident v1.9.1 — Core dashboard logic (page modules in js/modules/) */
-/* Trident v1.8.0 仪表盘主逻辑 */
+/* Anteumbra v1.9.1 — Core dashboard logic (page modules in js/modules/) */
+/* Anteumbra 仪表盘主逻辑 */
 
 /* ============================================================
    Dashboard 全局函数（必须在 dashboard.js 中预定义，因为
@@ -47,7 +47,7 @@ var _currentTitle = 'Dashboard';
 var _loadingHtml = '<div class="empty-state"><div class="spinner"></div><p>Initializing dashboard...</p></div>';
 
 document.addEventListener('DOMContentLoaded', function() {
-  TridentUtils.setupHtmxCsrf();
+  AnteumbraUtils.setupHtmxCsrf();
 
   // 初始加载dashboard
   setTimeout(function() {
@@ -55,8 +55,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 300);
 
   // SSE连接
-  if (window.TridentSSEManager) {
-    TridentSSEManager.getConnection();
+  if (window.AnteumbraSSEManager) {
+    AnteumbraSSEManager.getConnection();
   }
 
   // 导航点击事件
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var path = this.dataset.path;
       var title = this.dataset.title || path;
       loadContent(path, title);
-      TridentUtils.highlightNav(path.replace('_content', ''));
+      AnteumbraUtils.highlightNav(path.replace('_content', ''));
     });
   });
 
@@ -75,8 +75,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function(e) {
       e.preventDefault();
-      TridentUtils.confirm('Confirm logout?', function() {
-        if (window.TridentSSEManager) TridentSSEManager.disconnect();
+      AnteumbraUtils.confirm('Confirm logout?', function() {
+        if (window.AnteumbraSSEManager) AnteumbraSSEManager.disconnect();
         window.location.href = '/admin/logout';
       });
     });
@@ -322,8 +322,8 @@ function openLogAnalyzer() {
   var s = document.getElementById('live-log-stream'), t = document.getElementById('analyzer-log-content');
   if (s && t) { t.innerHTML = s.innerHTML; t.scrollTop = t.scrollHeight; }
   // v2.0: Reconnect SSE with ?levels=all for full log visibility
-  if (window.TridentSSEManager) {
-    TridentSSEManager.reconnectWithAllLevels();
+  if (window.AnteumbraSSEManager) {
+    AnteumbraSSEManager.reconnectWithAllLevels();
   }
   // Reset filter controls to defaults
   var kw = document.getElementById('analyzer-filter-input');
@@ -342,8 +342,8 @@ function closeLogAnalyzer() {
   m.style.display = 'none'; m.style.visibility = 'hidden'; m.style.opacity = '0';
   m.classList.remove('active');
   // v2.0: Reconnect SSE with normal (filtered) levels
-  if (window.TridentSSEManager) {
-    TridentSSEManager.reconnectNormal();
+  if (window.AnteumbraSSEManager) {
+    AnteumbraSSEManager.reconnectNormal();
   }
 }
 
@@ -600,11 +600,11 @@ function loadDashboardPanels() {
 }
 
 function showYaraEditModal(filename) {
-  TridentUtils.modal.show('yara-edit-modal');
+  AnteumbraUtils.modal.show('yara-edit-modal');
 }
 
 function confirmDelete(filename) {
-  TridentUtils.confirm('Delete rule file: ' + filename + ' ?', function() {
+  AnteumbraUtils.confirm('Delete rule file: ' + filename + ' ?', function() {
     var btn = document.querySelector('[data-delete-file="' + filename + '"]');
     if (btn) btn.click();
   });
@@ -651,8 +651,8 @@ function saveConfig() {
 function saveEnvVars() {
   var vars = {};
   var hashVal = document.getElementById('env-pwd-display')?.dataset?.hash;
-  if (hashVal) vars['TRIDENT_PASSWORD_HASH'] = hashVal;
-  ['TRIDENT_WECHAT_API_KEY','TRIDENT_EMAIL_USERNAME','TRIDENT_EMAIL_PASSWORD','TRIDENT_EMAIL_FROM','TRIDENT_EMAIL_TO','TRIDENT_WEBHOOK_SECRET'].forEach(function(k) {
+  if (hashVal) vars['ANTEUMBRA_PASSWORD_HASH'] = hashVal;
+  ['ANTEUMBRA_WECHAT_API_KEY','ANTEUMBRA_EMAIL_USERNAME','ANTEUMBRA_EMAIL_PASSWORD','ANTEUMBRA_EMAIL_FROM','ANTEUMBRA_EMAIL_TO','ANTEUMBRA_WEBHOOK_SECRET'].forEach(function(k) {
     var el = document.getElementById('env-' + k);
     if (el) vars[k] = el.value;
   });

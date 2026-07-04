@@ -19,12 +19,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-
-# 强制初始化（解决循环导入和时序问题）
-try:
-    ConfigRegistry.initialize()
-except RuntimeError:
-    pass  # 已初始化则忽略
 from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
 # v1.7.3：导入统一日志接口
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
@@ -36,11 +30,11 @@ from anteumbra.infrastructure import wal_manager
 def _is_tool_script() -> bool:
     """检测是否为工具脚本运行模式（测试环境也视为工具模式）
 
-    v1.0.6 fix: 原生检测 pytest (PYTEST_CURRENT_TEST)，不再依赖 TRIDENT_TOOL_MODE。
+    v1.0.6 fix: 原生检测 pytest (PYTEST_CURRENT_TEST)，不再依赖 ANTEUMBRA_TOOL_MODE。
     解决 import 时序问题 — 当 suspicious_registry 在 env var 设置前被导入时，
     仍然能正确识别测试环境并隔离数据路径。
     """
-    if os.environ.get("TRIDENT_TOOL_MODE", "false") == "true":
+    if os.environ.get("ANTEUMBRA_TOOL_MODE", "false") == "true":
         return True
     # pytest sets PYTEST_CURRENT_TEST when running tests (even during collection)
     if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -322,7 +316,7 @@ def _shutdown_async_saver():
 
     try:
         logger = _get_logger()
-    except:
+    except Exception:
         logger = logging.getLogger("monitor.suspicious_registry")
 
     log_with_symbol("notice", "info", "正在关闭异步保存器...", logger)
@@ -333,7 +327,7 @@ def _shutdown_async_saver():
         if _async_save_queue:
             try:
                 _async_save_queue.put(None)
-            except:
+            except Exception:
                 pass
 
         if _async_save_thread and _async_save_thread.is_alive():
@@ -350,7 +344,7 @@ def _async_save_worker():
 
     try:
         logger = _get_logger()
-    except:
+    except Exception:
         logger = logging.getLogger("monitor.suspicious_registry")
 
     log_with_symbol("notice", "info", "工作线程已启动", logger)
@@ -500,7 +494,7 @@ def _load_registry() -> List[Dict]:
                     # Always write as list format going forward
                     _REGISTRY_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
                     _logger_info("[REGISTRY] 已从备份恢复主文件")
-                except:
+                except Exception:
                     _logger_warning("[REGISTRY] 无法恢复主文件，继续使用备份")
                 return data
         except (json.JSONDecodeError, OSError):
@@ -611,7 +605,7 @@ def _save_registry_sync(data: List[Dict]):
                 fallback_path = registry_path.parent / "registry_emergency_backup.json"
                 fallback_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
                 logger.critical(f"[REGISTRY][FALLBACK] 已写入紧急备份: {fallback_path}")
-            except:
+            except Exception:
                 pass
 
     # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
@@ -991,7 +985,7 @@ def _trigger_registry_update_event():
     try:
         marker = normalize_path("data/registry_update.marker")
         marker.write_text(str(time.time()))
-    except:
+    except Exception:
         pass
 
 def get(path: Path) -> Optional[Dict]:
@@ -1241,8 +1235,9 @@ def _force_init_at_import():
         f"\n  - Backup: {_REGISTRY_BACKUP_PATH}"
     )
 
-# 模块导入时立即执行
-_force_init_at_import()
+# v1.0.9: defer path initialization to _ensure_initialized() (called lazily
+# by all public functions). Import-time side effects were breaking test isolation
+# and causing ConfigRegistry dependency before app bootstrap.
 
 
 # 辅助函数：避免在函数内重复写logger

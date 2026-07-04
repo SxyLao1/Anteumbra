@@ -72,7 +72,7 @@ class NotifierHandlerPlugin(Plugin):
             message = format_alert_message(ctx)
         except Exception as e:
             logger.warning("NotifierHandler: format_alert_message 失败: %s", e)
-            message = f"[Trident {level}] {alert_type}"
+            message = f"[Anteumbra {level}] {alert_type}"
 
         # Send via concrete Notifier
         self._send(message, level)
