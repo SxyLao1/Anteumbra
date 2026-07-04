@@ -90,6 +90,7 @@
 | P1 | Redis session backend |
 | P1 | Prometheus metrics endpoint |
 | P2 | SIEM syslog live streaming |
+| P2 | ConfigRegistry → dependency injection (Kimi audit P0, 1-week refactor) |
 | P3 | Multi-tenancy (tenant isolation) |
 
 ---

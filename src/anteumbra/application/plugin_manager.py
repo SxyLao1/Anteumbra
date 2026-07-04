@@ -165,20 +165,43 @@ class PluginManager:
     # ── 事件分发 ────────────────────────────────────────
 
     def dispatch(self, event: DomainEvent) -> List[DomainEvent]:
-        """分发事件到所有订阅插件（线程安全，带超时）"""
+        """分发事件到所有订阅插件（线程安全，带超时）
+
+        v1.0.8 fix: _dispatch_timeout was declared but never applied.
+        Each handler now runs in a daemon thread with join(timeout).
+        If a plugin hangs or deadloops, it is skipped after the timeout.
+        """
         if not self._enabled:
             return []
         new_events: List[DomainEvent] = []
         with self._rwlock:
             handlers = list(self._event_handlers.get(event.event_type, []))
         for plugin in handlers:
-            try:
-                result = plugin.on_event(event)
-                if result:
-                    new_events.extend(result)
-            except Exception as e:
-                logger.error("PluginManager: 插件 '%s' 处理事件 '%s' 失败: %s",
-                           plugin.name, event.event_type, e)
+            result_container = []
+            exc_container = []
+
+            def _call(pl=plugin, ev=event):
+                try:
+                    result_container.append(pl.on_event(ev))
+                except Exception as e:
+                    exc_container.append(e)
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            t.join(timeout=self._dispatch_timeout)
+            if t.is_alive():
+                logger.error(
+                    "PluginManager: 插件 '%s' 处理事件 '%s' 超时 (%ss)，跳过",
+                    plugin.name, event.event_type, self._dispatch_timeout,
+                )
+                continue
+            if exc_container:
+                logger.error(
+                    "PluginManager: 插件 '%s' 处理事件 '%s' 失败: %s",
+                    plugin.name, event.event_type, exc_container[0],
+                )
+            elif result_container and result_container[0]:
+                new_events.extend(result_container[0])
         return new_events
 
     def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> None:

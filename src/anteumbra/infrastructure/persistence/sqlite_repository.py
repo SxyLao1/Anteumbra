@@ -187,10 +187,23 @@ class SqliteRepository(EventRepository):
     v2.0 fix: ``table_name`` parameter routes data to the correct table.
     Previously every namespace (registry, quarantine, block_ledger,
     threat_profiles) was hardcoded to INSERT INTO ``registry``.
+
+    v1.0.8 fix: table_name is now validated against an allowlist to prevent
+    SQL injection via f-string table name interpolation.
     """
+
+    _ALLOWED_TABLE_NAMES = {
+        "registry", "quarantine", "block_ledger",
+        "threat_profiles", "scan_history", "wal_events",
+    }
 
     def __init__(self, db_path: str = "data/anteumbra.db", table_name: str = "registry",
                  key_column: str = "record_id", sort_column: str = "detected_at"):
+        if table_name not in self._ALLOWED_TABLE_NAMES:
+            raise ValueError(
+                f"Invalid table name: {table_name!r}. "
+                f"Allowed: {sorted(self._ALLOWED_TABLE_NAMES)}"
+            )
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._table = table_name

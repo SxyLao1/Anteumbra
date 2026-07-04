@@ -190,12 +190,12 @@ class ScanResult:
 
     def to_record(self) -> "FileRecord":
         """Convert scan result to a FileRecord for persistence."""
-        ds = DetectionSource.PASSIVE
+        # v1.0.8: try the enum constructor directly; fall back to PASSIVE
+        # for unknown sources (e.g. "unknown", future scanner types)
         try:
-            if self.detection_source in ("passive", "active", "waf", "log"):
-                ds = DetectionSource(self.detection_source)
+            ds = DetectionSource(self.detection_source)
         except ValueError:
-            pass
+            ds = DetectionSource.PASSIVE
         return FileRecord(
             file_path=str(self.file_path),
             display_name=self.file_path.name,
