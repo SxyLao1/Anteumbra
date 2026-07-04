@@ -45,7 +45,7 @@ def _load() -> List[Dict]:
                 _LEDGER_CACHE = records
                 return records
     except Exception:
-        pass
+        logger.debug("Repository load failed, falling back to JSON", exc_info=True)
 
     # Fallback: load from JSON file
     try:
@@ -90,9 +90,9 @@ def _repo_shadow_save(data: List[Dict]):
                 try:
                     repo.save(key, dict(item))
                 except Exception:
-                    pass
+                    logger.debug("Repository shadow save block_ledger item failed", exc_info=True)
     except Exception:
-        pass
+        logger.debug("Repository shadow save block_ledger unavailable", exc_info=True)
 
 
 def add_entry(
@@ -156,7 +156,7 @@ def _emit_block_event(entry: Dict) -> None:
                 "broadcast_status": entry.get("broadcast_status", "pending"),
             })
     except Exception:
-        pass
+        logger.debug("PluginManager emit block_executed failed", exc_info=True)
 
 
 def update_notes(ip: str, notes: str) -> bool:

@@ -15,6 +15,8 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
+logger = logging.getLogger("monitor.wal_manager")
+
 # WAL 状态
 _WAL_PATH: Optional[Path] = None
 _replaying = False
@@ -128,7 +130,7 @@ def _emit_wal_event(event_type: str, extra: Dict = None) -> None:
                 payload.update(extra)
             pm.emit(event_type, "wal_manager", payload)
     except Exception:
-        pass
+        logger.debug("PluginManager emit WAL event failed", exc_info=True)
 
 
 def _rotate_if_needed():
@@ -293,7 +295,7 @@ def list_archives() -> List[Dict]:
                 'mtime': stat.st_mtime
             })
         except Exception:
-            pass
+            logger.debug("Failed to stat WAL archive file", exc_info=True)
     return sorted(archives, key=lambda x: x['mtime'], reverse=True)
 
 
