@@ -9,6 +9,7 @@ Metrics Blueprint：提供健康检查和指标API
 """
 from anteumbra.infrastructure.config.version import get_version
 import json
+import logging
 import sys
 import time
 from flask import Blueprint, jsonify
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.config.registry import ConfigRegistry
+
+logger = logging.getLogger(__name__)
 
 # 创建Blueprint
 metrics_bp = Blueprint('metrics', __name__, url_prefix='/api/v1')
@@ -34,7 +37,7 @@ def health_check():
         except Exception as e:
             # Windows权限问题或psutil未安装
             metrics._stats["memory_mb"] = 0
-            print(f"[WARNING][METRICS] 内存监控失败: {e}", file=sys.stderr)
+            logger.warning(f"[METRICS] Memory monitoring failed: {e}")
 
         data = metrics.get()
 
@@ -50,7 +53,7 @@ def health_check():
     except Exception as e:
         # v1.0.9: remove traceback leak — only log internally, never expose to caller
         import traceback
-        print(f"[ERROR][HEALTH] 健康检查崩溃: {e}\n{traceback.format_exc()}", file=sys.stderr)
+        logger.error(f"[HEALTH] Health check crashed: {e}\n{traceback.format_exc()}")
 
         return jsonify({
             "status": "error",

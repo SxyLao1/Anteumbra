@@ -144,9 +144,10 @@ def trigger_registry_update():
 
 
 def get_connected_client_count() -> int:
-    """获取当前连接的SSE客户端数量"""
+    """获取当前连接的SSE客户端数量（线程安全）"""
     limits = get_sse_limits()
-    current = len(_sse_clients)
+    with _sse_lock:
+        current = len(_sse_clients)
     logger = logging.getLogger("monitor.sse_worker")
     logger.debug(f"[SSE] 当前连接: {current}/{limits['total']}")
     return current
@@ -157,6 +158,7 @@ class LogBuffer:
         self.buffer_path = Path(buffer_path)
         self.buffer_path.parent.mkdir(parents=True, exist_ok=True)
         self._queue = deque(maxlen=max_size)
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self):
@@ -164,23 +166,26 @@ class LogBuffer:
         if self.buffer_path.exists():
             try:
                 data = json.loads(self.buffer_path.read_text(encoding='utf-8'))
-                self._queue.extend(data)
-                # print(f"[LOG-BUF] 已加载 {len(self._queue)} 条历史日志")
-            except Exception as e:
-                print(f"[LOG-BUF] 加载失败: {e}")
-                self._queue.clear()
-        else:
-            print(f"[LOG-BUF] 缓冲文件不存在，创建新缓冲区")
+                with self._lock:
+                    self._queue.extend(data)
+            except Exception:
+                logger = logging.getLogger("monitor.sse_worker")
+                logger.warning("LogBuffer load failed, starting empty")
+                with self._lock:
+                    self._queue.clear()
 
     def _save(self):
         """保存到磁盘"""
         try:
+            with self._lock:
+                data = list(self._queue)
             self.buffer_path.write_text(
-                json.dumps(list(self._queue), indent=2),
+                json.dumps(data, indent=2),
                 encoding='utf-8'
             )
-        except Exception as e:
-            print(f"[LOG-BUF] 保存失败: {e}")
+        except Exception:
+            logger = logging.getLogger("monitor.sse_worker")
+            logger.warning("LogBuffer save failed")
 
     def push(self, log_line):
         """
@@ -192,26 +197,17 @@ class LogBuffer:
         Returns:
             bool: 是否成功添加（False表示已存在，跳过写入）
         """
-        # ========== 核心修复：去重检查 ==========
-        # 如果该日志已存在于缓冲区中，则跳过（避免重复）
-        if log_line in self._queue:
-            # 可选：记录调试信息（生产环境可关闭）
-            # logging.getLogger("monitor.sse_worker").debug(
-            #     f"[LOG-BUF] 跳过重复日志: {log_line[:50]}..."
-            # )
-            return False
-
-        # 添加到队列
-        self._queue.append(log_line)
-
-        # 如果超过最大长度，deque会自动移除最旧的
-        # 保存到磁盘
+        with self._lock:
+            if log_line in self._queue:
+                return False
+            self._queue.append(log_line)
         self._save()
         return True
 
     def get_all(self):
-        """获取所有缓冲的日志"""
-        return list(self._queue)
+        """获取所有缓冲的日志（线程安全）"""
+        with self._lock:
+            return list(self._queue)
 
 # 全局实例
 _log_buffer = LogBuffer(max_size=100)

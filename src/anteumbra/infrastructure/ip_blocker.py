@@ -104,7 +104,7 @@ class StdoutDevice(BlockDevice):
     def is_available(self): return True
     def block(self, decision):
         logger.info(f"[BLOCK][{self.name}] Would block {decision.ip} | reason={decision.reason} | profile={decision.profile_id[:8]}")
-        print(f"  [IP_BLOCKER] {self.name}: BLOCK {decision.ip} — {decision.reason}")
+        logger.info(f"[IP_BLOCKER] {self.name}: BLOCK {decision.ip} — {decision.reason}")
         return BlockResult(device_name=self.name, success=True, message="logged", ip=decision.ip)
     def unblock(self, ip):
         logger.info(f"[BLOCK][{self.name}] Would unblock {ip}")
@@ -316,19 +316,21 @@ class IPBlocker:
             self._persist_retry_queue()
 
     def start_retry_worker(self, persist_path: str = None):
-        """启动重试后台线程"""
+        """启动重试后台线程（线程安全）"""
         if persist_path:
             self._persist_path = persist_path
             self._load_retry_queue()
-        if self._retry_running:
-            return
-        self._retry_running = True
+        with self._lock:
+            if self._retry_running:
+                return
+            self._retry_running = True
         self._retry_thread = threading.Thread(target=self._retry_loop, daemon=True, name="BlockRetry")
         self._retry_thread.start()
         logger.info("[RETRY] Worker started")
 
     def stop_retry_worker(self):
-        self._retry_running = False
+        with self._lock:
+            self._retry_running = False
 
     def get_retry_queue_status(self) -> Dict:
         """返回重试队列状态（前端展示用）"""

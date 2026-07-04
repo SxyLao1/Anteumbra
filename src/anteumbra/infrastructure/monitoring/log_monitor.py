@@ -446,8 +446,7 @@ class LogMonitor:
                     message = format_alert_message(ctx)
                     notifier.send_alert(message, level=alert_level)
                 except Exception as e:
-                    import sys
-                    print(f"[ALERT] 通知失败: {e}", file=sys.stderr, flush=True)
+                    self.logger.error(f"[ALERT] Notification failed: {e}")
 
             threading.Thread(target=_send_async, daemon=True).start()
 

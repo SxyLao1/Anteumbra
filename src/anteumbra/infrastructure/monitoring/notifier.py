@@ -26,6 +26,8 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.monitoring.metrics import get_metrics
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
+_notifier_logger = logging.getLogger(__name__)
+
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
 
@@ -202,7 +204,7 @@ class Notifier:
                 f.flush()
                 os.fsync(f.fileno())
         except Exception as e:
-            print(f"[ALERT][FATAL] 批量磁盘失败: {e}", file=sys.stderr, flush=True)
+            _notifier_logger.critical(f"[ALERT][FATAL] Batch disk write failed: {e}")
 
     def _persist_overflow(self, message: str, level: str):
         """溢出持久化（内联简化版）"""
@@ -219,7 +221,7 @@ class Notifier:
                 f.flush()
                 os.fsync(f.fileno())
         except Exception as e:
-            print(f"[ALERT][FATAL] 磁盘失败: {e}", file=sys.stderr, flush=True)
+            _notifier_logger.critical(f"[ALERT][FATAL] Disk write failed: {e}")
 
     def _init_email(self) -> Dict[str, Any]:
         """初始化SMTP配置"""

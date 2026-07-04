@@ -307,7 +307,7 @@ class EmergencyScanner(BaseScanner):
 
                 metrics.increment("scan_suspicious")
 
-                print(f"[SCAN][EMERGENCY][HIT] {file_path.name} 特征: {', '.join(found_features)}", flush=True)
+                logger.info(f"[SCAN][EMERGENCY][HIT] {file_path.name} features: {', '.join(found_features)}")
 
             return result
 

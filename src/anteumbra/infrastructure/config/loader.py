@@ -7,11 +7,14 @@
 @Motto: HACK THE REAL
 v1.7.8-Patch1：12-Factor 配置模式 — 敏感值从 .env / 环境变量读取
 """
+import logging
 import sys
 import os
 import re
 from pathlib import Path
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_env_value(value: str) -> str:
@@ -105,7 +108,7 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
             load_dotenv(dotenv_path, override=True)
         except ImportError:
             # 如果 python-dotenv 没安装，跳过（但会打印警告）
-            print(f"[CONFIG WARNING] .env 文件存在但 python-dotenv 未安装，跳过环境变量加载", file=sys.stderr)
+            logger.warning("[CONFIG WARNING] .env file exists but python-dotenv is not installed, skipping env var loading")
 
     try:
         # 读取并解析 TOML
@@ -127,11 +130,9 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
         return config
 
     except Exception as e:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print(f"[CONFIG FATAL] TOML解析失败: {config_file}", file=sys.stderr)
-        print(f"错误类型: {type(e).__name__}", file=sys.stderr)
-        print(f"错误信息: {str(e)}", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
+        logger.error("[CONFIG FATAL] TOML parse failed: %s", config_file)
+        logger.error("Error type: %s", type(e).__name__)
+        logger.error("Error message: %s", str(e))
         raise
 
 

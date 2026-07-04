@@ -40,7 +40,7 @@ class StdoutLoggerPlugin(Plugin, Notifier):
 
     @property
     def supported_events(self) -> List[str]:
-        return ["alert_requested", "file_scanned", "block_executed", "file_quarantined", "threat_graph_updated"]
+        return ["alert_requested", "file_scanned", "block_executed", "file_quarantined", "threat_graph_updated", "wal_archived", "wal_replayed"]
 
     def activate(self, config: Dict[str, Any]) -> None:
         self._color = config.get("color", True)
@@ -74,6 +74,12 @@ class StdoutLoggerPlugin(Plugin, Notifier):
             count = payload.get("active_profile_count", 0)
             top = payload.get("top_risk_score", 0)
             print(f"[STDOUT][{ts}] GRAPH   {count} profiles, top risk={top:.2f}")
+        elif event.event_type == "wal_archived":
+            ap = payload.get("archive_path", "?")
+            print(f"[STDOUT][{ts}] WAL-ARC {ap}")
+        elif event.event_type == "wal_replayed":
+            rc = payload.get("recovered_count", 0)
+            print(f"[STDOUT][{ts}] WAL-REP recovered {rc} records")
         elif self._verbose:
             payload_str = json.dumps(payload, ensure_ascii=False, default=str)[:200]
             print(f"[STDOUT][{ts}] {event.event_type} <- {event.source}: {payload_str}")

@@ -230,7 +230,7 @@ class ConfigRegistry:
                     raise RuntimeError("ConfigRegistry自动修复失败，_config仍为None")
             except Exception as e:
                 logger.error(f"[CONFIG] 自动修复异常: {e}", exc_info=True)
-                raise RuntimeError(f"ConfigRegistry状态污染且无法自动修复: {e}")
+                raise RuntimeError(f"ConfigRegistry状态污染且无法自动修复: {e}") from e
 
         # 未初始化：尝试自动初始化
         logger = cls._get_logger()
@@ -240,7 +240,7 @@ class ConfigRegistry:
                 cls.initialize()
                 return cls._config
             except Exception as e:
-                raise RuntimeError(f"工具脚本模式下配置自动初始化失败: {e}")
+                raise RuntimeError(f"工具脚本模式下配置自动初始化失败: {e}") from e
         else:
             raise RuntimeError("配置未初始化。请先调用ConfigRegistry.initialize()")
 

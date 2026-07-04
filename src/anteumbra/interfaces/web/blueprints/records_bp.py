@@ -59,7 +59,7 @@ def _enhance_records(raw_records):
         try:
             display_name = normalize_path(r.get("file_path", "")).name
         except Exception:
-            display_name = str(r.get("file_path", "")).split("\\")[-1].split("/")[-1]
+            display_name = Path(r.get("file_path", "")).name
         enhanced.append({
             "file_exists": r.get("file_exists", False),
             "alerted": r.get("alerted", False),
@@ -263,7 +263,7 @@ def get_record_detail():
             display_name = file_path_obj.name
             file_size = file_path_obj.stat().st_size if file_path_obj.exists() else 0
         except Exception:
-            display_name = file_path.split("\\")[-1].split("/")[-1]
+            display_name = Path(file_path).name
             file_size = 0
 
         from anteumbra.application.quarantine_service import get_quarantine_list

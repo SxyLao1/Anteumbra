@@ -13,6 +13,7 @@ v1.7.9 新增：WebShell 自动隔离模块
 - 线程安全（RLock）
 """
 import json
+import logging
 import os
 import re
 import shutil
@@ -26,6 +27,7 @@ from typing import Dict, List, Optional, Any
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
+logger = logging.getLogger("monitor.quarantine")
 
 # ============================================================================
 # 全局状态
@@ -80,7 +82,7 @@ def _load_db() -> List[Dict[str, Any]]:
             if records and any(r.get("quarantine_id") or r.get("status") for r in records[:1]):
                 return records
     except Exception:
-        pass
+        logger.debug("Repository load failed, falling back to JSON", exc_info=True)
 
     db_path = _get_db_path()
     if db_path.exists():
@@ -88,7 +90,7 @@ def _load_db() -> List[Dict[str, Any]]:
             with open(db_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
-            pass  # 文件损坏，fallthrough 到重建逻辑
+            logger.debug("JSON load failed, falling back to disk recovery", exc_info=True)
 
     # 数据库不存在或损坏，尝试从磁盘文件恢复
     qdir = _get_quarantine_dir()
@@ -141,9 +143,9 @@ def _repo_shadow_save_quarantine(records: List[Dict[str, Any]]) -> None:
                 try:
                     repo.save(key, dict(item))
                 except Exception:
-                    pass
+                    logger.debug("Repository shadow save quarantine item failed", exc_info=True)
     except Exception:
-        pass
+        logger.debug("Repository shadow save quarantine unavailable", exc_info=True)
 
 
 def _save_db(records: List[Dict[str, Any]]) -> None:
@@ -187,7 +189,7 @@ def quarantine_file(
     rule_name: str,
     features: List[str],
     original_path: str = None
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """
     隔离文件
 
@@ -355,7 +357,7 @@ def is_recently_restored(file_path: str) -> bool:
         if key in _recently_restored:
             del _recently_restored[key]
     except Exception:
-        pass
+        logger.debug("Failed to check recently restored whitelist", exc_info=True)
     return False
 
 

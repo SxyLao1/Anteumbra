@@ -16,6 +16,8 @@ from typing import Optional
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
+logger = logging.getLogger(__name__)
+
 
 def _is_tool_mode() -> bool:
     """检测是否为工具脚本模式"""
@@ -96,14 +98,14 @@ def _load_from_registry(symbol_key: str) -> str:
             # 符号不存在，记录调试信息
             if _is_tool_mode():
                 available = list(symbols_cfg.keys())
-                print(f"[CONFIG REGISTRY] 符号 '{symbol_key}' 不存在", file=sys.stderr)
-                print(f"[CONFIG REGISTRY] 可用符号: {available[:10]}", file=sys.stderr)
+                logger.debug(f"[CONFIG REGISTRY] Symbol '{symbol_key}' not found")
+                logger.debug(f"[CONFIG REGISTRY] Available symbols: {available[:10]}")
             return f"[UNKNOWN][{symbol_key}]"
 
     except Exception as e:
         # 仅在工具模式打印调试信息（避免生产环境噪音）
         if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true":
-            print(f"[CONFIG REGISTRY] 加载失败: {e}", file=sys.stderr)
+            logger.debug(f"[CONFIG REGISTRY] Load failed: {e}")
         return f"[UNKNOWN][{symbol_key}]"
 
 def _load_directly(symbol_key: str) -> str:
@@ -111,7 +113,7 @@ def _load_directly(symbol_key: str) -> str:
     try:
         config_file = normalize_path("config.toml")
         if not config_file.exists():
-            print(f"[CONFIG DIRECT] config.toml不存在: {config_file}", file=sys.stderr)
+            logger.warning(f"[CONFIG DIRECT] config.toml not found: {config_file}")
             return f"[UNKNOWN][{symbol_key}]"
 
         from config.loader import load_toml_config
@@ -119,20 +121,20 @@ def _load_directly(symbol_key: str) -> str:
 
         symbols_cfg = config.get("logging", {}).get("symbols", {})
         if symbol_key in symbols_cfg:
-            print(f"[CONFIG DIRECT] ✓ 直接加载: {symbol_key} = {symbols_cfg[symbol_key]}", file=sys.stderr)
+            logger.info(f"[CONFIG DIRECT] Direct load OK: {symbol_key} = {symbols_cfg[symbol_key]}")
             return symbols_cfg[symbol_key]
         else:
-            print(f"[CONFIG DIRECT] 符号 '{symbol_key}' 不存在", file=sys.stderr)
+            logger.warning(f"[CONFIG DIRECT] Symbol '{symbol_key}' not found")
             return f"[UNKNOWN][{symbol_key}]"
 
     except Exception as e:
-        print(f"[CONFIG DIRECT] 加载失败: {e}", file=sys.stderr)
+        logger.warning(f"[CONFIG DIRECT] Load failed: {e}")
         return f"[UNKNOWN][{symbol_key}]"
 
 
 def _load_fallback(symbol_key: str) -> str:
     """硬编码fallback（内置常见符号）"""
-    print(f"[CONFIG FALLBACK] ⚠ 使用硬编码符号: {symbol_key}", file=sys.stderr)
+    logger.warning(f"[CONFIG FALLBACK] Using hardcoded symbol: {symbol_key}")
 
     # 内置常见符号映射（与config.toml保持一致）
     fallback_symbols = {

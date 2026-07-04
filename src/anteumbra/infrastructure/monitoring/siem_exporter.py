@@ -197,7 +197,7 @@ def emit_detection_event(record: Dict[str, Any], category: str = "webshell.detec
         "id": record.get("id", ""),
         "detected_at": record.get("detected_at", ""),
         "file_path": record.get("file_path", ""),
-        "display_name": record.get("file_path", "").split("\\")[-1].split("/")[-1] if record.get("file_path") else "unknown",
+        "display_name": Path(record.get("file_path", "")).name if record.get("file_path") else "unknown",
         "features": record.get("features", []),
         "rule_name": record.get("features", [None])[0] if record.get("features") else "unknown",
         "category": category,

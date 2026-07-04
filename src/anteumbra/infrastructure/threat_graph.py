@@ -66,7 +66,7 @@ class ThreatGraph:
             self._management_ips = cfg.get('management', {}).get('ips', [])
             self._time_window = cfg.get('profiling', {}).get('time_window_hours', 4)
         except Exception:
-            pass
+            logger.debug("Failed to load threat graph config", exc_info=True)
 
     def _is_management_ip(self, ip: str) -> bool:
         """检查是否管理IP——这些IP不参与画像但监控层仍会告警"""
@@ -79,7 +79,7 @@ class ThreatGraph:
                     if ipaddress.ip_address(ip) in ipaddress.ip_network(entry, strict=False):
                         return True
                 except Exception:
-                    pass
+                    logger.debug("CIDR check failed for management IP entry", exc_info=True)
             if ip == entry:
                 return True
         return False
@@ -446,9 +446,9 @@ class ThreatGraph:
                 try:
                     repo.save(pid, dict(pd))
                 except Exception:
-                    pass
+                    logger.debug("Repository shadow persist profile item failed", exc_info=True)
         except Exception:
-            pass
+            logger.debug("Repository shadow persist unavailable", exc_info=True)
 
     def load(self):
         """从持久化文件加载。
@@ -476,7 +476,7 @@ class ThreatGraph:
                             profiles_dict[pid] = pd
                     data = {"profiles": profiles_dict, "ip_table": {}}
         except Exception:
-            pass
+            logger.debug("Repository load failed, falling back to JSON", exc_info=True)
 
         # Fallback: load from JSON file
         if data is None:

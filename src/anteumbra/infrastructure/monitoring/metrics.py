@@ -127,4 +127,4 @@ def preload_metrics():
         logger.info("[METRICS][PERSIST] 持久化线程已启动")
 
     except Exception as e:
-        print(f"[WARN][METRICS] 预热失败: {e}", file=sys.stderr)
+        logging.getLogger("monitor.metrics").warning(f"[METRICS] Preload failed: {e}")

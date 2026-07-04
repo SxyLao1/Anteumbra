@@ -404,7 +404,7 @@ def get_metric(metric_name):
         except Exception as e:
             # Windows权限问题或psutil未安装
             metrics._stats["memory_mb"] = 0
-            print(f"[WARNING][METRICS] 内存监控失败: {e}", file=sys.stderr)
+            current_app.logger.warning(f"[METRICS] Memory monitoring failed: {e}")
 
         data = metrics.get()
 
@@ -709,35 +709,4 @@ def admin_health():
 # v1.8.4: 安全文件内容查看器
 # ═══════════════════════════════════════════════════════════════
 
-MAX_VIEW_SIZE = 512 * 1024  # 512KB 上限
-
-
-def _verify_file_in_registry(file_path: str) -> bool:
-    """验证文件是否在 Registry 中（白名单）"""
-    try:
-        from anteumbra.application.registry_service import get_all
-        from anteumbra.infrastructure.utils.path_utils import path_to_key
-        target = path_to_key(file_path)
-        for record in get_all(include_deleted=True):
-            if record.get("file_path") == target:
-                return True
-        return False
-    except Exception:
-        return False
-
-
-def _verify_file_in_quarantine(qid: str) -> Optional[Path]:
-    """验证 quarantine_id 是否在隔离库中，返回隔离路径或 None"""
-    try:
-        from anteumbra.application.quarantine_service import get_quarantine_detail
-        record = get_quarantine_detail(qid)
-        if record:
-            qpath = record.get("quarantine_path", "")
-            if qpath and Path(qpath).exists():
-                return Path(qpath)
-        return None
-    except Exception:
-        return None
-
-
-# v1.0.5: _html_escape removed — use _shared.html_escape (markupsafe.escape) instead
+# v1.0.5: _verify_file_in_registry / _verify_file_in_quarantine removed — use _shared.py versions

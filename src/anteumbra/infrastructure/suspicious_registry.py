@@ -234,12 +234,12 @@ def _add_record_direct(registry_data: List[Dict], file_path: Path, features: Lis
 def replay_wal_manually():
     """手动触发WAL重放（测试或灾难恢复时调用）- v1.8.4: 使用 wal_manager"""
 
+    logger = logging.getLogger("monitor.suspicious_registry.wal")
+
     entries = wal_manager.read_entries()
     if not entries:
-        print("WAL文件不存在或为空")
+        logger.info("WAL file not found or empty")
         return 0
-
-    logger = logging.getLogger("monitor.suspicious_registry.wal")
     if not logger.handlers:
         logger.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -328,7 +328,7 @@ def _shutdown_async_saver():
             try:
                 _async_save_queue.put(None)
             except Exception:
-                pass
+                _get_logger().debug("Async save queue put failed during shutdown", exc_info=True)
 
         if _async_save_thread and _async_save_thread.is_alive():
             _async_save_thread.join(timeout=5.0)
@@ -419,12 +419,12 @@ def _repo_load_registry() -> Optional[List[Dict]]:
                             if isinstance(parsed, list):
                                 r[field] = parsed
                         except (json.JSONDecodeError, TypeError):
-                            pass
+                            _get_logger().debug("Failed to deserialize features field from Repository", exc_info=True)
             logger = logging.getLogger("monitor.suspicious_registry")
             logger.info(f"[REGISTRY] 从 Repository 加载 {len(records)} 条记录 (backend={backend})")
             return records
     except Exception:
-        pass
+        _get_logger().debug("Repository load failed, falling back to JSON", exc_info=True)
     return None
 
 
@@ -520,9 +520,9 @@ def _repo_shadow_save(data: List[Dict]):
                 try:
                     repo.save(key, dict(item))
                 except Exception:
-                    pass
+                    _get_logger().debug("Repository shadow save item failed", exc_info=True)
     except Exception:
-        pass  # Repository not available or write failed — non-critical
+        _get_logger().debug("Repository shadow save unavailable", exc_info=True)
 
 
 def _save_registry_sync(data: List[Dict]):
@@ -606,7 +606,7 @@ def _save_registry_sync(data: List[Dict]):
                 fallback_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
                 logger.critical(f"[REGISTRY][FALLBACK] 已写入紧急备份: {fallback_path}")
             except Exception:
-                pass
+                _get_logger().debug("Emergency backup write failed", exc_info=True)
 
     # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
     _repo_shadow_save(data)
@@ -701,7 +701,7 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
                         "detection_source": detection_source,
                     })
             except Exception:
-                pass
+                _get_logger().debug("PluginManager emit record_added failed", exc_info=True)
 
             log_with_symbol("registry_add", "info", f"{file_path.name} | 特征: {', '.join(features[:3])}")
 
@@ -756,7 +756,7 @@ def mark_alerted(file_path: Path):
                             "file_path": abs_path,
                         })
                 except Exception:
-                    pass
+                    _get_logger().debug("PluginManager emit registry_changed (mark_alerted) failed", exc_info=True)
                 break
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
@@ -787,7 +787,7 @@ def mark_quarantined(file_path: str, quarantine_id: str):
                             "quarantine_id": quarantine_id,
                         })
                 except Exception:
-                    pass
+                    _get_logger().debug("PluginManager emit registry_changed (mark_quarantined) failed", exc_info=True)
                 break
     except Exception as e:
         log_with_symbol("error_registry_save", "error", f"标记隔离失败: {e}")
@@ -835,7 +835,7 @@ def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
                     "reason": reason,
                 })
         except Exception:
-            pass
+            logger.debug("PluginManager emit registry_changed (mark_false_positive) failed", exc_info=True)
 
         logger.info(f"[REGISTRY][FALSE_POSITIVE] 已标记误报: {abs_path}")
         return True
@@ -903,7 +903,7 @@ def increment_access(file_path: Path, ip: str):
                     "ip": ip,
                 })
         except Exception:
-            pass
+            _get_logger().debug("PluginManager emit registry_changed (increment_access) failed", exc_info=True)
 
     except Exception as e:
         log_with_symbol("error_increment", "error", f"异常: {e}", _get_logger())
@@ -969,7 +969,7 @@ def remove(file_path: Union[Path, str]) -> bool:
                     "file_path": abs_path,
                 })
         except Exception:
-            pass
+            logger.debug("PluginManager emit registry_changed (remove) failed", exc_info=True)
 
         return True
 
@@ -986,7 +986,7 @@ def _trigger_registry_update_event():
         marker = normalize_path("data/registry_update.marker")
         marker.write_text(str(time.time()))
     except Exception:
-        pass
+        _get_logger().debug("Registry update marker write failed", exc_info=True)
 
 def get(path: Path) -> Optional[Dict]:
     """获取单条记录"""
@@ -1080,7 +1080,7 @@ def soft_delete_record(file_path: Union[Path, str]) -> bool:
                             "file_path": abs_path,
                         })
                 except Exception:
-                    pass
+                    _get_logger().debug("PluginManager emit registry_changed (soft_delete) failed", exc_info=True)
 
                 return True
         return False
@@ -1101,6 +1101,7 @@ def get_async_save_queue_size() -> int:
     try:
         return _async_save_queue.qsize()
     except Exception:
+        _get_logger().debug("Failed to get async save queue size", exc_info=True)
         return 0
 
 

@@ -7,12 +7,15 @@
 @Motto: HACK THE REAL
 v1.7.6: 密码操作核心库（Web + CLI 共用）
 """
+import logging
 import re
 from pathlib import Path
 from typing import Tuple, Set
 from werkzeug.security import generate_password_hash
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path
+
+logger = logging.getLogger(__name__)
 
 # 弱口令字典缓存（全局单例，避免重复I/O）
 _WEAK_PASSWORDS_CACHE: Set[str] = set()
@@ -46,7 +49,7 @@ def load_weak_passwords() -> Set[str]:
             })
         except Exception as e:
             # 加载失败时返回空集合（不阻塞功能）
-            print(f"⚠️  加载弱口令字典失败: {e}", file=__import__('sys').stderr)
+            logger.warning(f"Failed to load weak password dictionary: {e}")
             _WEAK_PASSWORDS_CACHE = set()
     else:
         # 文件不存在时使用内置最小集合

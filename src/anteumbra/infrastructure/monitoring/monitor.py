@@ -224,7 +224,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self._cleanup_cache()
 
         except Exception:
-            pass
+            self.logger.debug("Failed to record directory in cache", exc_info=True)
 
     def _cleanup_cache(self):
         """
@@ -271,7 +271,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self._path_aliases[dest_key] = src_key
 
         except Exception:
-            pass
+            self.logger.debug("Failed to update cache on move", exc_info=True)
 
     # ===== 以下方法保持原有逻辑 =====
 
@@ -290,7 +290,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("skip_size", "info", f"大小超限: {event_path.name}", self.logger)
                 return False
         except Exception:
-            pass
+            self.logger.debug("Failed to check file size for monitoring decision", exc_info=True)
 
         config = ConfigRegistry.get_raw_config()
         website_cfg = config.get("website", {})
@@ -338,7 +338,7 @@ class FileMonitorHandler(FileSystemEventHandler):
             status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
             status["block_device_count"] = len(blocker_cfg.get("devices", []))
         except Exception:
-            pass
+            self.logger.debug("Failed to read system status from config", exc_info=True)
         return status
 
     # ── v1.0.9: EDA bridge helpers (Surgery 4 completion) ─────
@@ -361,7 +361,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                     **extra,
                 })
         except Exception:
-            pass
+            self.logger.debug("PluginManager emit alert_requested failed", exc_info=True)
 
     def _emit_file_quarantined(self, file_path: str, rule_name: str,
                                features: list, original_path: str,
@@ -379,7 +379,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                     "first_seen_ip": first_seen_ip,
                 })
         except Exception:
-            pass
+            self.logger.debug("PluginManager emit file_quarantined failed", exc_info=True)
 
     def _flush_batch_notify(self):
         """v1.0.9: emit batch notification via event bus → notifier_handler."""
@@ -548,7 +548,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                         "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
                     })
             except Exception:
-                pass
+                self.logger.debug("PluginManager emit file_scanned failed", exc_info=True)
 
             if scan_result and scan_result.is_suspicious:
                 log_with_symbol("scan_hit", "critical",
@@ -594,7 +594,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                     except (ValueError, TypeError, AttributeError):
                                         pass
                     except Exception:
-                        pass
+                        self.logger.debug("Failed to parse WAF event log for IP resolution", exc_info=True)
 
                     # Source 2: LogAnalyzer — Apache/Nginx access log (正则解析)
                     if first_seen_ip == "127.0.0.1":
@@ -611,7 +611,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                         f"(hits: {result['suspicious_ips'][best_ip]}, log: {result.get('log_path', '?')})"
                                     )
                         except Exception:
-                            pass
+                            self.logger.debug("LogAnalyzer failed to resolve attacker IP", exc_info=True)
 
                     # v1.0.9: Critical detection alert via event bus → notifier_handler
                     self._emit_alert("local_detection", str(event_path),
@@ -627,7 +627,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                         from anteumbra.infrastructure.config.registry import ConfigRegistry
                         quarantine_enabled = ConfigRegistry.get_raw_config().get('quarantine', {}).get('auto_quarantine_enabled', True)
                     except Exception:
-                        pass
+                        self.logger.debug("Failed to read quarantine config", exc_info=True)
 
                     if not quarantine_enabled:
                         self.logger.info(f"[QUARANTINE] 总开关关闭，跳过隔离: {event_path.name}")
@@ -878,7 +878,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                         is_quarantined = True
                         break
             except Exception:
-                pass
+                self.logger.debug("Failed to check quarantine status for deleted file", exc_info=True)
 
             if is_quarantined:
                 log_with_symbol("quarantine_add", "info",

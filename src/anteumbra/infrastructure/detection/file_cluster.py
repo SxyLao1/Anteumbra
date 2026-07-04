@@ -69,7 +69,7 @@ class FileCluster:
     @property
     def sample_files(self) -> List[str]:
         """返回簇中文件名示例"""
-        return [p.rsplit('\\', 1)[-1].rsplit('/', 1)[-1] for p in list(self.files.keys())[:5]]
+        return [Path(p).name for p in list(self.files.keys())[:5]]
 
 
 class FileClusterEngine:
