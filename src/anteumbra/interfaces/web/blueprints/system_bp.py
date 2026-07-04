@@ -6,6 +6,7 @@ Routes: /system/* (9) — four-quadrant system management + operations
 import base64
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ from anteumbra.application.registry_service import (
 )
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
+
+logger = logging.getLogger(__name__)
 
 system_bp = Blueprint('system', __name__, url_prefix='/admin')
 
@@ -44,7 +47,7 @@ def system_management():
                     sessions = list(session_path.glob("*.sess"))
                     session_count = len(sessions)
         except Exception:
-            pass
+            logger.debug("Failed to count session files in system_management", exc_info=True)
 
         return render_template(
             'admin/system_management.html',

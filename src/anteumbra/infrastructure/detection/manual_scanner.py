@@ -265,7 +265,7 @@ class ManualScanner:
                 try:
                     progress_callback(result)
                 except Exception:
-                    pass
+                    logger.debug("Progress callback failed during scan_directory", exc_info=True)
 
         # ── 完成 ──
         result.status = "completed"
@@ -282,7 +282,7 @@ class ManualScanner:
             try:
                 progress_callback(result)
             except Exception:
-                pass
+                logger.debug("Final progress callback failed in scan_directory", exc_info=True)
 
         return result
 

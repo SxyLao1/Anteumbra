@@ -433,7 +433,7 @@ class LogMonitor:
                         sys_status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
                         sys_status["block_device_count"] = len(blocker_cfg.get("devices", []))
                     except Exception:
-                        pass
+                        self.logger.debug("Failed to read system status config for alert context", exc_info=True)
                     ctx = {
                         "alert_type": "webshell_access",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),

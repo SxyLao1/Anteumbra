@@ -100,6 +100,7 @@ _async_save_enabled = False
 _async_save_interval = 60
 _async_running = False
 _async_lock = threading.Lock()
+_snapshot_lock = threading.Lock()
 _last_registry_snapshot: Optional[List[Dict]] = None  # 数据快照
 
 _save_lock = threading.Lock()  # 文件写入锁
@@ -464,8 +465,9 @@ def _load_registry() -> List[Dict]:
 
     # v1.7.9: 优先使用内存快照（避免异步保存未刷盘时读到旧数据）
     global _last_registry_snapshot
-    if _last_registry_snapshot is not None:
-        return _normalize_registry_format(_last_registry_snapshot)
+    with _snapshot_lock:
+        if _last_registry_snapshot is not None:
+            return _normalize_registry_format(_last_registry_snapshot)
 
     # v2.0: Try Repository first (SQLite primary)
     repo_data = _repo_load_registry()
@@ -615,7 +617,8 @@ def _save_registry(data: List[Dict]):
     """保存注册表（根据配置自动选择同步或异步）"""
     global _last_registry_snapshot
 
-    _last_registry_snapshot = data
+    with _snapshot_lock:
+        _last_registry_snapshot = data
 
     if _async_save_enabled:
         _queue_async_save(data)

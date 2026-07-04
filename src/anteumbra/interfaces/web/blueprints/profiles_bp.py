@@ -6,6 +6,7 @@ v1.9.0: Profiles Blueprint — 威胁画像 + 文件聚类
 路由前缀: /admin/profiles/*, /admin/file-clusters, /admin/clusters/*
 """
 from datetime import datetime
+import logging
 from pathlib import Path
 
 from flask import (
@@ -14,6 +15,8 @@ from flask import (
 )
 
 from anteumbra.interfaces.web.auth import require_auth
+
+logger = logging.getLogger(__name__)
 
 # ── Blueprint ──────────────────────────────────────────────
 
@@ -185,7 +188,7 @@ def profile_detail_page(profile_id):
                     unique_clusters.append(fc)
             file_clusters = unique_clusters
         except Exception:
-            pass
+            logger.debug("Failed to load file cluster data for profile detail", exc_info=True)
 
         # Linked records (bidirectional link)
         linked_records = []
@@ -212,7 +215,7 @@ def profile_detail_page(profile_id):
                         })
                         break
         except Exception:
-            pass
+            logger.debug("Failed to load linked records for profile detail", exc_info=True)
 
         return render_template('admin/profile_detail.html',
             profile=profile, ip_details=ip_details,

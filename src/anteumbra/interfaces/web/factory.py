@@ -20,6 +20,8 @@ from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from flask_wtf.csrf import generate_csrf
 
+logger = logging.getLogger(__name__)
+
 # 全局应用实例
 _app_instance: Optional[Flask] = None
 
@@ -187,5 +189,5 @@ def run_app(host: str = "127.0.0.1", port: int = 8080, threaded: bool = True):
         WSGIRequestHandler.server_version = ""    # 清掉 Werkzeug 版本
         WSGIRequestHandler.sys_version = ""       # 清掉 Python 版本
     except Exception:
-        pass
+        logger.debug("Failed to suppress Werkzeug server version headers", exc_info=True)
     app.run(host=host, port=port, threaded=threaded, debug=False)

@@ -363,7 +363,7 @@ class IPBlocker:
             import os
             os.replace(tmp, self._persist_path)
         except Exception:
-            pass
+            logger.debug("Failed to persist retry queue to disk", exc_info=True)
 
     def _load_retry_queue(self):
         if not self._persist_path:

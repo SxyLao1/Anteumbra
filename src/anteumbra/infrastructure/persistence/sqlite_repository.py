@@ -564,7 +564,7 @@ class DualWriteRepository:
             if r:
                 return r
         except Exception:
-            pass
+            logger.debug("SQLite get failed for record %s, falling back to JSON", record_id, exc_info=True)
         return self._json.get(record_id)
 
     def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
@@ -585,7 +585,7 @@ class DualWriteRepository:
         try:
             self._sql.delete(record_id)
         except Exception:
-            pass
+            logger.debug("SQLite delete failed for record %s, JSON delete was OK", record_id, exc_info=True)
         return ok
 
     def count(self, filters: Optional[Dict[str, Any]] = None) -> int:

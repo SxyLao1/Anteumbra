@@ -31,8 +31,6 @@ from flask import (
 from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
-import shutil
-
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.application.registry_service import get_all, remove
@@ -44,12 +42,13 @@ from anteumbra.infrastructure.utils.sse_manager import register_sse_client, unre
 from anteumbra.infrastructure.utils.password_utils import check_password_strength, update_password_hash_in_config
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 
+logger = logging.getLogger(__name__)
+
 # 创建Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # v1.9.0: 扫描结果缓存（供报告生成使用，1小时TTL）
 
-import json as _stdlib_json
 from flask_wtf.csrf import generate_csrf
 
 @admin_bp.context_processor
@@ -130,7 +129,7 @@ def overview():
                         html_parts.append(f'<div class="log-line">{safe_line}</div>')
                     log_history_html = ''.join(html_parts)
         except Exception:
-            pass
+            logger.debug("Failed to read monitor.log for overview log history", exc_info=True)
 
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
@@ -462,7 +461,7 @@ def metrics_page():
         m = get_metrics()
         data = m.get()
     except Exception:
-        pass
+        logger.debug("Failed to fetch metrics data for metrics_page", exc_info=True)
     ctx = {
         "metrics": data,
         "warning_threshold": 1,

@@ -19,7 +19,10 @@ YARA 扫描前自动尝试还原混淆代码为明文，大幅提升命中率。
 
 import base64
 import codecs
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class WebShellDecoder:
@@ -217,5 +220,5 @@ class WebShellDecoder:
                     # (don't execute, just provide the pattern for YARA to match)
                     text += f"\n/* decoded: {decoded} */"
             except Exception:
-                pass
+                logger.debug("Base64 decode attempt failed for string in _decode_base64_strings", exc_info=True)
         return text

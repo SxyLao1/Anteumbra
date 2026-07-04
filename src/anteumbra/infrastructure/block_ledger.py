@@ -178,7 +178,8 @@ def get_entries(
     search: str = "",
 ) -> tuple:
     """获取台账条目列表，返回 (entries, total)"""
-    entries = _load()
+    with _LEDGER_LOCK:
+        entries = _load()
     # 筛选
     if source_filter and source_filter != "all":
         entries = [e for e in entries if e.get("source") == source_filter]
@@ -195,7 +196,9 @@ def get_entries(
 
 def get_by_ip(ip: str) -> Optional[Dict]:
     """查询单个 IP 的封禁记录"""
-    for entry in _load():
+    with _LEDGER_LOCK:
+        entries = _load()
+    for entry in entries:
         if entry.get("ip") == ip:
             return entry
     return None
@@ -203,7 +206,8 @@ def get_by_ip(ip: str) -> Optional[Dict]:
 
 def get_stats() -> Dict:
     """获取台账统计"""
-    entries = _load()
+    with _LEDGER_LOCK:
+        entries = _load()
     today = datetime.now().strftime("%Y-%m-%d")
     auto_count = sum(1 for e in entries if e.get("source") == "auto")
     manual_count = sum(1 for e in entries if e.get("source") == "manual")
@@ -218,7 +222,8 @@ def get_stats() -> Dict:
 
 def export_ledger(fmt: str = "json") -> str:
     """导出台账数据"""
-    entries = _load()
+    with _LEDGER_LOCK:
+        entries = _load()
     if fmt == "csv":
         import io
         output = io.StringIO()

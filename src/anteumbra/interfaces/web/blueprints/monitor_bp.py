@@ -27,9 +27,12 @@ from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.utils.sse_manager import (
     register_sse_client, unregister_sse_client, _sse_clients, persist_log_line,
+    _sse_lock,
 )
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 from anteumbra.interfaces.web.blueprints._shared import require_auth_except_sse
+
+logger = logging.getLogger(__name__)
 
 monitor_bp = Blueprint('monitor', __name__, url_prefix='/admin')
 
@@ -60,10 +63,11 @@ def stream_logs():
         'total': _to_int(web_admin_cfg.get("sse_max_total_clients", 20), 20)
     }
 
-    ip_connections = [
-        q for q in _sse_clients
-        if getattr(q, '_client_ip', None) == client_ip
-    ]
+    with _sse_lock:
+        ip_connections = [
+            q for q in _sse_clients
+            if getattr(q, '_client_ip', None) == client_ip
+        ]
     ip_client_count = len(ip_connections)
 
     if ip_client_count >= limits['per_ip']:
@@ -125,7 +129,7 @@ def stream_logs():
                 try:
                     f.seek(0, 2)
                 except Exception:
-                    pass
+                    logger.debug("Failed to seek to end of log file in SSE stream", exc_info=True)
             else:
                 f = open(log_file, 'r', encoding='utf-8', errors='ignore', buffering=1)
                 f.seek(0, 2)
@@ -166,7 +170,9 @@ def stream_logs():
         finally:
             if client_queue:
                 unregister_sse_client(client_queue)
-                logger.debug(f"[SSE] client {client_ip} disconnected, {len(_sse_clients)} remaining")
+                with _sse_lock:
+                    remaining = len(_sse_clients)
+                logger.debug(f"[SSE] client {client_ip} disconnected, {remaining} remaining")
 
     response = Response(
         stream_with_context(generate()),
@@ -465,7 +471,7 @@ def config_history():
             if '[CONFIG][RELOAD]' in line or '[CONFIG][START]' in line:
                 history.append(line)
     except Exception:
-        pass
+        logger.debug("Failed to read config reload history from system.log", exc_info=True)
 
     if not history:
         return "<p style='color: #888;'>No config reload records</p>"

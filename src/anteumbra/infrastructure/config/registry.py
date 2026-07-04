@@ -174,7 +174,7 @@ class ConfigRegistry:
                 try:
                     cls._lock.release()
                 except RuntimeError:
-                    pass
+                    cls._get_logger().debug("Failed to release config lock (already released)", exc_info=True)
 
     @classmethod
     def reset(cls):
@@ -206,7 +206,7 @@ class ConfigRegistry:
                 try:
                     cls._lock.release()
                 except RuntimeError:
-                    pass
+                    cls._get_logger().debug("Failed to release config lock (already released)", exc_info=True)
 
     @classmethod
     def get_raw_config(cls) -> Dict:

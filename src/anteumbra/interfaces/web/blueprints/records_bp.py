@@ -7,6 +7,7 @@ v1.9.0: Records Blueprint — 检测记录 + 审计日志 + 文件查看器
          /admin/mark_false_positive/*, /admin/audit, /admin/file/*
 """
 import json
+import logging
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -26,6 +27,8 @@ from anteumbra.infrastructure.utils.sse_manager import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_registry, verify_file_in_quarantine, html_escape,
 )
+
+logger = logging.getLogger(__name__)
 
 # ── Blueprint ──────────────────────────────────────────────
 
@@ -288,7 +291,7 @@ def get_record_detail():
                     })
             linked_profiles.sort(key=lambda p: p["risk_score"], reverse=True)
         except Exception:
-            pass
+            logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 
         detail = {
             "file_path": file_path, "display_name": display_name,

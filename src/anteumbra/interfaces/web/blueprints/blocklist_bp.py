@@ -5,12 +5,16 @@ v1.9.0: Blocklist Blueprint — IP 封禁台账 + 封禁 API
 从 admin_bp.py 拆分。
 路由前缀: /admin/blocklist/*, /admin/api/v1/blocklist/*, /admin/block/*
 """
+import logging
+
 from flask import (
     Blueprint, render_template, request, jsonify,
     Response, current_app
 )
 
 from anteumbra.interfaces.web.auth import require_auth
+
+logger = logging.getLogger(__name__)
 
 # ── Blueprint ──────────────────────────────────────────────
 
@@ -45,7 +49,7 @@ def blocklist_add():
                     if profile.risk_score >= 0.7:
                         source = "auto"
             except Exception:
-                pass
+                logger.debug("Failed to auto-generate block reason from threat profile", exc_info=True)
 
         from anteumbra.application.ip_blocker_service import get_ip_blocker
         blocker = get_ip_blocker()

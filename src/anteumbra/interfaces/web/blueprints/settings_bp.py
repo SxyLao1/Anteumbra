@@ -4,6 +4,7 @@ v1.0.6: Settings Blueprint — extracted from admin_bp.py
 Routes: /settings/* (11) + /siem/* (2)
 """
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from flask import Blueprint, render_template, request, jsonify, current_app, ses
 from anteumbra.infrastructure.config.loader import load_config
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
+
+logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/admin')
 
@@ -162,7 +165,7 @@ def settings_config_save():
         try:
             ConfigRegistry.initialize(force=True)
         except Exception:
-            pass
+            logger.debug("ConfigRegistry re-initialization failed after config save", exc_info=True)
         return jsonify({'success': True, 'message': 'Config saved'})
     except Exception as e:
         current_app.logger.error(f'[SETTINGS] config save failed: {e}', exc_info=True)
@@ -255,7 +258,7 @@ def settings_env_save():
         try:
             ConfigRegistry.initialize(force=True)
         except Exception:
-            pass
+            logger.debug("ConfigRegistry re-initialization failed after .env save", exc_info=True)
 
         return jsonify({'success': True, 'message': '.env saved + config reloaded'})
     except Exception as e:

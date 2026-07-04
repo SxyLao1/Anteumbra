@@ -434,7 +434,7 @@ def quick_scan_yara(file_path: Path, scan_options: ScanOptions, logger: logging.
                             engine="decoder+yara")
                         logger.info(f"[DECODER] Hit after decode: {file_path.name} -> {', '.join(features[:3])}")
         except Exception:
-            pass  # Decoder failed, use original scan result
+            logger.debug("Decoder pass failed in quick_scan_yara, using original scan result", exc_info=True)
 
     # ===== 3. 日志记录（v1.7.9: add()移到_do_scan统一管理，避免遗漏）=====
     if result.is_suspicious:

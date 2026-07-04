@@ -128,7 +128,7 @@ class SIEMExporter:
             try:
                 self._sock.close()
             except Exception:
-                pass
+                logger.debug("Failed to close syslog socket during reconnect", exc_info=True)
             self._connect_syslog()
 
     def _check_rotate(self) -> None:
@@ -172,22 +172,25 @@ class SIEMExporter:
             try:
                 self._sock.close()
             except Exception:
-                pass
+                logger.debug("Failed to close syslog socket during exporter shutdown", exc_info=True)
             self._sock = None
 
 
 # ── Singleton ──────────────────────────────────────────
 
 _exporter: Optional[SIEMExporter] = None
+_exporter_lock = threading.Lock()
 
 
 def get_siem_exporter() -> SIEMExporter:
-    """Get or create singleton SIEM exporter from config."""
+    """Get or create singleton SIEM exporter from config (thread-safe)."""
     global _exporter
     if _exporter is None:
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
-        cfg = ConfigRegistry.get_raw_config().get("siem", {})
-        _exporter = SIEMExporter(cfg)
+        with _exporter_lock:
+            if _exporter is None:
+                from anteumbra.infrastructure.config.registry import ConfigRegistry
+                cfg = ConfigRegistry.get_raw_config().get("siem", {})
+                _exporter = SIEMExporter(cfg)
     return _exporter
 
 

@@ -9,6 +9,7 @@ import hashlib
 import logging
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from anteumbra.infrastructure.detection.hash_engine import HashEngine, get_hash_engine
@@ -54,7 +55,7 @@ class FileCluster:
                             sim = 0.85
                             logger.info(f"[CLUSTER] Small file fallback: {_os.path.basename(file_path)} ~ {_os.path.basename(first_file)}")
             except Exception:
-                pass
+                logger.debug("Small file size fallback check failed in cluster add_file", exc_info=True)
 
         if sim >= 0.80:
             self.files[file_path] = hash_value

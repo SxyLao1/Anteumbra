@@ -101,7 +101,7 @@ class WAFPoller:
                     self._dest_ips = ['127.0.0.1']
             logger.info(f"[WAF_POLLER] Destination IP filter: {self._dest_ips}")
         except Exception:
-            pass
+            logger.debug("Failed to load WAF poller config for dest_ips", exc_info=True)
         # 确定缓存文件路径
         self._cache_path = normalize_path("data/waf_events.jsonl")
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,7 +136,7 @@ class WAFPoller:
                     self._last_poll_time = datetime.fromisoformat(evt["timestamp"])
                     logger.info(f"[WAF_POLLER] Checkpoint restored: {self._last_poll_time}")
         except Exception:
-            pass
+            logger.debug("Failed to load WAF checkpoint from cache file", exc_info=True)
 
     def _poll_loop(self):
         while self._running:
