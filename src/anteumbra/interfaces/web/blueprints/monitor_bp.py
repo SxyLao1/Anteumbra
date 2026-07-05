@@ -120,6 +120,12 @@ def stream_logs():
             client_queue._client_ip = client_ip
             yield "data: [SSE] Connected to log stream...\n\n"
 
+            # v1.0.10: 确保日志文件存在（首次运行 / 新网站尚无 monitor.log）
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            if not log_file.exists():
+                log_file.touch()
+                logger.info(f"[SSE] Log file created: {log_file}")
+
             if sys.platform == "win32":
                 f = open(log_file, 'r', encoding='utf-8', errors='ignore', buffering=1)
                 try:
