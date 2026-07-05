@@ -26,6 +26,73 @@ logger = logging.getLogger(__name__)
 _app_instance: Optional[Flask] = None
 
 
+def _ensure_password_configured():
+    """首次运行：如果密码未配置，自动生成随机密码并写入 .env 文件。
+
+    优先级：环境变量 > .env 文件 > 自动生成
+    """
+    from pathlib import Path as _Path
+    import string as _string
+
+    # 获取已加载的配置路径（ConfigRegistry 初始化后已设置）
+    cfg_path = _Path(ConfigRegistry._config_path) if ConfigRegistry._config_path else None
+    if cfg_path is None or not cfg_path.exists():
+        logger.debug("Config path unknown, skipping password auto-setup")
+        return
+    root = cfg_path.parent
+
+    # 检查 ANTEUMBRA_PASSWORD_HASH 是否已设置（环境变量或已加载的配置）
+    cfg = ConfigRegistry.get_raw_config()
+    pw_hash = cfg.get("web_admin", {}).get("password_hash", "")
+
+    # 如果已配置有效 hash（非空且非占位符），跳过
+    if pw_hash and not pw_hash.startswith("${"):
+        return
+
+    # 检查 .env 文件是否已有 ANTEUMBRA_PASSWORD_HASH
+    env_file = root / ".env"
+    env_has_pw = False
+    if env_file.exists():
+        env_has_pw = "ANTEUMBRA_PASSWORD_HASH" in env_file.read_text(encoding="utf-8")
+
+    if env_has_pw:
+        # .env 已存在但 initialize 没读到——重新加载
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(str(env_file), override=True)
+            ConfigRegistry.initialize(str(cfg_path), force=True)
+            return
+        except Exception:
+            logger.debug("Failed to reload .env for password setup", exc_info=True)
+            return
+
+    # 生成随机密码
+    import secrets as _secrets
+    pwd = ''.join(_secrets.choice(_string.ascii_letters + _string.digits) for _ in range(12))
+    from werkzeug.security import generate_password_hash
+    h = generate_password_hash(pwd)
+
+    # 写入 .env 文件
+    env_file.write_text(
+        f"# Anteumbra auto-generated admin password hash\n"
+        f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
+        f"ANTEUMBRA_PASSWORD_HASH={h}\n",
+        encoding="utf-8"
+    )
+
+    # 设置环境变量，重新初始化让配置生效
+    os.environ["ANTEUMBRA_PASSWORD_HASH"] = h
+    ConfigRegistry.initialize(str(cfg_path), force=True)
+
+    # 打印凭据
+    print(f"\n{'='*60}")
+    print(f"  Anteumbra — 首次运行")
+    print(f"  管理员账号: admin")
+    print(f"  管理员密码: {pwd}")
+    print(f"  (已写入 {env_file})")
+    print(f"{'='*60}\n")
+
+
 def create_app(config_path: str = None) -> Flask:
     """创建Flask应用实例
 
@@ -48,6 +115,9 @@ def create_app(config_path: str = None) -> Flask:
             ConfigRegistry.initialize(str(cwd_config))
         else:
             ConfigRegistry.initialize()
+
+    # v1.0.9: 首次运行 — 密码为空则自动生成随机密码写入 .env
+    _ensure_password_configured()
 
     # 先静默werkzeug横幅
     from anteumbra.application.logging_service import silence_werkzeug

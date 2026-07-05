@@ -26,10 +26,16 @@ PID_FILE = Path("data/anteumbra.pid")
 
 
 def _find_project_root() -> Path:
-    """Walk up from cwd to find package root (contains config.toml or setup.py)."""
+    """Walk up from cwd to find project root.
+
+    Checks for: config.toml, pyproject.toml, or a running instance's PID file.
+    The PID file check lets 'anteumbra status' work from any directory.
+    """
     d = Path.cwd().resolve()
     for _ in range(6):
-        if (d / "config.toml").exists() or (d / "pyproject.toml").exists():
+        if ((d / "config.toml").exists()
+            or (d / "pyproject.toml").exists()
+            or (d / "data" / "anteumbra.pid").exists()):
             return d
         if d.parent == d:
             break
@@ -267,7 +273,27 @@ def config(output):
 
     shutil.copy(template, target)
     click.echo(f"Config template written to {target}")
-    click.echo("Edit it to configure websites, WAF, notifications, etc.")
+
+    # v1.0.9: 同时生成 .env 文件（含随机管理员密码）
+    env_file = target.parent / ".env"
+    if not env_file.exists() or click.confirm(f"{env_file} already exists. Overwrite?"):
+        import secrets as _sec
+        import string as _str
+        from werkzeug.security import generate_password_hash
+        pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
+        h = generate_password_hash(pwd)
+        env_file.write_text(
+            f"# Anteumbra admin password hash\n"
+            f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
+            f"ANTEUMBRA_PASSWORD_HASH={h}\n",
+            encoding="utf-8"
+        )
+        click.echo(f".env written to {env_file}")
+        click.echo(f"  Admin username: admin")
+        click.echo(f"  Admin password: {pwd}")
+        click.echo(f"  (change via Settings → Config Editor in the web dashboard)")
+
+    click.echo("Edit config.toml to configure websites, WAF, notifications, etc.")
 
 
 if __name__ == "__main__":
