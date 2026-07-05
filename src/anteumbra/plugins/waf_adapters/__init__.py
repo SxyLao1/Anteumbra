@@ -6,10 +6,10 @@ v1.9.4: WAF Adapters — ModSecurity / Cloudflare / AWS / Syslog
 通过 PluginManager 统一加载和生命周期管理。
 """
 
-from plugins.waf_adapters.modsecurity_adapter import ModSecurityAdapter
-from plugins.waf_adapters.cloudflare_adapter import CloudflareAdapter
-from plugins.waf_adapters.aws_adapter import AWSWAFAdapter
-from plugins.waf_adapters.syslog_receiver import SyslogWAFReceiver
+from anteumbra.plugins.waf_adapters.modsecurity_adapter import ModSecurityAdapter
+from anteumbra.plugins.waf_adapters.cloudflare_adapter import CloudflareAdapter
+from anteumbra.plugins.waf_adapters.aws_adapter import AWSWAFAdapter
+from anteumbra.plugins.waf_adapters.syslog_receiver import SyslogWAFReceiver
 
 __all__ = [
     "ModSecurityAdapter",

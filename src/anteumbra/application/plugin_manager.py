@@ -286,7 +286,7 @@ class PluginManager:
     def _load_builtin(self, name: str) -> Optional[Plugin]:
         """加载内置插件（从 plugins/ 目录）"""
         try:
-            module = importlib.import_module(f"plugins.{name}")
+            module = importlib.import_module(f"anteumbra.plugins.{name}")
             # 查找模块中第一个 Plugin 子类
             plugin_cls = None
             for attr_name in dir(module):

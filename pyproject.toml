@@ -71,6 +71,7 @@ anteumbra = [
     "translations/**/*.po",
     "interfaces/web/templates/**/*.html",
     "interfaces/web/static/**/*",
+    "plugins/**/*.py",
 ]
 
 [tool.pytest.ini_options]
