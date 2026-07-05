@@ -10,11 +10,29 @@ This plugin replaces the inline ``self.notifier._safe_notify()`` calls that
 were previously scattered across FileMonitorHandler.
 """
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import Plugin, DomainEvent
 
 logger = logging.getLogger(__name__)
+
+# v1.0.10: Ensure plugin log messages are captured to a file
+if not logger.handlers:
+    _log_dir = Path("logs/Anteumbra")
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _fh = RotatingFileHandler(
+        _log_dir / "plugins.log",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    _fh.setLevel(logging.DEBUG)
+    _fh.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s - [%(name)s] %(message)s'))
+    logger.addHandler(_fh)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
 
 
 class NotifierHandlerPlugin(Plugin):

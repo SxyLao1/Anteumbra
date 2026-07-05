@@ -380,6 +380,10 @@ def get_quarantine_list(
         隔离记录列表
     """
     records = _load_db()
+    # v1.0.10: normalize field names — SQLite records may have created_at instead of quarantine_time
+    for r in records:
+        if isinstance(r, dict) and "quarantine_time" not in r and "created_at" in r:
+            r["quarantine_time"] = r["created_at"]
     if status:
         records = [r for r in records if r["status"] == status]
     return records[offset:offset + limit]

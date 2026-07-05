@@ -57,7 +57,7 @@
             <span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'safe' if record.status == 'restored' else 'gray' }}">
               {{ record.status.upper() }}
             </span>
-            <span>{{ record.quarantine_time[:16] }}</span>
+            <span>{{ (record.get('quarantine_time') or record.get('created_at', ''))[:16] }}</span>
             <span>{{ record.original_path.split("\\")[-1].split("/")[-1] }}</span>
             <span>{{ (record.file_size / 1024)|round(2) }} KB</span>
           </div>
