@@ -136,16 +136,9 @@ def run(host, port, debug):
     pid_dir.mkdir(parents=True, exist_ok=True)
     (pid_dir / "anteumbra.pid").write_text(str(os.getpid()))
 
-    try:
-        # Delegate to the full application runner
-        from run import main as run_main
-        run_main()
-    except ImportError:
-        # Fallback: just start Flask dev server
-        from anteumbra.interfaces.web.factory import create_app, run_app
-        app = create_app()
-        click.echo(f"  Admin: http://{host}:{port}/admin")
-        run_app(host=host, port=port)
+    # v1.0.10: 使用包内 launcher 启动全部子系统（不再依赖 run.py）
+    from anteumbra.application.launcher import start_all
+    start_all(host=host, port=port)
 
 
 # ── Start (daemon / background) ─────────────────────────────

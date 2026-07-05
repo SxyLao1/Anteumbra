@@ -454,16 +454,15 @@ class TestProcessLifecycle:
         project_root = Path(__file__).parent.parent.parent
         pid_file = project_root / "data" / "anteumbra.pid"
 
-        # This test verifies that run.py's main() writes a PID file.
-        # We check the source code rather than actually running run.py,
-        # because run.py starts many background threads.
-        run_py_path = project_root / "run.py"
-        if not run_py_path.exists():
-            pytest.skip("run.py not found")
+        # v1.0.10: PID writing moved from run.py to launcher.start_all()
+        # Verify the launcher contains the PID file logic
+        launcher_path = project_root / "src" / "anteumbra" / "application" / "launcher.py"
+        if not launcher_path.exists():
+            pytest.skip("launcher.py not found")
 
-        source = run_py_path.read_text(encoding="utf-8")
+        source = launcher_path.read_text(encoding="utf-8")
         assert "anteumbra.pid" in source, (
-            "run.py should write a PID file (data/anteumbra.pid) at startup"
+            "launcher.start_all() should write a PID file (data/anteumbra.pid) at startup"
         )
         assert "os.getpid()" in source, (
             "PID file should contain the actual process ID"
