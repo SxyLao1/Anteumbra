@@ -4,7 +4,39 @@
 
 ---
 
-## [1.0.7] — 2026-07-03
+## [1.0.10] — 2026-07-05
+
+### Fixed
+- **Critical: plugins/ not in package tree** — `plugins/` moved to `src/anteumbra/plugins/`, fixing silent failure of all 4 built-in plugins (quarantine, notifier, threat_graph, stdout_logger) on pip installs. Import path in `plugin_manager.py` updated from `plugins.{name}` to `anteumbra.plugins.{name}`.
+- **Quarantine page 500** — field normalization: SQLite records with `created_at` but no `quarantine_time` now normalized in `get_quarantine_list()`; template uses defensive `.get()` for both fields
+- **Password change 415** — `/admin/settings/password` now accepts both JSON (`request.get_json(silent=True)`) and HTML form data (`request.form.to_dict()`)
+- **FileMonitorHandler** — added missing `website` attribute causing AttributeError
+- **SSE crash on first run** — monitor.log existence check before opening
+
+### Changed
+- **Plugin diagnostics** — `quarantine_handler` and `notifier_handler` now write to `logs/Anteumbra/plugins.log` via `RotatingFileHandler` (10MB × 3 backups)
+- **Password config** — `config.toml` now uses `${ANTEUMBRA_PASSWORD_HASH:-}` referencing `.env` instead of hardcoded hash
+- **.env template** — added all notification fields (email/wechat/webhook)
+
+---
+
+## [1.0.9] — 2026-07-05
+
+### Added
+- **`anteumbra install [path]`** — single-machine deployment command with global registry lock (`~/.anteumbra/installs.json`)
+- **Launcher module** — extracted startup logic from `run.py` and `cli/main.py` into `application/launcher.py`
+
+### Fixed
+- **Packaging: missing non-Python files** — wheel now includes templates (43 HTML), static (20 CSS/JS), translations (2 .po/.mo), YARA rules (18 .yar) via `[tool.setuptools.package-data]`
+- **Resource path resolution** — 6 files using `__file__` multi-level traversal replaced with `Path(anteumbra.__file__).parent` relative paths
+- **Dockerfile** — removed stale `COPY translations/` and `COPY rules/` (now bundled in package)
+
+### Changed
+- **Resources moved into package** — `rules/webshell/` → `src/anteumbra/rules/webshell/`, `translations/` → `src/anteumbra/translations/`
+
+---
+
+## [1.0.8] — 2026-07-04
 
 ### Fixed
 - **Registry test isolation**: `_is_tool_script()` now natively detects pytest via `PYTEST_CURRENT_TEST`; `_ensure_initialized()` unconditionally overrides production path in test mode — fixes import-timing bug where `wal_manager` import chain locked production path before env vars were set
