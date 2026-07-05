@@ -54,11 +54,12 @@ class FileMonitorHandler(FileSystemEventHandler):
     最大化幽灵目录修复的覆盖范围。
     """
 
-    def __init__(self, scan_callback: Callable, scan_options: ScanOptions, base_path: Path, logger: logging.Logger):
+    def __init__(self, scan_callback: Callable, scan_options: ScanOptions, base_path: Path, logger: logging.Logger, website: 'Website' = None):
         self.scan_callback = scan_callback
         self.scan_options = scan_options
         self.base_path = base_path
         self.logger = logger
+        self.website = website  # v1.0.10: 修复 LogAnalyzer 需要 website 属性
         self.exclude_dirs = {d.lower() for d in scan_options.exclude_dirs}
         self._dedupe_window = 5.0
 
@@ -919,7 +920,8 @@ class WebsiteMonitor:
             scan_callback=scan_callback,
             scan_options=website.scan_options,
             base_path=website.path,
-            logger=logger
+            logger=logger,
+            website=website  # v1.0.10: 修复 LogAnalyzer(self.website, ...)
         )
 
         # 初始化Observer
