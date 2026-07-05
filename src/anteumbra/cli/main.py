@@ -292,7 +292,7 @@ def config(output):
     shutil.copy(template, target)
     click.echo(f"Config template written to {target}")
 
-    # v1.0.9: 同时生成 .env 文件（含随机管理员密码）
+    # v1.0.10: 生成完整 .env 文件（含所有通知推送字段）
     env_file = target.parent / ".env"
     if not env_file.exists() or click.confirm(f"{env_file} already exists. Overwrite?"):
         import secrets as _sec
@@ -301,15 +301,37 @@ def config(output):
         pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
         h = generate_password_hash(pwd)
         env_file.write_text(
-            f"# Anteumbra admin password hash\n"
-            f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
-            f"ANTEUMBRA_PASSWORD_HASH={h}\n",
+            f"# Anteumbra .env — 环境变量配置\n"
+            f"# 修改后重启 anteumbra 生效\n"
+            f"\n"
+            f"# ── 管理员密码 (auto-generated) ──────────────\n"
+            f"# 修改方式: Settings → Config Editor，或运行:\n"
+            f"# python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
+            f"ANTEUMBRA_PASSWORD_HASH={h}\n"
+            f"\n"
+            f"# ── Flask 密钥 ─────────────────────────────\n"
+            f"ANTEUMBRA_SECRET_KEY=change_this_to_a_random_32_char_string\n"
+            f"\n"
+            f"# ── 邮件通知 (SMTP) ────────────────────────\n"
+            f"# 填入真实凭据以启用邮件告警\n"
+            f"ANTEUMBRA_EMAIL_USERNAME=\n"
+            f"ANTEUMBRA_EMAIL_PASSWORD=\n"
+            f"ANTEUMBRA_EMAIL_FROM=\n"
+            f"ANTEUMBRA_EMAIL_TO=\n"
+            f"\n"
+            f"# ── 微信通知 (ServerChan) ───────────────────\n"
+            f"# 填入 SendKey 以启用微信推送\n"
+            f"ANTEUMBRA_WECHAT_API_KEY=\n"
+            f"\n"
+            f"# ── WAF API ─────────────────────────────────\n"
+            f"# 对接外部 WAF 设备时使用\n"
+            f"ANTEUMBRA_WAF_API_KEY=\n",
             encoding="utf-8"
         )
         click.echo(f".env written to {env_file}")
         click.echo(f"  Admin username: admin")
         click.echo(f"  Admin password: {pwd}")
-        click.echo(f"  (change via Settings → Config Editor in the web dashboard)")
+        click.echo(f"  (fill in email/WeChat fields to enable notifications)")
 
     # v1.0.9: 同时复制 YARA 规则目录
     rules_src = None
@@ -445,9 +467,26 @@ def install(path, force):
         pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
         h = generate_password_hash(pwd)
         env_file.write_text(
-            f"# Anteumbra auto-generated admin password hash\n"
-            f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
-            f"ANTEUMBRA_PASSWORD_HASH={h}\n",
+            f"# Anteumbra .env — 环境变量配置\n"
+            f"# 修改后重启 anteumbra 生效\n"
+            f"\n"
+            f"# ── 管理员密码 (auto-generated) ──────────────\n"
+            f"ANTEUMBRA_PASSWORD_HASH={h}\n"
+            f"\n"
+            f"# ── Flask 密钥 ─────────────────────────────\n"
+            f"ANTEUMBRA_SECRET_KEY=change_this_to_a_random_32_char_string\n"
+            f"\n"
+            f"# ── 邮件通知 (SMTP) ────────────────────────\n"
+            f"ANTEUMBRA_EMAIL_USERNAME=\n"
+            f"ANTEUMBRA_EMAIL_PASSWORD=\n"
+            f"ANTEUMBRA_EMAIL_FROM=\n"
+            f"ANTEUMBRA_EMAIL_TO=\n"
+            f"\n"
+            f"# ── 微信通知 (ServerChan) ───────────────────\n"
+            f"ANTEUMBRA_WECHAT_API_KEY=\n"
+            f"\n"
+            f"# ── WAF API ─────────────────────────────────\n"
+            f"ANTEUMBRA_WAF_API_KEY=\n",
             encoding="utf-8"
         )
         click.echo(f".env written to {env_file}")
