@@ -231,21 +231,15 @@ def get_yara_engine(logger: logging.Logger = None) -> YaraEngine:
                 yara_cfg.get("rules_path") or
                 paths_cfg.get("yara_rules_path", "rules/webshell")
             )
-            # v1.0.9: 配置路径不存在时 fallback 到源码树或包内置规则目录
+            # v1.0.9: 配置路径不存在时 fallback 到包内置规则目录
             if not rules_path.exists():
                 from pathlib import Path as _YPath
                 import anteumbra as _anteumbra_pkg
-                pkg_dir = _YPath(_anteumbra_pkg.__file__).parent
-                candidates = [
-                    pkg_dir.parent.parent / "rules" / "webshell",   # dev: src/anteumbra/ → project/
-                    pkg_dir / "rules" / "webshell",                 # pip: site-packages/anteumbra/rules/
-                ]
-                for cand in candidates:
-                    if cand.exists():
-                        logger.info("Configured rules path %s not found, using bundled rules: %s",
-                                    rules_path, cand)
-                        rules_path = cand
-                        break
+                pkg_rules = _YPath(_anteumbra_pkg.__file__).parent / "rules" / "webshell"
+                if pkg_rules.exists():
+                    logger.info("Configured rules path %s not found, using bundled rules: %s",
+                                rules_path, pkg_rules)
+                    rules_path = pkg_rules
             _yara_engine = YaraEngine(rules_path, logger)
         else:
             # 返回空引擎（避免None检查）

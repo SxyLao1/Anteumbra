@@ -3,6 +3,7 @@
 Anteumbra v1.0 CLI — unified command-line interface.
 
 Usage:
+  anteumbra install [PATH]   Set up a deployment instance
   anteumbra run              Start all subsystems (foreground)
   anteumbra start            Start in background (daemon)
   anteumbra stop             Stop via PID file
@@ -10,6 +11,7 @@ Usage:
   anteumbra config           Interactive config wizard
   anteumbra --version        Show version
 """
+import json
 import logging
 import os
 import sys
@@ -26,11 +28,32 @@ PID_FILE = Path("data/anteumbra.pid")
 
 
 def _find_project_root() -> Path:
-    """Walk up from cwd to find project root.
+    """Walk up from cwd / install registry to find project root.
 
-    Checks for: config.toml, pyproject.toml, or a running instance's PID file.
-    The PID file check lets 'anteumbra status' work from any directory.
+    Priority:
+    1. ANTEUMBRA_HOME environment variable
+    2. Global install registry (~/.anteumbra/installs.json)
+    3. CWD upward walk (config.toml / pyproject.toml / PID file)
     """
+    # 1. 环境变量
+    env_home = os.environ.get("ANTEUMBRA_HOME")
+    if env_home:
+        p = Path(env_home).resolve()
+        if p.exists():
+            return p
+
+    # 2. 全局安装注册表
+    try:
+        from anteumbra.cli.install_registry import get_install_info
+        info = get_install_info()
+        if info:
+            p = Path(info["install_path"])
+            if p.exists():
+                return p
+    except Exception:
+        pass
+
+    # 3. CWD 向上遍历
     d = Path.cwd().resolve()
     for _ in range(6):
         if ((d / "config.toml").exists()
@@ -251,14 +274,16 @@ def status():
 def config(output):
     """Generate a config.toml from the bundled template."""
     import shutil
+    import anteumbra as _anteumbra_pkg
 
     root = _find_project_root()
     template = root / "config.toml"
     target = Path(output) if output else root / "config.toml"
 
     if not template.exists():
-        # Try looking in the package
-        pkg_template = Path(__file__).parent.parent.parent.parent / "config.toml"
+        # v1.0.9: 从包所在源码树查找（dev install）
+        pkg_dir = Path(_anteumbra_pkg.__file__).parent
+        pkg_template = pkg_dir.parent.parent / "config.toml"
         if pkg_template.exists():
             template = pkg_template
 
@@ -296,8 +321,8 @@ def config(output):
     # v1.0.9: 同时复制 YARA 规则目录
     rules_src = None
     for candidate in [
-        template.parent / "rules",                    # 源码树
-        Path(__file__).parent.parent.parent.parent / "rules",  # 包安装目录
+        template.parent / "rules",                    # 与 config.toml 同目录
+        Path(_anteumbra_pkg.__file__).parent / "rules",  # v1.0.9: 包内置规则
     ]:
         if candidate.is_dir():
             rules_src = candidate
@@ -314,6 +339,160 @@ def config(output):
         click.echo("  You can manually copy rules/ from the Anteumbra repository")
 
     click.echo("Edit config.toml to configure websites, WAF, notifications, etc.")
+
+
+# ── Install ────────────────────────────────────────
+
+@cli.command()
+@click.argument("path", required=False)
+@click.option("--force", is_flag=True, help="Force reinstall even if already installed")
+def install(path, force):
+    """Set up an Anteumbra deployment instance.
+
+    Copies config template, YARA rules, generates admin password,
+    and registers this as the single machine-wide installation.
+
+    PATH defaults to the current working directory.
+    """
+    import shutil
+    import secrets as _sec
+    import string as _str
+    import anteumbra as _anteumbra_pkg
+    from datetime import datetime
+    from anteumbra.cli.install_registry import get_install_info, register_install
+
+    target = Path(path).resolve() if path else Path.cwd().resolve()
+
+    # ── 检查已有安装 ──────────────────────────────
+    existing = get_install_info()
+    if existing:
+        existing_path = Path(existing["install_path"])
+        if existing_path == target:
+            if not force:
+                click.echo(f"Anteumbra is already installed at this location:")
+                click.echo(f"  {existing_path}")
+                click.echo(f"  Version: {existing.get('version', 'unknown')}")
+                click.echo(f"  Installed: {existing.get('installed_at', 'unknown')}")
+                click.echo(f"\nUse --force to reinstall.")
+                raise SystemExit(1)
+            else:
+                click.echo(f"Reinstalling at {target} (--force)...")
+        else:
+            if not force:
+                click.echo(f"Anteumbra is already installed on this machine:")
+                click.echo(f"  {existing_path}")
+                click.echo(f"  Version: {existing.get('version', 'unknown')}")
+                click.echo(f"  Installed: {existing.get('installed_at', 'unknown')}")
+                click.echo(f"\nOnly one instance per machine is supported.")
+                click.echo(f"To move the installation, reinstall with --force at the new path.")
+                click.echo(f"To reinstall at the existing path, run: anteumbra install --force")
+                raise SystemExit(1)
+            else:
+                click.echo(f"Moving installation from {existing_path} to {target}...")
+
+    # ── 确认目标目录 ──────────────────────────────
+    if target.exists() and not (target / ".anteumbra_install").exists():
+        # 目录存在但不是 Anteumbra 安装目录
+        existing_files = list(target.iterdir())
+        if existing_files and not force:
+            click.echo(f"Target directory {target} already exists and is not empty.")
+            click.echo(f"It does not appear to be an Anteumbra installation.")
+            if not click.confirm("Continue anyway?"):
+                click.echo("Aborted.")
+                return
+
+    target.mkdir(parents=True, exist_ok=True)
+
+    # ── 创建子目录 ────────────────────────────────
+    for sub in ["data", "data/sessions", "data/quarantine", "data/threat_intel",
+                "data/siem", "logs", "rules"]:
+        (target / sub).mkdir(parents=True, exist_ok=True)
+
+    # ── 提取 config.toml 模板 ─────────────────────
+    config_dst = target / "config.toml"
+    config_src = None
+    pkg_dir = Path(_anteumbra_pkg.__file__).parent
+
+    # 查找 config.toml 模板：源码树 → 包内
+    for candidate in [
+        pkg_dir.parent.parent / "config.toml",       # dev: src/anteumbra/ → project/
+        pkg_dir / "config.toml",                      # pip: 包内
+    ]:
+        if candidate.exists():
+            config_src = candidate
+            break
+
+    if config_src and config_src != config_dst:
+        shutil.copy(config_src, config_dst)
+        click.echo(f"Config template → {config_dst}")
+    elif not config_dst.exists():
+        click.echo("Warning: config.toml template not found in package — please create one manually")
+        click.echo("  See: https://github.com/SxyLao1/Anteumbra/blob/main/config.toml")
+
+    # ── 复制 YARA 规则 ────────────────────────────
+    rules_src = pkg_dir / "rules"
+    rules_dst = target / "rules"
+    if rules_src.exists() and rules_src.is_dir():
+        # 只复制 webshell 子目录（不复制整个 rules/ 包裹层）
+        webshell_src = rules_src / "webshell"
+        webshell_dst = rules_dst / "webshell"
+        if webshell_src.exists() and not webshell_dst.exists():
+            shutil.copytree(webshell_src, webshell_dst)
+            yar_count = len(list(webshell_dst.glob("*.yar")))
+            click.echo(f"YARA rules → {webshell_dst} ({yar_count} files)")
+        elif webshell_dst.exists():
+            click.echo(f"YARA rules already exist at {webshell_dst} (skipped)")
+    else:
+        click.echo("Warning: YARA rules not found in package")
+
+    # ── 生成 .env ─────────────────────────────────
+    env_file = target / ".env"
+    if not env_file.exists() or force:
+        from werkzeug.security import generate_password_hash
+        pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
+        h = generate_password_hash(pwd)
+        env_file.write_text(
+            f"# Anteumbra auto-generated admin password hash\n"
+            f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
+            f"ANTEUMBRA_PASSWORD_HASH={h}\n",
+            encoding="utf-8"
+        )
+        click.echo(f".env written to {env_file}")
+    else:
+        click.echo(f".env already exists at {env_file} (skipped)")
+        pwd = None
+
+    # ── 写安装锁 ──────────────────────────────────
+    lock_file = target / ".anteumbra_install"
+    lock_data = {
+        "version": __version__,
+        "installed_at": datetime.now().isoformat(),
+        "install_path": str(target),
+        "python": sys.executable,
+    }
+    lock_file.write_text(
+        f"# Anteumbra installation marker — do not delete manually\n"
+        f"# {json.dumps(lock_data)}\n",
+        encoding="utf-8"
+    )
+
+    # ── 注册全局安装 ──────────────────────────────
+    register_install(str(target), __version__)
+
+    # ── 完成 ──────────────────────────────────────
+    click.echo(f"\n{'='*60}")
+    click.echo(f"  Anteumbra v{__version__} installed successfully!")
+    click.echo(f"  Location: {target}")
+    click.echo(f"  Admin:    http://127.0.0.1:8080/admin")
+    click.echo(f"  Username: admin")
+    if pwd:
+        click.echo(f"  Password: {pwd}")
+    else:
+        click.echo(f"  Password: (see {env_file})")
+    click.echo(f"\n  Start:    cd {target} && anteumbra run")
+    click.echo(f"  Status:   anteumbra status")
+    click.echo(f"  Config:   edit {target / 'config.toml'}")
+    click.echo(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

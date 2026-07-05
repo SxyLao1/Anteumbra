@@ -67,7 +67,9 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy application source
 COPY src/ ./src/
 COPY pyproject.toml .
-COPY translations/ ./translations/
+COPY config.toml .
+
+# v1.0.9: translations/ and rules/ are now inside src/anteumbra/ (packaged via package_data)
 
 # Install the package itself (editable not needed in container)
 RUN pip install --no-cache-dir --no-deps -e . \
@@ -75,7 +77,8 @@ RUN pip install --no-cache-dir --no-deps -e . \
 
 # Create data directories with proper permissions
 RUN mkdir -p data/registry data/quarantine data/wal data/sessions data/archives logs \
-    && chmod -R 755 data logs
+    && cp -r src/anteumbra/rules /app/rules \
+    && chmod -R 755 data logs rules
 
 # Run as non-root
 RUN useradd --create-home --shell /bin/bash anteumbra \

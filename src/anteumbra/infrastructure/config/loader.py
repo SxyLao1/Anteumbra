@@ -88,8 +88,26 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
     config_file = Path(config_path).resolve()
 
     if not config_file.exists():
-        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-        config_file = project_root / "config.toml"
+        # v1.0.9: 优先 CWD，其次全局安装注册表，最后包所在源码树
+        cwd_config = Path.cwd() / "config.toml"
+        if cwd_config.exists():
+            config_file = cwd_config
+        else:
+            try:
+                from anteumbra.cli.install_registry import get_install_info
+                info = get_install_info()
+                if info:
+                    reg_config = Path(info["install_path"]) / "config.toml"
+                    if reg_config.exists():
+                        config_file = reg_config
+            except Exception:
+                pass
+        if not config_file.exists():
+            import anteumbra as _pkg
+            pkg_dir = Path(_pkg.__file__).resolve().parent
+            dev_config = pkg_dir.parent.parent / "config.toml"
+            if dev_config.exists():
+                config_file = dev_config
 
         if not config_file.exists():
             raise FileNotFoundError(

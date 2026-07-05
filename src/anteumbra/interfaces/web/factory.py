@@ -128,10 +128,10 @@ def create_app(config_path: str = None) -> Flask:
 
     # v2.0: Flask-Babel i18n (language from ?lang= or cookie or Accept-Language)
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
-    # Compute absolute path to project-root translations/ directory
-    _factory_dir = os.path.dirname(os.path.abspath(__file__))  # .../interfaces/web/
-    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_factory_dir))))
-    app.config['BABEL_TRANSLATION_DIRECTORIES'] = os.path.join(_project_root, 'translations')
+    # v1.0.9: 包内翻译路径 — translations/ 已移入 src/anteumbra/translations/
+    import anteumbra as _anteumbra_pkg
+    _translations_dir = os.path.join(os.path.dirname(_anteumbra_pkg.__file__), "translations")
+    app.config['BABEL_TRANSLATION_DIRECTORIES'] = _translations_dir
     try:
         def _select_locale():
             """v2.0 fix: Auto-detect locale from query param → cookie → Accept-Language header."""

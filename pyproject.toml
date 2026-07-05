@@ -64,6 +64,15 @@ version = {attr = "anteumbra.__version__"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+anteumbra = [
+    "rules/webshell/*.yar",
+    "translations/**/*.mo",
+    "translations/**/*.po",
+    "interfaces/web/templates/**/*.html",
+    "interfaces/web/static/**/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

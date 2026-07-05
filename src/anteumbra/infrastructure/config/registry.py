@@ -77,8 +77,28 @@ class ConfigRegistry:
         if config_path:
             cls._config_path = normalize_path(config_path).resolve()
         elif cls._config_path is None:
-            project_root = normalize_path(__file__).resolve().parent.parent.parent.parent.parent  # src/anteumbra/infrastructure/config/ → 5 levels up
-            cls._config_path = (project_root / "config.toml").resolve()
+            # v1.0.9: 优先 CWD/config.toml，其次全局安装注册表，最后包所在源码树
+            cwd_config = Path.cwd() / "config.toml"
+            if cwd_config.exists():
+                cls._config_path = cwd_config.resolve()
+            else:
+                # 检查全局安装注册表
+                try:
+                    from anteumbra.cli.install_registry import get_install_info
+                    info = get_install_info()
+                    if info:
+                        reg_config = Path(info["install_path"]) / "config.toml"
+                        if reg_config.exists():
+                            cls._config_path = reg_config.resolve()
+                except Exception:
+                    pass
+            if cls._config_path is None:
+                # Fallback: 包所在源码树（dev install pip install -e .）
+                import anteumbra as _pkg
+                pkg_dir = Path(_pkg.__file__).resolve().parent
+                dev_config = pkg_dir.parent.parent / "config.toml"
+                if dev_config.exists():
+                    cls._config_path = dev_config.resolve()
 
         if not cls._config_path.exists():
             raise FileNotFoundError(
