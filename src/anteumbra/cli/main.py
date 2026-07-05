@@ -293,6 +293,26 @@ def config(output):
         click.echo(f"  Admin password: {pwd}")
         click.echo(f"  (change via Settings → Config Editor in the web dashboard)")
 
+    # v1.0.9: 同时复制 YARA 规则目录
+    rules_src = None
+    for candidate in [
+        template.parent / "rules",                    # 源码树
+        Path(__file__).parent.parent.parent.parent / "rules",  # 包安装目录
+    ]:
+        if candidate.is_dir():
+            rules_src = candidate
+            break
+
+    rules_dst = target.parent / "rules"
+    if rules_src and not rules_dst.exists():
+        shutil.copytree(rules_src, rules_dst)
+        click.echo(f"YARA rules copied to {rules_dst}")
+    elif rules_src and rules_dst.exists():
+        click.echo(f"YARA rules already exist at {rules_dst} (skipped)")
+    elif not rules_src:
+        click.echo("Warning: YARA rules source not found — rules will be unavailable until added")
+        click.echo("  You can manually copy rules/ from the Anteumbra repository")
+
     click.echo("Edit config.toml to configure websites, WAF, notifications, etc.")
 
 
