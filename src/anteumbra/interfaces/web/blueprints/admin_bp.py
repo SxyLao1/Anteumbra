@@ -583,7 +583,10 @@ def account_page():
 def change_password():
     """修改密码API"""
     try:
-        data = request.get_json()
+        # v1.0.10: 优先 JSON（API 客户端），fallback form（Web UI HTML form）
+        data = request.get_json(silent=True) or {}
+        if not data:
+            data = request.form.to_dict()
         current_password = data.get('current_password')
         new_password = data.get('new_password')
 
