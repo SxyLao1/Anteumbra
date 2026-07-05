@@ -26,12 +26,28 @@ logger = logging.getLogger(__name__)
 _app_instance: Optional[Flask] = None
 
 
-def create_app() -> Flask:
-    """创建Flask应用实例"""
+def create_app(config_path: str = None) -> Flask:
+    """创建Flask应用实例
+
+    Args:
+        config_path: config.toml 路径。None 时自动探测（CWD > 源码树 > 父目录）。
+    """
     global _app_instance
 
     if _app_instance is not None:
         return _app_instance
+
+    # v1.0.9 fix: 确保配置已初始化（run.py 会先调，但 CLI 直接调 create_app 时不会）
+    # 优先使用 CWD 的 config.toml（部署环境），其次源码树内（开发环境）
+    if config_path:
+        ConfigRegistry.initialize(config_path)
+    else:
+        from pathlib import Path as _Path
+        cwd_config = _Path.cwd() / "config.toml"
+        if cwd_config.exists():
+            ConfigRegistry.initialize(str(cwd_config))
+        else:
+            ConfigRegistry.initialize()
 
     # 先静默werkzeug横幅
     from anteumbra.application.logging_service import silence_werkzeug
