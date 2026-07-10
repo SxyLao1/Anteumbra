@@ -20,6 +20,7 @@
 __all__ = [
     "block_ledger_service",
     "config_service",
+    "config_history_service",
     "file_cluster_service",
     "ip_blocker_service",
     "logging_service",
@@ -31,6 +32,7 @@ __all__ = [
     "registry_service",
     "scanner_service",
     "siem_service",
+    "session_service",
     "sse_service",
     "threat_graph_service",
     "wal_service",

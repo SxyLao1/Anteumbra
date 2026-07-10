@@ -18,6 +18,8 @@ from anteumbra.application.registry_service import (
     get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.application.logging_service import log_with_symbol
+from anteumbra.application.config_history_service import get_config_history_logger
+from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.interfaces.web.auth import require_auth
 
 logger = logging.getLogger(__name__)
@@ -230,8 +232,7 @@ def system_config_panel():
         page = max(1, request.args.get('page', 1, type=int))
         per_page = config.get("web_admin", {}).get("config_items_per_page", 10)
 
-        from tools.config_watcher_logger import get_config_watcher_logger
-        history_logger = get_config_watcher_logger()
+        history_logger = get_config_history_logger()
         raw_history = history_logger.get_history(limit=1000)
         formatted_history = []
         for record in raw_history:
@@ -389,10 +390,8 @@ def system_wal_replay():
 def system_session_cleanup():
     """Clean up expired sessions (returns rendered panel HTML + pagination)"""
     try:
-        from tools.cleanup_sessions import cleanup_sessions
-        deleted = cleanup_sessions(days=7)
-
         session_dir = current_app.config.get('SESSION_FILE_DIR')
+        deleted = cleanup_sessions(session_dir, days=7)
         all_sessions = []
 
         if session_dir:
@@ -464,8 +463,7 @@ def system_config_reload():
         config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
         config_signature = hashlib.md5(config_data.encode()).hexdigest()[:8]
 
-        from tools.config_watcher_logger import get_config_watcher_logger
-        history_logger = get_config_watcher_logger()
+        history_logger = get_config_history_logger()
         raw_history = history_logger.get_history(limit=10)
         formatted_history = []
         for record in raw_history:

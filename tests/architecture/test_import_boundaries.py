@@ -38,13 +38,7 @@ class ImportEdge:
         return self.source, self.imported
 
 
-def _python_files() -> Iterable[Path]:
-    for path in PACKAGE_ROOT.rglob("*.py"):
-        if "__pycache__" not in path.parts:
-            yield path
-
-
-def _internal_import_edges() -> list[ImportEdge]:
+def _import_edges() -> list[ImportEdge]:
     edges: list[ImportEdge] = []
     for path in _python_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
@@ -58,9 +52,18 @@ def _internal_import_edges() -> list[ImportEdge]:
                 imported_modules = [node.module]
 
             for module in imported_modules:
-                if module.startswith("anteumbra"):
-                    edges.append(ImportEdge(rel, node.lineno, module))
+                edges.append(ImportEdge(rel, node.lineno, module))
     return edges
+
+
+def _python_files() -> Iterable[Path]:
+    for path in PACKAGE_ROOT.rglob("*.py"):
+        if "__pycache__" not in path.parts:
+            yield path
+
+
+def _internal_import_edges() -> list[ImportEdge]:
+    return [edge for edge in _import_edges() if edge.imported.startswith("anteumbra")]
 
 
 def _format_edges(edges: Iterable[ImportEdge]) -> str:
@@ -123,6 +126,19 @@ def test_domain_layer_has_no_outward_dependencies():
         in {"application", "infrastructure", "interfaces", "plugins", "cli"}
     ]
     assert not violations, "domain layer must not import outer layers:\n" + _format_edges(violations)
+
+
+def test_packaged_code_does_not_import_top_level_tools():
+    violations = [
+        edge
+        for edge in _import_edges()
+        if edge.imported == "tools" or edge.imported.startswith("tools.")
+    ]
+    assert not violations, (
+        "packaged runtime code must not import repository-local tools modules. "
+        "Move reusable behavior into anteumbra.application or anteumbra.infrastructure:\n"
+        + _format_edges(violations)
+    )
 
 
 def test_interfaces_do_not_add_new_direct_infrastructure_imports():

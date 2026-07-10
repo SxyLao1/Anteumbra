@@ -24,6 +24,7 @@ from anteumbra.application.registry_service import (
     get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.application.logging_service import log_with_symbol
+from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.application.sse_service import (
     register_sse_client, unregister_sse_client, get_connected_client_count,
@@ -436,8 +437,7 @@ def session_list():
 def session_cleanup():
     """Clean up expired sessions"""
     try:
-        from tools.cleanup_sessions import cleanup_sessions
-        deleted = cleanup_sessions(days=7)
+        deleted = cleanup_sessions(current_app.config.get('SESSION_FILE_DIR'), days=7)
         log_with_symbol("notice", "info", f"Cleaned up expired sessions: {deleted}", current_app.logger)
         return jsonify({"success": True, "deleted": deleted})
     except Exception as e:
