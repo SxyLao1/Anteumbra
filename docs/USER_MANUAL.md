@@ -71,16 +71,25 @@ Your Web Server (Nginx/Apache/IIS)
 
 ```bash
 pip install anteumbra
-anteumbra --help
+anteumbra install ./anteumbra-instance
+cd ./anteumbra-instance
+anteumbra run
 ```
+
+PyPI install is the normal path for users and deployments. The `install` command creates the runtime instance, writes `config.toml` and `.env`, copies bundled YARA rules, and prints the initial admin password.
 
 ### 2.3 From Source
 
 ```bash
 git clone https://github.com/SxyLao1/Anteumbra.git
 cd Anteumbra
-pip install -e .
+pip install -e ".[dev]"
+anteumbra install ./dev-instance --force
+cd ./dev-instance
+anteumbra run
 ```
+
+Source install is for development and testing only. It uses the same runtime instance flow as PyPI installs.
 
 ### 2.4 Docker
 
@@ -100,6 +109,8 @@ The Docker image includes all three hash engines (ssdeep + py-tlsh + yara-python
 ```bash
 anteumbra run
 ```
+
+Run this command from the instance directory created by `anteumbra install`.
 
 On first startup, Anteumbra:
 1. Generates a random admin password (printed to console — **save it**)
@@ -716,5 +727,5 @@ GET /admin/health            # Authenticated health with diagnostics
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.9 — MIT License</sub>
+  <sub>Anteumbra v1.0.18 — MIT License</sub>
 </div>

@@ -326,6 +326,25 @@ class TestCliInstall:
         )
         assert "config.toml" in package_data
 
+    def test_pyproject_license_metadata_uses_spdx_string(self):
+        """Wheel metadata should avoid deprecated license table/classifier forms."""
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            try:
+                import tomli as tomllib
+            except ImportError:
+                pytest.skip("tomli not installed")
+
+        with open(pyproject_path, "rb") as f:
+            pyproject = tomllib.load(f)
+
+        project = pyproject.get("project", {})
+        assert project.get("license") == "MIT"
+        classifiers = project.get("classifiers", [])
+        assert "License :: OSI Approved :: MIT License" not in classifiers
+
     def test_install_creates_complete_deployment_instance(self, tmp_path, monkeypatch):
         """anteumbra install should create config, env, rules and registry marker."""
         from anteumbra.cli import install_registry

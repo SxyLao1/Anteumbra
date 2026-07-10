@@ -71,7 +71,9 @@ Anteumbra 是一个**被动的 Web 边界安全观测平台**。它不会内联�
 
 ```bash
 pip install anteumbra
-anteumbra --help
+anteumbra install ./anteumbra-instance
+cd ./anteumbra-instance
+anteumbra run
 ```
 
 ### 2.3 从源码安装
@@ -79,7 +81,10 @@ anteumbra --help
 ```bash
 git clone https://github.com/SxyLao1/Anteumbra.git
 cd Anteumbra
-pip install -e .
+pip install -e ".[dev]"
+anteumbra install ./dev-instance --force
+cd ./dev-instance
+anteumbra run
 ```
 
 ### 2.4 Docker
@@ -716,5 +721,5 @@ GET /admin/health            # 需认证的健康检查，含诊断信息
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.9 — MIT License</sub>
+  <sub>Anteumbra v1.0.18 — MIT License</sub>
 </div>

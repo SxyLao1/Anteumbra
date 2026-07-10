@@ -4,6 +4,17 @@
 
 ---
 
+## [1.0.18] - 2026-07-11
+
+### Fixed
+- Updated package license metadata to the modern SPDX string form and removed the deprecated license classifier.
+- Raised the build backend requirement to `setuptools>=77.0` to match the license metadata format.
+
+### Docs
+- Updated the user manuals to use the unified `anteumbra install <instance-dir>` flow for both PyPI and source installs.
+
+---
+
 ## [1.0.17] - 2026-07-11
 
 ### Fixed
