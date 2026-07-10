@@ -796,6 +796,38 @@ def mark_quarantined(file_path: str, quarantine_id: str):
         log_with_symbol("error_registry_save", "error", f"标记隔离失败: {e}")
 
 
+def mark_restored(file_path: str) -> bool:
+    """Clear quarantine state after a file is restored from quarantine."""
+    _ensure_initialized()
+    try:
+        registry = _load_registry()
+        abs_path = path_to_key(file_path)
+        for item in registry:
+            if item["file_path"] == abs_path:
+                item["file_exists"] = True
+                item["quarantine_id"] = None
+                item["restored_at"] = datetime.now().isoformat()
+                _save_registry_sync(registry)
+                log_with_symbol("quarantine_restore", "info",
+                                f"Registry restored: {Path(file_path).name}")
+
+                try:
+                    from anteumbra.application.plugin_manager import get_plugin_manager
+                    pm = get_plugin_manager()
+                    if pm.is_enabled:
+                        pm.emit("registry_changed", "suspicious_registry", {
+                            "operation": "mark_restored",
+                            "file_path": abs_path,
+                        })
+                except Exception:
+                    _get_logger().debug("PluginManager emit registry_changed (mark_restored) failed", exc_info=True)
+                return True
+        return False
+    except Exception as e:
+        log_with_symbol("error_registry_save", "error", f"标记恢复失败: {e}")
+        return False
+
+
 def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
     """v2.0: 标记记录为误报 — 在 Registry 中设置 marked_false_positive=True
 

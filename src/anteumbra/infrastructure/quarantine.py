@@ -40,6 +40,48 @@ _quarantine_db: Optional[Path] = None
 _recently_restored: dict = {}  # {normalized_path: expire_timestamp}
 _restored_ttl = 30  # 秒
 
+def _record_score(record: Dict[str, Any]) -> int:
+    """Prefer complete records over disk-recovered placeholders."""
+    score = 0
+    original_path = str(record.get("original_path", ""))
+    rule_name = str(record.get("rule_name", ""))
+    features = record.get("features") or []
+    quarantine_path = record.get("quarantine_path")
+
+    if original_path and not original_path.startswith("(recovered)/"):
+        score += 4
+    if rule_name and "auto-recovered" not in rule_name:
+        score += 2
+    if features and features != ["(recovered)"]:
+        score += 1
+    if quarantine_path and Path(quarantine_path).exists():
+        score += 1
+    return score
+
+
+def _normalize_records(raw_records: Any) -> List[Dict[str, Any]]:
+    """Normalize legacy list/dict stores and dedupe repeated quarantine IDs."""
+    if isinstance(raw_records, dict):
+        records = [r for r in raw_records.values() if isinstance(r, dict)]
+    elif isinstance(raw_records, list):
+        records = [r for r in raw_records if isinstance(r, dict)]
+    else:
+        return []
+
+    by_qid: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for record in records:
+        qid = str(record.get("quarantine_id", ""))
+        if not qid:
+            continue
+        if qid not in by_qid:
+            by_qid[qid] = record
+            order.append(qid)
+        elif _record_score(record) > _record_score(by_qid[qid]):
+            by_qid[qid] = record
+    return [by_qid[qid] for qid in order]
+
+
 
 def _get_quarantine_dir() -> Path:
     """获取隔离目录路径，不存在则自动创建（线程安全）"""
@@ -64,13 +106,19 @@ def _get_db_path() -> Path:
 
 
 def _load_db() -> List[Dict[str, Any]]:
-    """加载隔离记录数据库。
+    """Load quarantine records.
 
-    v2.0: Repository-first loading. When storage.backend is sqlite or both,
-    reads from SQLite via Repository. Falls back to JSON when backend is json
-    or Repository is unavailable.
+    JSON is the primary store; Repository is a best-effort shadow copy.
+    Prefer JSON to avoid stale placeholder records recovered from disk.
     """
-    # v2.0: Try Repository first (SQLite primary)
+    db_path = _get_db_path()
+    if db_path.exists():
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                return _normalize_records(json.load(f))
+        except Exception:
+            logger.debug("JSON load failed, falling back to disk recovery", exc_info=True)
+
     try:
         from anteumbra.infrastructure.config.registry import ConfigRegistry
         config = ConfigRegistry.get_raw_config()
@@ -78,23 +126,13 @@ def _load_db() -> List[Dict[str, Any]]:
         if backend != "json":
             from anteumbra.infrastructure.persistence import get_repository
             repo = get_repository("quarantine")
-            records = repo.list_all(limit=999999)
-            # v2.0 fix: SqliteRepository.list_all() always queries 'registry' table.
-            # Validate that records have quarantine-specific fields (quarantine_id or status).
+            records = _normalize_records(repo.list_all(limit=999999))
             if records and any(r.get("quarantine_id") or r.get("status") for r in records[:1]):
                 return records
     except Exception:
-        logger.debug("Repository load failed, falling back to JSON", exc_info=True)
+        logger.debug("Repository load failed, falling back to disk recovery", exc_info=True)
 
-    db_path = _get_db_path()
-    if db_path.exists():
-        try:
-            with open(db_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            logger.debug("JSON load failed, falling back to disk recovery", exc_info=True)
-
-    # 数据库不存在或损坏，尝试从磁盘文件恢复
+    # Data store missing or corrupted; recover from quarantine files on disk.
     qdir = _get_quarantine_dir()
     recovered = []
     for date_dir in sorted(qdir.glob("*")):
@@ -123,6 +161,7 @@ def _load_db() -> List[Dict[str, Any]]:
                 "status": "quarantined",
             })
     if recovered:
+        recovered = _normalize_records(recovered)
         recovered.sort(key=lambda r: r["quarantine_time"], reverse=True)
         _save_db(recovered)
         log_with_symbol("quarantine_recover", "INFO",
@@ -152,6 +191,8 @@ def _repo_shadow_save_quarantine(records: List[Dict[str, Any]]) -> None:
 
 def _save_db(records: List[Dict[str, Any]]) -> None:
     """保存隔离记录数据库（v1.7.9: 原子写入 + 备份，防断电/并发损坏）"""
+    if any(isinstance(r, dict) and r.get("quarantine_id") for r in records):
+        records = _normalize_records(records)
     db_path = _get_db_path()
     tmp_path = db_path.with_suffix('.tmp')
     bak_path = db_path.with_suffix('.bak')
@@ -308,6 +349,12 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
         record["status"] = "restored"
         record["restore_time"] = datetime.now().isoformat()
         _save_db(records)
+
+        try:
+            from anteumbra.infrastructure.suspicious_registry import mark_restored
+            mark_restored(str(original_path))
+        except Exception:
+            logger.debug("Failed to clear registry quarantine state after restore", exc_info=True)
 
         log_with_symbol("quarantine_restore", "INFO",
                         f"[QUARANTINE] File restored: {quarantine_id} -> {original_path}")

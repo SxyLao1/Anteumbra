@@ -25,9 +25,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 
-  <!-- HTMX -->
-  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-  <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
+  <!-- HTMX: keep local so admin actions work in offline/internal deployments. -->
+  <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/htmx-sse.js') }}"></script>
 
   <!-- 拆分后的JS -->
   <script src="{{ url_for('static', filename='js/utils.js') }}" defer></script>

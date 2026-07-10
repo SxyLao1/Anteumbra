@@ -92,17 +92,14 @@ def verify_file_in_registry(file_path: str) -> bool:
 def verify_file_in_quarantine(qid: str) -> Optional[Path]:
     """验证文件是否在 Quarantine 中，返回实际路径"""
     try:
-        import json
-        qf = Path("data/quarantine/quarantine.json")
-        if not qf.exists():
+        from anteumbra.application.quarantine_service import get_quarantine_detail
+        record = get_quarantine_detail(qid)
+        if not record:
             return None
-        items = json.loads(qf.read_text(encoding='utf-8'))
-        for item in items:
-            if str(item.get("quarantine_id", "")) == qid:
-                fp = item.get("original_path", "")
-                p = Path(fp) if fp else None
-                if p and p.exists():
-                    return p
+        fp = record.get("quarantine_path", "")
+        p = Path(fp) if fp else None
+        if p and p.exists() and p.is_file():
+            return p
         return None
     except Exception:
         return None

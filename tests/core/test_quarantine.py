@@ -129,6 +129,35 @@ class TestGetQuarantineList:
         records = q.get_quarantine_list(limit=3, offset=0)
         assert len(records) == 3
 
+    def test_duplicate_qid_prefers_complete_record(self, isolate_quarantine, tmp_path):
+        q, q_dir, db_path = isolate_quarantine
+        quarantined = q_dir / "Q-20260101010101-ABCDEF12_shell.php"
+        quarantined.write_text("payload", encoding="utf-8")
+        original = tmp_path / "shell.php"
+        complete = {
+            "quarantine_id": "Q-20260101010101-ABCDEF12",
+            "original_path": str(original),
+            "quarantine_path": str(quarantined),
+            "quarantine_time": "2026-01-01T01:01:01",
+            "rule_name": "php_eval",
+            "features": ["eval"],
+            "file_size": 7,
+            "status": "quarantined",
+        }
+        recovered = {
+            **complete,
+            "original_path": "(recovered)/shell.php",
+            "rule_name": "(auto-recovered from disk)",
+            "features": ["(recovered)"],
+        }
+        db_path.write_text(json.dumps([recovered, complete]), encoding="utf-8")
+
+        records = q.get_quarantine_list()
+
+        assert len(records) == 1
+        assert records[0]["original_path"] == str(original)
+        assert records[0]["rule_name"] == "php_eval"
+
 
 class TestGetQuarantineDetail:
     """Test get_quarantine_detail() single record lookup."""

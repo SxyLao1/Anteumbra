@@ -219,6 +219,25 @@ class TestMarkQuarantined:
         assert record["quarantine_id"] == "qr-67890"
 
 
+class TestMarkRestored:
+    """Test mark_restored() operation."""
+
+    def test_mark_restored_clears_quarantine_state(self, sample_path, sample_features):
+        from anteumbra.infrastructure.suspicious_registry import (
+            add, get, mark_quarantined, mark_restored,
+        )
+
+        add(sample_path, sample_features)
+        mark_quarantined(sample_path, "qr-restore")
+        result = mark_restored(sample_path)
+        record = get(sample_path)
+
+        assert result is True
+        assert record["file_exists"] is True
+        assert record["quarantine_id"] is None
+        assert "restored_at" in record
+
+
 class TestMarkFalsePositive:
     """Test mark_false_positive() operation."""
 

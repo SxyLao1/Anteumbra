@@ -20,15 +20,28 @@ from playwright.sync_api import sync_playwright
 TEST_PASSWORD = "test_anteumbra"
 TEST_HASH = generate_password_hash(TEST_PASSWORD)
 
+CHROMIUM_UNSAFE_PORTS = {
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69,
+    77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119,
+    123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
+    526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
+    993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 5060, 5061, 6000, 6566,
+    6665, 6666, 6667, 6668, 6669, 6697, 10080,
+}
+
 # ── Session-scoped browser (expensive to restart) ─────────────
 _pw_instance = None
 _browser_instance = None
 
 
 def _find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    for _ in range(100):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        if port not in CHROMIUM_UNSAFE_PORTS:
+            return port
+    raise RuntimeError("Could not find a Chromium-safe free port")
 
 
 @pytest.fixture(scope="session")
