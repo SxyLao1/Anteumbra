@@ -2,7 +2,7 @@
   <div id="quarantine-detail-content" style="position:relative; margin:5% auto; max-width:800px; background:#0a0a0a; border:1px solid #00ff41; border-radius:8px; padding:24px; color:#ccc;"></div>
 </div>
 
-<div id="quarantine-list-container" class="quarantine-list" style="padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column;" data-all-qids='{{ all_qids|default([])|tojson }}'>
+<div id="quarantine-list-container" class="quarantine-list" style="padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column;" data-all-qids='{{ all_qids|default([])|tojson }}' data-current-status="{{ current_status }}">
   <!-- Unified Toolbar -->
   <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid #1a1a1a; flex-shrink:0; background:#050505; flex-wrap:wrap;">
     <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="selQPage(this)">{{ _("Sel Page") }}</button>
@@ -10,8 +10,8 @@
     <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 6px;" onclick="clearQSel(this)">{{ _("Clear") }}</button>
     <span class="q-count" style="font-size:10px;color:#888;min-width:50px;">{{ _("0 selected") }}</span>
     <span style="color:#1a1a1a;">|</span>
-    <button class="btn btn-success btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('restore')">{{ _("Restore Sel") }}</button>
-    <button class="btn btn-danger btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('delete')">{{ _("Delete Sel") }}</button>
+    <button class="btn btn-success btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('restore', this)">{{ _("Restore Sel") }}</button>
+    <button class="btn btn-danger btn-sm q-batch-btn" style="font-size:10px;padding:3px 6px;" disabled onclick="batchQAction('delete', this)">{{ _("Delete Sel") }}</button>
     <span style="flex:1;"></span>
     <button class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-ghost{% endif %}" style="font-size:10px;padding:3px 6px;"
             hx-get="/admin/quarantine?status=all{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _("All") }}</button>

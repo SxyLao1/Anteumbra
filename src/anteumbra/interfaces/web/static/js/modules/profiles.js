@@ -106,7 +106,21 @@ function clearRecSel(btn) {
   (row||document).querySelectorAll('.rec-checkbox').forEach(function(cb) { cb.checked = false; });
   _recUpdateUI();
 }
-function batchRecAction(action) {
+function _activeRecContainer(trigger) {
+  if (trigger) {
+    var scoped = trigger.closest('[id^="records-table-container"]');
+    if (scoped) return scoped;
+  }
+  var containers = Array.from(document.querySelectorAll('[id^="records-table-container"]'));
+  return containers.find(function(el) { return el.offsetParent !== null; }) || containers[0] || null;
+}
+
+function _triggerStatsRefresh() {
+  document.dispatchEvent(new Event('anteumbra:statsRefresh'));
+}
+
+function batchRecAction(action, trigger) {
+  var container = _activeRecContainer(trigger);
   var paths = Array.from(window._recSelected);
   if (!paths.length) return;
   var labels = {quarantine:'Quarantine', false_positive:'Mark as FP', delete:'Delete'};
@@ -134,9 +148,9 @@ function batchRecAction(action) {
     if (d.error) { alert('Batch failed: ' + d.error); return; }
     alert('Done: ' + (d.success||0) + ' success, ' + (d.skipped||0) + ' skipped, ' + (d.failed||0) + ' failed');
     window._recSelected.clear();
-    var container = document.querySelector('[id^="records-table-container"]');
+    _triggerStatsRefresh();
     if (container && window.htmx) {
-      htmx.ajax('GET', '/admin/records?compact=1' + (container.id.indexOf('audit')!==-1?'&audit=true':''), {target:'#'+container.id,swap:'outerHTML'});
+      htmx.ajax('GET', '/admin/records?compact=1' + (container.dataset.auditMode === 'true'?'&audit=true':''), {target:'#'+container.id,swap:'outerHTML'});
     }
   })
   .catch(function(e) { alert('Batch failed: ' + e.message); });
@@ -186,7 +200,8 @@ function clearQSel(btn) {
   (row||document).querySelectorAll('.q-checkbox').forEach(function(cb) { cb.checked = false; });
   _qUpdateUI();
 }
-function batchQAction(action) {
+function batchQAction(action, trigger) {
+  var container = trigger ? trigger.closest('#quarantine-list-container') : document.getElementById('quarantine-list-container');
   var ids = Array.from(window._qSelected);
   if (!ids.length) return;
   var labels = {restore:'Restore', delete:'Delete'};
@@ -214,9 +229,10 @@ function batchQAction(action) {
     if (d.error) { alert('Batch failed: ' + d.error); return; }
     alert('Done: ' + (d.success||0) + ' success, ' + (d.failed||0) + ' failed');
     window._qSelected.clear();
-    var container = document.getElementById('quarantine-list-container');
+    _triggerStatsRefresh();
     if (container && window.htmx) {
-      htmx.ajax('GET', '/admin/quarantine?status=quarantined', {target:'#quarantine-list-container', swap:'outerHTML'});
+      var status = container.dataset.currentStatus || 'quarantined';
+      htmx.ajax('GET', '/admin/quarantine?status=' + encodeURIComponent(status), {target:'#quarantine-list-container', swap:'outerHTML'});
     }
   })
   .catch(function(e) { alert('Batch failed: ' + e.message); });

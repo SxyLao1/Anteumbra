@@ -285,7 +285,7 @@ The main dashboard shows:
 **Operations:**
 - **View detail** — Click any record for full metadata, linked profiles, quarantine info
 - **Search** — Filter by filename or feature
-- **Batch actions** — Multi-select → quarantine / mark false positive / delete
+- **Batch actions** — Select visible rows, carry the selection across pages, or use **All** for the current tab result set; then quarantine / mark false positive / delete
 - **File viewer** — View file content with syntax highlighting (512KB max)
 - **Quarantine** — One-click isolate a detected file
 - **Mark False Positive** — Exclude legitimate files from future alerts
@@ -297,7 +297,7 @@ The main dashboard shows:
 **Operations:**
 - **Restore** — Move file back to original location (+30s whitelist to prevent re-quarantine)
 - **Delete** — Permanent removal
-- **Batch** — Multi-select restore/delete
+- **Batch** — Multi-select across pages, then restore/delete the selected quarantine records
 - **Cross-link** — Navigate from quarantine record back to original detection
 
 ### 5.4 Threat Profiles
