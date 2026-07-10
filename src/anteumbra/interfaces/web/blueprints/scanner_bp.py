@@ -10,6 +10,7 @@ import logging
 import queue
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -31,8 +32,10 @@ from anteumbra.interfaces.web.blueprints._shared import (
 scanner_bp = Blueprint('scanner', __name__, url_prefix='/admin')
 
 _scan_logger = logging.getLogger("monitor.scanner_sse")
+_scan_jobs: dict = {}
+_scan_jobs_lock = threading.Lock()
+_SCAN_JOB_TTL = 3600
 
-# 模块级缓存引用（与 _shared 同步，线程安全）
 
 
 # ── Routes ─────────────────────────────────────────────────
@@ -67,54 +70,152 @@ def scanner_page():
         return render_template('admin/error.html', error=str(e)), 500
 
 
-@scanner_bp.route('/scanner/run')
-@require_auth
-def scanner_run_sse():
-    """SSE 端点: 后台线程扫描 + 队列实时推送进度"""
-    target_dir = request.args.get('target_dir', '')
-    recursive = request.args.get('recursive', '1') == '1'
+def _cleanup_scan_jobs() -> None:
+    now = time.time()
+    with _scan_jobs_lock:
+        stale = [
+            job_id for job_id, job in _scan_jobs.items()
+            if job.get("completed_at") and now - job["completed_at"] > _SCAN_JOB_TTL
+        ]
+        for job_id in stale:
+            del _scan_jobs[job_id]
 
-    if not target_dir:
-        def _err():
-            yield f"data: {_json.dumps({'event': 'error', 'message': '缺少 target_dir 参数'})}\n\n"
-        return Response(_err(), mimetype='text/event-stream')
+
+def _request_data():
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if isinstance(data, dict):
+            return data
+    return request.form
+
+
+def _is_true(value) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _complete_payload(result) -> dict:
+    return {
+        "event": "complete",
+        "scan_id": result.scan_id,
+        "total_files": result.total_files,
+        "scanned_files": result.scanned_files,
+        "new_findings": result.new_findings,
+        "known_findings": result.known_findings,
+        "clean": result.clean,
+        "errors": result.errors,
+        "duration": round(result.end_time - result.start_time, 1) if result.end_time else 0,
+        "status": result.status,
+    }
+
+
+def _run_scan_job(scan_id: str) -> None:
+    with _scan_jobs_lock:
+        job = _scan_jobs.get(scan_id)
+    if not job:
+        return
+
+    target_dir = job["target_dir"]
+    recursive = job["recursive"]
+    progress_queue = job["queue"]
+    cancel_flag = job["cancel_flag"]
 
     from anteumbra.application.scanner_service import ManualScanner
 
-    progress_queue = queue.Queue()
-    cancel_flag = {"cancelled": False}
+    try:
+        scanner = ManualScanner(_scan_logger)
+        target = normalize_path(Path(target_dir))
 
-    def _scan_thread():
-        try:
-            scanner = ManualScanner(_scan_logger)
-            target = normalize_path(Path(target_dir))
+        def progress_cb(result):
+            try:
+                progress_queue.put_nowait(('progress', {
+                    'scanned': result.scanned_files,
+                    'total': result.total_files,
+                    'new_findings': result.new_findings,
+                    'known_findings': result.known_findings,
+                    'clean': result.clean,
+                    'errors': result.errors,
+                }))
+            except queue.Full:
+                pass
 
-            def progress_cb(result):
-                try:
-                    progress_queue.put_nowait(('progress', {
-                        'scanned': result.scanned_files,
-                        'total': result.total_files,
-                        'new_findings': result.new_findings,
-                        'known_findings': result.known_findings,
-                        'clean': result.clean,
-                        'errors': result.errors,
-                    }))
-                except queue.Full:
-                    pass
+        def cancelled():
+            return cancel_flag["cancelled"]
 
-            def cancelled():
-                return cancel_flag["cancelled"]
+        result = scanner.scan_directory(
+            target_dir=target,
+            recursive=recursive,
+            progress_callback=progress_cb,
+            cancelled_check=cancelled,
+        )
+        with _scan_jobs_lock:
+            job["result"] = result
+            job["completed_at"] = time.time()
+        _cache_put(result.scan_id, result)
+        _cache_cleanup_stale()
+        save_scan_to_disk(result)
+        progress_queue.put(('complete', result))
+    except Exception as e:
+        _scan_logger.error(f"scanner failed: {e}", exc_info=True)
+        with _scan_jobs_lock:
+            job["error"] = str(e)
+            job["completed_at"] = time.time()
+        progress_queue.put(('error', str(e)))
 
-            result = scanner.scan_directory(
-                target_dir=target,
-                recursive=recursive,
-                progress_callback=progress_cb,
-                cancelled_check=cancelled,
-            )
-            progress_queue.put(('complete', result))
-        except Exception as e:
-            _scan_logger.error(f"扫描异常: {e}", exc_info=True)
-            progress_queue.put(('error', str(e)))
+
+@scanner_bp.route('/scanner/run', methods=['POST'])
+@require_auth
+def scanner_run():
+    """Create a manual scanner job. Progress is streamed by /scanner/stream."""
+    data = _request_data()
+    target_dir = str(data.get('target_dir', '')).strip()
+    recursive = _is_true(data.get('recursive', '1'))
+
+    if not target_dir:
+        return jsonify({"success": False, "error": "missing target_dir"}), 400
+
+    _cleanup_scan_jobs()
+    scan_id = uuid.uuid4().hex
+    job = {
+        "scan_id": scan_id,
+        "target_dir": target_dir,
+        "recursive": recursive,
+        "queue": queue.Queue(),
+        "cancel_flag": {"cancelled": False},
+        "created_at": time.time(),
+        "completed_at": None,
+        "thread": None,
+        "result": None,
+        "error": None,
+    }
+    thread = threading.Thread(target=_run_scan_job, args=(scan_id,), daemon=True)
+    job["thread"] = thread
+    with _scan_jobs_lock:
+        _scan_jobs[scan_id] = job
+    thread.start()
+    return jsonify({
+        "success": True,
+        "scan_id": scan_id,
+        "stream_url": f"/admin/scanner/stream?scan_id={scan_id}",
+    })
+
+
+@scanner_bp.route('/scanner/stream')
+@require_auth
+def scanner_stream_sse():
+    """SSE stream for an already-created scanner job."""
+    scan_id = request.args.get('scan_id', '')
+    with _scan_jobs_lock:
+        job = _scan_jobs.get(scan_id)
+
+    if not job:
+        def _err():
+            yield f"data: {_json.dumps({'event': 'error', 'message': 'scan not found'})}\n\n"
+        return Response(_err(), status=404, mimetype='text/event-stream')
+
+    target_dir = job["target_dir"]
+    recursive = job["recursive"]
+    progress_queue = job["queue"]
+    scan_thread = job["thread"]
 
     def _generate():
         try:
@@ -122,9 +223,6 @@ def scanner_run_sse():
         except Exception:
             t = Path(target_dir)
         yield f"data: {_json.dumps({'event': 'init', 'target': str(t), 'recursive': recursive})}\n\n"
-
-        scan_thread = threading.Thread(target=_scan_thread, daemon=True)
-        scan_thread.start()
 
         findings_sent = set()
         while scan_thread.is_alive() or not progress_queue.empty():
@@ -141,11 +239,7 @@ def scanner_run_sse():
                         if key not in findings_sent:
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
-                    yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
-                    _cache_put(result.scan_id, result)
-                    # 清理过期缓存
-                    _cache_cleanup_stale()
-                    save_scan_to_disk(result)
+                    yield f"data: {_json.dumps(_complete_payload(result))}\n\n"
                     return
 
                 elif msg_type == 'error':
@@ -155,7 +249,6 @@ def scanner_run_sse():
             except queue.Empty:
                 continue
 
-        # 消费队列残余
         while not progress_queue.empty():
             try:
                 msg_type, payload = progress_queue.get_nowait()
@@ -166,9 +259,7 @@ def scanner_run_sse():
                         if key not in findings_sent:
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
-                    yield f"data: {_json.dumps({'event': 'complete', 'scan_id': result.scan_id, 'total_files': result.total_files, 'scanned_files': result.scanned_files, 'new_findings': result.new_findings, 'known_findings': result.known_findings, 'clean': result.clean, 'errors': result.errors, 'duration': round(result.end_time - result.start_time, 1) if result.end_time else 0, 'status': result.status})}\n\n"
-                    _cache_put(result.scan_id, result)
-                    save_scan_to_disk(result)
+                    yield f"data: {_json.dumps(_complete_payload(result))}\n\n"
             except queue.Empty:
                 break
 
@@ -186,8 +277,17 @@ def scanner_run_sse():
 @scanner_bp.route('/scanner/cancel', methods=['POST'])
 @require_auth
 def scanner_cancel():
-    """取消正在进行的扫描（预留）"""
-    return jsonify({"success": True, "message": "取消信号已发送"})
+    """Cancel one active scanner job, or all active jobs if no scan_id is sent."""
+    data = _request_data()
+    scan_id = str(data.get("scan_id", "")).strip()
+    cancelled = 0
+    with _scan_jobs_lock:
+        jobs = [_scan_jobs.get(scan_id)] if scan_id else list(_scan_jobs.values())
+        for job in jobs:
+            if job and not job.get("completed_at"):
+                job["cancel_flag"]["cancelled"] = True
+                cancelled += 1
+    return jsonify({"success": True, "cancelled": cancelled, "message": "cancel signal sent"})
 
 
 @scanner_bp.route('/scanner/quarantine', methods=['POST'])

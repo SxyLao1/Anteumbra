@@ -10,6 +10,7 @@ var _scanResultsTab = 'new';
 var _scanStartTime = 0;
 var _scanComplete = false;
 var _scanLastId = '';
+var _scanJobId = '';
 var _scanSelected = new Set();
 var _scanQuarantined = new Set();
 
@@ -25,6 +26,7 @@ function startScan() {
   // Reset state
   _scanFindings = [];
   _scanComplete = false;
+  _scanJobId = '';
   _scanStartTime = Date.now();
   var tbody = document.getElementById('results-tbody');
   if (tbody) tbody.innerHTML = '';
@@ -49,26 +51,44 @@ function startScan() {
   document.getElementById('scan-progress-bar')?.style && (document.getElementById('scan-progress-bar').style.width = '0%');
   var pt = document.getElementById('scan-progress-text'); if (pt) pt.textContent = '0 / ?';
 
-  // Open SSE
-  var token = window._sseToken || '';
-  var tokenParam = token ? '&token=' + encodeURIComponent(token) : '';
-  var url = '/admin/scanner/run?target_dir=' + encodeURIComponent(dir)
-          + '&recursive=' + recursive + tokenParam;
+  var csrf = document.querySelector('meta[name="csrf-token"]');
+  var csrfToken = csrf ? csrf.content : '';
+  var body = 'target_dir=' + encodeURIComponent(dir)
+          + '&recursive=' + recursive
+          + '&extensions=' + encodeURIComponent(extensions);
 
-  _scanSSE = new EventSource(url, { withCredentials: true });
+  fetch('/admin/scanner/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+    body: body
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
+      return d;
+    });
+  })
+  .then(function(d) {
+    _scanJobId = d.scan_id;
+    _scanSSE = new EventSource(d.stream_url, { withCredentials: true });
 
-  _scanSSE.onmessage = function(event) {
-    try { var data = JSON.parse(event.data); handleScanEvent(data); }
-    catch(e) { console.error('SSE parse error:', e); }
-  };
+    _scanSSE.onmessage = function(event) {
+      try { var data = JSON.parse(event.data); handleScanEvent(data); }
+      catch(e) { console.error('SSE parse error:', e); }
+    };
 
-  _scanSSE.onerror = function() {
-    if (!_scanComplete) {
-      var tb = document.getElementById('results-tbody');
-      if (tb) tb.innerHTML += '<tr><td colspan="6" style="color:#ff4444;padding:12px;">SSE connection lost.</td></tr>';
-    }
-    if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-  };
+    _scanSSE.onerror = function() {
+      if (!_scanComplete) {
+        var tb = document.getElementById('results-tbody');
+        if (tb) tb.innerHTML += '<tr><td colspan="7" style="color:#ff4444;padding:12px;">SSE connection lost.</td></tr>';
+      }
+      if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
+    };
+  })
+  .catch(function(e) {
+    var tb = document.getElementById('results-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Start failed: ' + _escHtml(e.message) + '</td></tr>';
+  });
 }
 
 function handleScanEvent(data) {
@@ -219,7 +239,13 @@ function quarantineScanFile(filePath, btn) {
 
 function stopScan() {
   if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-  fetch('/admin/scanner/cancel', { method: 'POST' });
+  var csrf = document.querySelector('meta[name="csrf-token"]');
+  var token = csrf ? csrf.content : '';
+  fetch('/admin/scanner/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
+    body: _scanJobId ? 'scan_id=' + encodeURIComponent(_scanJobId) : ''
+  });
   var pt = document.getElementById('scan-progress-text');
   if (pt) pt.textContent = 'Stopped';
 }

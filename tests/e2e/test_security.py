@@ -579,3 +579,67 @@ class TestPentestRegressions:
             assert "&lt;/textarea&gt;&lt;script&gt;" in body
         finally:
             rule_file.unlink(missing_ok=True)
+
+    def test_scanner_run_requires_post_job_creation(self, client):
+        self._authenticate(client)
+
+        get_resp = client.get("/admin/scanner/run?target_dir=.")
+        assert get_resp.status_code == 405
+
+        post_resp = client.post("/admin/scanner/run", data={})
+        assert post_resp.status_code == 400
+        assert post_resp.get_json()["error"] == "missing target_dir"
+
+    def test_scanner_post_job_streams_completion(self, client, monkeypatch, tmp_path):
+        self._authenticate(client)
+
+        scan_id = "anteumbra-test-scanner-post-stream"
+        scan_file = Path("data") / "scans" / f"{scan_id}.json"
+
+        class DummyResult:
+            def __init__(self):
+                self.scan_id = scan_id
+                self.target_dir = str(tmp_path)
+                self.start_time = time.time()
+                self.end_time = self.start_time + 0.1
+                self.status = "completed"
+                self.total_files = 1
+                self.scanned_files = 1
+                self.new_findings = 0
+                self.known_findings = 0
+                self.clean = 1
+                self.errors = 0
+                self.findings = []
+
+        class DummyScanner:
+            def __init__(self, logger):
+                self.logger = logger
+
+            def scan_directory(self, **kwargs):
+                result = DummyResult()
+                kwargs["progress_callback"](result)
+                return result
+
+        monkeypatch.setattr(
+            "anteumbra.application.scanner_service.ManualScanner",
+            DummyScanner,
+        )
+
+        try:
+            post_resp = client.post(
+                "/admin/scanner/run",
+                data={"target_dir": str(tmp_path), "recursive": "0"},
+            )
+            assert post_resp.status_code == 200
+            payload = post_resp.get_json()
+            assert payload["success"] is True
+            assert payload["stream_url"].startswith("/admin/scanner/stream?scan_id=")
+
+            stream_resp = client.get(payload["stream_url"])
+            body = stream_resp.get_data(as_text=True)
+            assert stream_resp.status_code == 200
+            assert '"event": "init"' in body
+            assert '"event": "complete"' in body
+            assert scan_id in body
+        finally:
+            scan_file.unlink(missing_ok=True)

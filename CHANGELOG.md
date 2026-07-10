@@ -4,6 +4,14 @@
 
 ---
 
+## [1.0.16] - 2026-07-10
+
+### Fixed
+- Changed manual scanner startup from GET side effect to POST job creation plus authenticated SSE stream subscription.
+- Added scanner regression coverage for GET method rejection and POST input validation.
+
+---
+
 ## [1.0.15] - 2026-07-10
 
 ### Fixed
