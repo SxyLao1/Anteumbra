@@ -9,6 +9,8 @@ Covers:
   4. Login rate limiting (429 after rapid attempts)
 """
 import os
+import base64
+import io
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -492,3 +494,88 @@ class TestRateLimiting:
             )
 
         admin_mod._login_attempts.clear()
+
+
+class TestPentestRegressions:
+    """Regression tests for locally confirmed pentest findings."""
+
+    def _authenticate(self, client, sse_token=None):
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["username"] = "admin"
+            if sse_token:
+                sess["sse_token"] = sse_token
+
+    def test_stream_logs_rejects_forged_sse_token(self, client):
+        forged = base64.b64encode(b"admin:not-the-session-secret").decode()
+
+        resp = client.get(f"/admin/stream_logs?token={forged}")
+        assert resp.status_code == 403
+
+        valid_session_token = base64.b64encode(b"admin:real-session-secret").decode()
+        self._authenticate(client, sse_token=valid_session_token)
+
+        resp = client.get(f"/admin/stream_logs?token={forged}")
+        assert resp.status_code == 403
+
+    def test_yara_upload_rejects_traversal_filename(self, client):
+        self._authenticate(client)
+
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        from anteumbra.infrastructure.utils.path_utils import normalize_path
+
+        rules_path = normalize_path(
+            ConfigRegistry.get_raw_config()
+            .get("paths", {})
+            .get("yara_rules_path", "rules/webshell")
+        )
+        escaped_path = (rules_path / ".." / "anteumbra_pentest_escape.yar").resolve()
+        if escaped_path.exists():
+            escaped_path.unlink()
+
+        try:
+            resp = client.post(
+                "/admin/yara/rules/upload",
+                data={
+                    "file": (
+                        io.BytesIO(b"rule anteumbra_pentest_escape { condition: true }\n"),
+                        "../anteumbra_pentest_escape.yar",
+                    )
+                },
+                content_type="multipart/form-data",
+            )
+
+            assert resp.status_code == 400
+            assert not escaped_path.exists()
+        finally:
+            if escaped_path.exists():
+                escaped_path.unlink()
+
+    def test_yara_edit_modal_escapes_rule_content(self, client):
+        self._authenticate(client)
+
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        from anteumbra.infrastructure.utils.path_utils import normalize_path
+
+        rules_path = normalize_path(
+            ConfigRegistry.get_raw_config()
+            .get("paths", {})
+            .get("yara_rules_path", "rules/webshell")
+        )
+        rules_path.mkdir(parents=True, exist_ok=True)
+        rule_file = rules_path / "anteumbra_pentest_xss.yar"
+        payload = "</textarea><script>window.__anteumbra_xss=1</script>"
+        rule_file.write_text(
+            f'rule anteumbra_pentest_xss {{ strings: $a = "{payload}" condition: $a }}\n',
+            encoding="utf-8",
+        )
+
+        try:
+            resp = client.get("/admin/yara/rules/edit/anteumbra_pentest_xss.yar")
+            body = resp.get_data(as_text=True)
+
+            assert resp.status_code == 200
+            assert payload not in body
+            assert "&lt;/textarea&gt;&lt;script&gt;" in body
+        finally:
+            rule_file.unlink(missing_ok=True)

@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 
 import yara
 from flask import Blueprint, request, jsonify, render_template, abort, current_app
+from markupsafe import escape as html_escape
+from werkzeug.utils import secure_filename
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.application.yara_service import YaraEngine, get_yara_engine
@@ -29,6 +31,18 @@ yara_bp = Blueprint('yara', __name__, url_prefix='/admin/yara')
 
 # 线程锁（防止并发修改规则文件）
 _rule_operation_lock = threading.RLock()
+
+
+def _sanitize_rule_upload_filename(filename: str) -> str:
+    """Return a safe YARA rule filename, or an empty string when rejected."""
+    if not filename or '\x00' in filename or '%00' in filename:
+        return ""
+    if any(sep in filename for sep in ('/', '\\')) or '..' in filename:
+        return ""
+    safe_name = secure_filename(filename)
+    if safe_name != filename or not safe_name.endswith('.yar'):
+        return ""
+    return safe_name
 
 
 def _validate_rule_path(filename: str, rules_path) -> Path:
@@ -311,10 +325,11 @@ def upload_rule():
             return jsonify({"error": "未上传文件"}), 400
 
         file = request.files['file']
-        if file.filename == '':
+        safe_filename = _sanitize_rule_upload_filename(file.filename)
+        if not safe_filename:
             return jsonify({"error": "文件名为空"}), 400
 
-        if not file.filename.endswith('.yar'):
+        if not safe_filename.endswith('.yar'):
             return jsonify({"error": "只支持 .yar 文件"}), 400
 
         # 读取内容
@@ -342,7 +357,7 @@ def upload_rule():
         is_valid, error_msg = validate_rule_syntax(content)
         if not is_valid:
             log_with_symbol("warning_config_reload", "warning",
-                            f"规则语法验证失败: {file.filename}")
+                            f"Rule syntax validation failed: {safe_filename}")
             return jsonify({
                 "error": "语法验证失败",
                 "details": error_msg
@@ -357,7 +372,7 @@ def upload_rule():
             paths_cfg.get("yara_rules_path", "rules/webshell")
         )
 
-        save_path = rules_path / file.filename
+        save_path = _validate_rule_path(safe_filename, rules_path)
         if save_path.exists():
             return jsonify({
                 "error": "同名文件已存在，请先删除或重命名"
@@ -370,7 +385,7 @@ def upload_rule():
         return jsonify({
             "success": True,
             "message": f"规则上传成功并触发热重载",
-            "filename": file.filename
+            "filename": safe_filename
         })
 
     except Exception as e:
@@ -392,6 +407,8 @@ def edit_rule_modal(filename):
             abort(404)
 
         file_content = target_file.read_text(encoding='utf-8', errors='ignore')
+        escaped_content = html_escape(file_content).replace('%', '%%')
+        filename_arg = html_escape(json.dumps(filename))
 
         # 使用 % 格式化避免 f-string 解析问题
         html = """
@@ -400,7 +417,7 @@ def edit_rule_modal(filename):
           <div id="yara-validation-result" style="font-family:var(--font-mono);font-size:12px;min-height:24px;"></div>
           <div style="display:flex;gap:10px;justify-content:flex-end;">
             <button class="btn btn-ghost" onclick="validateYaraRule()">Validate Syntax</button>
-            <button class="btn btn-primary" onclick="saveYaraRule('%s')">Save Update</button>
+            <button class="btn btn-primary" onclick='saveYaraRule(%s)'>Save Update</button>
           </div>
         </div>
 
@@ -455,7 +472,7 @@ def edit_rule_modal(filename):
           };
         })();
         </script>
-        """ % (file_content.replace('%', '%%'), filename.replace("'", "\'"))
+        """ % (escaped_content, filename_arg)
         return html
     except Exception as e:
         log_with_symbol("yara_error", "error", f"编辑弹窗失败: {e}")

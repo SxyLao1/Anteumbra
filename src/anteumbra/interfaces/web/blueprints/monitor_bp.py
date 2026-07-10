@@ -4,6 +4,7 @@ v1.0.6: Monitor Blueprint — extracted from admin_bp.py
 Routes: /stream_logs, /logs/*, /wal/*, /registry/*, /session/*, /sse/*, /config/*
 """
 import base64
+import hmac
 import json
 import logging
 import queue
@@ -74,6 +75,12 @@ def stream_logs():
             f"[SSE] IP {client_ip} cleaned {len(ip_connections)} old connections"
         )
         ip_client_count = 0
+
+    session_token = session.get('sse_token')
+    if not session.get('authenticated') or not session_token:
+        abort(403)
+    if not hmac.compare_digest(str(token), str(session_token)):
+        abort(403)
 
     try:
         decoded = base64.b64decode(token).decode('utf-8')
