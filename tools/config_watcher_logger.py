@@ -20,7 +20,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
-from utils.path_utils import normalize_path
+from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 
 class ConfigWatcherLogger:
