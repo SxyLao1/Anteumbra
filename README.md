@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.9-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.17-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -41,22 +41,31 @@ Key capabilities:
 - **Smart alerting** — Exponential backoff with adaptive thresholds to reduce false positives
 - **Web dashboard** — Dark theme terminal-style interface, SSE real-time log stream, HTMX-driven, SPA navigation
 - **Enterprise security** — CSRF protection, IP whitelist, Scrypt password hashing, static JS auth guard
-- **Production deployment** — Docker multi-stage build, Gunicorn multi-worker, systemd service, `pip install -e .`
+- **Production deployment** — PyPI install, Docker multi-stage build, Gunicorn multi-worker, systemd service
 - **Comprehensive test suite** — ~340 tests: 88 unit + 94 E2E backend + 34 E2E UI (Playwright) + 1 WAF proxy
 
 ## Quick Start
 
 ```bash
 pip install anteumbra
-anteumbra --help
+anteumbra install ./anteumbra-instance
+cd ./anteumbra-instance
+anteumbra run
 ```
 
-### From Source
+Then open `http://127.0.0.1:8080/admin`. Default username is `admin`; password is printed by `anteumbra install`.
+
+### Source Install
+
+Use source install only for development, testing, or local code changes. It still creates runtime instances through the same `anteumbra install` command:
 
 ```bash
 git clone https://github.com/SxyLao1/Anteumbra.git
 cd Anteumbra
-pip install -e .
+pip install -e ".[dev]"
+anteumbra install ./dev-instance --force
+cd ./dev-instance
+anteumbra run
 python -m pytest tests/core/ -v
 ```
 
@@ -89,8 +98,6 @@ services:
 ```
 
 The Docker image includes all three hash engines (ssdeep + py-tlsh + yara-python) compiled and active for Linux.
-
-Then open `http://127.0.0.1:5000/admin`. Default username is `admin`; password is printed in the console during first setup.
 
 ## Architecture
 
@@ -144,6 +151,7 @@ cd Trident
 
 # 2. Install Anteumbra
 pip install anteumbra
+anteumbra install /path/to/Anteumbra
 
 # 3. Copy your config and data
 cp /path/to/Trident/config.toml /path/to/Anteumbra/
@@ -161,5 +169,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.9 — MIT License</sub>
+  <sub>Anteumbra v1.0.17 — MIT License</sub>
 </div>

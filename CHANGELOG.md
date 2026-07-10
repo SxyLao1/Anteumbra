@@ -4,6 +4,19 @@
 
 ---
 
+## [1.0.17] - 2026-07-11
+
+### Fixed
+- Bundled the deployment `config.toml` template in the Python package so PyPI installs can create complete runtime instances.
+- Changed `anteumbra install` to fail when the config template is missing instead of reporting a partial success.
+- Changed `anteumbra start` to launch the installed package entry point instead of requiring source-tree `run.py`.
+- Aligned CLI `run`/`start` default port with the bundled config and launcher default (`8080`).
+
+### Docs
+- Clarified PyPI install as the normal user/deployment path and source editable install as the developer/test path.
+
+---
+
 ## [1.0.16] - 2026-07-10
 
 ### Fixed

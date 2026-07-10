@@ -17,6 +17,7 @@ import socket
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 
 
 # ── Flask test client fixtures ──────────────────────────────────────────────
@@ -290,6 +291,96 @@ class TestVersionSource:
         )
         # Version should look like a semver (e.g., "1.0.4")
         assert "." in v, f"Version '{v}' does not look like a semver"
+
+
+class TestCliInstall:
+    """Verify CLI deployment setup works for packaged and editable installs."""
+
+    def test_config_template_is_packaged_and_declared(self):
+        """config.toml must ship inside the wheel for PyPI installs."""
+        import anteumbra
+
+        package_config = Path(anteumbra.__file__).parent / "config.toml"
+        assert package_config.exists(), (
+            "src/anteumbra/config.toml must exist so wheels can create "
+            "deployment instances without the source tree"
+        )
+
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            try:
+                import tomli as tomllib
+            except ImportError:
+                pytest.skip("tomli not installed")
+
+        with open(pyproject_path, "rb") as f:
+            pyproject = tomllib.load(f)
+
+        package_data = (
+            pyproject.get("tool", {})
+            .get("setuptools", {})
+            .get("package-data", {})
+            .get("anteumbra", [])
+        )
+        assert "config.toml" in package_data
+
+    def test_install_creates_complete_deployment_instance(self, tmp_path, monkeypatch):
+        """anteumbra install should create config, env, rules and registry marker."""
+        from anteumbra.cli import install_registry
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance"
+        registered = {}
+
+        monkeypatch.setattr(install_registry, "get_install_info", lambda: None)
+        monkeypatch.setattr(
+            install_registry,
+            "register_install",
+            lambda path, version: registered.update({"path": path, "version": version}),
+        )
+
+        result = CliRunner().invoke(cli, ["install", str(target), "--force"])
+
+        assert result.exit_code == 0, result.output
+        assert (target / "config.toml").exists()
+        assert (target / ".env").exists()
+        assert (target / ".anteumbra_install").exists()
+        assert (target / "rules" / "webshell").is_dir()
+        assert list((target / "rules" / "webshell").glob("*.yar"))
+        assert registered["path"] == str(target.resolve())
+
+    def test_start_uses_package_entrypoint_not_source_run_py(self, tmp_path, monkeypatch):
+        """Background start must work from a deployment dir without run.py."""
+        import anteumbra.cli.main as cli_main
+
+        calls = []
+        pid_reads = iter([None, 12345])
+
+        def fake_popen(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+
+            class FakeProc:
+                pass
+
+            return FakeProc()
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
+
+        result = CliRunner().invoke(cli_main.cli, ["start"])
+
+        assert result.exit_code == 0, result.output
+        assert calls, "start should launch a background process"
+        cmd = calls[0][0]
+        assert "-m" in cmd
+        assert "anteumbra" in cmd
+        assert "run" in cmd
+        assert "run.py" not in " ".join(cmd)
+        assert calls[0][1]["cwd"] == str(tmp_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -66,12 +66,22 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 anteumbra = [
+    "config.toml",
     "rules/webshell/*.yar",
     "translations/**/*.mo",
     "translations/**/*.po",
     "interfaces/web/templates/**/*.html",
-    "interfaces/web/static/**/*",
+    "interfaces/web/static/*.svg",
+    "interfaces/web/static/css/*.css",
+    "interfaces/web/static/js/*.js",
+    "interfaces/web/static/js/modules/*.js",
     "plugins/**/*.py",
+]
+
+[tool.setuptools.exclude-package-data]
+anteumbra = [
+    "**/__pycache__/*",
+    "**/*.pyc",
 ]
 
 [tool.pytest.ini_options]

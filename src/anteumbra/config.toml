@@ -1,0 +1,576 @@
+[system]
+release_date = "TBD"
+
+project_root = "."
+
+[website]
+name = "Default Website"
+path = "/var/www/html"
+port = 80
+enabled = true
+
+[web_admin]
+enabled = true
+host = "127.0.0.1"
+port = 8080
+username = "admin"
+# 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
+password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"
+allowed_ips = ["127.0.0.1"]
+sse_log_levels = ["INFO", "ERROR", "CRITICAL"]
+items_per_page = 6
+yara_items_per_page = 10
+session_items_per_page = 20
+config_items_per_page = 10
+session_type = "filesystem"
+session_dir = "data/sessions"
+session_lifetime = 3600
+session_permanent = false
+# 新增SSE连接限制配置
+sse_max_clients_per_ip = 5
+sse_max_total_clients = 20
+
+# ============================================================================
+# v1.8.1: WAF 事件源配置（画像引擎数据来源）
+# ============================================================================
+[waf_source]
+enabled = true
+type = "mock"
+url = "http://127.0.0.1:8081"
+poll_interval = 10
+
+# v1.9.0: 目的IP过滤——WAF在出口抓全流量时，只分析打向本机的攻击
+# 空列表 = 自动探测本机非回环IP。手动填写则使用指定IP列表。
+dest_ips = []
+
+# ============================================================================
+# v1.9.0: 管理IP白名单（不参与画像，但攻击行为仍然告警）
+# ============================================================================
+[management]
+# 管理员/安全设备IP——这些IP的操作不参与画像聚类
+# 但如果这些IP触发了检测规则（如WebShell扫描），仍然发送告警
+ips = ["127.0.0.1", "::1"]
+
+# ============================================================================
+# v1.9.0: 画像时间窗口（小时）
+# ============================================================================
+[profiling]
+time_window_hours = 4
+
+# ============================================================================
+# v1.8.2: IP 封禁引擎
+# ============================================================================
+[ip_blocker]
+# v1.9.0: 启用 IP 封禁引擎 + 台账记录
+enabled = true
+
+# 自动封禁：高危画像关联 IP 自动广播到所有设备（关闭则仅手动触发）
+# 建议：先在测试环境验证设备连通性，再开启
+auto_block_enabled = false
+auto_block_min_score = 0.8
+
+# ---- 封禁设备列表 ----
+# Anteumbra 将封禁决策同时广播到下面所有设备。
+# 设备类型说明：
+#   stdout = 仅终端日志输出（默认，开发/演示用）
+#   mock   = 内存黑名单（测试用，重启丢失）
+#   http   = 通过 HTTP POST 对接真实 WAF/FW API
+#
+# 对接真实设备示例（取消注释并修改）：
+#   [[ip_blocker.devices]]
+#   name = "Production WAF"
+#   type = "http"
+#   url = "https://waf.company.com/api/block"
+#   api_key = "${ANTEUMBRA_WAF_API_KEY:-}"
+#
+# HTTP 设备请求格式（Anteumbra 自动发送）：
+#   POST {url}
+#   Content-Type: application/json
+#   Authorization: Bearer {api_key}
+#   Body: {"ip":"1.2.3.4", "comment":"Anteumbra: webshell upload (profile: a1b2c3d4)", "permanent":false, "duration":86400, "risk_score":0.95}
+
+[[ip_blocker.devices]]
+name = "Stdout Logger"
+type = "stdout"
+
+# ============================================================================
+# v1.9.0: 隔离总开关（测试时可关闭，避免文件被移走）
+# ============================================================================
+[quarantine]
+# 是否自动隔离检测到的WebShell（默认关闭，生产环境谨慎开启）
+auto_quarantine_enabled = false
+
+[security]
+csrf_enabled = true
+csrf_exclude_paths = ["/api/v1/health"]
+secret_key = "${ANTEUMBRA_SECRET_KEY:-}"
+
+[registry]
+async_save_enabled = true
+async_save_interval_seconds = 60
+
+[registry.audit]
+# 审计模式：保留已删除记录天数
+retention_days = 30
+# 自动压缩：删除超过N天的记录
+auto_compact_enabled = true
+# 审计视图允许查看已删除记录
+audit_view_enabled = true
+
+[monitor]
+# Windows平台目录验证延迟 (毫秒)
+# 论文实验基础: T-01-B验证≥0.01ms即可消除误判，采用50ms工程保守设计
+# 分解: 50ms = 30ms基础成本(Python运行时+文件系统查询) + 20ms安全余量
+# Linux平台此值自动设为0 (Inotify原生可靠，无需延迟)
+windows_verify_delay_ms = 50
+
+# 目录缓存容量 (LRU缓存大小)
+# 对应论文描述的"容量为100的LRU队列"
+# 用于缓解Windows平台ReadDirectoryChangesW API的目录类型标志位不稳定问题
+dir_cache_size = 100
+
+# 缓存TTL (秒)
+# 目录缓存项过期时间，默认60秒
+dir_cache_ttl = 60
+
+# 目录缓存TTL超时时间（秒）
+# 采用TTL控制的无限制容量缓存，替代LRU硬编码容量100
+# 确保60秒内所有访问过的目录均被记忆，最大化幽灵目录修复覆盖范围
+dir_cache_timeout_seconds = 60.0
+
+# ============================================================================
+# v1.7.3新增：日志符号映射配置
+# 格式：符号键 = "[模块][子模块][动作]"
+# 业务代码通过 log_with_symbol(symbol_key, level, message) 调用
+# ============================================================================
+[logging.symbols]
+# ============================================================================
+# 日志符号表 — 按功能模块分类，格式: key = "[MODULE][SUB][ACTION]"
+# 业务代码通过 log_with_symbol(symbol_key, level, message) 调用
+# 未匹配的 key 会输出 [UNKNOWN][key]，发现后请在此补全
+# ============================================================================
+
+# ── 监控模块 (MONITOR) ─────────────────────────────────────────────
+success         = "[MONITOR][START][SUCCESS]"
+monitor_start   = "[MONITOR][START][INFO]"
+monitor_stop    = "[MONITOR][STOP][INFO]"
+critical_start  = "[MONITOR][START][CRITICAL]"
+create_dir      = "[MONITOR][CREATE][DIR]"
+create_file     = "[MONITOR][CREATE][FILE]"
+create_wait     = "[MONITOR][CREATE][WAIT]"
+create_skip     = "[MONITOR][CREATE][SKIP]"
+create_error    = "[MONITOR][CREATE][ERROR]"
+delete_dir      = "[MONITOR][DELETE][DIR]"
+delete_file     = "[MONITOR][DELETE][FILE]"
+modify          = "[MONITOR][MODIFY][FILE]"
+close           = "[MONITOR][CLOSE][FILE]"
+move_file       = "[MONITOR][MOVE][FILE]"
+move_dir        = "[MONITOR][MOVE][DIR]"
+skip_duplicate  = "[MONITOR][SKIP][DUPLICATE]"
+skip_exclude    = "[MONITOR][SKIP][EXCLUDE]"
+skip_size       = "[MONITOR][SKIP][SIZE_LIMIT]"
+warning_exclude = "[MONITOR][SKIP][WARNING]"
+error_dir_cache = "[MONITOR][ERROR][CACHE]"
+info            = "[MONITOR][INFO][GENERAL]"
+
+# ── 扫描模块 (SCAN) ────────────────────────────────────────────────
+scan_hit        = "[SCAN][FILE][HIT]"
+scan_safe       = "[SCAN][FILE][SAFE]"
+scan_skip       = "[SCAN][SKIP][NONE]"
+scan_queue_full = "[SCAN][QUEUE][WARNING]"
+emergency_scan  = "[SCAN][EMERGENCY][INFO]"
+notice_yara_skip = "[SCAN][YARA][NOTICE]"
+error_scan      = "[SCAN][ERROR]"
+error_scan_fail = "[SCAN][CHAIN][ERROR]"
+
+# ── 隔离模块 (QUARANTINE) ──────────────────────────────────────────
+quarantine_add     = "[QUARANTINE][ADD][SUCCESS]"
+quarantine_skip    = "[QUARANTINE][SKIP][WARNING]"
+quarantine_recover = "[QUARANTINE][RECOVER][INFO]"
+quarantine_restore = "[QUARANTINE][RESTORE][SUCCESS]"
+quarantine_delete  = "[QUARANTINE][DELETE][SUCCESS]"
+
+# ── 注册表 (REGISTRY) ──────────────────────────────────────────────
+registry_add         = "[REGISTRY][ADD][SUCCESS]"
+registry_remove      = "[REGISTRY][REMOVE][SUCCESS]"
+registry_save        = "[REGISTRY][SAVE][SUCCESS]"
+notice               = "[REGISTRY][NOTICE][INFO]"
+async_saver_start    = "[REGISTRY][ASYNC][START]"
+async_saver_stop     = "[REGISTRY][ASYNC][STOP]"
+error_registry_add   = "[REGISTRY][ADD][ERROR]"
+error_registry_remove= "[REGISTRY][REMOVE][ERROR]"
+error_registry_save  = "[REGISTRY][SAVE][ERROR]"
+error_async          = "[REGISTRY][ASYNC][ERROR]"
+error_increment      = "[REGISTRY][INCREMENT][ERROR]"
+error_mark_alerted   = "[REGISTRY][ALERT][ERROR]"
+warning_wal_fail     = "[REGISTRY][WAL][WARNING]"
+error_wal_rotate     = "[REGISTRY][WAL][ROTATE][ERROR]"
+error_wal_write      = "[REGISTRY][WAL][WRITE][ERROR]"
+error_wal_archive    = "[REGISTRY][WAL][ARCHIVE][ERROR]"
+
+# ── 日志分析 (LOG_MONITOR) ─────────────────────────────────────────
+log_monitor_start          = "[LOG_MONITOR][START][SUCCESS]"
+log_monitor_start_error    = "[LOG_MONITOR][START][ERROR]"
+log_monitor_info           = "[LOG_MONITOR][START][INFO]"
+log_monitor_stop           = "[LOG_MONITOR][STOP][INFO]"
+log_monitor_skip           = "[LOG_MONITOR][SKIP][INFO]"
+log_monitor_skip_duplicate = "[LOG_MONITOR][SKIP][DUPLICATE]"
+log_monitor_error          = "[LOG_MONITOR][ERROR][INFO]"
+log_monitor_warning        = "[LOG_MONITOR][WARNING][INFO]"
+
+# ── 告警/通知 (ALERT / NOTIFIER) ───────────────────────────────────
+critical_alert_apt    = "[ALERT][APT][CRITICAL]"
+critical_alert_high   = "[ALERT][HIGH_FREQ][CRITICAL]"
+notifier_init         = "[NOTIFIER][INIT][SUCCESS]"
+error_notifier_init   = "[NOTIFIER][INIT][ERROR]"
+error_notifier_email  = "[NOTIFIER][EMAIL][ERROR]"
+error_notifier_wechat = "[NOTIFIER][WECHAT][ERROR]"
+error_notifier_webhook= "[NOTIFIER][WEBHOOK][ERROR]"
+error_notifier_queue  = "[NOTIFIER][QUEUE][ERROR]"
+
+# ── 配置 (CONFIG) ──────────────────────────────────────────────────
+warning_config_reload = "[CONFIG][RELOAD][WARNING]"
+error_config_reload   = "[CONFIG][RELOAD][ERROR]"
+
+# ── YARA 管理 (YARA) ───────────────────────────────────────────────
+yara_list     = "[YARA][LIST][INFO]"
+yara_upload   = "[YARA][UPLOAD][SUCCESS]"
+yara_update   = "[YARA][UPDATE][SUCCESS]"
+yara_delete   = "[YARA][DELETE][SUCCESS]"
+yara_validate = "[YARA][VALIDATE][INFO]"
+yara_error    = "[YARA][ERROR][FAIL]"
+
+# ── SSE 推送 ───────────────────────────────────────────────────────
+sse_start     = "[SSE][START][SUCCESS]"
+sse_error     = "[SSE][ERROR][FAIL]"
+sse_ready     = "[SSE][READY][INFO]"
+sse_connect   = "[SSE][CONNECT][INFO]"
+sse_disconnect = "[SSE][DISCONNECT][INFO]"
+
+# ── 安全/认证 (SECURITY) ──────────────────────────────────────────
+critical_permission = "[SECURITY][PERM][CRITICAL]"
+warning_permission  = "[SECURITY][PERM][WARNING]"
+detect_php    = "[SECURITY][MAGIC][PHP]"
+detect_asp    = "[SECURITY][MAGIC][ASP]"
+detect_jsp    = "[SECURITY][MAGIC][JSP]"
+detect_error  = "[SECURITY][MAGIC][ERROR]"
+
+# ── 系统 (SYSTEM) ──────────────────────────────────────────────────
+system_info_start    = "[SYSTEM][INFO][START]"
+critical_system_start = "[SYSTEM][START][CRITICAL]"
+critical_system_fail  = "[SYSTEM][FAIL][CRITICAL]"
+
+# ── 调试 (DEBUG) ───────────────────────────────────────────────────
+debug_exclude = "[DEBUG][EXCLUDE][INFO]"
+debug_scan    = "[DEBUG][SCAN][INFO]"
+debug         = "[DEBUG][GENERAL][INFO]"
+
+# ── 通用 (GENERAL) ─────────────────────────────────────────────────
+warning = "[GENERAL][WARNING]"
+error   = "[GENERAL][ERROR]"
+
+# ============================================================================
+# v1.7.0新增：通用阈值配置
+# ============================================================================
+[thresholds]
+# 告警冷却时间（秒）
+initial_alert_cooldown_seconds = 60
+
+# 高频攻击阈值（次/60秒）
+high_frequency_threshold = 10
+
+# 高频告警冷却时间（秒）
+high_frequency_cooldown_seconds = 300
+
+# 告警队列熔断阈值（次）
+circuit_breaker_threshold = 10
+
+# ============================================================================
+# v1.7.3新增：指数退避冷却模型参数（不要重复定义已有参数）
+# ============================================================================
+# 增长系数α（每多一次事件增加10%）
+cooldown_alpha = 0.1
+
+# 等级乘数β（每提升一级冷却时间×1.5）
+cooldown_beta = 1.5
+
+# IP聚类惩罚系数γ（同一IP攻击多个文件时×1.2）
+cooldown_gamma = 1.2
+
+# 服务关联惩罚系数δ（Webshell+数据库爆破组合×1.3）
+cooldown_delta = 1.3
+
+[thresholds.visual_alert]
+# 高危文件颜色阈值（WebShell场景：零容忍）
+warning_threshold = 1
+critical_threshold = 3
+
+# ============================================================================
+# v1.7.0新增：文件大小限制
+# ============================================================================
+[filesizes]
+# WAL轮转阈值（MB）
+# 用途：WAL日志文件大小达到后自动归档
+# 推荐值：10（生产）/ 1（测试）
+# 影响范围：core/suspicious_registry.py
+wal_rotate_threshold_mb = 10
+
+# Registry压缩保留天数（天）
+# 用途：清理已删除超过N天的记录
+# 推荐值：30（生产）/ 1（测试）
+# 影响范围：core/suspicious_registry.py
+registry_compact_days = 30
+
+# WAL清理保留天数（天）
+# 用途：删除过期的WAL归档文件
+# 推荐值：7（生产）/ 1（测试）
+# 影响范围：core/suspicious_registry.py
+wal_cleanup_days = 7
+
+# WAL清理保留数量（个）
+# 用途：保留最近N个WAL归档文件
+# 推荐值：20（生产）/ 5（测试）
+# 影响范围：core/suspicious_registry.py
+wal_cleanup_count = 20
+
+# 日志文件大小限制（MB）
+# 用途：限制扫描单个文件的最大大小
+# 推荐值：5-10（生产）
+# 影响范围：core/monitor.py, core/scanner.py
+max_scan_file_size_mb = 5
+
+# 魔术头检测大小限制（MB）
+# 用途：检测脚本文件时读取的最大字节数
+# 推荐值：10（生产）
+# 影响范围：core/monitor.py
+magic_detection_size_mb = 10
+
+# 日志滚动大小（MB）
+# 用途：应用日志文件轮转阈值
+# 推荐值：100（生产）/ 10（测试）
+# 影响范围：utils/logger_factory.py
+log_rotation_size_mb = 100
+
+# 日志备份数量（个）
+# 用途：保留的日志归档文件数量
+# 推荐值：5（生产）/ 2（测试）
+# 影响范围：utils/logger_factory.py
+log_backup_count = 5
+
+# YARA规则文件大小限制（KB）
+max_rule_file_size_kb = 100
+
+# ============================================================================
+# v1.7.0新增：队列容量配置
+# ============================================================================
+[queues]
+# 告警队列容量（条）
+# 用途：异步告警队列的最大长度，0=无限制
+# 推荐值：测试环境100，生产环境0（无限制）
+# 影响范围：core/notifier.py
+alert_queue_maxsize = 0
+
+# Registry异步保存间隔（秒）
+# 用途：批量保存Registry到磁盘的间隔
+# 推荐值：60（生产）/ 5（测试）
+# 影响范围：core/suspicious_registry.py
+registry_save_interval = 60
+
+# ============================================================================
+# v1.7.0新增：路径配置
+# ============================================================================
+[paths]
+# YARA规则目录（相对路径）
+# 用途：扫描引擎加载规则的路径
+# 推荐值："rules/webshell"
+# 影响范围：core/yara_engine.py, core/scanner.py
+yara_rules_path = "rules/webshell"
+
+# 监控扩展名列表
+# 用途：文件监控关注的文件类型
+# 推荐值：[".php", ".asp", ".aspx", ".jsp", ".jspx"]
+# 影响范围：core/monitor.py, core/scanner.py
+monitor_extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+
+# 日志基础目录
+# 用途：应用日志存储的根目录
+# 推荐值："logs"
+# 影响范围：utils/logger_factory.py
+log_base_dir = "logs"
+
+# 数据存储目录
+# 用途：Registry、WAL、metrics等数据存储
+# 推荐值："data"
+# 影响范围：core/suspicious_registry.py, core/metrics.py
+data_dir = "data"
+
+# ============================================================================
+# v1.7.0新增：超时配置
+# ============================================================================
+[timeouts]
+# HTTP请求超时（秒）
+# 用途：微信、邮件、Webhook通知的超时时间
+# 推荐值：10（生产）/ 3（测试）
+# 影响范围：core/notifier.py
+http_timeout = 10
+
+# 配置热加载延迟（秒）
+# 用途：config.toml变更后等待多久再重载
+# 推荐值：10（避免频繁重载）
+# 影响范围：core/config_watcher.py
+config_reload_delay = 10
+
+# 扫描超时（秒）
+# 用途：YARA扫描单个文件的超时
+# 推荐值：30（生产）
+# 影响范围：core/yara_engine.py
+scan_timeout = 30
+
+# ============================================================================
+# 原有配置（保持不变）
+# ============================================================================
+[website.log_config]
+access_log_path = "/var/log/nginx/access.log"
+filter_internal_ip = false
+log_monitor_enabled = true
+
+[api]
+health_check_port = 8080
+health_check_host = "127.0.0.1"
+
+[notifier]
+enabled = true
+
+[notifier.wechat]
+enabled = true
+send_key = "${ANTEUMBRA_WECHAT_API_KEY:-}"
+verify_ssl = false
+timeout = 10
+channel = "9"
+noip = false
+
+[notifier.email]
+enabled = true
+smtp_host = "smtp.163.com"
+smtp_port = 465
+username = "${ANTEUMBRA_EMAIL_USERNAME:-}"
+password = "${ANTEUMBRA_EMAIL_PASSWORD:-}"
+from_addr = "${ANTEUMBRA_EMAIL_FROM:-}"
+to_addrs = ["${ANTEUMBRA_EMAIL_TO:-}"]
+use_tls = false
+use_ssl = true
+timeout = 30
+
+[notifier.webhook]
+enabled = false
+
+[website.scan_options]
+exclude_dirs = ["cache", "logs", "temp", "data"]
+exclude_files = ["*.log", "*.cache"]
+debug_mode = false
+
+# v1.7.3修复：logging配置现在同时控制logger过滤和符号映射
+[logging]
+level = "INFO"
+encoding = "utf-8"
+
+# ============================================================================
+# v1.7.3新增：Flask访问日志独立配置
+# ============================================================================
+[logging.flask]
+# 是否启用Flask访问日志（写入文件）
+flask_log_enabled = true
+
+# Flask访问日志文件路径（独立于monitor.log）
+flask_log_path = "logs/Anteumbra/access.log"
+
+# 日志滚动大小（MB）
+flask_log_rotation_mb = 10
+
+# 备份数量
+flask_log_backup_count = 5
+
+# ============================================================================
+# v1.9.2: 存储后端配置
+# ============================================================================
+[storage]
+# 存储后端: "json" (默认) | "sqlite" (WAL模式高性能) | "both" (双写: JSON兜底 + SQLite优先读)
+backend = "both"
+# SQLite 数据库文件路径 (backend = "sqlite" 或 "both" 时生效)
+db_path = "data/anteumbra.db"
+
+# ============================================================================
+# v1.9.3: 插件系统配置
+# ============================================================================
+[plugins]
+# 插件系统总开关
+enabled = true
+
+# 内置插件列表（PluginManager 启动时自动加载）
+# 可用: stdout_logger, quarantine_handler, notifier_handler,
+#       waf_adapters.modsecurity, waf_adapters.cloudflare,
+#       waf_adapters.aws_waf, waf_adapters.syslog_waf
+builtin = [
+    "stdout_logger",
+    "quarantine_handler",
+    "notifier_handler",
+    "threat_graph_handler",
+]
+
+# 单插件配置
+[plugins.stdout_logger]
+color = true
+verbose = false
+
+# WAF 适配器 — ModSecurity JSON 审计日志
+[plugins.modsecurity]
+enabled = false
+audit_log_path = "data/modsec_audit.log"
+poll_interval = 5
+min_score = 5.0
+
+# WAF 适配器 — Cloudflare GraphQL API
+[plugins.cloudflare]
+enabled = false
+zone_id = "${CLOUDFLARE_ZONE_ID:-}"
+api_token = "${CLOUDFLARE_API_TOKEN:-}"
+poll_interval = 60
+lookback_minutes = 5
+
+# WAF 适配器 — AWS WAFv2 CloudWatch Logs
+[plugins.aws_waf]
+enabled = false
+region = "us-east-1"
+web_acl_arn = ""
+log_source = "cloudwatch"
+log_group = "/aws/waf/logs"
+poll_interval = 300
+
+# WAF 适配器 — Syslog UDP 接收器 (CEF/ModSecurity/Cloudflare)
+[plugins.syslog_waf]
+enabled = false
+host = "0.0.0.0"
+port = 514
+format = "cef"
+
+# ============================================================================
+# v1.9.5: SIEM 导出配置
+# ============================================================================
+[siem]
+# SIEM 导出总开关
+enabled = true
+# 导出格式: "json_lines" (推荐) | "cef" (ArcSight/QRadar) | "syslog" (RFC 5424)
+format = "json_lines"
+# JSON Lines 导出文件路径 (append-only, 自动轮转)
+export_file = "data/siem/events.jsonl"
+# 文件轮转阈值 (MB)
+rotate_mb = 100
+# Syslog 实时推送 (format = "syslog" 时生效)
+syslog_host = ""
+syslog_port = 514
+syslog_protocol = "udp"
+# 是否在 SIEM 事件中包含文件样本的前 256 字节 (默认关闭)
+include_raw_sample = false
+
+[scanner.yara]
+enabled = true

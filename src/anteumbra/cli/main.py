@@ -25,6 +25,26 @@ import click
 from anteumbra import __version__
 
 PID_FILE = Path("data/anteumbra.pid")
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8080
+
+
+def _package_dir() -> Path:
+    import anteumbra as _anteumbra_pkg
+
+    return Path(_anteumbra_pkg.__file__).parent
+
+
+def _find_config_template() -> Path | None:
+    """Return the bundled config template for both wheel and editable installs."""
+    pkg_dir = _package_dir()
+    for candidate in [
+        pkg_dir / "config.toml",
+        pkg_dir.parent.parent / "config.toml",
+    ]:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _find_project_root() -> Path:
@@ -112,8 +132,8 @@ def cli(ctx):
 # ── Run (foreground) ─────────────────────────────────
 
 @cli.command()
-@click.option("--host", default="127.0.0.1", help="Bind address")
-@click.option("--port", default=5000, help="Bind port")
+@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Bind address")
+@click.option("--port", default=DEFAULT_PORT, show_default=True, help="Bind port")
 @click.option("--debug/--no-debug", default=False, help="Enable debug mode")
 def run(host, port, debug):
     """Start all Anteumbra subsystems in the foreground.
@@ -144,8 +164,8 @@ def run(host, port, debug):
 # ── Start (daemon / background) ─────────────────────────────
 
 @cli.command()
-@click.option("--host", default="127.0.0.1", help="Bind address")
-@click.option("--port", default=5000, help="Bind port")
+@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Bind address")
+@click.option("--port", default=DEFAULT_PORT, show_default=True, help="Bind port")
 def start(host, port):
     """Start Anteumbra as a background process.
 
@@ -159,21 +179,27 @@ def start(host, port):
         click.echo(f"Anteumbra is already running (PID {pid}). Use 'anteumbra stop' first.")
         raise SystemExit(1)
 
-    run_py = root / "run.py"
-    if not run_py.exists():
-        click.echo("Error: run.py not found in project root.", err=True)
-        raise SystemExit(1)
-
     log_file = root / "data" / "anteumbra.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        str(_get_python()),
+        "-m",
+        "anteumbra",
+        "run",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
 
     if sys.platform == "win32":
         # Windows: use pythonw.exe (no console window)
         pythonw = Path(sys.exec_prefix) / "pythonw.exe"
         if not pythonw.exists():
             pythonw = Path(sys.executable)  # fallback
+        cmd[0] = str(pythonw)
         subprocess.Popen(
-            [str(pythonw), str(run_py)],
+            cmd,
             cwd=str(root),
             creationflags=subprocess.CREATE_NO_WINDOW
             if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
@@ -181,7 +207,7 @@ def start(host, port):
     else:
         # Unix: fork + redirect output
         subprocess.Popen(
-            [_get_python(), str(run_py)],
+            cmd,
             cwd=str(root),
             stdout=open(str(log_file), "a"),
             stderr=subprocess.STDOUT,
@@ -267,21 +293,14 @@ def status():
 def config(output):
     """Generate a config.toml from the bundled template."""
     import shutil
-    import anteumbra as _anteumbra_pkg
 
     root = _find_project_root()
-    template = root / "config.toml"
+    template = _find_config_template()
     target = Path(output) if output else root / "config.toml"
 
-    if not template.exists():
+    if not template:
         # v1.0.9: 从包所在源码树查找（dev install）
-        pkg_dir = Path(_anteumbra_pkg.__file__).parent
-        pkg_template = pkg_dir.parent.parent / "config.toml"
-        if pkg_template.exists():
-            template = pkg_template
-
-    if not template.exists():
-        click.echo("No config.toml template found. Run this from the Anteumbra project root.", err=True)
+        click.echo("No bundled config.toml template found. Reinstall the anteumbra package.", err=True)
         raise SystemExit(1)
 
     if target.exists():
@@ -372,7 +391,6 @@ def install(path, force):
     import shutil
     import secrets as _sec
     import string as _str
-    import anteumbra as _anteumbra_pkg
     from datetime import datetime
     from anteumbra.cli.install_registry import get_install_info, register_install
 
@@ -425,26 +443,23 @@ def install(path, force):
 
     # ── 提取 config.toml 模板 ─────────────────────
     config_dst = target / "config.toml"
-    config_src = None
-    pkg_dir = Path(_anteumbra_pkg.__file__).parent
-
-    # 查找 config.toml 模板：源码树 → 包内
-    for candidate in [
-        pkg_dir.parent.parent / "config.toml",       # dev: src/anteumbra/ → project/
-        pkg_dir / "config.toml",                      # pip: 包内
-    ]:
-        if candidate.exists():
-            config_src = candidate
-            break
+    config_src = _find_config_template()
+    pkg_dir = _package_dir()
 
     if config_src and config_src != config_dst:
         shutil.copy(config_src, config_dst)
         click.echo(f"Config template → {config_dst}")
-    elif not config_dst.exists():
-        click.echo("Warning: config.toml template not found in package — please create one manually")
-        click.echo("  See: https://github.com/SxyLao1/Anteumbra/blob/main/config.toml")
+    elif not config_src:
+        click.echo("Error: bundled config.toml template not found. Reinstall the anteumbra package.", err=True)
 
     # ── 复制 YARA 规则 ────────────────────────────
+    if not config_src:
+        raise SystemExit(1)
+
+    if not config_dst.exists():
+        click.echo(f"Error: failed to create {config_dst}", err=True)
+        raise SystemExit(1)
+
     rules_src = pkg_dir / "rules"
     rules_dst = target / "rules"
     if rules_src.exists() and rules_src.is_dir():

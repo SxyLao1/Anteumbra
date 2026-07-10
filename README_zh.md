@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.9-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.17-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -41,14 +41,16 @@ Anteumbra（前身 Trident）是一款面向 Linux 和 Windows 的**生产级 We
 - **智能告警** — 指数退避 + 自适应阈值，降低误报噪音
 - **Web 管理面板** — 暗色终端风界面，SSE 实时日志流，HTMX 驱动，SPA 导航
 - **企业安全** — CSRF 防护，IP 白名单，Scrypt 密码哈希，静态 JS 鉴权守卫
-- **生产部署** — Docker 多阶段构建，Gunicorn 多 Worker，systemd 服务，`pip install -e .` 开发模式
+- **生产部署** — PyPI 安装，Docker 多阶段构建，Gunicorn 多 Worker，systemd 服务
 - **全面测试** — ~340 个测试：88 单元 + 94 E2E 后端 + 34 E2E UI (Playwright) + 1 WAF 代理
 
 ## 快速开始
 
 ```bash
 pip install anteumbra
-anteumbra --help
+anteumbra install ./anteumbra-instance
+cd ./anteumbra-instance
+anteumbra run
 ```
 
 ### 从源码安装
@@ -56,7 +58,10 @@ anteumbra --help
 ```bash
 git clone https://github.com/SxyLao1/Anteumbra.git
 cd Anteumbra
-pip install -e .
+pip install -e ".[dev]"
+anteumbra install ./dev-instance --force
+cd ./dev-instance
+anteumbra run
 python -m pytest tests/core/ -v
 ```
 
@@ -90,7 +95,6 @@ services:
 
 Docker 镜像包含全部三轨哈希引擎（ssdeep + py-tlsh + yara-python），在 Linux 下编译并激活。
 
-然后打开 `http://127.0.0.1:5000/admin`。默认用户名 `admin`，密码在首次启动时打印在控制台中。
 
 ## 架构
 
@@ -161,5 +165,5 @@ MIT License。自由用于生产环境、学术研究和个人使用。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.9 — MIT License</sub>
+  <sub>Anteumbra v1.0.17 — MIT License</sub>
 </div>
