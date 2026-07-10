@@ -32,7 +32,6 @@ from anteumbra.application.sse_service import (
     get_ip_client_count, get_ip_clients, persist_log_line,
 )
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
-from anteumbra.interfaces.web.blueprints._shared import require_auth_except_sse
 
 logger = logging.getLogger(__name__)
 
@@ -510,11 +509,11 @@ def config_history():
 @monitor_bp.route('/config/signature')
 @require_auth
 def config_signature():
-    """Return current config signature (MD5)"""
+    """Return current config signature for display only."""
     import hashlib
     try:
         config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
-        md5 = hashlib.md5(config_data.encode()).hexdigest()[:8]
+        md5 = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
         return f"config.toml [{md5}]"
     except Exception:
         return "Cannot compute signature"

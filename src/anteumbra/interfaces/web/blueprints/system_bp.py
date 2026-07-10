@@ -227,7 +227,7 @@ def system_config_panel():
     try:
         config = ConfigRegistry.get_raw_config()
         config_data = json.dumps(config, sort_keys=True)
-        config_signature = hashlib.md5(config_data.encode()).hexdigest()[:8]
+        config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
         page = max(1, request.args.get('page', 1, type=int))
         per_page = config.get("web_admin", {}).get("config_items_per_page", 10)
@@ -461,7 +461,7 @@ def system_config_reload():
         ConfigRegistry.initialize(force=True)
 
         config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
-        config_signature = hashlib.md5(config_data.encode()).hexdigest()[:8]
+        config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
         history_logger = get_config_history_logger()
         raw_history = history_logger.get_history(limit=10)

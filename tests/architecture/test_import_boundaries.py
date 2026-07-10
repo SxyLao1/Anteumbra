@@ -80,7 +80,6 @@ KNOWN_INTERFACES_TO_INFRASTRUCTURE: set[tuple[str, str]] = {
     ("interfaces/web/auth.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/factory.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/factory.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/_shared.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/blueprints/_shared.py", "anteumbra.infrastructure.utils.path_utils"),
     ("interfaces/web/blueprints/admin_bp.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/blueprints/admin_bp.py", "anteumbra.infrastructure.utils.path_utils"),

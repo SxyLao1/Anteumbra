@@ -11,14 +11,9 @@ import secrets
 import threading
 import time
 from pathlib import Path
-from functools import wraps
 from typing import Optional
-from datetime import datetime
 
-from flask import session, redirect, url_for, request, current_app, abort, jsonify
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -117,38 +112,6 @@ def generate_secure_sse_token(username: str) -> str:
     return base64.b64encode(token_str.encode()).decode()
 
 
-# ── Auth 装饰器（排除 SSE） ─────────────────────────────
-
-def require_auth_except_sse(f):
-    """与 require_auth 相同，但允许 SSE 端点通过 token 鉴权。
-
-    v1.0.9: fixed token validation — now checks both username AND random part
-    of the base64-encoded token (format: base64(\"username:random\")).
-    Previously only checked username, allowing forged tokens with any random value.
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        # SSE 端点通过 query param token 鉴权
-        if request.args.get("sse_token"):
-            token = request.args.get("sse_token")
-            try:
-                decoded = base64.b64decode(token.encode()).decode()
-                parts = decoded.split(":", 1)
-                if len(parts) != 2:
-                    return jsonify({"error": "Invalid token format"}), 401
-                username, random_part = parts
-                creds = get_admin_credentials()
-                expected_random = creds.get("sse_secret", "")
-                if username == creds.get("username", "admin") and random_part == expected_random:
-                    return f(*args, **kwargs)
-            except Exception:
-                logger.debug("SSE token validation failed in require_auth_except_sse", exc_info=True)
-            return jsonify({"error": "Unauthorized"}), 401
-        # 普通鉴权
-        if not session.get("authenticated"):
-            return redirect(url_for("admin.login"))
-        return f(*args, **kwargs)
-    return decorated
 
 
 # ── 扫描结果内存缓存 ────────────────────────────────────

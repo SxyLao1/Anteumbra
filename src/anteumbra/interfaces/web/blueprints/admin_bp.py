@@ -28,7 +28,6 @@ from flask import (
     make_response, Response, current_app, stream_with_context,
     session, redirect, url_for
 )
-from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
@@ -269,14 +268,6 @@ def monitor_content():
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
 
-def require_auth_except_sse(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if request.path == '/admin/stream_logs':
-            return f(*args, **kwargs)
-        return require_auth(f)(*args, **kwargs)
-
-    return decorated
 
 
 # v1.7.9: 登录速率限制（V-006修复）- 每IP每分钟最多5次尝试
@@ -567,7 +558,7 @@ def debug_routes():
 @admin_bp.app_template_filter('to_hash')
 def to_hash(value):
     import hashlib
-    return hashlib.md5(value.encode()).hexdigest()[:8]
+    return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 

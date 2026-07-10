@@ -4,6 +4,15 @@
 
 ---
 
+## [1.0.15] - 2026-07-10
+
+### Fixed
+- Removed dead `require_auth_except_sse` helpers that were no longer used and conflicted with the current credential/session model.
+- Marked short config/template MD5 hashes as non-security display digests, reducing Bandit noise without changing UI output.
+- Tightened the architecture import-boundary ratchet after removing `_shared.py`'s stale direct `ConfigRegistry` dependency.
+
+---
+
 ## [1.0.10] — 2026-07-05
 
 ### Fixed
