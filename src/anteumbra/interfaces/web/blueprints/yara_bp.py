@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import yara
 from flask import Blueprint, request, jsonify, render_template, abort, current_app
 from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
@@ -25,6 +24,11 @@ from anteumbra.application.yara_service import YaraEngine, get_yara_engine
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
+
+try:
+    import yara
+except ImportError:
+    yara = None
 
 # 创建Blueprint
 yara_bp = Blueprint('yara', __name__, url_prefix='/admin/yara')
@@ -91,13 +95,17 @@ def get_rule_files() -> List[Dict[str, str]]:
             try:
                 stats = yar_file.stat()
                 # 尝试预编译验证语法
-                try:
-                    yara.compile(filepath=str(yar_file))
-                    status = "valid"
-                    error_msg = ""
-                except Exception as e:
-                    status = "invalid"
-                    error_msg = str(e)[:100]
+                if yara is None:
+                    status = "unavailable"
+                    error_msg = "yara-python is not installed"
+                else:
+                    try:
+                        yara.compile(filepath=str(yar_file))
+                        status = "valid"
+                        error_msg = ""
+                    except Exception as e:
+                        status = "invalid"
+                        error_msg = str(e)[:100]
 
                 # 粗略统计规则数（按rule关键字计数）
                 content = yar_file.read_text(encoding='utf-8', errors='ignore')
@@ -126,6 +134,8 @@ def get_rule_files() -> List[Dict[str, str]]:
 def validate_rule_syntax(rule_content: str) -> Tuple[bool, Optional[str]]:
     """验证YARA规则语法，返回(是否有效, 错误信息)"""
     try:
+        if yara is None:
+            return False, "yara-python is not installed. Install anteumbra[yara] or anteumbra[full]."
         yara.compile(source=rule_content)
         return True, None
     except Exception as e:

@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.18-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.19-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -52,6 +52,8 @@ anteumbra install ./anteumbra-instance
 cd ./anteumbra-instance
 anteumbra run
 ```
+
+如需启用编译型 YARA 规则校验和扫描，请安装 `anteumbra[yara]`；如需同时启用可选相似哈希引擎，请安装 `anteumbra[full]`。
 
 ### 从源码安装
 
@@ -165,5 +167,5 @@ MIT License。自由用于生产环境、学术研究和个人使用。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.18 — MIT License</sub>
+  <sub>Anteumbra v1.0.19 — MIT License</sub>
 </div>

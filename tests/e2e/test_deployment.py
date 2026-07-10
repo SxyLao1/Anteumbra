@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 import socket
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -344,6 +345,48 @@ class TestCliInstall:
         assert project.get("license") == "MIT"
         classifiers = project.get("classifiers", [])
         assert "License :: OSI Approved :: MIT License" not in classifiers
+
+    def test_base_install_can_create_app_without_yara_python(self, tmp_path):
+        """The web app must boot when optional yara-python is not installed."""
+        project_root = Path(__file__).parent.parent.parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(project_root / "src")
+        env["ANTEUMBRA_TOOL_MODE"] = "true"
+
+        code = textwrap.dedent(
+            """
+            import importlib.abc
+            import sys
+
+            class BlockYara(importlib.abc.MetaPathFinder):
+                def find_spec(self, fullname, path=None, target=None):
+                    if fullname == "yara":
+                        raise ModuleNotFoundError("No module named 'yara'")
+                    return None
+
+            sys.meta_path.insert(0, BlockYara())
+
+            from anteumbra.interfaces.web.factory import create_app
+
+            app = create_app()
+            client = app.test_client()
+            assert client.get("/admin/login").status_code == 200
+            assert client.get("/api/v1/health").status_code == 200
+            resp = client.get("/admin/yara/rules")
+            assert resp.status_code in (302, 403)
+            """
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=tmp_path,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0, result.stderr + result.stdout
 
     def test_install_creates_complete_deployment_instance(self, tmp_path, monkeypatch):
         """anteumbra install should create config, env, rules and registry marker."""

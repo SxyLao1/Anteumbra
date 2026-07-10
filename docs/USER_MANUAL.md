@@ -78,6 +78,8 @@ anteumbra run
 
 PyPI install is the normal path for users and deployments. The `install` command creates the runtime instance, writes `config.toml` and `.env`, copies bundled YARA rules, and prints the initial admin password.
 
+Install `anteumbra[yara]` to enable compiled YARA rule validation and scanning, or `anteumbra[full]` for YARA plus optional similarity hash engines.
+
 ### 2.3 From Source
 
 ```bash
@@ -727,5 +729,5 @@ GET /admin/health            # Authenticated health with diagnostics
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.18 — MIT License</sub>
+  <sub>Anteumbra v1.0.19 — MIT License</sub>
 </div>

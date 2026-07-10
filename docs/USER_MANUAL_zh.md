@@ -76,6 +76,8 @@ cd ./anteumbra-instance
 anteumbra run
 ```
 
+如需启用编译型 YARA 规则校验和扫描，请安装 `anteumbra[yara]`；如需同时启用可选相似哈希引擎，请安装 `anteumbra[full]`。
+
 ### 2.3 从源码安装
 
 ```bash
@@ -721,5 +723,5 @@ GET /admin/health            # 需认证的健康检查，含诊断信息
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.18 — MIT License</sub>
+  <sub>Anteumbra v1.0.19 — MIT License</sub>
 </div>

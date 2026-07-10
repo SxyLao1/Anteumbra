@@ -4,6 +4,17 @@
 
 ---
 
+## [1.0.19] - 2026-07-11
+
+### Fixed
+- Made `yara-python` an actual optional dependency by allowing the web app and YARA management routes to boot without it.
+- Added regression coverage for creating the Flask app when `yara-python` is absent.
+
+### Docs
+- Documented `anteumbra[yara]` and `anteumbra[full]` for users who need compiled YARA validation/scanning.
+
+---
+
 ## [1.0.18] - 2026-07-11
 
 ### Fixed

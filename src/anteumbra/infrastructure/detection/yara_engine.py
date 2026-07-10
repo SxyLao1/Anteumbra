@@ -10,7 +10,6 @@ v1.7.0重构：清理遗漏的硬编码
 import os
 from datetime import datetime
 
-import yara
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
@@ -19,6 +18,11 @@ from dataclasses import dataclass
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
+
+try:
+    import yara
+except ImportError:
+    yara = None
 
 
 @dataclass
@@ -36,12 +40,16 @@ class YaraEngine:
     def __init__(self, rules_path: Path, logger: logging.Logger):
         self.rules_path = normalize_path(rules_path).resolve()
         self.logger = logger
-        self.compiled_rules: Optional[yara.Rules] = None
+        self.compiled_rules: Optional[Any] = None
         self._load_rules()
 
     def _load_rules(self):
         """加载并编译YARA规则（精简日志）"""
         try:
+            if yara is None:
+                self.logger.warning("yara-python is not installed; YARA engine disabled")
+                self.compiled_rules = None
+                return
 
             # 释放旧规则对象（防止内存泄漏）
             if self.compiled_rules is not None:
@@ -194,6 +202,8 @@ class YaraEngine:
     def validate_rule_string(self, rule_content: str) -> Tuple[bool, Optional[str]]:
         """验证规则字符串语法"""
         try:
+            if yara is None:
+                return False, "yara-python is not installed. Install anteumbra[yara] or anteumbra[full]."
             yara.compile(source=rule_content)
             return True, None
         except Exception as e:

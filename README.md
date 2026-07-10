@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.18-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.19-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -54,6 +54,8 @@ anteumbra run
 ```
 
 Then open `http://127.0.0.1:8080/admin`. Default username is `admin`; password is printed by `anteumbra install`.
+
+Install `anteumbra[yara]` to enable compiled YARA rule validation and scanning, or `anteumbra[full]` for YARA plus optional similarity hash engines.
 
 ### Source Install
 
@@ -169,5 +171,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.18 — MIT License</sub>
+  <sub>Anteumbra v1.0.19 — MIT License</sub>
 </div>
