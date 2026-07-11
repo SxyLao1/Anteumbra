@@ -99,6 +99,8 @@ KNOWN_INTERFACES_TO_INFRASTRUCTURE: set[tuple[str, str]] = {
     ("interfaces/web/blueprints/metrics.py", "anteumbra.infrastructure.utils.path_utils"),
     ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.utils.path_utils"),
+    ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
+    ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.detection.log_heuristic"),
     ("interfaces/web/blueprints/profiles_bp.py", "anteumbra.infrastructure.utils.path_utils"),
     ("interfaces/web/blueprints/quarantine_bp.py", "anteumbra.infrastructure.config.registry"),
     ("interfaces/web/blueprints/records_bp.py", "anteumbra.infrastructure.config.registry"),
