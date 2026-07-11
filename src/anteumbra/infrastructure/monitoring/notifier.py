@@ -54,6 +54,16 @@ def _mask_url_secret(url: str) -> str:
     return re.sub(r"/([^/?#]+)(\.send)", lambda m: f"/{_mask_secret(m.group(1))}{m.group(2)}", url)
 
 
+def _sanitize_log_text(value: object) -> str:
+    text = str(value or "")
+    text = re.sub(
+        r"https://sctapi\.ftqq\.com/([^/\s]+)\.send",
+        lambda m: f"https://sctapi.ftqq.com/{_mask_secret(m.group(1))}.send",
+        text,
+    )
+    return text
+
+
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
 
@@ -465,19 +475,19 @@ class Notifier:
             if "check_hostname requires server_hostname" in str(e):
                 self.logger.error("[NOTIFIER][WECHAT] SSL代理配置错误")
             else:
-                self.logger.error(f"[NOTIFIER][WECHAT] 参数错误: {e}")
+                self.logger.error("[NOTIFIER][WECHAT] 参数错误: %s", _sanitize_log_text(e))
 
         except requests.exceptions.ProxyError as e:
             self._wechat_failure_count += 1
-            self.logger.error(f"[NOTIFIER][WECHAT] 代理连接失败: {e}")
+            self.logger.error("[NOTIFIER][WECHAT] 代理连接失败: %s", _sanitize_log_text(e))
 
         except requests.exceptions.ConnectionError as e:
             self._wechat_failure_count += 1
-            self.logger.error(f"[NOTIFIER][WECHAT] 网络连接失败: {e}")
+            self.logger.error("[NOTIFIER][WECHAT] 网络连接失败: %s", _sanitize_log_text(e))
 
         except Exception as e:
             self._wechat_failure_count += 1
-            self.logger.error("[NOTIFIER][WECHAT] send failed: %s", e, exc_info=True)
+            self.logger.error("[NOTIFIER][WECHAT] send failed: %s", _sanitize_log_text(e))
 
         # 熔断判断
         finally:

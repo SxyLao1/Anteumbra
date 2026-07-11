@@ -430,9 +430,9 @@ scan_timeout = 30
 # 原有配置（保持不变）
 # ============================================================================
 [website.log_config]
-access_log_path = "/var/log/nginx/access.log"
+access_log_path = "logs/access.log"
 filter_internal_ip = false
-log_monitor_enabled = true
+log_monitor_enabled = false
 
 [api]
 health_check_port = 8080

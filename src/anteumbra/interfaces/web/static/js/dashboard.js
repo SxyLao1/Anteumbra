@@ -347,6 +347,24 @@ function closeLogAnalyzer() {
   }
 }
 
+function loadAccessLogAnalysis() {
+  var c = document.getElementById('analyzer-log-content'); if (!c) return;
+  c.innerHTML = '<div class="empty-state"><p>Loading access log analysis...</p></div>';
+  fetch('/admin/logs/access-analysis')
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(html) {
+      c.innerHTML = html || '<div class="log-line info">[ACCESS_ANALYSIS] No analysis output</div>';
+      filterLogAnalyzer();
+    })
+    .catch(function(e) {
+      c.innerHTML = '<div class="log-line error">[ACCESS_ANALYSIS][ERROR] ' + String(e).replace(/[<>]/g, '') + '</div>';
+      filterLogAnalyzer();
+    });
+}
+
 function analyzerTimePreset() {
   var tr = document.getElementById('analyzer-time-filter')?.value || 'all';
   var custom = document.getElementById('analyzer-custom-time');

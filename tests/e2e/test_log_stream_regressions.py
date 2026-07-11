@@ -70,9 +70,32 @@ def test_notifier_log_masking_hides_secrets():
     spec.loader.exec_module(notifier)
 
     masked_url = notifier._mask_url_secret("https://sctapi.ftqq.com/SCT1234567890abcdef.send")
+    sanitized_error = notifier._sanitize_log_text(
+        "400 Client Error for url: https://sctapi.ftqq.com/SCT1234567890abcdef.send"
+    )
     masked_email = notifier._mask_email("exampleuser@example.com")
 
     assert "SCT1234567890abcdef" not in masked_url
+    assert "SCT1234567890abcdef" not in sanitized_error
     assert "exampleuser" not in masked_email
     assert masked_url.endswith(".send")
     assert masked_email.endswith("@example.com")
+
+
+def test_access_log_analysis_is_available_from_log_analyzer():
+    monitor_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "monitor_bp.py",
+    )
+    dashboard_js = read_source("src", "anteumbra", "interfaces", "web", "static", "js", "dashboard.js")
+    overview = read_source("src", "anteumbra", "interfaces", "web", "templates", "admin", "overview.html")
+
+    assert "@monitor_bp.route('/logs/access-analysis')" in monitor_bp
+    assert "LogHeuristicEngine" in monitor_bp
+    assert "function loadAccessLogAnalysis()" in dashboard_js
+    assert "/admin/logs/access-analysis" in dashboard_js
+    assert "Access Analysis" in overview

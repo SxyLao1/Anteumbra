@@ -4,6 +4,7 @@ v1.0.6: Monitor Blueprint — extracted from admin_bp.py
 Routes: /stream_logs, /logs/*, /wal/*, /registry/*, /session/*, /sse/*, /config/*
 """
 import base64
+import html
 import hmac
 import json
 import logging
@@ -266,6 +267,57 @@ def logs_history():
     except Exception as e:
         current_app.logger.error(f"[LOGS_HISTORY] Read failed: {e}", exc_info=True)
         return f"<div class='log-line error'>[ERROR] Failed to load history: {str(e)[:50]}</div>"
+
+
+@monitor_bp.route('/logs/access-analysis')
+@require_auth
+def access_log_analysis():
+    """Render a read-only access-log behavior analysis for the Log Analyzer modal."""
+    cfg = ConfigRegistry.get_raw_config().get("website", {}).get("log_config", {})
+    enabled = bool(cfg.get("log_monitor_enabled", False))
+    raw_path = str(cfg.get("access_log_path", "")).strip()
+
+    def line(level: str, text: str) -> str:
+        return f'<div class="log-line {level}">{html.escape(text)}</div>'
+
+    parts = [line("info", "[ACCESS_ANALYSIS] Web access log analysis")]
+    if not enabled:
+        parts.append(line("warn", "[ACCESS_ANALYSIS][DISABLED] Enable website.log_config.log_monitor_enabled to analyze web access logs."))
+        return ''.join(parts)
+    if not raw_path:
+        parts.append(line("warn", "[ACCESS_ANALYSIS][MISSING] website.log_config.access_log_path is empty."))
+        return ''.join(parts)
+
+    log_path = normalize_path(raw_path)
+    parts.append(line("info", f"[ACCESS_ANALYSIS][CONFIG] path={log_path}"))
+    if not log_path.exists():
+        parts.append(line("error", f"[ACCESS_ANALYSIS][MISSING] access log file does not exist: {log_path}"))
+        return ''.join(parts)
+
+    try:
+        from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
+        engine = LogHeuristicEngine()
+        events = engine.feed_file(log_path)
+        stats = engine.get_stats()
+        parts.append(line(
+            "info",
+            f"[ACCESS_ANALYSIS][SUMMARY] analyzed={stats.get('total_analyzed', 0)} alerts={stats.get('total_alerts', 0)} ips={stats.get('ips_tracked', 0)}",
+        ))
+        if not events:
+            parts.append(line("info", "[ACCESS_ANALYSIS][CLEAN] No suspicious access-log behavior detected."))
+            return ''.join(parts)
+        for event in events[-200:]:
+            severity = str(event.get("severity", "medium")).upper()
+            event_type = event.get("type", "unknown")
+            ip = event.get("ip", "unknown")
+            target = event.get("path") or event.get("user_agent") or event.get("tools") or ""
+            detail = event.get("reason") or event.get("count") or event.get("unique_paths") or ""
+            parts.append(line("warn", f"[ACCESS_ANALYSIS][{severity}] {event_type} ip={ip} target={target} detail={detail}"))
+    except Exception as exc:
+        current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
+        parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))
+
+    return ''.join(parts)
 
 
 # -- WAL Management --
