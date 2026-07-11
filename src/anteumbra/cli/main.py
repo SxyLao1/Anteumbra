@@ -122,6 +122,34 @@ def _get_python() -> str:
     return sys.executable
 
 
+def _resolve_bind_options(root: Path, host: str | None, port: int | None) -> tuple[str, int]:
+    """Resolve run/start bind address from CLI options, then config, then defaults."""
+    resolved_host = host
+    resolved_port = port
+
+    if resolved_host is not None and resolved_port is not None:
+        return resolved_host, resolved_port
+
+    config_path = root / "config.toml"
+    if config_path.exists():
+        try:
+            cfg = _load_toml_file(config_path)
+            web_admin = cfg.get("web_admin", {})
+            if isinstance(web_admin, dict):
+                if resolved_host is None:
+                    resolved_host = str(web_admin.get("host") or DEFAULT_HOST)
+                if resolved_port is None:
+                    configured_port = web_admin.get("port", DEFAULT_PORT)
+                    resolved_port = int(configured_port)
+        except Exception as exc:
+            click.echo(
+                f"Warning: failed to read {config_path}; using default bind: {exc}",
+                err=True,
+            )
+
+    return resolved_host or DEFAULT_HOST, resolved_port or DEFAULT_PORT
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(__version__, prog_name="anteumbra")
 @click.pass_context
@@ -140,8 +168,8 @@ def cli(ctx):
 # ── Run (foreground) ─────────────────────────────────
 
 @cli.command()
-@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Bind address")
-@click.option("--port", default=DEFAULT_PORT, show_default=True, help="Bind port")
+@click.option("--host", default=None, help="Bind address (default: config web_admin.host)")
+@click.option("--port", default=None, type=int, help="Bind port (default: config web_admin.port)")
 @click.option("--debug/--no-debug", default=False, help="Enable debug mode")
 def run(host, port, debug):
     """Start all Anteumbra subsystems in the foreground.
@@ -151,6 +179,7 @@ def run(host, port, debug):
     Use Ctrl+C to stop.
     """
     root = _find_project_root()
+    host, port = _resolve_bind_options(root, host, port)
     os.chdir(str(root))
     sys.path.insert(0, str(root))
 
@@ -172,8 +201,8 @@ def run(host, port, debug):
 # ── Start (daemon / background) ─────────────────────────────
 
 @cli.command()
-@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Bind address")
-@click.option("--port", default=DEFAULT_PORT, show_default=True, help="Bind port")
+@click.option("--host", default=None, help="Bind address (default: config web_admin.host)")
+@click.option("--port", default=None, type=int, help="Bind port (default: config web_admin.port)")
 def start(host, port):
     """Start Anteumbra as a background process.
 
@@ -181,6 +210,7 @@ def start(host, port):
     On Linux/macOS this forks to the background.
     """
     root = _find_project_root()
+    host, port = _resolve_bind_options(root, host, port)
     pid = _read_pid()
 
     if pid and _is_running(pid):
@@ -395,6 +425,16 @@ def _write_env_value(env_path: Path, key: str, value: str) -> None:
 
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.environ[key] = value
+
+
+def _secret_prompt(text: str, default: str = "") -> str:
+    """Prompt for a secret, without blocking piped/non-interactive input."""
+    return click.prompt(
+        text,
+        default=default,
+        show_default=False,
+        hide_input=sys.stdin.isatty(),
+    )
 
 
 def _create_config_template(target: Path, overwrite: bool | None = None) -> str | None:
@@ -670,12 +710,7 @@ def config_wizard(config_path):
         raise click.ClickException("Admin port must be between 1 and 65535.")
     _set_dotted_value(data, "web_admin.port", admin_port)
 
-    password = click.prompt(
-        "Admin password (leave empty to keep generated/current)",
-        default="",
-        show_default=False,
-        hide_input=True,
-    )
+    password = _secret_prompt("Admin password (leave empty to keep generated/current)")
     if password:
         from werkzeug.security import generate_password_hash
 
@@ -707,16 +742,11 @@ def config_wizard(config_path):
         )
         _set_dotted_value(data, "waf_source.type", waf_type)
         _set_dotted_value(data, "waf_source.url", waf_url)
-        waf_key = click.prompt("WAF API key (optional)", default="", show_default=False, hide_input=True)
+        waf_key = _secret_prompt("WAF API key (optional)")
         if waf_key:
             _write_env_value(target.parent / ".env", "ANTEUMBRA_WAF_API_KEY", waf_key)
 
-    wechat_key = click.prompt(
-        "ServerChan/WeChat SendKey (optional)",
-        default="",
-        show_default=False,
-        hide_input=True,
-    )
+    wechat_key = _secret_prompt("ServerChan/WeChat SendKey (optional)")
     if wechat_key:
         _write_env_value(target.parent / ".env", "ANTEUMBRA_WECHAT_API_KEY", wechat_key)
 

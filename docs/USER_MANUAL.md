@@ -278,16 +278,16 @@ anteumbra config validate # Validate paths, ports, .env, enabled integrations
 ### `anteumbra run`
 ```
 Options:
-  --host TEXT      Bind address (default: 127.0.0.1)
-  --port INTEGER   Bind port (default: 5000)
+  --host TEXT      Bind address (default: config web_admin.host, fallback 127.0.0.1)
+  --port INTEGER   Bind port (default: config web_admin.port, fallback 8080)
   --debug / --no-debug
 ```
 
 ### `anteumbra start`
 ```
 Options:
-  --host TEXT      Bind address
-  --port INTEGER   Bind port
+  --host TEXT      Bind address (default: config web_admin.host)
+  --port INTEGER   Bind port (default: config web_admin.port)
 ```
 
 ### `anteumbra stop`

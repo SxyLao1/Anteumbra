@@ -564,6 +564,37 @@ class TestCliInstall:
         assert "run.py" not in " ".join(cmd)
         assert calls[0][1]["cwd"] == str(tmp_path)
 
+    def test_start_uses_configured_admin_port_by_default(self, tmp_path, monkeypatch):
+        """start should honor web_admin.port when --port is not explicitly passed."""
+        import anteumbra.cli.main as cli_main
+
+        (tmp_path / "config.toml").write_text(
+            "[web_admin]\nhost = \"127.0.0.1\"\nport = 18444\n",
+            encoding="utf-8",
+        )
+        calls = []
+        pid_reads = iter([None, 12345])
+
+        def fake_popen(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+
+            class FakeProc:
+                pass
+
+            return FakeProc()
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
+
+        result = CliRunner().invoke(cli_main.cli, ["start"])
+
+        assert result.exit_code == 0, result.output
+        cmd = calls[0][0]
+        assert "--port" in cmd
+        assert cmd[cmd.index("--port") + 1] == "18444"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 18.2.3 — Process Lifecycle

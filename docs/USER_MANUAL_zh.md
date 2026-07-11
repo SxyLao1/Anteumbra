@@ -272,16 +272,16 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
 ### `anteumbra run`
 ```
 选项：
-  --host TEXT      绑定地址（默认：127.0.0.1）
-  --port INTEGER   绑定端口（默认：5000）
+  --host TEXT      绑定地址（默认读取 config web_admin.host，回退 127.0.0.1）
+  --port INTEGER   绑定端口（默认读取 config web_admin.port，回退 8080）
   --debug / --no-debug
 ```
 
 ### `anteumbra start`
 ```
 选项：
-  --host TEXT      绑定地址
-  --port INTEGER   绑定端口
+  --host TEXT      绑定地址（默认读取 config web_admin.host）
+  --port INTEGER   绑定端口（默认读取 config web_admin.port）
 ```
 
 ### `anteumbra stop`
