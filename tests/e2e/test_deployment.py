@@ -479,6 +479,47 @@ class TestCliInstall:
         assert result.exit_code != 0
         assert "Website path does not exist" in result.output
 
+    def test_config_validate_accepts_tomcat_access_log_wildcards(self, tmp_path):
+        """Tomcat AccessLogValve files are usually date-suffixed and configured by glob."""
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        site_path = tmp_path / "webapps" / "ROOT" / "test"
+        log_dir = tmp_path / "tomcat" / "logs"
+        access_log = log_dir / "localhost_access_log.2026-07-11.txt"
+        site_path.mkdir(parents=True)
+        log_dir.mkdir(parents=True)
+        access_log.write_text(
+            '127.0.0.1 - - [11/Jul/2026:20:00:00 +0800] "GET / HTTP/1.1" 200 16\n',
+            encoding="utf-8",
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(cli, ["config", "set", "website.path", str(site_path), "--config", str(target)])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(cli, ["config", "set", "website.log_config.log_monitor_enabled", "true", "--config", str(target)])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "website.log_config.access_log_path",
+                str(log_dir / "localhost_access_log.*.txt"),
+                "--config",
+                str(target),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
+        assert result.exit_code == 0, result.output
+
     def test_config_wizard_creates_first_run_configuration(self, tmp_path):
         """Interactive wizard should collect the essential deployment settings."""
         import tomli

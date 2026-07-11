@@ -8,7 +8,7 @@ Analyzes web server access logs for suspicious behavioral patterns:
   - UA anomalies: tool signatures (sqlmap, nmap, etc.)
   - Path anomalies: requests to backup files, config files, shell upload paths
 
-Supports: Nginx combined, Apache common, IIS W3C formats.
+Supports: Nginx combined, Apache common, Tomcat AccessLogValve common, IIS W3C formats.
 
 Design:
   - Sliding window analysis (configurable window_size)
@@ -34,9 +34,9 @@ _NGINX_RE = re.compile(
     r'(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+) \S+" (\d+) \d+ "([^"]*)" "([^"]*)"'
 )
 
-# Apache common: 127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326
+# Apache/Tomcat common: 127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] "GET /app HTTP/1.1" 200 2326
 _APACHE_RE = re.compile(
-    r'(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+) \S+" (\d+) (\d+)'
+    r'(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+) \S+" (\d{3}) (?:\d+|-)'
 )
 
 # IIS W3C: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) sc-status
@@ -57,7 +57,7 @@ def parse_log_line(line: str) -> Optional[Dict]:
                 return {"ip": ip, "timestamp": ts, "method": method, "path": path,
                         "status": int(status), "user_agent": ua, "referer": referer}
             elif fmt_name == "apache":
-                ip, ts, method, path, status, size = m.groups()
+                ip, ts, method, path, status = m.groups()
                 return {"ip": ip, "timestamp": ts, "method": method, "path": path,
                         "status": int(status), "user_agent": "", "referer": ""}
             elif fmt_name == "iis":

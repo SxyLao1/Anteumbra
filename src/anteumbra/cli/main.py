@@ -581,11 +581,18 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
         if not access_log:
             errors.append("Access log monitoring is enabled but access_log_path is empty.")
         else:
-            log_path = Path(access_log)
-            if not log_path.is_absolute():
-                log_path = config_path.parent / log_path
-            if not log_path.exists():
-                errors.append(f"Access log path does not exist: {log_path.resolve()}")
+            if "*" in access_log:
+                import glob
+
+                matches = glob.glob(access_log, recursive="**" in access_log)
+                if not matches:
+                    errors.append(f"Access log wildcard has no matches: {access_log}")
+            else:
+                log_path = Path(access_log)
+                if not log_path.is_absolute():
+                    log_path = config_path.parent / log_path
+                if not log_path.exists():
+                    errors.append(f"Access log path does not exist: {log_path.resolve()}")
 
     waf_source = cfg.get("waf_source", {})
     if isinstance(waf_source, dict) and waf_source.get("enabled"):

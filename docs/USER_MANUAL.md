@@ -173,6 +173,22 @@ anteumbra config validate
 
 `config set` rewrites `config.toml` using structured TOML output. Keep sensitive values in `.env` through `config env set`.
 
+For web access log analysis, keep one product flow and only change the log path
+for your web server:
+
+```bash
+# Nginx / Apache fixed file
+anteumbra config set website.log_config.log_monitor_enabled true
+anteumbra config set website.log_config.access_log_path /var/log/nginx/access.log
+
+# Tomcat AccessLogValve date-rotated files
+anteumbra config set website.log_config.access_log_path '/opt/tomcat/logs/localhost_access_log.*.txt'
+```
+
+On Windows, PowerShell may expand `*` before Anteumbra receives it. For Tomcat
+wildcards, prefer `anteumbra config wizard` or the Web Settings page, or edit
+`website.log_config.access_log_path` in `config.toml` directly.
+
 ### 3.4 File Monitoring
 
 ```toml

@@ -22,12 +22,31 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
 
+def resolve_access_log_path(access_log_path_cfg: str) -> Optional[Path]:
+    """Resolve a fixed or globbed access-log path to the newest matching file."""
+    if not access_log_path_cfg:
+        return None
+
+    if "**" in access_log_path_cfg:
+        matches = glob.glob(access_log_path_cfg, recursive=True)
+    elif "*" in access_log_path_cfg:
+        matches = glob.glob(access_log_path_cfg)
+    else:
+        fixed_path = normalize_path(access_log_path_cfg)
+        return fixed_path if fixed_path.exists() else None
+
+    existing = [Path(path) for path in matches if Path(path).exists()]
+    if not existing:
+        return None
+    return normalize_path(sorted(existing, key=lambda p: p.stat().st_mtime, reverse=True)[0])
+
+
 class LogAnalyzer:
     """Web访问日志分析器（v1.7.4增强：通配符递归支持）"""
 
     LOG_PATTERNS = [
-        r'(?P<ip>\d+\.\d+\.\d+\.\d+)\s+-(\s+-)?\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d+)\s+(?P<size>\d+)',
-        r'(?P<ip>\d+\.\d+\.\d+\.\d+)\s+(?:-|\S*)\s+(?:-|\S*)\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d+)\s+(?P<size>\d+)\s+"[^"]*"\s+"[^"]*"'
+        r'(?P<ip>\S+)\s+\S+\s+\S+\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d{3})\s+(?P<size>\d+|-)',
+        r'(?P<ip>\S+)\s+\S+\s+\S+\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d{3})\s+(?P<size>\d+|-)\s+"[^"]*"\s+"[^"]*"'
     ]
 
     def __init__(self, website: Website, logger: logging.Logger):
@@ -48,8 +67,11 @@ class LogAnalyzer:
                             self.logger)
 
     def _detect_log_type(self) -> str:
-        if "nginx" in str(self.log_path).lower():
+        log_path = str(self.log_path).lower()
+        if "nginx" in log_path:
             return "nginx"
+        if "tomcat" in log_path or "localhost_access_log" in log_path:
+            return "tomcat"
         return "apache"
 
     def get_configured_path(self) -> Optional[Path]:

@@ -288,11 +288,19 @@ def access_log_analysis():
         parts.append(line("warn", "[ACCESS_ANALYSIS][MISSING] website.log_config.access_log_path is empty."))
         return ''.join(parts)
 
-    log_path = normalize_path(raw_path)
-    parts.append(line("info", f"[ACCESS_ANALYSIS][CONFIG] path={log_path}"))
-    if not log_path.exists():
-        parts.append(line("error", f"[ACCESS_ANALYSIS][MISSING] access log file does not exist: {log_path}"))
+    try:
+        from anteumbra.infrastructure.monitoring.log_analyzer import resolve_access_log_path
+
+        log_path = resolve_access_log_path(raw_path)
+    except Exception as exc:
+        current_app.logger.warning("[ACCESS_ANALYSIS] failed to resolve log path: %s", exc, exc_info=True)
+        log_path = None
+
+    parts.append(line("info", f"[ACCESS_ANALYSIS][CONFIG] path={raw_path}"))
+    if not log_path:
+        parts.append(line("error", f"[ACCESS_ANALYSIS][MISSING] access log file does not exist or wildcard has no matches: {raw_path}"))
         return ''.join(parts)
+    parts.append(line("info", f"[ACCESS_ANALYSIS][SOURCE] selected={log_path}"))
 
     try:
         from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine

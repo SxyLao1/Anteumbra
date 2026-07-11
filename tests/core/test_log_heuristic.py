@@ -24,6 +24,15 @@ class TestLogParsing:
         assert r["method"] == "GET"
         assert r["path"] == "/index.html"
 
+    def test_tomcat_common_format_with_empty_bytes(self):
+        line = '192.168.160.1 - - [29/Aug/2024:21:44:45 +0800] "GET /manager/html HTTP/1.1" 401 -'
+        r = parse_log_line(line)
+        assert r is not None
+        assert r["ip"] == "192.168.160.1"
+        assert r["method"] == "GET"
+        assert r["path"] == "/manager/html"
+        assert r["status"] == 401
+
     def test_iis_format(self):
         # IIS W3C: date time s-ip cs-method cs-uri-stem cs-uri-query s-port c-ip cs(User-Agent) sc-status
         line = '2026-06-28 12:00:01 192.168.1.1 GET /default.aspx - 80 10.0.0.1 Mozilla/5.0 200'
@@ -142,6 +151,15 @@ class TestSuspiciousPathDetection:
         )
         assert r is not None
         assert r["type"] == "suspicious_path"
+
+    def test_tomcat_jsp_shell_probe(self):
+        engine = LogHeuristicEngine()
+        r = engine.feed_line(
+            '172.17.0.2 - - [29/Aug/2024:21:44:45 +0800] "POST /test/shell.jsp HTTP/1.1" 200 -'
+        )
+        assert r is not None
+        assert r["type"] == "suspicious_path"
+        assert r["path"] == "/test/shell.jsp"
 
 
 class TestErrorStormDetection:

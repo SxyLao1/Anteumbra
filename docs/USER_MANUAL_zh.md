@@ -167,6 +167,21 @@ anteumbra config validate
 
 `config set` 会用结构化 TOML 重新写出 `config.toml`；密码、API Key 等敏感值请通过 `config env set` 写入 `.env`。
 
+访问日志分析仍然走同一套 Anteumbra 配置，只按 Web 服务器类型调整日志路径：
+
+```bash
+# Nginx / Apache 固定日志文件
+anteumbra config set website.log_config.log_monitor_enabled true
+anteumbra config set website.log_config.access_log_path /var/log/nginx/access.log
+
+# Tomcat AccessLogValve 日期轮转日志
+anteumbra config set website.log_config.access_log_path '/opt/tomcat/logs/localhost_access_log.*.txt'
+```
+
+Windows PowerShell 可能会在 Anteumbra 收到参数前展开 `*`。配置 Tomcat
+通配符时，优先使用 `anteumbra config wizard`、Web 设置页，或直接编辑
+`config.toml` 里的 `website.log_config.access_log_path`。
+
 ### 3.4 文件监控
 
 ```toml
