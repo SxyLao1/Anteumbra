@@ -73,6 +73,8 @@ Your Web Server (Nginx/Apache/IIS)
 pip install anteumbra
 anteumbra install ./anteumbra-instance
 cd ./anteumbra-instance
+anteumbra config wizard
+anteumbra config validate
 anteumbra run
 ```
 
@@ -88,6 +90,7 @@ cd Anteumbra
 pip install -e ".[dev]"
 anteumbra install ./dev-instance --force
 cd ./dev-instance
+anteumbra config wizard
 anteumbra run
 ```
 
@@ -114,10 +117,12 @@ anteumbra run
 
 Run this command from the instance directory created by `anteumbra install`.
 
-On first startup, Anteumbra:
-1. Generates a random admin password (printed to console — **save it**)
-2. Creates `config.toml` if missing (or use `anteumbra config`)
-3. Starts the file monitor and web dashboard
+Before startup, `anteumbra install` creates `config.toml`, `.env`, bundled rules, and a default monitored directory. It also prints the initial admin password; save it.
+
+On startup, Anteumbra:
+1. Loads `config.toml` and `.env` from the runtime instance directory
+2. Verifies at least one enabled website path exists
+3. Starts the file monitor, background workers, and web dashboard
 
 Open `http://127.0.0.1:8080/admin` and log in with username `admin`.
 
@@ -153,7 +158,22 @@ python -c "from werkzeug.security import generate_password_hash; print(generate_
 
 Paste the output into `config.toml` or set `ANTEUMBRA_PASSWORD_HASH` in your `.env` file.
 
-### 3.3 File Monitoring
+### 3.3 CLI Configuration
+
+Use `anteumbra config wizard` for first-run setup, or scripted subcommands for repeatable deployments:
+
+```bash
+anteumbra config init --output ./config.toml
+anteumbra config wizard
+anteumbra config set website.path /var/www/html
+anteumbra config set web_admin.port 8080
+anteumbra config env set ANTEUMBRA_WECHAT_API_KEY your-send-key
+anteumbra config validate
+```
+
+`config set` rewrites `config.toml` using structured TOML output. Keep sensitive values in `.env` through `config env set`.
+
+### 3.4 File Monitoring
 
 ```toml
 [website.scan_options]
@@ -164,7 +184,7 @@ exclude_files = ["*.log", "*.cache"]
 monitor_extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
 ```
 
-### 3.4 Alerting
+### 3.5 Alerting
 
 ```toml
 [notifier]
@@ -250,7 +270,9 @@ anteumbra run             # Start in foreground
 anteumbra start           # Start as daemon (background)
 anteumbra stop            # Stop running instance
 anteumbra status          # Check if running
-anteumbra config          # Generate config.toml template
+anteumbra config          # Generate config.toml template (compatibility alias)
+anteumbra config wizard   # Interactive first-run setup
+anteumbra config validate # Validate paths, ports, .env, enabled integrations
 ```
 
 ### `anteumbra run`
@@ -275,7 +297,19 @@ Stops the running process. On Windows uses `taskkill /F`, on Linux sends `SIGTER
 ```
 Options:
   -o, --output TEXT   Output path (default: ./config.toml)
+
+Subcommands:
+  init                  Create config.toml, .env, default site dir, rules
+  wizard                Interactive setup for website path, admin port, logs, WAF
+  set KEY VALUE         Set a dotted config key, e.g. web_admin.port 8080
+  env set KEY VALUE     Set one .env variable
+  validate              Validate runnable paths and integration settings
+  reload                Reload config in the current CLI process
 ```
+
+`anteumbra config reload` does not reach into an already running background
+service. Use the web Settings/System reload action or restart the service for a
+running instance.
 
 ---
 
@@ -384,6 +418,12 @@ Uses ssdeep/TLSH/SimHash to group files with ≥80% similarity. Helps identify:
 - **SIEM Status** — Export statistics and format
 - **Storage Status** — Database size, backend info
 - **Plugin Status** — Loaded plugins and their states
+
+Saving config or `.env` from the web Settings page triggers an in-process
+config reload. Manual file edits should be followed by the System reload action
+or a restart. Restart is still recommended for startup-lifecycle settings such
+as web bind host/port, session backend, storage backend, plugin list, and
+monitored website path.
 
 ### 5.11 System Management
 
@@ -729,5 +769,5 @@ GET /admin/health            # Authenticated health with diagnostics
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.21 — MIT License</sub>
+  <sub>Anteumbra v1.0.22 — MIT License</sub>
 </div>

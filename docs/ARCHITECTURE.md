@@ -1,4 +1,4 @@
-# Anteumbra Technical White Paper v1.0.21
+# Anteumbra Technical White Paper v1.0.22
 
 > **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
 
@@ -795,5 +795,5 @@ Merge conditions:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.21 — Evolving alongside the code</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.22 — Evolving alongside the code</sub>
 </div>

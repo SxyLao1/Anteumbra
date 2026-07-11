@@ -430,6 +430,78 @@ class TestCliInstall:
         assert 'path = "sites/default"' in target.read_text(encoding="utf-8")
         assert (target.parent / "rules" / "webshell").is_dir()
 
+    def test_config_subcommands_update_config_and_env(self, tmp_path):
+        """CLI config subcommands should support scripted first-run setup."""
+        import tomli
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        env_path = target.parent / ".env"
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            ["config", "set", "web_admin.port", "8099", "--config", str(target)],
+        )
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            ["config", "env", "set", "ANTEUMBRA_WECHAT_API_KEY", "send-key", "--env", str(env_path)],
+        )
+        assert result.exit_code == 0, result.output
+
+        cfg = tomli.loads(target.read_text(encoding="utf-8"))
+        assert cfg["web_admin"]["port"] == 8099
+        assert "ANTEUMBRA_WECHAT_API_KEY=send-key" in env_path.read_text(encoding="utf-8")
+
+    def test_config_validate_reports_missing_website_path(self, tmp_path):
+        """config validate should catch deployment paths that cannot run."""
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        missing_site = tmp_path / "missing-site"
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            ["config", "set", "website.path", str(missing_site), "--config", str(target)],
+        )
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
+        assert result.exit_code != 0
+        assert "Website path does not exist" in result.output
+
+    def test_config_wizard_creates_first_run_configuration(self, tmp_path):
+        """Interactive wizard should collect the essential deployment settings."""
+        import tomli
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        site_path = tmp_path / "phpstudy" / "WWW" / "test"
+        wizard_input = f"{site_path}\ny\n8098\n\nn\nn\n\n"
+
+        result = CliRunner().invoke(
+            cli,
+            ["config", "wizard", "--config", str(target)],
+            input=wizard_input,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert site_path.is_dir()
+        cfg = tomli.loads(target.read_text(encoding="utf-8"))
+        assert cfg["website"]["path"] == str(site_path)
+        assert cfg["web_admin"]["port"] == 8098
+        assert cfg["website"]["log_config"]["log_monitor_enabled"] is False
+        assert cfg["waf_source"]["enabled"] is False
+
     def test_bundled_config_defaults_are_runnable_without_external_services(self):
         """Fresh installs should not require nginx logs or a mock WAF server."""
         import tomli

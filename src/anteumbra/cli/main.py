@@ -8,7 +8,7 @@ Usage:
   anteumbra start            Start in background (daemon)
   anteumbra stop             Stop via PID file
   anteumbra status           Check if running
-  anteumbra config           Interactive config wizard
+  anteumbra config           Manage configuration files
   anteumbra --version        Show version
 """
 import json
@@ -294,17 +294,114 @@ def status():
         (Path.cwd() / PID_FILE).unlink(missing_ok=True)
 
 
-# ── Config wizard ─────────────────────────────────
+# ── Config management ──────────────────────────────
 
-@cli.command()
-@click.option("--output", "-o", default=None, help="Output path (default: ./config.toml)")
-def config(output):
-    """Generate a config.toml from the bundled template."""
+def _load_toml_file(path: Path) -> dict:
+    """Load a TOML file without install-registry fallbacks."""
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _write_toml_file(path: Path, data: dict) -> None:
+    import tomli_w
+
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+
+
+def _config_target(config_path: str | None = None) -> Path:
+    if config_path:
+        return Path(config_path).expanduser().resolve()
+    return (_find_project_root() / "config.toml").resolve()
+
+
+def _load_toml_value(value: str):
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    return tomllib.loads(f"value = {value}")["value"]
+
+
+def _parse_config_value(raw: str):
+    value = raw.strip()
+    lower = value.lower()
+    if lower == "true":
+        return True
+    if lower == "false":
+        return False
+    if lower in {"none", "null"}:
+        return None
+    try:
+        if "." not in value:
+            return int(value)
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        return _load_toml_value(value)
+    except Exception:
+        return raw
+
+
+def _set_dotted_value(data: dict, dotted_key: str, value) -> None:
+    parts = [part for part in dotted_key.split(".") if part]
+    if not parts:
+        raise click.ClickException("Config key cannot be empty.")
+    node = data
+    for part in parts[:-1]:
+        child = node.setdefault(part, {})
+        if not isinstance(child, dict):
+            raise click.ClickException(
+                f"Cannot set {dotted_key}: {part} is not a table."
+            )
+        node = child
+    node[parts[-1]] = value
+
+
+def _get_dotted_value(data: dict, dotted_key: str, default=None):
+    node = data
+    for part in dotted_key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return default
+        node = node[part]
+    return node
+
+
+def _write_env_value(env_path: Path, key: str, value: str) -> None:
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    replacement = f"{key}={value}"
+    replaced = False
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#") or "=" not in line:
+            continue
+        if line.split("=", 1)[0].strip() == key:
+            lines[index] = replacement
+            replaced = True
+            break
+
+    if not replaced:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(replacement)
+
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[key] = value
+
+
+def _create_config_template(target: Path, overwrite: bool | None = None) -> str | None:
+    """Generate config.toml, .env, default site dir, and bundled rules."""
     import shutil
 
-    root = _find_project_root()
     template = _find_config_template()
-    target = Path(output) if output else root / "config.toml"
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if not template:
@@ -313,9 +410,12 @@ def config(output):
         raise SystemExit(1)
 
     if target.exists():
-        if not click.confirm(f"{target} already exists. Overwrite?"):
+        should_overwrite = overwrite
+        if should_overwrite is None:
+            should_overwrite = click.confirm(f"{target} already exists. Overwrite?")
+        if not should_overwrite:
             click.echo("Aborted.")
-            return
+            return None
 
     shutil.copy(template, target)
     click.echo(f"Config template written to {target}")
@@ -324,7 +424,7 @@ def config(output):
 
     # v1.0.10: 生成完整 .env 文件（含所有通知推送字段）
     env_file = target.parent / ".env"
-    if not env_file.exists() or click.confirm(f"{env_file} already exists. Overwrite?"):
+    if not env_file.exists() or overwrite is True or click.confirm(f"{env_file} already exists. Overwrite?"):
         import secrets as _sec
         import string as _str
         from werkzeug.security import generate_password_hash
@@ -362,6 +462,8 @@ def config(output):
         click.echo(f"  Admin username: admin")
         click.echo(f"  Admin password: {pwd}")
         click.echo(f"  (fill in email/WeChat fields to enable notifications)")
+    else:
+        pwd = None
 
     # v1.0.9: 同时复制 YARA 规则目录
     rules_src = None
@@ -384,6 +486,251 @@ def config(output):
         click.echo("  You can manually copy rules/ from the Anteumbra repository")
 
     click.echo("Edit config.toml to configure websites, WAF, notifications, etc.")
+    return pwd
+
+
+def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
+    from anteumbra.infrastructure.config.loader import load_toml_config
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not config_path.exists():
+        return [f"Config file does not exist: {config_path}"], warnings
+
+    try:
+        cfg = load_toml_config(str(config_path))
+    except Exception as exc:
+        return [f"Failed to load config: {exc}"], warnings
+
+    website = cfg.get("website", {})
+    if not isinstance(website, dict):
+        errors.append("[website] must be a table.")
+        website = {}
+
+    if website.get("enabled", True):
+        site_path = str(website.get("path", "")).strip()
+        if not site_path:
+            errors.append("[website].path is required when website.enabled=true.")
+        else:
+            resolved = Path(site_path)
+            if not resolved.is_absolute():
+                resolved = config_path.parent / resolved
+            if not resolved.exists():
+                errors.append(f"Website path does not exist: {resolved.resolve()}")
+
+    web_admin = cfg.get("web_admin", {})
+    if not isinstance(web_admin, dict):
+        errors.append("[web_admin] must be a table.")
+        web_admin = {}
+
+    port = web_admin.get("port")
+    if not isinstance(port, int) or not (1 <= port <= 65535):
+        errors.append("[web_admin].port must be an integer between 1 and 65535.")
+
+    if not str(web_admin.get("password_hash", "")).strip():
+        warnings.append("Admin password hash is empty. Set ANTEUMBRA_PASSWORD_HASH in .env.")
+
+    secret = os.environ.get("ANTEUMBRA_SECRET_KEY", "")
+    if not secret or secret == "change_this_to_a_random_32_char_string":
+        warnings.append("ANTEUMBRA_SECRET_KEY is not customized.")
+
+    log_config = website.get("log_config", {})
+    if isinstance(log_config, dict) and log_config.get("log_monitor_enabled"):
+        access_log = str(log_config.get("access_log_path", "")).strip()
+        if not access_log:
+            errors.append("Access log monitoring is enabled but access_log_path is empty.")
+        else:
+            log_path = Path(access_log)
+            if not log_path.is_absolute():
+                log_path = config_path.parent / log_path
+            if not log_path.exists():
+                errors.append(f"Access log path does not exist: {log_path.resolve()}")
+
+    waf_source = cfg.get("waf_source", {})
+    if isinstance(waf_source, dict) and waf_source.get("enabled"):
+        if not str(waf_source.get("url", "")).strip():
+            errors.append("WAF source is enabled but [waf_source].url is empty.")
+
+    return errors, warnings
+
+
+@cli.group(invoke_without_command=True)
+@click.option("--output", "-o", default=None, help="Output path (default: ./config.toml)")
+@click.pass_context
+def config(ctx, output):
+    """Manage config.toml and .env files."""
+    if ctx.invoked_subcommand is None:
+        target = Path(output).expanduser().resolve() if output else _config_target()
+        _create_config_template(target)
+
+
+@config.command("init")
+@click.option("--output", "-o", default=None, help="Output path (default: ./config.toml)")
+@click.option("--force", is_flag=True, help="Overwrite existing files without prompting")
+def config_init(output, force):
+    """Create config.toml, .env, default site dir, and bundled rules."""
+    target = Path(output).expanduser().resolve() if output else _config_target()
+    _create_config_template(target, overwrite=True if force else None)
+
+
+@config.command("set")
+@click.argument("key")
+@click.argument("value")
+@click.option("--config", "config_path", default=None, help="Path to config.toml")
+def config_set(key, value, config_path):
+    """Set a dotted config key, for example website.path or web_admin.port."""
+    target = _config_target(config_path)
+    if not target.exists():
+        raise click.ClickException(f"Config file does not exist: {target}")
+
+    data = _load_toml_file(target)
+    parsed = _parse_config_value(value)
+    _set_dotted_value(data, key, parsed)
+    _write_toml_file(target, data)
+    click.echo(f"Set {key} = {parsed!r} in {target}")
+
+
+@config.group("env")
+def config_env():
+    """Manage .env values."""
+
+
+@config_env.command("set")
+@click.argument("key")
+@click.argument("value")
+@click.option("--env", "env_path", default=None, help="Path to .env")
+def config_env_set(key, value, env_path):
+    """Set one environment variable in .env."""
+    target = Path(env_path).expanduser().resolve() if env_path else _config_target().parent / ".env"
+    _write_env_value(target, key, value)
+    click.echo(f"Set {key} in {target}")
+
+
+@config.command("validate")
+@click.option("--config", "config_path", default=None, help="Path to config.toml")
+def config_validate(config_path):
+    """Validate config.toml, .env, paths, ports, and enabled integrations."""
+    target = _config_target(config_path)
+    errors, warnings = _validate_config_file(target)
+
+    for warning in warnings:
+        click.echo(f"Warning: {warning}")
+    for error in errors:
+        click.echo(f"Error: {error}", err=True)
+
+    if errors:
+        raise SystemExit(1)
+    click.echo(f"Config OK: {target}")
+
+
+@config.command("reload")
+@click.option("--config", "config_path", default=None, help="Path to config.toml")
+def config_reload(config_path):
+    """Reload config in the current CLI process after validation."""
+    target = _config_target(config_path)
+    errors, warnings = _validate_config_file(target)
+    for warning in warnings:
+        click.echo(f"Warning: {warning}")
+    if errors:
+        for error in errors:
+            click.echo(f"Error: {error}", err=True)
+        raise SystemExit(1)
+
+    from anteumbra.infrastructure.config.registry import ConfigRegistry
+
+    ConfigRegistry.initialize(str(target), force=True)
+    click.echo("Config registry reloaded in this process.")
+    click.echo("A running Anteumbra service still needs the web reload action or a restart.")
+
+
+@config.command("wizard")
+@click.option("--config", "config_path", default=None, help="Path to config.toml")
+def config_wizard(config_path):
+    """Interactive first-run configuration wizard."""
+    target = _config_target(config_path)
+    if not target.exists():
+        click.echo(f"No config found at {target}; creating a template first.")
+        _create_config_template(target, overwrite=True)
+
+    data = _load_toml_file(target)
+
+    current_site = str(_get_dotted_value(data, "website.path", "sites/default"))
+    site_path = click.prompt("Website root path", default=current_site)
+    resolved_site = Path(site_path)
+    if not resolved_site.is_absolute():
+        resolved_site = target.parent / resolved_site
+    if not resolved_site.exists() and click.confirm(f"Create website directory {resolved_site}?", default=True):
+        resolved_site.mkdir(parents=True, exist_ok=True)
+    _set_dotted_value(data, "website.path", site_path)
+
+    current_port = int(_get_dotted_value(data, "web_admin.port", DEFAULT_PORT))
+    admin_port = click.prompt("Admin port", default=current_port, type=int)
+    if not (1 <= admin_port <= 65535):
+        raise click.ClickException("Admin port must be between 1 and 65535.")
+    _set_dotted_value(data, "web_admin.port", admin_port)
+
+    password = click.prompt(
+        "Admin password (leave empty to keep generated/current)",
+        default="",
+        show_default=False,
+        hide_input=True,
+    )
+    if password:
+        from werkzeug.security import generate_password_hash
+
+        _write_env_value(target.parent / ".env", "ANTEUMBRA_PASSWORD_HASH", generate_password_hash(password))
+
+    log_enabled = bool(_get_dotted_value(data, "website.log_config.log_monitor_enabled", False))
+    enable_logs = click.confirm("Enable access log analysis?", default=log_enabled)
+    _set_dotted_value(data, "website.log_config.log_monitor_enabled", enable_logs)
+    if enable_logs:
+        current_log = str(_get_dotted_value(data, "website.log_config.access_log_path", ""))
+        access_log = click.prompt("Access log path", default=current_log or "logs/access.log")
+        _set_dotted_value(data, "website.log_config.access_log_path", access_log)
+
+    waf_enabled = bool(_get_dotted_value(data, "waf_source.enabled", False))
+    enable_waf = click.confirm("Enable WAF event polling?", default=waf_enabled)
+    _set_dotted_value(data, "waf_source.enabled", enable_waf)
+    if enable_waf:
+        waf_type = click.prompt(
+            "WAF type",
+            default=str(_get_dotted_value(data, "waf_source.type", "mock")),
+            type=click.Choice(
+                ["mock", "http", "modsecurity", "cloudflare", "aws_waf", "syslog"],
+                case_sensitive=False,
+            ),
+        )
+        waf_url = click.prompt(
+            "WAF URL",
+            default=str(_get_dotted_value(data, "waf_source.url", "http://127.0.0.1:8081")),
+        )
+        _set_dotted_value(data, "waf_source.type", waf_type)
+        _set_dotted_value(data, "waf_source.url", waf_url)
+        waf_key = click.prompt("WAF API key (optional)", default="", show_default=False, hide_input=True)
+        if waf_key:
+            _write_env_value(target.parent / ".env", "ANTEUMBRA_WAF_API_KEY", waf_key)
+
+    wechat_key = click.prompt(
+        "ServerChan/WeChat SendKey (optional)",
+        default="",
+        show_default=False,
+        hide_input=True,
+    )
+    if wechat_key:
+        _write_env_value(target.parent / ".env", "ANTEUMBRA_WECHAT_API_KEY", wechat_key)
+
+    _write_toml_file(target, data)
+    click.echo(f"Config wizard wrote {target}")
+
+    errors, warnings = _validate_config_file(target)
+    for warning in warnings:
+        click.echo(f"Warning: {warning}")
+    if errors:
+        for error in errors:
+            click.echo(f"Error: {error}", err=True)
+        raise SystemExit(1)
+    click.echo("Config OK.")
 
 
 # ── Install ────────────────────────────────────────

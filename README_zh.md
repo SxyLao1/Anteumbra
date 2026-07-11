@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.21-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.22-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -50,8 +50,12 @@ Anteumbra（前身 Trident）是一款面向 Linux 和 Windows 的**生产级 We
 pip install anteumbra
 anteumbra install ./anteumbra-instance
 cd ./anteumbra-instance
+anteumbra config wizard
+anteumbra config validate
 anteumbra run
 ```
+
+打开 `http://127.0.0.1:8080/admin`。默认用户名为 `admin`；初始密码由 `anteumbra install` 打印，如果在 `anteumbra config wizard` 中输入新密码则会重新写入 `.env`。
 
 如需启用编译型 YARA 规则校验和扫描，请安装 `anteumbra[yara]`；如需同时启用可选相似哈希引擎，请安装 `anteumbra[full]`。
 
@@ -63,6 +67,7 @@ cd Anteumbra
 pip install -e ".[dev]"
 anteumbra install ./dev-instance --force
 cd ./dev-instance
+anteumbra config wizard
 anteumbra run
 python -m pytest tests/core/ -v
 ```
@@ -167,5 +172,5 @@ MIT License。自由用于生产环境、学术研究和个人使用。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.21 — MIT License</sub>
+  <sub>Anteumbra v1.0.22 — MIT License</sub>
 </div>

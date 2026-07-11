@@ -73,6 +73,8 @@ Anteumbra 是一个**被动的 Web 边界安全观测平台**。它不会内联�
 pip install anteumbra
 anteumbra install ./anteumbra-instance
 cd ./anteumbra-instance
+anteumbra config wizard
+anteumbra config validate
 anteumbra run
 ```
 
@@ -86,6 +88,7 @@ cd Anteumbra
 pip install -e ".[dev]"
 anteumbra install ./dev-instance --force
 cd ./dev-instance
+anteumbra config wizard
 anteumbra run
 ```
 
@@ -108,10 +111,12 @@ Docker 镜像包含全部三种哈希引擎（ssdeep + py-tlsh + yara-python）�
 anteumbra run
 ```
 
-首次启动时，Anteumbra 会：
-1. 生成一个随机的管理员密码（打印到控制台 — **请保存好**）
-2. 如果缺失则创建 `config.toml`（或使用 `anteumbra config`）
-3. 启动文件监控器和 Web 仪表盘
+首次启动前，`anteumbra install` 会创建 `config.toml`、`.env`、内置规则和默认监控目录，并打印初始管理员密码，请先保存好。
+
+启动时，Anteumbra 会：
+1. 从运行实例目录加载 `config.toml` 和 `.env`
+2. 检查至少有一个启用的网站路径真实存在
+3. 启动文件监控、后台任务和 Web 仪表盘
 
 打开 `http://127.0.0.1:8080/admin`，使用用户名 `admin` 登录。
 
@@ -147,7 +152,22 @@ python -c "from werkzeug.security import generate_password_hash; print(generate_
 
 将输出粘贴到 `config.toml` 中，或在 `.env` 文件中设置 `ANTEUMBRA_PASSWORD_HASH`。
 
-### 3.3 文件监控
+### 3.3 CLI 配置
+
+首次配置推荐使用交互向导；自动化部署可以使用脚本式子命令：
+
+```bash
+anteumbra config init --output ./config.toml
+anteumbra config wizard
+anteumbra config set website.path /var/www/html
+anteumbra config set web_admin.port 8080
+anteumbra config env set ANTEUMBRA_WECHAT_API_KEY your-send-key
+anteumbra config validate
+```
+
+`config set` 会用结构化 TOML 重新写出 `config.toml`；密码、API Key 等敏感值请通过 `config env set` 写入 `.env`。
+
+### 3.4 文件监控
 
 ```toml
 [website.scan_options]
@@ -158,7 +178,7 @@ exclude_files = ["*.log", "*.cache"]
 monitor_extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
 ```
 
-### 3.4 告警通知
+### 3.5 告警通知
 
 ```toml
 [notifier]
@@ -245,6 +265,8 @@ anteumbra start           # 以守护进程方式启动（后台）
 anteumbra stop            # 停止运行中的实例
 anteumbra status          # 检查是否在运行
 anteumbra config          # 生成 config.toml 模板
+anteumbra config wizard   # 交互式首次配置
+anteumbra config validate # 校验路径、端口、.env 和已启用集成
 ```
 
 ### `anteumbra run`
@@ -269,7 +291,17 @@ anteumbra config          # 生成 config.toml 模板
 ```
 选项：
   -o, --output TEXT   输出路径（默认：./config.toml）
+
+常用子命令：
+  init                  创建 config.toml、.env、默认站点目录和规则
+  wizard                交互式配置网站路径、管理端口、日志和 WAF
+  set KEY VALUE         设置一个点分隔配置项，例如 web_admin.port 8080
+  env set KEY VALUE     设置一个 .env 变量
+  validate              校验可运行路径和集成配置
+  reload                重载当前 CLI 进程中的配置
 ```
+
+`anteumbra config reload` 只会重载当前 CLI 进程的配置；已经运行的后台服务请使用 Web 系统页的重载动作，或重启服务。
 
 ---
 
@@ -378,6 +410,8 @@ anteumbra config          # 生成 config.toml 模板
 - **SIEM 状态** — 导出统计信息和格式
 - **存储状态** — 数据库大小、后端信息
 - **插件状态** — 已加载插件及其状态
+
+在 Web 设置页保存 `config.toml` 或 `.env` 会触发当前进程内的配置重载。手工编辑文件后，请在系统页执行重载，或重启服务。Web 绑定地址/端口、会话后端、存储后端、插件列表、网站监控路径等启动期资源仍建议重启后生效。
 
 ### 5.11 系统管理
 
@@ -723,5 +757,5 @@ GET /admin/health            # 需认证的健康检查，含诊断信息
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.21 — MIT License</sub>
+  <sub>Anteumbra v1.0.22 — MIT License</sub>
 </div>
