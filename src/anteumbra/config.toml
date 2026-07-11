@@ -5,7 +5,7 @@ project_root = "."
 
 [website]
 name = "Default Website"
-path = "/var/www/html"
+path = "sites/default"
 port = 80
 enabled = true
 
@@ -34,7 +34,7 @@ sse_max_total_clients = 20
 # v1.8.1: WAF 事件源配置（画像引擎数据来源）
 # ============================================================================
 [waf_source]
-enabled = true
+enabled = false
 type = "mock"
 url = "http://127.0.0.1:8081"
 poll_interval = 10
@@ -432,7 +432,7 @@ scan_timeout = 30
 [website.log_config]
 access_log_path = "/var/log/nginx/access.log"
 filter_internal_ip = false
-log_monitor_enabled = true
+log_monitor_enabled = false
 
 [api]
 health_check_port = 8080

@@ -27,6 +27,7 @@ from anteumbra import __version__
 PID_FILE = Path("data/anteumbra.pid")
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
+DEFAULT_SITE_DIR = Path("sites/default")
 
 
 def _package_dir() -> Path:
@@ -45,6 +46,13 @@ def _find_config_template() -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def _ensure_default_site_dir(root: Path) -> Path:
+    """Create the default monitored website directory inside a deployment root."""
+    site_dir = root / DEFAULT_SITE_DIR
+    site_dir.mkdir(parents=True, exist_ok=True)
+    return site_dir
 
 
 def _find_project_root() -> Path:
@@ -297,6 +305,7 @@ def config(output):
     root = _find_project_root()
     template = _find_config_template()
     target = Path(output) if output else root / "config.toml"
+    target.parent.mkdir(parents=True, exist_ok=True)
 
     if not template:
         # v1.0.9: 从包所在源码树查找（dev install）
@@ -310,6 +319,8 @@ def config(output):
 
     shutil.copy(template, target)
     click.echo(f"Config template written to {target}")
+    site_dir = _ensure_default_site_dir(target.parent)
+    click.echo(f"Default website directory ready at {site_dir}")
 
     # v1.0.10: 生成完整 .env 文件（含所有通知推送字段）
     env_file = target.parent / ".env"
@@ -356,7 +367,7 @@ def config(output):
     rules_src = None
     for candidate in [
         template.parent / "rules",                    # 与 config.toml 同目录
-        Path(_anteumbra_pkg.__file__).parent / "rules",  # v1.0.9: 包内置规则
+        _package_dir() / "rules",                     # 包内置规则
     ]:
         if candidate.is_dir():
             rules_src = candidate
@@ -438,7 +449,7 @@ def install(path, force):
 
     # ── 创建子目录 ────────────────────────────────
     for sub in ["data", "data/sessions", "data/quarantine", "data/threat_intel",
-                "data/siem", "logs", "rules"]:
+                "data/siem", "logs", "rules", str(DEFAULT_SITE_DIR)]:
         (target / sub).mkdir(parents=True, exist_ok=True)
 
     # ── 提取 config.toml 模板 ─────────────────────

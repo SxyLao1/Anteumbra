@@ -44,10 +44,10 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         return
     website = websites[0]
     website.path = normalize_path(website.path)
-
-    api_cfg = ConfigRegistry.get_raw_config().get("api", {})
-    host = api_cfg.get("health_check_host", host)
-    port = api_cfg.get("health_check_port", port)
+    if not website.path.exists():
+        print(f"[FATAL] Website path does not exist: {website.path}")
+        print("        Create the directory or update [website].path in config.toml.")
+        return
 
     print(f"Anteumbra v{get_version()} — Web Perimeter Security")
     print(f"  Website: {website.name}")
@@ -77,15 +77,20 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     print(f"[OK] File monitor watching: {website.path}")
 
     # ── Log Monitor ────────────────────────────────────
-    try:
-        from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
-        from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
-        analyzer = get_analyzer(website, monitor_logger)
-        log_monitor = LogMonitor(monitor_logger, analyzer)
-        log_monitor.start()
-        print("[OK] Log monitor started")
-    except Exception as e:
-        print(f"[WARN] Log monitor: {e}")
+    log_monitor = None
+    log_cfg = ConfigRegistry.get_raw_config().get("website", {}).get("log_config", {})
+    if log_cfg.get("log_monitor_enabled", False):
+        try:
+            from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
+            from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
+            analyzer = get_analyzer(website, monitor_logger)
+            log_monitor = LogMonitor(monitor_logger, analyzer)
+            log_monitor.start()
+            print("[OK] Log monitor started")
+        except Exception as e:
+            print(f"[WARN] Log monitor: {e}")
+    else:
+        print("[OK] Log monitor disabled")
 
     # ── WAF Poller ─────────────────────────────────────
     try:

@@ -15,6 +15,7 @@ import sys
 import time
 import socket
 import textwrap
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -409,9 +410,56 @@ class TestCliInstall:
         assert (target / "config.toml").exists()
         assert (target / ".env").exists()
         assert (target / ".anteumbra_install").exists()
+        assert (target / "sites" / "default").is_dir()
+        assert 'path = "sites/default"' in (target / "config.toml").read_text(encoding="utf-8")
         assert (target / "rules" / "webshell").is_dir()
         assert list((target / "rules" / "webshell").glob("*.yar"))
         assert registered["path"] == str(target.resolve())
+
+    def test_config_command_creates_runnable_default_site(self, tmp_path):
+        """anteumbra config should create a config plus the default monitored directory."""
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        result = CliRunner().invoke(cli, ["config", "--output", str(target)])
+
+        assert result.exit_code == 0, result.output
+        assert target.exists()
+        assert (target.parent / ".env").exists()
+        assert (target.parent / "sites" / "default").is_dir()
+        assert 'path = "sites/default"' in target.read_text(encoding="utf-8")
+        assert (target.parent / "rules" / "webshell").is_dir()
+
+    def test_bundled_config_defaults_are_runnable_without_external_services(self):
+        """Fresh installs should not require nginx logs or a mock WAF server."""
+        import tomli
+        import anteumbra
+
+        config_path = Path(anteumbra.__file__).parent / "config.toml"
+        cfg = tomli.loads(config_path.read_text(encoding="utf-8"))
+
+        assert cfg["website"]["path"] == "sites/default"
+        assert cfg["website"]["log_config"]["log_monitor_enabled"] is False
+        assert cfg["waf_source"]["enabled"] is False
+
+    def test_launcher_handles_missing_website_path_without_traceback(self, tmp_path, monkeypatch, capsys):
+        """Bad user config should fail cleanly before starting background services."""
+        from anteumbra.application import launcher
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+
+        missing = tmp_path / "missing-site"
+        website = SimpleNamespace(name="Missing Site", path=missing)
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(ConfigRegistry, "initialize", classmethod(lambda cls: None))
+        monkeypatch.setattr(ConfigRegistry, "get_enabled_websites", classmethod(lambda cls: [website]))
+        monkeypatch.setattr(ConfigRegistry, "get_raw_config", classmethod(lambda cls: {}))
+
+        launcher.start_all(host="127.0.0.1", port=8765)
+
+        output = capsys.readouterr().out
+        assert "[FATAL] Website path does not exist" in output
+        assert str(missing.resolve()) in output
 
     def test_start_uses_package_entrypoint_not_source_run_py(self, tmp_path, monkeypatch):
         """Background start must work from a deployment dir without run.py."""

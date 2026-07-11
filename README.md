@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.20-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.21-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -171,5 +171,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.20 — MIT License</sub>
+  <sub>Anteumbra v1.0.21 — MIT License</sub>
 </div>
