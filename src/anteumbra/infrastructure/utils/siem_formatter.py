@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Trident SIEM Event Formatter
+Anteumbra SIEM Event Formatter
 Standardizes detection events into SIEM-friendly formats.
 
 Supported formats:

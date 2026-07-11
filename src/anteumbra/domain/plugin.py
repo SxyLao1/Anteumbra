@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-v1.9.0: Plugin 抽象接口
+Plugin abstraction for Anteumbra extension points.
 
-Trident 插件系统的核心契约。所有功能模块（检测器、通知器、
-事件源、数据仓库）最终都实现 Plugin 接口，通过 PluginManager
-注册和调度。
+Detectors, notifiers, event sources, and repositories can implement this
+contract and be registered through PluginManager.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

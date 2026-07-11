@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-v1.9.3: Trident Plugin Manager
+Anteumbra Plugin Manager
 
 插件生命周期管理：加载 → 激活 → 事件分发 → 停用。
 通过 config.toml [plugins] 控制启停。

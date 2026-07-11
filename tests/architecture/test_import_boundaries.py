@@ -62,6 +62,18 @@ def _python_files() -> Iterable[Path]:
             yield path
 
 
+def _packaged_text_files() -> Iterable[Path]:
+    suffixes = {".css", ".html", ".js", ".py", ".toml"}
+    for path in PACKAGE_ROOT.rglob("*"):
+        if (
+            path.is_file()
+            and path.suffix in suffixes
+            and "__pycache__" not in path.parts
+            and "rules" not in path.parts
+        ):
+            yield path
+
+
 def _internal_import_edges() -> list[ImportEdge]:
     return [edge for edge in _import_edges() if edge.imported.startswith("anteumbra")]
 
@@ -113,6 +125,22 @@ KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER: set[tuple[str, str]] = {
 # The launcher is the composition root and may start the web interface.
 KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
     ("application/launcher.py", "anteumbra.interfaces.web.factory"),
+}
+
+
+KNOWN_LEGACY_BRANDING_LINES: set[tuple[str, str]] = {
+    (
+        "interfaces/web/factory.py",
+        "重命名 trident_ → anteumbra_ 保持模板兼容",
+    ),
+    (
+        "interfaces/web/static/js/sse-manager.js",
+        "window.TridentSSEManager = window.AnteumbraSSEManager;",
+    ),
+    (
+        "interfaces/web/static/js/utils.js",
+        "window.TridentUtils = AnteumbraUtils;",
+    ),
 }
 
 
@@ -227,3 +255,35 @@ def test_known_application_to_interfaces_debt_still_matches_reality():
             f"{source}: {imported}" for source, imported in sorted(stale_allowlist)
         )
     )
+
+
+def test_packaged_code_has_no_unscoped_legacy_branding():
+    violations: list[str] = []
+    for path in _packaged_text_files():
+        rel = path.relative_to(PACKAGE_ROOT).as_posix()
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "Trident" not in line and "trident_" not in line:
+                continue
+            if any(rel == allowed_path and allowed_text in line for allowed_path, allowed_text in KNOWN_LEGACY_BRANDING_LINES):
+                continue
+            violations.append(f"{rel}:{line_no}: {line.strip()}")
+
+    assert not violations, (
+        "legacy Trident naming must stay inside explicit compatibility shims:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_dashboard_initial_version_uses_package_version_context():
+    dashboard = PACKAGE_ROOT / "interfaces" / "web" / "templates" / "admin" / "dashboard.html"
+    source = dashboard.read_text(encoding="utf-8")
+    assert 'class="brand-sub">v{{ anteumbra_version }}</span>' in source
+    assert 'class="brand-sub">v1.' not in source
+
+
+def test_pypi_publish_workflow_uses_trusted_publishing_environment():
+    workflow = PROJECT_ROOT / ".github" / "workflows" / "publish.yml"
+    source = workflow.read_text(encoding="utf-8")
+    assert "id-token: write" in source
+    assert "environment: pypi" in source
+    assert "pypa/gh-action-pypi-publish@release/v1" in source

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-v1.8.1: WAF/FW 事件源抽象接口
-Trident 不解析原始流量，只消费 WAF 已经结构化好的事件摘要。
+"""WAF/FW event source abstraction.
+
+Anteumbra does not parse raw traffic; it consumes structured event summaries
+already emitted by WAFs or log adapters.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -23,7 +24,7 @@ class WAFEvent:
     attack_type: str        # webshell, sqli, rce, c2, scanner, mixed
 
     # 画像引擎使用的额外字段
-    file_path: Optional[str] = None    # 关联的本地文件路径（Trident 文件事件关联后填充）
+    file_path: Optional[str] = None    # 关联的本地文件路径（文件事件关联后填充）
     profile_id: Optional[str] = None   # 画像引擎分配后回写
 
 

@@ -142,7 +142,7 @@ class MemoryShellTracer:
         return scored
 
     def _cross_reference(self, candidates: List[Dict]) -> Optional[Dict]:
-        """Cross-reference upload candidates with Trident's detection records."""
+        """Cross-reference upload candidates with Anteumbra detection records."""
         if not candidates:
             return None
         try:

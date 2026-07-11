@@ -1,4 +1,4 @@
-/* Trident v1.9.1: profiles module */
+/* Anteumbra profiles module */
 // All functions intentionally global — HTML onclick handlers depend on them
 // v1.8.1: IP cross-page selection (profile detail page)
 window._ipSelected = window._ipSelected || new Set();

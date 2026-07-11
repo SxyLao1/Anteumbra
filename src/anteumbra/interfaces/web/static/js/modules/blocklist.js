@@ -1,4 +1,4 @@
-/* Trident v1.9.1: blocklist module */
+/* Anteumbra blocklist module */
 // All functions intentionally global — HTML onclick handlers depend on them
 /* ============================================================
    v1.9.0: Block Ledger (台账)

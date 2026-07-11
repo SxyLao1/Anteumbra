@@ -9,6 +9,7 @@ jobs:
   pypi:
     name: "Build & Publish"
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       id-token: write  # Trusted Publishing (OIDC)
       contents: read

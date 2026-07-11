@@ -1,6 +1,3 @@
-"""
-Anteumbra v1.0 鈥?Lightweight Web Perimeter Security Platform
+"""Anteumbra lightweight web perimeter security platform."""
 
-Evolved from Trident v1.9.5.
-"""
-__version__ = "1.0.19"
+__version__ = "1.0.20"

@@ -1,6 +1,4 @@
-"""Trident WAL管理器 - 高内聚低耦合封装
-v1.8.4: 从 suspicious_registry.py 中完整迁移 WAL 功能
-"""
+"""Write-ahead log manager for registry crash recovery."""
 import json
 import logging
 import os

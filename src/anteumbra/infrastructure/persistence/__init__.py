@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Trident v1.9.2: 数据仓库实现层
+Repository implementation layer.
 
 提供 JSON 和 SQLite 两种 Repository 实现。
 通过 config.toml [storage] backend 切换：
-  - "json"   (默认，向后兼容)
+  - "json"   (向后兼容)
   - "sqlite"  (高性能，WAL 模式)
-  - "both"    (双写并行，SQLite 读优先)
-
-v2.0: 新增 get_repository() 工厂函数，供所有持久化模块统一使用。
+  - "both"    (默认；双写并行，SQLite 读优先)
 """
 
 import logging

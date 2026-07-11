@@ -1,4 +1,4 @@
-/* Trident v1.9.1: scanner module */
+/* Anteumbra scanner module */
 // All functions intentionally global — HTML onclick handlers depend on them
 /* ============================================================
    v1.9.0: Manual Scanner (defined globally — innerHTML doesn't exec <script>)

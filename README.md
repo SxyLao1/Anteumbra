@@ -4,11 +4,11 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.19-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.20-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-<img src="https://img.shields.io/badge/tests-340%2F340-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/tests-394%20passing-brightgreen?style=flat-square" alt="Tests">
 
 **Lightweight Web Perimeter Security** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -171,5 +171,5 @@ Third-party tools bundled in `tools/` retain their original licenses.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.19 — MIT License</sub>
+  <sub>Anteumbra v1.0.20 — MIT License</sub>
 </div>

@@ -723,5 +723,5 @@ GET /admin/health            # 需认证的健康检查，含诊断信息
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.19 — MIT License</sub>
+  <sub>Anteumbra v1.0.20 — MIT License</sub>
 </div>
