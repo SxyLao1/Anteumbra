@@ -167,20 +167,24 @@ anteumbra config validate
 
 `config set` 会用结构化 TOML 重新写出 `config.toml`；密码、API Key 等敏感值请通过 `config env set` 写入 `.env`。
 
-访问日志分析仍然走同一套 Anteumbra 配置，只按 Web 服务器类型调整日志路径：
+访问日志分析仍然走同一套 Anteumbra 配置。优先使用预设命令，它会自动启用
+日志分析并写入对应服务器的日志路径形态：
 
 ```bash
-# Nginx / Apache 固定日志文件
-anteumbra config set website.log_config.log_monitor_enabled true
-anteumbra config set website.log_config.access_log_path /var/log/nginx/access.log
+# Nginx / Apache
+anteumbra config access-log nginx
+anteumbra config access-log apache
 
-# Tomcat AccessLogValve 日期轮转日志
-anteumbra config set website.log_config.access_log_path '/opt/tomcat/logs/localhost_access_log.*.txt'
+# Tomcat AccessLogValve 日期轮转日志；不需要手写通配符
+anteumbra config access-log tomcat --base /opt/tomcat
+
+# 自定义固定文件或通配符
+anteumbra config access-log custom --path /path/to/access.log
 ```
 
-Windows PowerShell 可能会在 Anteumbra 收到参数前展开 `*`。配置 Tomcat
-通配符时，优先使用 `anteumbra config wizard`、Web 设置页，或直接编辑
-`config.toml` 里的 `website.log_config.access_log_path`。
+`config set` 仍可用于底层编辑。如果 PowerShell 在 Anteumbra 收到参数前
+展开了 Tomcat 的 `localhost_access_log.*.txt`，CLI 会把展开后的多个文件
+自动还原成 `localhost_access_log.*.txt`。
 
 ### 3.4 文件监控
 
@@ -310,6 +314,7 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
 常用子命令：
   init                  创建 config.toml、.env、默认站点目录和规则
   wizard                交互式配置网站路径、管理端口、日志和 WAF
+  access-log TYPE       使用预设配置访问日志分析
   set KEY VALUE         设置一个点分隔配置项，例如 web_admin.port 8080
   env set KEY VALUE     设置一个 .env 变量
   validate              校验可运行路径和集成配置

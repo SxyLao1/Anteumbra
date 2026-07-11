@@ -14,6 +14,8 @@ Usage:
 import json
 import logging
 import os
+import posixpath
+import re
 import sys
 import time
 import signal
@@ -379,6 +381,106 @@ def _parse_config_value(raw: str):
         return raw
 
 
+def _path_to_config_string(path: Path) -> str:
+    """Write paths with forward slashes so TOML examples work across shells."""
+    return path.as_posix()
+
+
+def _has_glob(pattern: str) -> bool:
+    return any(ch in pattern for ch in "*?[")
+
+
+def _glob_for_config_path(pattern: str, config_path: Path) -> list[str]:
+    import glob
+
+    glob_path = Path(pattern)
+    if not glob_path.is_absolute():
+        glob_path = config_path.parent / glob_path
+    return glob.glob(str(glob_path), recursive="**" in pattern)
+
+
+def _collapse_expanded_access_log_paths(values: tuple[str, ...]) -> str | None:
+    """Recover a wildcard when PowerShell expands an access-log glob."""
+    if len(values) < 2:
+        return None
+
+    paths = [Path(value) for value in values]
+    parent = paths[0].parent
+    if any(path.parent != parent for path in paths):
+        return None
+
+    names = [path.name for path in paths]
+    if all(re.match(r"^localhost_access_log\..+\.txt$", name) for name in names):
+        return _path_to_config_string(parent / "localhost_access_log.*.txt")
+
+    prefix = os.path.commonprefix(names)
+    suffix = os.path.commonprefix([name[::-1] for name in names])[::-1]
+    if not prefix and not suffix:
+        return None
+
+    shortest = min(len(name) for name in names)
+    if len(prefix) + len(suffix) >= shortest:
+        suffix = suffix[: max(0, shortest - len(prefix) - 1)]
+
+    return _path_to_config_string(parent / f"{prefix}*{suffix}")
+
+
+def _normalize_config_set_value(key: str, values: tuple[str, ...]) -> tuple[str, str | None]:
+    if not values:
+        raise click.ClickException("Config value cannot be empty.")
+    if len(values) == 1:
+        return values[0], None
+
+    if key == "website.log_config.access_log_path":
+        collapsed = _collapse_expanded_access_log_paths(values)
+        if collapsed:
+            return (
+                collapsed,
+                "Multiple paths were received; treating them as an expanded shell wildcard.",
+            )
+
+    raise click.ClickException(
+        "Received multiple values. Quote the value, or use `anteumbra config access-log` for web access logs."
+    )
+
+
+def _infer_access_log_server(access_log_path: str) -> str:
+    lower = access_log_path.lower()
+    if "localhost_access_log" in lower or "tomcat" in lower:
+        return "tomcat"
+    if "nginx" in lower:
+        return "nginx"
+    if "apache" in lower or "httpd" in lower:
+        return "apache"
+    return "custom"
+
+
+def _infer_tomcat_base(access_log_path: str) -> str | None:
+    if not access_log_path:
+        return None
+    path = Path(access_log_path)
+    if path.name.lower().startswith("localhost_access_log") and path.parent.name.lower() == "logs":
+        return _path_to_config_string(path.parent.parent)
+    return None
+
+
+def _access_log_preset_path(server_type: str, log_path: str | None = None, base_path: str | None = None) -> str:
+    server = server_type.lower()
+    if log_path:
+        return log_path
+    if server == "nginx":
+        return "/var/log/nginx/access.log"
+    if server == "apache":
+        return "/var/log/apache2/access.log"
+    if server == "tomcat":
+        if base_path:
+            return _path_to_config_string(Path(base_path) / "logs" / "localhost_access_log.*.txt")
+        return posixpath.join("logs", "localhost_access_log.*.txt")
+    if server == "custom":
+        raise click.ClickException("Custom access-log setup requires --path or wizard input.")
+    raise click.ClickException(f"Unsupported access-log server type: {server_type}")
+
+
 def _set_dotted_value(data: dict, dotted_key: str, value) -> None:
     parts = [part for part in dotted_key.split(".") if part]
     if not parts:
@@ -581,10 +683,8 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
         if not access_log:
             errors.append("Access log monitoring is enabled but access_log_path is empty.")
         else:
-            if "*" in access_log:
-                import glob
-
-                matches = glob.glob(access_log, recursive="**" in access_log)
+            if _has_glob(access_log):
+                matches = _glob_for_config_path(access_log, config_path)
                 if not matches:
                     errors.append(f"Access log wildcard has no matches: {access_log}")
             else:
@@ -623,7 +723,7 @@ def config_init(output, force):
 
 @config.command("set")
 @click.argument("key")
-@click.argument("value")
+@click.argument("value", nargs=-1, required=True)
 @click.option("--config", "config_path", default=None, help="Path to config.toml")
 def config_set(key, value, config_path):
     """Set a dotted config key, for example website.path or web_admin.port."""
@@ -632,10 +732,43 @@ def config_set(key, value, config_path):
         raise click.ClickException(f"Config file does not exist: {target}")
 
     data = _load_toml_file(target)
-    parsed = _parse_config_value(value)
+    raw_value, note = _normalize_config_set_value(key, value)
+    parsed = _parse_config_value(raw_value)
     _set_dotted_value(data, key, parsed)
     _write_toml_file(target, data)
+    if note:
+        click.echo(f"Note: {note}")
     click.echo(f"Set {key} = {parsed!r} in {target}")
+
+
+@config.command("access-log")
+@click.argument(
+    "server_type",
+    type=click.Choice(["none", "nginx", "apache", "tomcat", "custom"], case_sensitive=False),
+)
+@click.option("--path", "log_path", default=None, help="Explicit access log path or wildcard")
+@click.option("--base", "base_path", default=None, help="Server base directory, e.g. CATALINA_BASE for Tomcat")
+@click.option("--config", "config_path", default=None, help="Path to config.toml")
+def config_access_log(server_type, log_path, base_path, config_path):
+    """Configure web access-log analysis using server presets."""
+    target = _config_target(config_path)
+    if not target.exists():
+        raise click.ClickException(f"Config file does not exist: {target}")
+
+    data = _load_toml_file(target)
+    server = server_type.lower()
+    if server == "none":
+        _set_dotted_value(data, "website.log_config.log_monitor_enabled", False)
+        _write_toml_file(target, data)
+        click.echo(f"Disabled access log analysis in {target}")
+        return
+
+    access_log = _access_log_preset_path(server, log_path=log_path, base_path=base_path)
+    _set_dotted_value(data, "website.log_config.log_monitor_enabled", True)
+    _set_dotted_value(data, "website.log_config.access_log_path", access_log)
+    _write_toml_file(target, data)
+    click.echo(f"Enabled access log analysis for {server}.")
+    click.echo(f"Set website.log_config.access_log_path = {access_log!r} in {target}")
 
 
 @config.group("env")
@@ -728,7 +861,21 @@ def config_wizard(config_path):
     _set_dotted_value(data, "website.log_config.log_monitor_enabled", enable_logs)
     if enable_logs:
         current_log = str(_get_dotted_value(data, "website.log_config.access_log_path", ""))
-        access_log = click.prompt("Access log path", default=current_log or "logs/access.log")
+        default_server = _infer_access_log_server(current_log) if current_log else "custom"
+        server = click.prompt(
+            "Access log server",
+            default=default_server,
+            type=click.Choice(["nginx", "apache", "tomcat", "custom"], case_sensitive=False),
+        )
+        if server.lower() == "tomcat":
+            default_base = _infer_tomcat_base(current_log) or "."
+            base_path = click.prompt("Tomcat/CATALINA_BASE directory", default=default_base)
+            access_log = _access_log_preset_path("tomcat", base_path=base_path)
+        elif server.lower() == "custom":
+            access_log = click.prompt("Access log path", default=current_log or "logs/access.log")
+        else:
+            default_log = _access_log_preset_path(server)
+            access_log = click.prompt("Access log path", default=current_log or default_log)
         _set_dotted_value(data, "website.log_config.access_log_path", access_log)
 
     waf_enabled = bool(_get_dotted_value(data, "waf_source.enabled", False))

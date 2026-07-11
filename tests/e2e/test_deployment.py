@@ -520,6 +520,68 @@ class TestCliInstall:
         result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
         assert result.exit_code == 0, result.output
 
+    def test_config_set_recovers_powershell_expanded_tomcat_wildcards(self, tmp_path):
+        """PowerShell can expand *.txt before Click receives the command."""
+        import tomli
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        log_dir = tmp_path / "tomcat" / "logs"
+        log_dir.mkdir(parents=True)
+        first = log_dir / "localhost_access_log.2026-07-10.txt"
+        second = log_dir / "localhost_access_log.2026-07-11.txt"
+        first.write_text("old\n", encoding="utf-8")
+        second.write_text("new\n", encoding="utf-8")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "website.log_config.access_log_path",
+                str(first),
+                str(second),
+                "--config",
+                str(target),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "expanded shell wildcard" in result.output
+
+        cfg = tomli.loads(target.read_text(encoding="utf-8"))
+        assert cfg["website"]["log_config"]["access_log_path"].endswith(
+            "tomcat/logs/localhost_access_log.*.txt"
+        )
+
+    def test_config_access_log_tomcat_preset_sets_enabled_wildcard(self, tmp_path):
+        """Users should not need to type Tomcat wildcard paths by hand."""
+        import tomli
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        tomcat_home = tmp_path / "apache-tomcat-9.0.96"
+        (tomcat_home / "logs").mkdir(parents=True)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        result = runner.invoke(
+            cli,
+            ["config", "access-log", "tomcat", "--base", str(tomcat_home), "--config", str(target)],
+        )
+        assert result.exit_code == 0, result.output
+
+        cfg = tomli.loads(target.read_text(encoding="utf-8"))
+        assert cfg["website"]["log_config"]["log_monitor_enabled"] is True
+        assert cfg["website"]["log_config"]["access_log_path"].endswith(
+            "apache-tomcat-9.0.96/logs/localhost_access_log.*.txt"
+        )
+
     def test_config_wizard_creates_first_run_configuration(self, tmp_path):
         """Interactive wizard should collect the essential deployment settings."""
         import tomli
@@ -541,6 +603,35 @@ class TestCliInstall:
         assert cfg["website"]["path"] == str(site_path)
         assert cfg["web_admin"]["port"] == 8098
         assert cfg["website"]["log_config"]["log_monitor_enabled"] is False
+        assert cfg["waf_source"]["enabled"] is False
+
+    def test_config_wizard_tomcat_access_log_preset(self, tmp_path):
+        """Wizard should guide Tomcat users without requiring wildcard typing."""
+        import tomli
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        site_path = tmp_path / "webapps" / "ROOT" / "test"
+        tomcat_home = tmp_path / "apache-tomcat-9.0.96"
+        (tomcat_home / "logs").mkdir(parents=True)
+        (tomcat_home / "logs" / "localhost_access_log.2026-07-11.txt").write_text(
+            '127.0.0.1 - - [11/Jul/2026:20:00:00 +0800] "GET / HTTP/1.1" 200 16\n',
+            encoding="utf-8",
+        )
+        wizard_input = f"{site_path}\ny\n8098\n\ny\ntomcat\n{tomcat_home}\nn\n\n"
+
+        result = CliRunner().invoke(
+            cli,
+            ["config", "wizard", "--config", str(target)],
+            input=wizard_input,
+        )
+
+        assert result.exit_code == 0, result.output
+        cfg = tomli.loads(target.read_text(encoding="utf-8"))
+        assert cfg["website"]["log_config"]["log_monitor_enabled"] is True
+        assert cfg["website"]["log_config"]["access_log_path"].endswith(
+            "apache-tomcat-9.0.96/logs/localhost_access_log.*.txt"
+        )
         assert cfg["waf_source"]["enabled"] is False
 
     def test_bundled_config_defaults_are_runnable_without_external_services(self):

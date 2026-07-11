@@ -173,21 +173,24 @@ anteumbra config validate
 
 `config set` rewrites `config.toml` using structured TOML output. Keep sensitive values in `.env` through `config env set`.
 
-For web access log analysis, keep one product flow and only change the log path
-for your web server:
+For web access log analysis, use the preset command when possible. It enables
+log analysis and writes the right path shape for the selected server:
 
 ```bash
-# Nginx / Apache fixed file
-anteumbra config set website.log_config.log_monitor_enabled true
-anteumbra config set website.log_config.access_log_path /var/log/nginx/access.log
+# Nginx / Apache
+anteumbra config access-log nginx
+anteumbra config access-log apache
 
-# Tomcat AccessLogValve date-rotated files
-anteumbra config set website.log_config.access_log_path '/opt/tomcat/logs/localhost_access_log.*.txt'
+# Tomcat AccessLogValve date-rotated files; no wildcard typing required
+anteumbra config access-log tomcat --base /opt/tomcat
+
+# Custom file or wildcard
+anteumbra config access-log custom --path /path/to/access.log
 ```
 
-On Windows, PowerShell may expand `*` before Anteumbra receives it. For Tomcat
-wildcards, prefer `anteumbra config wizard` or the Web Settings page, or edit
-`website.log_config.access_log_path` in `config.toml` directly.
+`config set` still works for low-level edits. If PowerShell expands a Tomcat
+`localhost_access_log.*.txt` wildcard before Anteumbra receives it, the CLI
+collapses the expanded files back to `localhost_access_log.*.txt`.
 
 ### 3.4 File Monitoring
 
@@ -317,6 +320,7 @@ Options:
 Subcommands:
   init                  Create config.toml, .env, default site dir, rules
   wizard                Interactive setup for website path, admin port, logs, WAF
+  access-log TYPE       Configure access-log analysis presets
   set KEY VALUE         Set a dotted config key, e.g. web_admin.port 8080
   env set KEY VALUE     Set one .env variable
   validate              Validate runnable paths and integration settings
