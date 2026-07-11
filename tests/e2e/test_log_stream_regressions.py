@@ -1,0 +1,78 @@
+from pathlib import Path
+import importlib.util
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def read_source(*parts: str) -> str:
+    return (ROOT.joinpath(*parts)).read_text(encoding="utf-8")
+
+
+def test_live_log_sse_control_messages_are_not_emitted_or_rendered():
+    monitor_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "monitor_bp.py",
+    )
+    sse_manager = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "static",
+        "js",
+        "sse-manager.js",
+    )
+
+    assert "[SSE] Connected to log stream" not in monitor_bp
+    assert "[SSE] Monitoring logs" not in monitor_bp
+    assert "if (rawData.indexOf('[SSE]') === 0) {" in sse_manager
+
+
+def test_log_history_uses_configured_website_logs_with_default_fallbacks():
+    monitor_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "monitor_bp.py",
+    )
+
+    assert "ConfigRegistry.get_enabled_websites()" in monitor_bp
+    assert "logs/{website.name}/monitor.log" in monitor_bp
+    assert "logs/Default Website/monitor.log" in monitor_bp
+    assert "logs/Website-PhpStudy/monitor.log" in monitor_bp
+    assert "logs/Anteumbra/monitor.log" in monitor_bp
+
+
+def test_notifier_internal_logs_use_plugin_log_handler():
+    notifier_handler = read_source(
+        "src",
+        "anteumbra",
+        "plugins",
+        "notifier_handler.py",
+    )
+
+    assert "self._logger = logger" in notifier_handler
+    assert 'logging.getLogger("monitor.notifier_handler")' not in notifier_handler
+
+
+def test_notifier_log_masking_hides_secrets():
+    notifier_path = ROOT / "src" / "anteumbra" / "infrastructure" / "monitoring" / "notifier.py"
+    spec = importlib.util.spec_from_file_location("anteumbra_source_notifier", notifier_path)
+    notifier = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(notifier)
+
+    masked_url = notifier._mask_url_secret("https://sctapi.ftqq.com/SCT1234567890abcdef.send")
+    masked_email = notifier._mask_email("exampleuser@example.com")
+
+    assert "SCT1234567890abcdef" not in masked_url
+    assert "exampleuser" not in masked_email
+    assert masked_url.endswith(".send")
+    assert masked_email.endswith("@example.com")

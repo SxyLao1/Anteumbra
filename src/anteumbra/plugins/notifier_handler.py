@@ -58,7 +58,7 @@ class NotifierHandlerPlugin(Plugin):
     def activate(self, config: Dict[str, Any]) -> None:
         # Lazy-init notifier on first alert to avoid config dependency at import time
         logger.info("NotifierHandler: 已激活")
-        self._logger = logging.getLogger("monitor.notifier_handler")
+        self._logger = logger
 
     def deactivate(self) -> None:
         logger.info("NotifierHandler: 已停用")
@@ -69,6 +69,10 @@ class NotifierHandlerPlugin(Plugin):
         payload = event.payload or {}
         alert_type = payload.get("alert_type", "unknown")
         level = payload.get("level", "WARNING")
+        logger.info(
+            "NotifierHandler: received alert_requested type=%s level=%s source=%s file=%s",
+            alert_type, level, event.source, payload.get("file_path", ""),
+        )
 
         # Build context dict for format_alert_message()
         ctx = dict(payload)
@@ -106,5 +110,6 @@ class NotifierHandlerPlugin(Plugin):
                 from anteumbra.infrastructure.monitoring.notifier import get_notifier
                 self._notifier = get_notifier(self._logger or logging.getLogger("monitor.notifier"))
             self._notifier._safe_notify(message, level=level)
+            logger.info("NotifierHandler: queued alert level=%s", level)
         except Exception as e:
             logger.warning("NotifierHandler: _safe_notify 失败: %s", e)

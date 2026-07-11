@@ -1,4 +1,4 @@
-/* Anteumbra SSE连接管理器 */
+/* Anteumbra SSE connection manager */
 window.AnteumbraSSEManager = {
   eventSource: null,
   isConnected: false,
@@ -17,7 +17,7 @@ window.AnteumbraSSEManager = {
     if (this.eventSource && this.eventSource.readyState === EventSource.OPEN) {
       return this.eventSource;
     }
-    // 先加载历史日志，再连接SSE
+    // Load history before opening the live stream.
     if (!this.historyLoaded) {
       this.loadHistory();
     }
@@ -28,7 +28,7 @@ window.AnteumbraSSEManager = {
     var self = this;
     var logStream = document.getElementById('live-log-stream');
     if (!logStream) {
-      // 不设置 historyLoaded，等 DOM 准备好后再加载
+      // Keep historyLoaded=false so the next DOM-ready call can retry.
       return;
     }
     fetch('/admin/logs/history')
@@ -120,23 +120,20 @@ window.AnteumbraSSEManager = {
       container.removeChild(container.firstChild);
     }
 
-    // v2.0: Use requestAnimationFrame to ensure layout is complete before scrolling
     requestAnimationFrame(function() {
       container.scrollTop = container.scrollHeight;
     });
   },
 
   appendLogLine(rawData) {
-    if (rawData.indexOf('[SSE]') === 0 && (rawData.indexOf('连接') !== -1 || rawData.indexOf('监控') !== -1)) {
+    if (rawData.indexOf('[SSE]') === 0) {
       return;
     }
 
-    // Check search filter
     const filterInput = document.getElementById('log-search-input');
     const term = filterInput ? filterInput.value.toLowerCase() : '';
     const matches = !term || rawData.toLowerCase().includes(term);
 
-    // Write to Log Analyzer page (#log-stream)
     const logStream = document.getElementById('log-stream');
     if (logStream) {
       this._appendToStream(logStream, rawData);
@@ -145,10 +142,8 @@ window.AnteumbraSSEManager = {
       }
     }
 
-    // Also write to dashboard quadrant (#live-log-stream) for real-time update
     const liveStream = document.getElementById('live-log-stream');
     if (liveStream) {
-      // Remove placeholder on first message
       const placeholder = liveStream.querySelector('.empty-state');
       if (placeholder) placeholder.remove();
       this._appendToStream(liveStream, rawData);
@@ -157,7 +152,6 @@ window.AnteumbraSSEManager = {
       }
     }
 
-    // v2.0: Also write to Log Analyzer modal when open
     if (this._analyzerOpen) {
       const analyzerContent = document.getElementById('analyzer-log-content');
       if (analyzerContent) {
@@ -173,7 +167,7 @@ window.AnteumbraSSEManager = {
 
   reconnectWithAllLevels() {
     this.disconnect();
-    this.historyLoaded = true;  // Skip history reload
+    this.historyLoaded = true;
     this._allLevels = true;
     this._analyzerOpen = true;
     return this.createConnection();
@@ -181,7 +175,7 @@ window.AnteumbraSSEManager = {
 
   reconnectNormal() {
     this.disconnect();
-    this.historyLoaded = true;  // Skip history reload
+    this.historyLoaded = true;
     this._allLevels = false;
     this._analyzerOpen = false;
     return this.createConnection();
@@ -234,4 +228,4 @@ window.AnteumbraSSEManager = {
     }
   }
 };
-window.TridentSSEManager = window.AnteumbraSSEManager;  // backward compat
+window.TridentSSEManager = window.AnteumbraSSEManager;

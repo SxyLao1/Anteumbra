@@ -95,9 +95,9 @@ def stream_logs():
     if not site_name:
         try:
             websites = ConfigRegistry.get_enabled_websites()
-            site_name = websites[0].name if websites else "Website-PhpStudy"
+            site_name = websites[0].name if websites else "Default Website"
         except Exception:
-            site_name = "Website-PhpStudy"
+            site_name = "Default Website"
 
     log_file = normalize_path(f"logs/{site_name}/monitor.log")
     show_all_levels = request.args.get('levels', '') == 'all'
@@ -125,8 +125,6 @@ def stream_logs():
                 return
 
             client_queue._client_ip = client_ip
-            yield "data: [SSE] Connected to log stream...\n\n"
-
             # v1.0.10: 确保日志文件存在（首次运行 / 新网站尚无 monitor.log）
             log_file.parent.mkdir(parents=True, exist_ok=True)
             if not log_file.exists():
@@ -142,8 +140,6 @@ def stream_logs():
             else:
                 f = open(log_file, 'r', encoding='utf-8', errors='ignore', buffering=1)
                 f.seek(0, 2)
-
-            yield "data: [SSE] Monitoring logs...\n\n"
 
             while True:
                 try:
@@ -214,8 +210,25 @@ def logs_history():
                 current_app.logger.warning(f"[LOGS_HISTORY] Buffer read failed: {e}")
 
         if not lines:
-            log_file = normalize_path("logs/Anteumbra/monitor.log")
-            if log_file.exists():
+            log_candidates = []
+            try:
+                websites = ConfigRegistry.get_enabled_websites()
+                for website in websites:
+                    log_candidates.append(normalize_path(f"logs/{website.name}/monitor.log"))
+            except Exception:
+                current_app.logger.debug("Failed to resolve website log candidates", exc_info=True)
+            log_candidates.extend([
+                normalize_path("logs/Default Website/monitor.log"),
+                normalize_path("logs/Website-PhpStudy/monitor.log"),
+                normalize_path("logs/Anteumbra/monitor.log"),
+            ])
+
+            seen = set()
+            for log_file in log_candidates:
+                key = str(log_file)
+                if key in seen or not log_file.exists():
+                    continue
+                seen.add(key)
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                     f.seek(0, 2)
                     size = f.tell()
@@ -223,6 +236,8 @@ def logs_history():
                     f.seek(max(0, size - buf_size))
                     chunk = f.read()
                     lines = chunk.splitlines()[-1000:]
+                if lines:
+                    break
 
         if not lines:
             return "<div class='log-line info'>[INFO] No log history found</div>"
@@ -242,7 +257,7 @@ def logs_history():
                 log_class = 'warn'
             elif '[DEBUG]' in upper or 'DEBUG' in upper:
                 log_class = 'debug'
-            if line.startswith('[SSE]') and ('connection' in line or 'monitoring' in line):
+            if line.startswith('[SSE]'):
                 continue
             safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             html_parts.append(f'<div class="log-line {log_class}">{safe_line}</div>')

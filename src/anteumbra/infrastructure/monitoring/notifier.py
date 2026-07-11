@@ -10,6 +10,7 @@ v1.7.0重构：迁移所有硬编码到config.toml
 import logging
 import os
 import queue
+import re
 import smtplib
 import sys
 import threading
@@ -27,6 +28,31 @@ from anteumbra.infrastructure.monitoring.metrics import get_metrics
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 _notifier_logger = logging.getLogger(__name__)
+
+
+def _mask_secret(value: str, prefix: int = 6, suffix: int = 4) -> str:
+    value = str(value or "")
+    if len(value) <= prefix + suffix:
+        return "***" if value else ""
+    return f"{value[:prefix]}...{value[-suffix:]}"
+
+
+def _mask_email(addr: str) -> str:
+    addr = str(addr or "")
+    if "@" not in addr:
+        return _mask_secret(addr, 2, 2)
+    local, domain = addr.split("@", 1)
+    if len(local) <= 2:
+        masked_local = local[:1] + "***"
+    else:
+        masked_local = f"{local[:2]}***{local[-1:]}"
+    return f"{masked_local}@{domain}"
+
+
+def _mask_url_secret(url: str) -> str:
+    url = str(url or "")
+    return re.sub(r"/([^/?#]+)(\.send)", lambda m: f"/{_mask_secret(m.group(1))}{m.group(2)}", url)
+
 
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
@@ -162,6 +188,11 @@ class Notifier:
 
             # 尝试入队（非阻塞）
             self._alert_queue.put_nowait((message, level))
+            self.logger.info(
+                "[NOTIFIER][QUEUE] queued alert level=%s size=%s",
+                level,
+                self._alert_queue.qsize(),
+            )
         except queue.Full:
             # 队列满：立即持久化
             self._persist_overflow(message, level)
@@ -354,11 +385,11 @@ class Notifier:
             server.send_message(msg)
             server.quit()
 
-            self.logger.info(f"[NOTIFIER][EMAIL] 发送成功 -> {cfg['to_addrs']}")
+            recipients = [_mask_email(addr) for addr in cfg["to_addrs"]]
+            self.logger.info(f"[NOTIFIER][EMAIL] 发送成功 -> {recipients}")
 
         except Exception as e:
-            if not self._warned_missing_config:
-                self.logger.warning(f"[NOTIFIER][EMAIL] skipped: credentials not configured"); self._warned_missing_config = True
+            self.logger.error("[NOTIFIER][EMAIL] send failed: %s", e, exc_info=True)
 
     def _send_wechat(self, message: str, level: str):
         """发送微信告警（Server酱）- 熔断降级版【必须完整替换】"""
@@ -392,9 +423,9 @@ class Notifier:
             session.verify = False
 
             if os.environ.get("HTTPS_PROXY"):
-                self.logger.debug(f"[NOTIFIER][WECHAT] 检测到系统代理: {os.environ['HTTPS_PROXY']}")
+                self.logger.debug(f"[NOTIFIER][WECHAT] 检测到系统代理: {_mask_url_secret(os.environ['HTTPS_PROXY'])}")
 
-            self.logger.debug(f"[NOTIFIER][WECHAT] 正在发送请求至: {url}")
+            self.logger.debug(f"[NOTIFIER][WECHAT] 正在发送请求至: {_mask_url_secret(url)}")
 
             # 设置超时和重试
             from requests.adapters import HTTPAdapter
@@ -446,7 +477,7 @@ class Notifier:
 
         except Exception as e:
             self._wechat_failure_count += 1
-            self.logger.warning(f"[NOTIFIER][WECHAT] skipped: {e} (API key not configured?)")
+            self.logger.error("[NOTIFIER][WECHAT] send failed: %s", e, exc_info=True)
 
         # 熔断判断
         finally:

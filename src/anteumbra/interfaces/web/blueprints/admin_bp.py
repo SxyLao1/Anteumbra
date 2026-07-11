@@ -114,7 +114,9 @@ def overview():
         import json
         log_history_html = ""
         try:
-            log_file = normalize_path("logs/Website-PhpStudy/monitor.log")
+            websites = ConfigRegistry.get_enabled_websites()
+            site_name = websites[0].name if websites else "Default Website"
+            log_file = normalize_path(f"logs/{site_name}/monitor.log")
             if log_file.exists():
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                     all_lines = f.readlines()
