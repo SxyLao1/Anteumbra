@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.24-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.25-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -117,8 +117,15 @@ python -m pytest
 
 ```bash
 docker build -t anteumbra .
-docker run -d -p 8080:8080 -v $(pwd)/data:/app/data -v $(pwd)/config.toml:/app/config.toml anteumbra
+docker run -d --name anteumbra \
+  -p 18080:8080 \
+  -v $(pwd)/anteumbra-data:/app/data \
+  -v $(pwd)/anteumbra-logs:/app/logs \
+  anteumbra
+docker logs anteumbra
 ```
+
+The container starts the same full runtime as `anteumbra run`, creates a Docker-friendly default config on first start, and prints the initial admin password in `docker logs`. Open `http://127.0.0.1:18080/admin`.
 
 ## Architecture
 
@@ -145,5 +152,5 @@ MIT License. Third-party tools bundled under `tools/` retain their original lice
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.24 · MIT License</sub>
+  <sub>Anteumbra v1.0.25 · MIT License</sub>
 </div>

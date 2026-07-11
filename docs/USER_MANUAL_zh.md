@@ -97,13 +97,17 @@ anteumbra run
 ```bash
 docker build -t anteumbra .
 docker run -d \
-  -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/config.toml:/app/config.toml \
+  --name anteumbra \
+  -p 18080:8080 \
+  -v $(pwd)/anteumbra-data:/app/data \
+  -v $(pwd)/anteumbra-logs:/app/logs \
   anteumbra
+docker logs anteumbra
 ```
 
-Docker 镜像包含全部三种哈希引擎（ssdeep + py-tlsh + yara-python），已为 Linux 预编译。
+首次启动时，容器会创建 `.env`，将 `/app/sites/default` 作为默认监控目录，关闭演示用 MockWAF 轮询以避免连接失败噪音，并在 `docker logs` 中打印初始管理员密码。管理后台地址为 `http://127.0.0.1:18080/admin`。
+
+Docker 镜像会安装 `yara-python`，并尝试构建可选模糊哈希引擎（`py-tlsh`、`ssdeep`）。如果某个可选引擎与当前 Python 基础镜像不兼容，Anteumbra 会记录跳过并使用可用引擎继续运行。
 
 ### 2.5 首次运行
 
@@ -690,14 +694,17 @@ WantedBy=multi-user.target
 services:
   anteumbra:
     build: .
-    ports: ["8080:8080"]
+    ports: ["18080:8080"]
     volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml
+      - ./anteumbra-data:/app/data
+      - ./anteumbra-logs:/app/logs
+      # 可选：首次启动后再挂载已编辑的运行配置。
+      # - ./config.toml:/app/config.toml
       - ./rules:/app/rules
     environment:
-      - ANTEUMBRA_PASSWORD_HASH=${ANTEUMBRA_PASSWORD_HASH}
-      - ANTEUMBRA_SECRET_KEY=${ANTEUMBRA_SECRET_KEY}
+      # 可选：设置 ANTEUMBRA_ADMIN_PASSWORD 或 ANTEUMBRA_PASSWORD_HASH。
+      - ANTEUMBRA_ADMIN_PASSWORD=${ANTEUMBRA_ADMIN_PASSWORD:-}
+      - ANTEUMBRA_SECRET_KEY=${ANTEUMBRA_SECRET_KEY:-}
     restart: unless-stopped
 ```
 
@@ -777,5 +784,5 @@ GET /admin/health            # 需认证的健康检查，含诊断信息
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.24 — MIT License</sub>
+  <sub>Anteumbra v1.0.25 — MIT License</sub>
 </div>

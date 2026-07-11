@@ -101,13 +101,17 @@ Source install is for development and testing only. It uses the same runtime ins
 ```bash
 docker build -t anteumbra .
 docker run -d \
-  -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/config.toml:/app/config.toml \
+  --name anteumbra \
+  -p 18080:8080 \
+  -v $(pwd)/anteumbra-data:/app/data \
+  -v $(pwd)/anteumbra-logs:/app/logs \
   anteumbra
+docker logs anteumbra
 ```
 
-The Docker image includes all three hash engines (ssdeep + py-tlsh + yara-python) pre-compiled for Linux.
+On first start, the container creates `.env`, uses `/app/sites/default` as the default monitored directory, disables the demo MockWAF poller to avoid noisy connection errors, and prints the initial admin password in `docker logs`. The admin UI is available at `http://127.0.0.1:18080/admin`.
+
+The Docker image installs `yara-python` and attempts to build optional fuzzy hash engines (`py-tlsh`, `ssdeep`). If an optional engine is incompatible with the current Python base image, Anteumbra logs the skip and continues with the available engines.
 
 ### 2.5 First Run
 
@@ -702,14 +706,17 @@ WantedBy=multi-user.target
 services:
   anteumbra:
     build: .
-    ports: ["8080:8080"]
+    ports: ["18080:8080"]
     volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml
+      - ./anteumbra-data:/app/data
+      - ./anteumbra-logs:/app/logs
+      # Optional: mount an edited runtime config after first start.
+      # - ./config.toml:/app/config.toml
       - ./rules:/app/rules
     environment:
-      - ANTEUMBRA_PASSWORD_HASH=${ANTEUMBRA_PASSWORD_HASH}
-      - ANTEUMBRA_SECRET_KEY=${ANTEUMBRA_SECRET_KEY}
+      # Optional: set either ANTEUMBRA_ADMIN_PASSWORD or ANTEUMBRA_PASSWORD_HASH.
+      - ANTEUMBRA_ADMIN_PASSWORD=${ANTEUMBRA_ADMIN_PASSWORD:-}
+      - ANTEUMBRA_SECRET_KEY=${ANTEUMBRA_SECRET_KEY:-}
     restart: unless-stopped
 ```
 
@@ -789,5 +796,5 @@ GET /admin/health            # Authenticated health with diagnostics
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.24 — MIT License</sub>
+  <sub>Anteumbra v1.0.25 — MIT License</sub>
 </div>
