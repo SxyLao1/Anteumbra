@@ -1,120 +1,125 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.7 (2026-07-03)  
-> **Vision**: Web Perimeter Threat Intelligence — Passive Detection · Semi-Active Response · File-Level Forensics  
-> **Status**: PyPI published, ~217 tests passing, DDD + EDA architecture complete, CI/CD operational, admin blueprint fully modularized
+> **Current Version**: v1.0.25 (2026-07-11)
+> **Vision**: Web perimeter threat intelligence: passive file detection, access-log behavior analysis, attacker profiling, and operator-friendly response.
+> **Current Status**: Beta-quality user release candidate. Core workflows are usable; remaining work is release discipline, deeper configuration architecture, and production hardening.
 
 ---
 
-## v1.0.x — DDD Migration + Surgery (Current)
+## Where The Project Stands
 
-| Milestone | Status | Version |
-|-----------|--------|---------|
-| Trident v1.9.5 → Anteumbra rename | ✅ Done | v1.0.0 |
-| DDD four-layer architecture | ✅ Done | v1.0.0 |
-| `pip install anteumbra` package | ✅ Done | v1.0.0 |
-| Unified CLI (`anteumbra run\|start\|stop\|status\|config`) | ✅ Done | v1.0.0 |
-| Flask-Babel i18n (en/zh, auto-detect) | ✅ Done | v1.0.0 |
-| PluginManager + EDA event-driven (95%+ coverage) | ✅ Done | v1.0.1 |
-| emit/dispatch semantic separation (async Fire-and-Forget) | ✅ Done | v1.0.1 |
-| Repository bridge (JSON + SQLite dual-write) | ✅ Done | v1.0.2–v1.0.3 |
-| Block Ledger + Bidirectional Links + Broadcast | ✅ Done | v1.0.2–v1.0.3 |
-| Blueprint split (admin → 5+ route modules) | ✅ Done | v1.0.2 |
-| SQLite FK constraints (3 FKs) + index optimization (13) + auto-migration | ✅ Done | v1.0.4 |
-| Docker multi-stage build (3 hash engines active) | ✅ Done | v1.0.4 |
-| PyPI official publish (Trusted Publishing OIDC) | ✅ Done | v1.0.4 |
+Anteumbra has moved past the initial Trident rename and packaging surgery. The current 1.0.x line is focused on making one coherent product instead of separate PyPI, source, and Docker experiences.
 
----
+### Done In 1.0.x
 
-## v1.0.5 — Polish & Test Hardening (Released 2026-07-03)
+| Area | Current State |
+|------|---------------|
+| Packaging | `pip install anteumbra` uses packaged config, templates, translations, static assets, plugins, and YARA rules. |
+| Runtime setup | `anteumbra install <dir>` creates a runtime instance with `config.toml`, `.env`, rules, logs, data directories, and an initial admin password. |
+| CLI configuration | `anteumbra config init/set/env/wizard/access-log/validate/reload` covers first-run setup and common operator edits. |
+| Web workflows | Dashboard, monitoring, scanner, quarantine, restore, false-positive marking, settings, logs, audit entry points, and health checks are wired. |
+| Access-log analysis | Nginx, Apache, Tomcat, and custom access-log presets are supported from CLI and web audit views. |
+| Log streaming | SSE log stream is quieter, loads historical monitor logs, and exposes notifier delivery state. |
+| Docker | Container now starts the full `anteumbra run` runtime, creates Docker-friendly defaults, prints first-start credentials, and passes health checks. |
+| Architecture guardrails | Layer/import boundary tests exist and are part of the cleanup discipline. |
+| Documentation | README, user manual, architecture docs, and release guide reflect the current install model. |
 
-| Priority | Feature | Status |
-|----------|---------|:---:|
-| P0 | Template i18n full coverage — 36/40 templates, ~490 `{{ _(...) }}` | ✅ |
-| P0 | Version unification — `__init__.__version__` single source of truth (PEP 440) | ✅ |
-| P0 | ScanResult triple-definition unified → `domain/entities.py` dataclass (10 fields) | ✅ |
-| P0 | `html_escape` → `markupsafe.escape()` (Flask standard library) | ✅ |
-| P0 | `DummyEngine` (YARA fallback) — explicit `compiled_rules`/`match` replacing `__getattr__` | ✅ |
-| P0 | `EmergencyScanner` — `advanced_bypass` import wrapped in try/except safe fallback | ✅ |
-| P0 | `FileRecord.from_dict` — filter unknown keys from SQLite rows (`id` column) | ✅ |
-| P1 | 73 new automated tests (deployment 11 + security 52 + profiling E2E 8 + full-chain 1) | ✅ |
-| P1 | CI/CD — GitHub Actions: test matrix (3.10/3.11/3.12) + Playwright UI + Build + Docker + PyPI publish (OIDC) | ✅ |
-| P1 | `threat_graph` dataclasses → `infrastructure/models.py` migration | ✅ |
-| P1 | ROADMAP.md + CHANGELOG.md created and updated | ✅ |
-| P1 | Docker build fixes — ssdeep/py-tlsh optional fallback, shell redirect escaping | ✅ |
-| P2 | Project documentation sync (CLAUDE.md + PROJECT_MASTER + Memory) | ✅ |
+### Known Truths
+
+- The project is usable as a beta/release-candidate security tool, but should not be described as fully production-hardened yet.
+- The architecture is significantly cleaner than the inherited Trident shape, but not fully re-architected.
+- The deepest remaining coupling is still around global runtime state, especially `ConfigRegistry`, process-wide paths, and launcher-time resources.
+- Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
+- Some historical comments and older modules still contain encoding damage from earlier development; they do not block runtime, but they hurt maintainability.
 
 ---
 
-## v1.0.7 — Registry Test Isolation & Full-Chain E2E (Released 2026-07-03)
+## v1.0.20 - v1.0.25 Cleanup Line
 
-| Priority | Feature | Status |
-|----------|---------|:---:|
-| P0 | Registry test isolation — `_is_tool_script()` native pytest detection + unconditional path override | ✅ |
-| P0 | Full-chain E2E fix — `test_full_chain_waf_to_block_ledger` now PASSES | ✅ |
-| P1 | Test count: 186 backend + 34 UI = 220 (was ~217 with 1 skip + 1 intermittent) | ✅ |
-
----
-
-## v1.0.6 — Blueprint Modularization & Security (Released 2026-07-03)
-
-| Priority | Feature | Status |
-|----------|---------|:---:|
-| P0 | admin_bp split — 2280 lines → admin_bp (776) + settings_bp (350) + monitor_bp (500) + system_bp (450) | ✅ |
-| P0 | `/admin/debug/routes` + `/admin/test` @require_auth security fix | ✅ |
-| P1 | Unused import cleanup in admin_bp.py after split | ✅ |
-| P1 | Version bump + all docs sync (README/ROADMAP/CHANGELOG/memory) | ✅ |
-
-**Zero template changes, zero URL changes** — all routes retain `/admin/*` paths across 4 blueprints.
+| Version | Theme | Status |
+|---------|-------|--------|
+| 1.0.20 | Refactor baseline and architectural guardrails | Done |
+| 1.0.21 | First-run runtime startup reliability | Done |
+| 1.0.22 | CLI configuration workflow and configured bind handling | Done |
+| 1.0.23 | Web audit entry points, quieter SSE logs, notifier visibility | Done |
+| 1.0.24 | Tomcat access-log analyzer and CLI presets | Done |
+| 1.0.25 | Docker full-runtime deployment and documentation sync | Done |
 
 ---
 
-## v1.1.0 — Multi-Site + Intelligence (Planned)
+## Release Readiness Checklist
 
-| Priority | Feature |
-|----------|---------|
-| P0 | Full-chain E2E test fix (Registry data isolation) |
-| P1 | UI test stabilization (Playwright parallel run timeouts) |
-| P1 | Geo-IP integration (MaxMind GeoLite2) |
-| P1 | Admin 2FA (TOTP) + API key management |
-| P2 | Multi-site support (`[[website]]` array) |
-| P2 | MISP / AbuseIPDB threat intelligence feed integration |
+Before a wider user push or PyPI release, complete this checklist.
 
----
-
-## v1.2.0 — Production Hardening (Planned)
-
-| Priority | Feature |
-|----------|---------|
-| P0 | Docker multi-arch image (amd64 + arm64) |
-| P1 | Redis session backend |
-| P1 | Prometheus metrics endpoint |
-| P2 | SIEM syslog live streaming |
-| P2 | ConfigRegistry → dependency injection (Kimi audit P0, 1-week refactor) |
-| P3 | Multi-tenancy (tenant isolation) |
+| Priority | Item | Status |
+|----------|------|--------|
+| P0 | Update CHANGELOG through the current version | Done in 1.0.25 documentation cleanup |
+| P0 | Verify PyPI clean install in a fresh runtime directory | Pending final release pass |
+| P0 | Verify source editable install in a fresh runtime directory | Pending final release pass |
+| P0 | Verify Docker build/run/health/detection path | Done for 1.0.25 |
+| P0 | Confirm README commands match real output | Mostly done; re-check during release pass |
+| P1 | Run deployment, architecture, and relevant web regression tests | Pending final release pass |
+| P1 | Tag release and push only after the final clean install check | Pending |
+| P1 | Publish to PyPI from tag using the release workflow | Pending |
 
 ---
 
-## v2.0.0 — Async Core (Future)
+## v1.1.0 - Configuration And Runtime Decoupling
 
-| Priority | Feature |
-|----------|---------|
-| P0 | asyncio EventBus replacing queue.Queue |
-| P0 | Pydantic v2 Schema for all events |
-| P1 | Plugin marketplace (pip installable plugins) |
-| P1 | GraphQL API alongside REST |
-| P2 | Distributed deployment (Redis pub/sub between nodes) |
+Goal: make the project easier for one AI or one engineer to implement a module independently, without accidentally coupling to global process state.
+
+| Priority | Work Item | Why |
+|----------|-----------|-----|
+| P0 | Introduce an application/runtime context object | Replace scattered global lookups with explicit dependencies. |
+| P0 | Reduce direct `ConfigRegistry` imports outside infrastructure/config and composition roots | Keep feature modules easier to test and reuse. |
+| P0 | Define stable module integration contracts for scanner, monitor, log analyzer, notifier, quarantine, and WAF adapters | Let independent module work plug in without hidden side effects. |
+| P1 | Separate startup resource allocation from request handlers | Make web, CLI, Docker, and tests share the same runtime composition path. |
+| P1 | Add tests that enforce no new cross-layer imports | Keep the architecture from drifting backward. |
+| P1 | Normalize old mojibake comments in touched modules | Improve maintainability without risky broad rewrites. |
+| P2 | Create developer module templates for plugins/analyzers/adapters | Make extension work repeatable for humans and AIs. |
 
 ---
 
-## Trident Legacy (Archived)
+## v1.2.0 - Production Hardening
 
-See [Trident CHANGELOG](https://github.com/SxyLao1/Trident/blob/main/CHANGELOG.md) for v1.7.9–v1.9.5 details.
+| Priority | Work Item |
+|----------|-----------|
+| P0 | Fresh PyPI install smoke test in CI |
+| P0 | Docker image release workflow and multi-arch build (`linux/amd64`, `linux/arm64`) |
+| P1 | Redis/cache-backed session option for production |
+| P1 | Prometheus-compatible metrics endpoint or documented scrape path |
+| P1 | Reverse-proxy deployment examples for Nginx/Caddy |
+| P2 | Live syslog streaming mode for SIEM, beyond file export |
+| P2 | Stronger backup/restore documentation for `data/`, `logs/`, `config.toml`, and `.env` |
 
-**Key accomplishments (2025–2026):**
-- Blueprint split (3767→2155 lines), JS modularization (1455→561)
-- SQLite backend (WAL mode) + DualWriteRepository
-- Plugin Manager + stdout_logger + 4 WAF adapters
-- Log Heuristic Engine + SIEM CEF/JSON Lines exporter
-- Memory Shell Tracer + reference tools
-- 79 core tests + code quality fixes (SQL injection, thread safety, timezone)
+---
+
+## v1.3.0 - Intelligence Expansion
+
+| Priority | Work Item |
+|----------|-----------|
+| P1 | Geo-IP enrichment for attacker profiles |
+| P1 | AbuseIPDB/MISP-style threat intelligence feed integration |
+| P1 | Admin 2FA/TOTP and API key management |
+| P2 | Multi-site configuration (`[[website]]`) with clear UI separation |
+| P2 | Better report export for security review workflows |
+
+---
+
+## v2.0.0 - Async And Distributed Core
+
+These are future architecture moves, not 1.0.x cleanup tasks.
+
+| Priority | Work Item |
+|----------|-----------|
+| P0 | Async event bus replacing the current queue/thread model |
+| P0 | Typed event schemas for all internal events |
+| P1 | Distributed deployment using Redis/pub-sub or equivalent |
+| P1 | Plugin marketplace or pip-installable external plugins |
+| P2 | GraphQL or richer query API alongside REST |
+
+---
+
+## Archived Trident Lineage
+
+Anteumbra inherits useful pieces from Trident: file monitoring, YARA detection, log heuristics, SIEM export, plugin ideas, memory-shell tooling, and a web dashboard. The 1.0.x line is about turning that inheritance into a coherent installable product with testable module boundaries.

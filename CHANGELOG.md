@@ -4,6 +4,71 @@
 
 ---
 
+## [1.0.25] - 2026-07-11
+
+### Fixed
+- Rebuilt the Docker runtime around `/opt/venv` so the non-root `anteumbra` user can execute installed console scripts.
+- Changed the container default command to start the full `anteumbra run` runtime instead of only a bare Gunicorn web app.
+- Added a Docker entrypoint that creates first-start runtime defaults, prints the initial admin password, and keeps non-runtime commands such as `anteumbra --version` clean.
+- Adjusted Docker defaults to monitor `/app/sites/default` and disable the demo MockWAF poller to avoid noisy connection failures.
+
+### Verified
+- Built the Docker image, started a container on host port `18080`, checked `/api/v1/health`, and confirmed the reported version is `1.0.25`.
+- Copied a PHP webshell probe into the container's monitored directory and verified a YARA hit with `scan_total=1` and `scan_suspicious=1`.
+
+### Docs
+- Updated README and user manuals with the working Docker deployment flow and clarified optional fuzzy hash engine behavior.
+
+---
+
+## [1.0.24] - 2026-07-11
+
+### Fixed
+- Added Tomcat access-log analysis support, including `localhost_access_log.*.txt` style date-rotated logs.
+- Added CLI access-log presets for `nginx`, `apache`, `tomcat`, `custom`, and `none`.
+- Added regression coverage for Tomcat log parsing and deployment configuration behavior.
+
+### Docs
+- Documented access-log setup commands in the user manuals and README.
+
+---
+
+## [1.0.23] - 2026-07-11
+
+### Fixed
+- Exposed access-log analysis status and audit-facing signals in the web dashboard.
+- Reduced noisy SSE log stream behavior and exposed notifier delivery state for operators.
+- Added regression coverage for log-stream behavior.
+
+---
+
+## [1.0.22] - 2026-07-11
+
+### Fixed
+- Made CLI startup honor the configured admin bind host and port.
+- Added first-run configuration commands and validation-oriented setup flow.
+- Improved documentation for the unified PyPI/source runtime model.
+
+---
+
+## [1.0.21] - 2026-07-11
+
+### Fixed
+- Made first-run runtime startup more reliable from a fresh instance directory.
+- Aligned launcher behavior, bundled config defaults, and CLI startup paths.
+- Added deployment regression coverage around fresh instance startup.
+
+---
+
+## [1.0.20] - 2026-07-11
+
+### Changed
+- Established the 1.0.20 cleanup baseline before larger architecture work.
+- Tightened architecture/import boundary expectations.
+- Cleaned up release documentation, plugin contracts, static/module organization, and several inherited project edges.
+
+---
+
 ## [1.0.19] - 2026-07-11
 
 ### Fixed
