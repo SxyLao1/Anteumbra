@@ -25,9 +25,9 @@ cd F:\Home\Github\Anteumbra
 python -m pytest tests\core tests\tools tests\architecture tests\compatibility tests\e2e -q
 python -m pytest tests\e2e_ui -q
 git status --short
-git tag v1.0.22
+git tag vX.Y.Z
 git push origin main
-git push origin v1.0.22
+git push origin vX.Y.Z
 ```
 
 The PyPI project must also have GitHub Trusted Publishing configured for:

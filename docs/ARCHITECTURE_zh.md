@@ -1,4 +1,4 @@
-# Anteumbra 技术白皮书 v1.0.22
+# Anteumbra 技术白皮书 v1.0.24
 
 > **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
@@ -787,5 +787,5 @@ decay_factor:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.22 — 随代码一起演进</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.24 — 随代码一起演进</sub>
 </div>

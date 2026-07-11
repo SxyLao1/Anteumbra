@@ -789,5 +789,5 @@ GET /admin/health            # Authenticated health with diagnostics
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.22 — MIT License</sub>
+  <sub>Anteumbra v1.0.24 — MIT License</sub>
 </div>
