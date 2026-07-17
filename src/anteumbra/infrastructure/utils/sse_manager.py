@@ -22,6 +22,9 @@ _registry_update_queue = queue.Queue(maxsize=0)
 _sse_clients: List[queue.Queue] = []
 _sse_lock = threading.Lock()
 _worker_thread = None
+_worker_lock = threading.Lock()
+_worker_stop_event = threading.Event()
+_worker_stop_signal = object()
 
 def get_sse_limits():
     """从config.toml动态读取SSE连接限制（支持热加载）"""
@@ -42,16 +45,15 @@ def start_sse_worker():
     """启动SSE推送工作线程（全局单例）"""
     global _worker_thread
 
-    if _worker_thread is not None and _worker_thread.is_alive():
-        return
-
     def _worker():
         logger = logging.getLogger("monitor.sse_worker")
         logger.info("[SSE][WORKER] Registry推送工作线程已启动")
 
-        while True:
+        while not _worker_stop_event.is_set():
             try:
-                signal = _registry_update_queue.get(timeout=1)
+                signal = _registry_update_queue.get(timeout=0.5)
+                if signal is _worker_stop_signal:
+                    break
                 if signal == "registry_update":
                     # 动态读取限制（支持配置热更新）
                     limits = get_sse_limits()
@@ -81,8 +83,45 @@ def start_sse_worker():
             except Exception as e:
                 logger.error(f"[SSE][WORKER] 错误: {e}", exc_info=True)
 
-    _worker_thread = threading.Thread(target=_worker, daemon=True, name="RegistrySSEWorker")
-    _worker_thread.start()
+    with _worker_lock:
+        if _worker_thread is not None and _worker_thread.is_alive():
+            return
+        _worker_stop_event.clear()
+        _worker_thread = threading.Thread(
+            target=_worker,
+            daemon=True,
+            name="RegistrySSEWorker",
+        )
+        _worker_thread.start()
+
+
+def stop_sse_worker(timeout: float = 2.0) -> bool:
+    """Stop the SSE worker and disconnect registered clients."""
+    global _worker_thread
+
+    with _worker_lock:
+        thread = _worker_thread
+        if thread is None:
+            cleanup_sse_connections()
+            return True
+        _worker_stop_event.set()
+        _registry_update_queue.put_nowait(_worker_stop_signal)
+
+    if thread is not threading.current_thread():
+        thread.join(timeout=timeout)
+    stopped = not thread.is_alive()
+    cleanup_sse_connections()
+
+    with _worker_lock:
+        if _worker_thread is thread and stopped:
+            _worker_thread = None
+    return stopped
+
+
+def is_sse_worker_running() -> bool:
+    """Return whether the singleton worker thread is alive."""
+    with _worker_lock:
+        return bool(_worker_thread and _worker_thread.is_alive())
 
 
 def register_sse_client() -> queue.Queue:

@@ -913,7 +913,7 @@ class WebsiteMonitor:
         self.logger = logger
         self._is_running = False
 
-        self.logger.critical(f"[DEBUG][CONFIG] Website配置: {website.name}")
+        self.logger.debug(f"[DEBUG][CONFIG] Website配置: {website.name}")
 
         # 初始化处理器 (v1.8.1版本)
         self.handler = FileMonitorHandler(
@@ -955,7 +955,7 @@ class WebsiteMonitor:
             log_with_symbol("error", "error", "Observer start failed", self.logger)
             return
 
-        log_with_symbol("success", "critical", "Monitor started successfully", self.logger)
+        log_with_symbol("success", "info", "Monitor started successfully", self.logger)
 
     def stop(self):
         """停止监控"""
@@ -978,5 +978,6 @@ class WebsiteMonitor:
         if hasattr(self, 'handler'):
             del self.handler
 
+    @property
     def is_running(self) -> bool:
         return self._is_running

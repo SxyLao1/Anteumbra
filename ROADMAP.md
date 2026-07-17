@@ -1,8 +1,8 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.25 (2026-07-11)
+> **Current Version**: v1.0.26 (2026-07-17)
 > **Vision**: Web perimeter threat intelligence: passive file detection, access-log behavior analysis, attacker profiling, and operator-friendly response.
-> **Current Status**: Beta-quality user release candidate. Core workflows are usable; remaining work is release discipline, deeper configuration architecture, and production hardening.
+> **Current Status**: Beta-quality release candidate with local wheel, editable-source, browser, and Docker distribution smoke tests complete. Remaining work is tag/PyPI publication, release discipline, deeper configuration architecture, and production hardening.
 
 ---
 
@@ -21,20 +21,21 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Access-log analysis | Nginx, Apache, Tomcat, and custom access-log presets are supported from CLI and web audit views. |
 | Log streaming | SSE log stream is quieter, loads historical monitor logs, and exposes notifier delivery state. |
 | Docker | Container now starts the full `anteumbra run` runtime, creates Docker-friendly defaults, prints first-start credentials, and passes health checks. |
-| Architecture guardrails | Layer/import boundary tests exist and are part of the cleanup discipline. |
+| Runtime reliability | Multi-site resources have explicit startup/shutdown ownership; poison JSONL events advance through a dead-letter path; startup readiness and degraded capabilities are visible. |
+| Architecture guardrails | Layer/import boundary tests exist, and resolved debt has been removed from the allowlist. |
 | Documentation | README, user manual, architecture docs, and release guide reflect the current install model. |
 
 ### Known Truths
 
 - The project is usable as a beta/release-candidate security tool, but should not be described as fully production-hardened yet.
 - The architecture is significantly cleaner than the inherited Trident shape, but not fully re-architected.
-- The deepest remaining coupling is still around global runtime state, especially `ConfigRegistry`, process-wide paths, and launcher-time resources.
+- The deepest remaining coupling is still around global runtime state, especially `ConfigRegistry`, process-wide paths, and singleton service factories. Launcher resource ownership is cleaner, but the runtime is not yet dependency-injected.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
 - Some historical comments and older modules still contain encoding damage from earlier development; they do not block runtime, but they hurt maintainability.
 
 ---
 
-## v1.0.20 - v1.0.25 Cleanup Line
+## v1.0.20 - v1.0.26 Cleanup Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
@@ -44,6 +45,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.23 | Web audit entry points, quieter SSE logs, notifier visibility | Done |
 | 1.0.24 | Tomcat access-log analyzer and CLI presets | Done |
 | 1.0.25 | Docker full-runtime deployment and documentation sync | Done |
+| 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Done; ready to tag |
 
 ---
 
@@ -53,12 +55,12 @@ Before a wider user push or PyPI release, complete this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P0 | Update CHANGELOG through the current version | Done in 1.0.25 documentation cleanup |
-| P0 | Verify PyPI clean install in a fresh runtime directory | Pending final release pass |
-| P0 | Verify source editable install in a fresh runtime directory | Pending final release pass |
-| P0 | Verify Docker build/run/health/detection path | Done for 1.0.25 |
-| P0 | Confirm README commands match real output | Mostly done; re-check during release pass |
-| P1 | Run deployment, architecture, and relevant web regression tests | Pending final release pass |
+| P0 | Update CHANGELOG through the current version | Done for 1.0.26 |
+| P0 | Verify release wheel clean install in a fresh runtime directory | Done: non-editable 1.0.26 wheel, config, YARA, start/health/stop, and browser smoke passed |
+| P0 | Verify source editable install in a fresh runtime directory | Done: PEP 660 install, config, health, UTF-8 logs, and stop passed |
+| P0 | Verify Docker build/run/health/detection path | Done: healthy non-root container and monitored two-rule YARA hit passed |
+| P0 | Confirm README commands match real output | Done in clean-install CLI pass |
+| P1 | Run deployment, architecture, and relevant web regression tests | Done: 428 non-UI passed, 1 live-WAF skip; 41 UI passed |
 | P1 | Tag release and push only after the final clean install check | Pending |
 | P1 | Publish to PyPI from tag using the release workflow | Pending |
 

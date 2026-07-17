@@ -6,6 +6,7 @@ Uses go() with wait_until="commit" to avoid blocking
 on unpkg.com CDN <script> tags. Fresh Flask server per test.
 """
 import pytest
+from pathlib import Path
 from playwright.sync_api import expect
 
 
@@ -37,6 +38,31 @@ class TestDashboard:
         page.wait_for_timeout(1500)
         body_text = page.locator("body").inner_text()
         assert len(body_text) > 100, "Dashboard body should have meaningful content"
+
+    def test_overview_shows_detection_and_notification_modes(self, page, server_url):
+        page.click("a.nav-link[data-path='overview']")
+        capability_band = page.locator("[data-testid='runtime-capabilities']")
+
+        expect(capability_band).to_be_visible(timeout=10000)
+        expect(capability_band).to_contain_text("Detection")
+        expect(capability_band).to_contain_text("Notifications")
+
+    def test_overview_loads_existing_monitor_history(self, page, server_url):
+        marker = "CODEX-HISTORY-MARKER"
+        log_file = Path("logs") / "Default Website" / "monitor.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_file.write_text(
+            f"[2026-07-17 12:00:00] INFO - {marker}\n",
+            encoding="utf-8",
+        )
+
+        go(page, f"{server_url}/admin/")
+        page.click("a.nav-link[data-path='overview']")
+
+        expect(page.locator("#live-log-stream")).to_contain_text(
+            marker,
+            timeout=10000,
+        )
 
     def test_threats_has_table(self, page, server_url):
         """Threats page should render a table (even if empty)."""

@@ -13,6 +13,45 @@ var _scanLastId = '';
 var _scanJobId = '';
 var _scanSelected = new Set();
 var _scanQuarantined = new Set();
+var _scanHistoryRequestId = 0;
+
+function setScanUiState(state, progressText) {
+  var labels = {
+    starting: 'Starting',
+    running: 'Running',
+    stopping: 'Stopping',
+    completed: 'Completed',
+    stopped: 'Stopped',
+    failed: 'Failed'
+  };
+  var colors = {
+    starting: '#ffaa00',
+    running: '#00ff41',
+    stopping: '#ffaa00',
+    completed: '#00ff41',
+    stopped: '#ffaa00',
+    failed: '#ff4444'
+  };
+  var active = state === 'starting' || state === 'running' || state === 'stopping';
+  var status = document.getElementById('scan-status');
+  if (status) {
+    status.textContent = labels[state] || state;
+    status.dataset.state = state;
+    status.style.color = colors[state] || '#888';
+  }
+  var progress = document.getElementById('scan-progress-text');
+  if (progress && progressText != null) progress.textContent = progressText;
+
+  var stopBtn = document.getElementById('scan-stop-btn');
+  if (stopBtn) {
+    stopBtn.disabled = state !== 'running';
+    stopBtn.style.display = state === 'running' ? '' : 'none';
+  }
+  var startBtn = document.getElementById('scan-start-btn');
+  if (startBtn) startBtn.disabled = active;
+  var configCard = document.getElementById('scan-config-card');
+  if (configCard) configCard.style.display = active ? 'none' : 'flex';
+}
 
 function startScan() {
   var dir = document.getElementById('scan-target-dir');
@@ -28,6 +67,7 @@ function startScan() {
   _scanComplete = false;
   _scanJobId = '';
   _scanStartTime = Date.now();
+  if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
   var tbody = document.getElementById('results-tbody');
   if (tbody) tbody.innerHTML = '';
 
@@ -50,6 +90,7 @@ function startScan() {
   });
   document.getElementById('scan-progress-bar')?.style && (document.getElementById('scan-progress-bar').style.width = '0%');
   var pt = document.getElementById('scan-progress-text'); if (pt) pt.textContent = '0 / ?';
+  setScanUiState('starting', '0 / ? files');
 
   var csrf = document.querySelector('meta[name="csrf-token"]');
   var csrfToken = csrf ? csrf.content : '';
@@ -70,6 +111,7 @@ function startScan() {
   })
   .then(function(d) {
     _scanJobId = d.scan_id;
+    setScanUiState('running', '0 / ? files');
     _scanSSE = new EventSource(d.stream_url, { withCredentials: true });
 
     _scanSSE.onmessage = function(event) {
@@ -79,6 +121,8 @@ function startScan() {
 
     _scanSSE.onerror = function() {
       if (!_scanComplete) {
+        _scanComplete = true;
+        setScanUiState('failed', 'Connection lost');
         var tb = document.getElementById('results-tbody');
         if (tb) tb.innerHTML += '<tr><td colspan="7" style="color:#ff4444;padding:12px;">SSE connection lost.</td></tr>';
       }
@@ -86,6 +130,8 @@ function startScan() {
     };
   })
   .catch(function(e) {
+    _scanComplete = true;
+    setScanUiState('failed', 'Start failed: ' + e.message);
     var tb = document.getElementById('results-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Start failed: ' + _escHtml(e.message) + '</td></tr>';
   });
@@ -118,12 +164,26 @@ function handleScanEvent(data) {
     case 'complete':
       _scanComplete = true;
       _scanLastId = data.scan_id;
+      _scanJobId = '';
       var pb2 = document.getElementById('scan-progress-bar');
-      if (pb2) pb2.style.width = '100%';
-      var pt3 = document.getElementById('scan-progress-text');
-      if (pt3) pt3.textContent = data.scanned_files + ' / ' + data.total_files;
+      var terminalPct = data.status === 'completed'
+        ? 100
+        : (data.total_files > 0 ? Math.round(data.scanned_files / data.total_files * 100) : 0);
+      if (pb2) pb2.style.width = terminalPct + '%';
+      var finalState = data.status === 'cancelled'
+        ? 'stopped'
+        : (data.status === 'error' ? 'failed' : 'completed');
+      var finalLabel = finalState === 'stopped'
+        ? 'Stopped'
+        : (finalState === 'failed' ? 'Failed' : 'Completed');
+      var finalText = finalLabel + ' - ' + data.scanned_files + ' / ' + data.total_files + ' files';
+      if (finalState === 'failed' && data.error_message) finalText += ': ' + data.error_message;
+      setScanUiState(
+        finalState,
+        finalText
+      );
       var el2 = document.getElementById('scan-elapsed');
-      if (el2) el2.textContent = data.duration + 's';
+      if (el2) el2.textContent = (data.duration == null ? '?' : data.duration) + 's';
       var sn2 = document.getElementById('stat-new'); if (sn2) sn2.textContent = data.new_findings;
       var sk2 = document.getElementById('stat-known'); if (sk2) sk2.textContent = data.known_findings;
       var sc2 = document.getElementById('stat-clean'); if (sc2) sc2.textContent = data.clean;
@@ -133,8 +193,12 @@ function handleScanEvent(data) {
         if (rb) rb.style.display = '';
       }
       if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
+      setTimeout(loadScanHistory, 50);
       break;
     case 'error':
+      _scanComplete = true;
+      _scanJobId = '';
+      setScanUiState('failed', 'Failed - ' + (data.message || 'Unknown error'));
       var tb2 = document.getElementById('results-tbody');
       if (tb2) tb2.innerHTML += '<tr><td colspan="6" style="color:#ff4444;padding:12px;">Error: ' + (data.message || 'Unknown') + '</td></tr>';
       if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
@@ -238,16 +302,24 @@ function quarantineScanFile(filePath, btn) {
 }
 
 function stopScan() {
-  if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
+  if (!_scanJobId || _scanComplete) return;
+  setScanUiState('stopping', 'Stopping...');
   var csrf = document.querySelector('meta[name="csrf-token"]');
   var token = csrf ? csrf.content : '';
   fetch('/admin/scanner/cancel', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
-    body: _scanJobId ? 'scan_id=' + encodeURIComponent(_scanJobId) : ''
+    body: 'scan_id=' + encodeURIComponent(_scanJobId)
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
+      return d;
+    });
+  })
+  .catch(function(e) {
+    setScanUiState('running', 'Cancel failed: ' + e.message);
   });
-  var pt = document.getElementById('scan-progress-text');
-  if (pt) pt.textContent = 'Stopped';
 }
 
 function generateReport() {
@@ -257,10 +329,12 @@ function generateReport() {
 function loadScanHistory() {
   var el = document.getElementById('scan-history-list');
   if (!el) return;
+  var requestId = ++_scanHistoryRequestId;
   el.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>Loading history...</p></div>';
   fetch('/admin/scanner/history')
     .then(function(r) { return r.json(); })
     .then(function(d) {
+      if (requestId !== _scanHistoryRequestId || !el.isConnected) return;
       if (!d.scans || d.scans.length === 0) {
         el.innerHTML = '<p style="color:#555;text-align:center;padding:12px;">No scan history yet.</p>';
         return;
@@ -278,7 +352,7 @@ function loadScanHistory() {
           + '<span style="color:#ff4444;font-size:9px;">' + s.new_findings + ' new</span>'
           + '<span style="color:#ffaa00;font-size:9px;">' + s.known_findings + ' known</span>'
           + '<span style="color:#555;">' + dateStr + '</span>'
-          + '<span style="color:#888;">' + (s.duration || '?') + 's</span>'
+          + '<span style="color:#888;">' + (s.duration == null ? '?' : s.duration) + 's</span>'
           + '</div>'
           + '<div style="display:flex;gap:4px;flex-shrink:0;">'
           + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;" onclick="viewScanResults(\'' + s.scan_id + '\')">View</button>'
@@ -289,6 +363,7 @@ function loadScanHistory() {
       el.innerHTML = html;
     })
     .catch(function() {
+      if (requestId !== _scanHistoryRequestId || !el.isConnected) return;
       el.innerHTML = '<p style="color:#ff4444;text-align:center;padding:12px;">Failed to load history.</p>';
     });
 }

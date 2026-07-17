@@ -1,4 +1,4 @@
-# Anteumbra 技术白皮书 v1.0.25
+# Anteumbra 技术白皮书 v1.0.26
 
 > **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
@@ -137,9 +137,9 @@ class PluginManager:
 - `dispatch(event) → List[DomainEvent]` — 同步分发（每个 handler 有 30s 超时）
 - `register(plugin) / unregister(name)` — 插件生命周期管理
 
-#### 16 个 Application Service 模块
+#### Application 编排与 Service 模块
 
-每个 service 是一个薄外观，从 infrastructure 重导出公共 API：
+部分 service 仍是薄外观，从 infrastructure 重导出稳定的公共 API：
 
 ```python
 # application/sse_service.py（示例）
@@ -150,7 +150,25 @@ from anteumbra.infrastructure.utils.sse_manager import (
 __all__ = ["register_sse_client", ...]
 ```
 
-**目的**：修复 DDD 依赖方向。Interface 层通过 Application 层访问 Infrastructure，而不是直接 import。
+另一些模块已经承担真实用例和跨资源行为：
+
+| 模块 | 职责 |
+|------|------|
+| `launcher.py` | 组合根、多站点资源启动、运行状态和确定性关闭 |
+| `jsonl_consumer.py` | JSONL 逐条确认、截断/轮转处理和死信 |
+| `quarantine_service.py` | 带文件系统与 Registry 补偿的隔离/恢复事务 |
+| `log_analysis_service.py` | 按站点分析访问日志，Web 路由不直接导入解析器 |
+| `runtime_health_service.py` | CLI/Web 共用的可选能力与配置/WAL/Registry 关键健康评估 |
+
+**目的**：Interfaces 通过 Application API 访问具体解析器和存储。该边界正在
+改善，但仍有历史 facade 和全局单例；目录位置本身不代表依赖已经完全倒置。
+
+#### 运行生命周期
+
+`launcher.start_all()` 是进程组合根：先绑定 Web 监听器和激活插件，再为每个
+启用站点创建文件监控器与访问日志监控器，随后启动画像、SSE、Metrics 等后台
+资源，并记录所有资源所有权。`stop_all()` 按该清单幂等关闭。可选能力失败会
+形成明确告警；一个文件监控器都无法启动则视为致命错误。
 
 ### 2.3 Infrastructure 层（基础设施层）
 
@@ -443,12 +461,18 @@ Web Server (Nginx/Apache/IIS)
        │
        ├── 如果 quarantine.auto_quarantine_enabled:
        │   → emit("file_quarantined", ...)
+       │   → quarantine_handler
+       │   → quarantine_service（文件 + Registry 补偿）
        │
        └── emit("alert_requested", ...)
             → notifier_handler → email/WeChat/webhook
 ```
 
 ### 5.2 威胁画像数据流
+
+追加式 WAF JSONL 输入由 `JsonlEventTailer` 消费。完整记录逐条确认；畸形 JSON
+或处理器异常会写入 `data/waf_events.deadletter.jsonl`，随后推进游标。未写完的
+尾行留待下次轮询，文件被替换或截断时从字节 0 重新读取。
 
 ```
 ┌──────────────────────┐    ┌──────────────────────┐
@@ -485,6 +509,10 @@ Web Server (Nginx/Apache/IIS)
 
 ### 5.3 日志分析数据流
 
+每个启用站点拥有自己的日志配置。`log_analysis_service` 通过站点绑定的分析器
+选择 Nginx/Apache/Tomcat 解析逻辑并返回带站点标识的结果；单个站点日志缺失
+不会抑制其他站点。
+
 ```
 Web 访问日志 (access.log)
         │
@@ -514,12 +542,15 @@ Web 访问日志 (access.log)
 ### 5.4 SSE 实时推送流
 
 ```
+所有启用站点日志 → 按时间合并历史
+                         │
 Flask View → SSE EventStream
      │
      │ register_sse_client() → Queue
      │
      ├── Monitor Log lines → persist_log_line() → LogBuffer
      ├── Registry Updates → trigger_registry_update()
+     ├── 15 秒 heartbeat → keepalive
      └── Client disconnect → unregister_sse_client()
             │
             ▼
@@ -727,11 +758,11 @@ decay_factor:
 ### 9.3 "新模块如何接入事件总线？"
 
 ```
-1. 如果模块在 infrastructure 层：
-   - 惰性导入 PluginManager
-   - from anteumbra.application.plugin_manager import get_plugin_manager
-   - 调用 pm.emit("event_type", "source_name", payload)
-   - 这是已知的 DDD 设计权衡（13个惰性导入点）
+1. 如果现有 infrastructure 模块已经发射事件：
+   - 当前兼容路径会惰性导入 PluginManager
+   - 不要把该模式扩散到无关模块
+   - 优先通过 Application 用例或注入的 Domain 事件发布端口
+   - 现有反向导入作为 v1.1.0 架构债务跟踪
 
 2. 如果新增事件类型：
    - 确保至少一个插件在 supported_events 中声明
@@ -747,9 +778,9 @@ decay_factor:
 
 | 变更类型 | 版本位 | 示例 |
 |---------|:------:|------|
-| 新增功能（新 blueprint、新检测引擎、新导出格式） | MINOR | 1.1.0 |
-| Bug 修复、代码质量、性能优化、重构 | PATCH | 1.0.10 |
-| 不兼容的 API 变更、架构重写 | MAJOR | 2.0.0 |
+| 新里程碑或不兼容产品架构 | 里程碑 | 2.0.0 |
+| 面向用户的新功能线 | 功能 | 1.1.0 |
+| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.26 |
 
 ---
 
@@ -758,7 +789,7 @@ decay_factor:
 | 技术 | 用途 |
 |------|------|
 | **Python 3.10+** | 主语言 |
-| **Flask 3.x** | Web 框架 |
+| **Flask 2.3.x** | Web 框架 |
 | **HTMX 2.x** | 前端交互（无 JS 框架依赖） |
 | **Jinja2** | 模板引擎 |
 | **YARA 4.x** | WebShell 规则匹配 |
@@ -777,7 +808,7 @@ decay_factor:
 | 想找... | 文件 |
 |---------|------|
 | 版本号 | `src/anteumbra/__init__.py:__version__` |
-| 所有异常处理 | grep `except.*:` → `pass` 已清零 |
+| 静默宽泛异常 | `rg -U "except Exception.*\\n\\s+pass" src/anteumbra`（必须无匹配） |
 | 所有事件发射点 | grep `pm.emit(` |
 | 所有线程锁 | grep `Lock()` |
 | 所有数据库表 | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
@@ -787,5 +818,5 @@ decay_factor:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.25 — 随代码一起演进</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.26 — 随代码一起演进</sub>
 </div>

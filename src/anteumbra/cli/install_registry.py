@@ -26,10 +26,10 @@ def _registry_path() -> Path:
 
 def get_install_info() -> Optional[Dict]:
     """读取全局安装注册表，返回已安装实例的信息；未安装则返回 None。"""
-    rp = _registry_path()
-    if not rp.exists():
-        return None
     try:
+        rp = _registry_path()
+        if not rp.exists():
+            return None
         data = json.loads(rp.read_text(encoding="utf-8"))
         if isinstance(data, dict) and "install_path" in data:
             # 验证安装目录是否存在

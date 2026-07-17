@@ -243,6 +243,10 @@ def waf_events_file(tmp_path):
          "body": "user=admin'--&pass=x"},
         {"timestamp": "2026-07-01T10:00:15", "src_ip": "10.99.99.1", "method": "GET",
          "url": "/admin/config.php?file=../../etc/passwd", "waf_score": 95, "user_agent": "sqlmap/1.6"},
+        # Same tool and time window through a second address: must aggregate.
+        {"timestamp": "2026-07-01T10:00:20", "src_ip": "10.99.99.2", "method": "GET",
+         "url": "/search.php?q=1 UNION SELECT password", "waf_score": 88,
+         "user_agent": "sqlmap/1.6"},
         # Attacker 2: 10.88.77.2 — AntSword webshell upload
         {"timestamp": "2026-07-01T10:01:00", "src_ip": "10.88.77.2", "method": "POST",
          "url": "/upload.php", "waf_score": 80, "user_agent": "AntSword/v2.1",

@@ -218,6 +218,38 @@ class TestRestoreFile:
         q.restore_file(result["quarantine_id"])
         assert q.is_recently_restored(str(sample_file)) is True
 
+    def test_restore_refuses_to_overwrite_existing_file(
+        self, isolate_quarantine, sample_file
+    ):
+        q, _, _ = isolate_quarantine
+        result = q.quarantine_file(str(sample_file), "test", ["f1"])
+        sample_file.write_text("replacement", encoding="utf-8")
+
+        with pytest.raises(FileExistsError, match="destination exists"):
+            q.restore_file(result["quarantine_id"])
+
+        assert sample_file.read_text(encoding="utf-8") == "replacement"
+        assert Path(result["quarantine_path"]).exists()
+
+    def test_restore_metadata_failure_moves_file_back(
+        self, isolate_quarantine, sample_file, monkeypatch
+    ):
+        q, _, _ = isolate_quarantine
+        result = q.quarantine_file(str(sample_file), "test", ["f1"])
+        original_save = q._save_db
+
+        def fail_save(_records):
+            raise OSError("simulated restore metadata failure")
+
+        monkeypatch.setattr(q, "_save_db", fail_save)
+        with pytest.raises(OSError, match="simulated restore metadata failure"):
+            q.restore_file(result["quarantine_id"])
+
+        assert not sample_file.exists()
+        assert Path(result["quarantine_path"]).exists()
+        monkeypatch.setattr(q, "_save_db", original_save)
+        assert q.get_quarantine_detail(result["quarantine_id"])["status"] == "quarantined"
+
 
 # ── Delete Quarantine Tests ───────────────────────────────────
 
@@ -238,6 +270,29 @@ class TestDeleteQuarantine:
         q, _, _ = isolate_quarantine
         with pytest.raises(ValueError, match="不存在"):
             q.delete_quarantine("nonexistent-qid")
+
+    def test_delete_metadata_failure_preserves_file_and_status(
+        self, isolate_quarantine, sample_file, monkeypatch
+    ):
+        q, _, _ = isolate_quarantine
+        result = q.quarantine_file(str(sample_file), "test", ["f1"])
+        original_save = q._save_db
+        calls = 0
+
+        def fail_first_save(records):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise OSError("simulated delete metadata failure")
+            return original_save(records)
+
+        monkeypatch.setattr(q, "_save_db", fail_first_save)
+
+        with pytest.raises(OSError, match="simulated delete metadata failure"):
+            q.delete_quarantine(result["quarantine_id"])
+
+        assert Path(result["quarantine_path"]).exists()
+        assert q.get_quarantine_detail(result["quarantine_id"])["status"] == "quarantined"
 
 
 # ── Is Recently Restored Tests ────────────────────────────────
@@ -281,3 +336,48 @@ class TestDbResilience:
         assert db_path.exists()
         loaded = json.loads(db_path.read_text(encoding="utf-8"))
         assert loaded[0]["test"] == "data"
+
+    def test_missing_db_does_not_recover_new_file_as_placeholder(
+        self, isolate_quarantine, sample_file
+    ):
+        q, _, db_path = isolate_quarantine
+        db_path.unlink()
+
+        result = q.quarantine_file(
+            str(sample_file), "real_rule", ["real_feature"], str(sample_file)
+        )
+
+        records = q.get_quarantine_list()
+        assert len(records) == 1
+        assert records[0]["quarantine_id"] == result["quarantine_id"]
+        assert records[0]["original_path"] == str(sample_file)
+        assert records[0]["rule_name"] == "real_rule"
+        assert records[0]["features"] == ["real_feature"]
+
+    def test_metadata_failure_rolls_file_back(
+        self, isolate_quarantine, sample_file, monkeypatch
+    ):
+        q, q_dir, _ = isolate_quarantine
+
+        def fail_save(_records):
+            raise OSError("simulated metadata failure")
+
+        monkeypatch.setattr(q, "_save_db", fail_save)
+
+        with pytest.raises(OSError, match="simulated metadata failure"):
+            q.quarantine_file(str(sample_file), "rule", ["feature"])
+
+        assert sample_file.exists()
+        assert not list(q_dir.glob("*/*"))
+
+    def test_explicit_rollback_restores_file_and_removes_record(
+        self, isolate_quarantine, sample_file
+    ):
+        q, _, _ = isolate_quarantine
+        result = q.quarantine_file(str(sample_file), "rule", ["feature"])
+
+        rolled_back = q.rollback_quarantine(result["quarantine_id"])
+
+        assert rolled_back["quarantine_id"] == result["quarantine_id"]
+        assert sample_file.exists()
+        assert q.get_quarantine_detail(result["quarantine_id"]) is None

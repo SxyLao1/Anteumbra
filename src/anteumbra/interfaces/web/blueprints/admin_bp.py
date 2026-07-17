@@ -132,9 +132,15 @@ def overview():
         except Exception:
             logger.debug("Failed to read monitor.log for overview log history", exc_info=True)
 
+        from anteumbra.application.runtime_health_service import assess_runtime_capabilities
+
+        runtime_capabilities = assess_runtime_capabilities(
+            ConfigRegistry.get_raw_config()
+        )
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
-            client_ip=request.remote_addr, log_history=log_history_html)
+            client_ip=request.remote_addr, log_history=log_history_html,
+            runtime_capabilities=runtime_capabilities)
     except Exception as e:
         current_app.logger.error(f"[ADMIN] overview失败: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
@@ -506,8 +512,16 @@ def metrics_data():
         # Render HTML with i18n labels (pre-call _() to avoid f-string backslash issue)
         l_scan = _("Scan Total")
         l_risk = _("High Risk")
+        l_alerts = _("Alerts")
+        l_notification = _("Notification")
         l_mem = _("Memory")
         l_uptime = _("Uptime")
+        notification_status = str(data.get("last_notification_status", "never"))
+        notification_color = (
+            "#00ff41" if notification_status == "success"
+            else "#ffaa00" if notification_status in {"never", "skipped", "queued"}
+            else "#ff4444"
+        )
         return f'''
         <div class="metrics-grid">
             <div class="metric-card">
@@ -520,6 +534,20 @@ def metrics_data():
                 <div class="metric-value {color_class}" style="color: {color_code};">
                     {suspicious_count}
                 </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">{l_alerts}</div>
+                <div class="metric-value">{data.get("alert_total", 0)}</div>
+                <div class="metric-subtitle">registry {data.get("registry_size", 0)}</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">{l_notification}</div>
+                <div class="metric-value" style="color: {notification_color}; font-size: 18px;">
+                    {notification_status.upper()}
+                </div>
+                <div class="metric-subtitle">ok {data.get("notification_success", 0)} / failed {data.get("notification_failed", 0)} / skipped {data.get("notification_skipped", 0)}</div>
             </div>
 
             <div class="metric-card">
@@ -624,23 +652,10 @@ def public_health():
     Intentionally open - no auth required. Returns minimal status only,
     no version numbers or sensitive data (attack surface reduction).
     """
-    status = {"status": "healthy"}
+    from anteumbra.application.runtime_health_service import assess_system_health
 
-    # Quick component checks
-    try:
-        from anteumbra.application.config_service import load_toml_config
-        load_toml_config()
-    except Exception:
-        status["status"] = "degraded"
-
-    try:
-        from anteumbra.application.wal_service import get_wal_info
-        get_wal_info()
-    except Exception:
-        status["status"] = "degraded"
-
-    http_code = 200 if status["status"] == "healthy" else 503
-    return jsonify(status), http_code
+    health = assess_system_health()
+    return jsonify({"status": health["status"]}), health["http_status"]
 
 
 @admin_bp.route('/health', methods=['GET'])
@@ -650,53 +665,20 @@ def admin_health():
 
     Requires login. Returns version, component status, and detailed checks.
     """
-    """Health check endpoint for Docker HEALTHCHECK and monitoring systems."""
-    from anteumbra.application.config_service import get_version, load_config
+    from anteumbra.application.config_service import get_version
+    from anteumbra.application.runtime_health_service import assess_system_health
+
+    health = assess_system_health()
     status = {
-        'status': 'healthy',
+        'status': health['status'],
         'version': get_version(),
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'checks': {}
+        'checks': health['checks'],
+        'capabilities': health['capabilities'],
     }
-
-    # Check config
-    try:
-        cfg = load_config()
-        status['checks']['config'] = 'ok'
-    except Exception as e:
-        status['checks']['config'] = f'error: {str(e)}'
-        status['status'] = 'degraded'
-
-    # Check WAL module (function-based, no class)
-    try:
-        from anteumbra.application.wal_service import get_wal_info
-        get_wal_info()
-        status['checks']['wal'] = 'ok'
-    except Exception as e:
-        status['checks']['wal'] = f'error: {str(e)}'
-        status['status'] = 'degraded'
-
-    # Check registry module (function-based, no class)
-    try:
-        from anteumbra.application.registry_service import get_all
-        get_all(include_deleted=False)
-        status['checks']['registry'] = 'ok'
-    except Exception as e:
-        status['checks']['registry'] = f'error: {str(e)}'
-        status['status'] = 'degraded'
-
-    # Check YARA engine
-    try:
-        from anteumbra.application.yara_service import get_yara_engine
-        import logging
-        get_yara_engine(logging.getLogger('health'))
-        status['checks']['yara'] = 'ok'
-    except Exception as e:
-        status['checks']['yara'] = f'error: {str(e)}'
-        status['status'] = 'degraded'
-
-    http_code = 200 if status['status'] == 'healthy' else 503
-    return jsonify(status), http_code
+    if health['errors']:
+        status['errors'] = health['errors']
+    return jsonify(status), health['http_status']
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.25-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.26-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -43,12 +43,16 @@ anteumbra run
 
 Open `http://127.0.0.1:8080/admin`. The default username is `admin`; the initial password is printed by `anteumbra install`. You can set a new password in `anteumbra config wizard`.
 
-Optional extras:
+YARA scanning is included in the base install. Optional similarity engines are
+available through the `full` extra:
 
 ```bash
-pip install "anteumbra[yara]"  # compiled YARA support
-pip install "anteumbra[full]"  # YARA plus optional similarity engines
+pip install anteumbra           # includes yara-python
+pip install "anteumbra[full]"  # adds ssdeep and py-tlsh
 ```
+
+`anteumbra[yara]` remains accepted as a compatibility alias but adds no
+dependencies beyond the base package.
 
 ## Common Configuration
 
@@ -82,7 +86,7 @@ For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-com
 
 ## Core Capabilities
 
-- File monitoring on Windows and Linux
+- Multi-site file monitoring on Windows and Linux
 - Manual scans with scan history and printable reports
 - YARA-based WebShell detection for PHP, ASP, JSP, ASPX, Godzilla, Behinder, and related families
 - Access-log behavior analysis for Nginx, Apache, and Tomcat
@@ -90,7 +94,7 @@ For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-com
 - Quarantine, restore, false-positive marking, and audit trail workflows
 - JSON and SQLite storage backends with WAL support
 - SIEM export in CEF, JSON Lines, and Syslog formats
-- Web dashboard with SSE log streaming and configuration management
+- Web dashboard with merged historical/live SSE logs, runtime capability status, and configuration management
 - Plugin manager and WAF/event-source integration points
 
 ## Source Install
@@ -152,5 +156,5 @@ MIT License. Third-party tools bundled under `tools/` retain their original lice
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.25 · MIT License</sub>
+  <sub>Anteumbra v1.0.26 · MIT License</sub>
 </div>

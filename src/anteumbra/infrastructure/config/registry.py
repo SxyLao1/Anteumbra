@@ -91,7 +91,10 @@ class ConfigRegistry:
                         if reg_config.exists():
                             cls._config_path = reg_config.resolve()
                 except Exception:
-                    pass
+                    cls._get_logger().debug(
+                        "[CONFIG] Failed to read the installation registry",
+                        exc_info=True,
+                    )
             if cls._config_path is None:
                 # Fallback: 包所在源码树（dev install pip install -e .）
                 import anteumbra as _pkg
@@ -293,25 +296,31 @@ class ConfigRegistry:
         # 支持多种配置格式（向后兼容）
         site_data = config.get("website")
         if isinstance(site_data, dict):
-            if site_data.get("enabled", False):
-                site = cls._create_website(site_data)
-                if site:
-                    websites.append(site)
+            if site_data.get("enabled", True):
+                websites.append(cls._create_website(site_data))
         elif isinstance(site_data, list):
             for data in site_data:
-                if data.get("enabled", False):
-                    site = cls._create_website(data)
-                    if site:
-                        websites.append(site)
+                if not isinstance(data, dict):
+                    raise ValueError("Every [[website]] entry must be a table")
+                if data.get("enabled", True):
+                    websites.append(cls._create_website(data))
+        else:
+            raise ValueError("[website] must be a table or an array of tables")
 
         return websites
 
     @classmethod
-    def _create_website(cls, data: Dict) -> Optional[Website]:
+    def _create_website(cls, data: Dict) -> Website:
         """创建网站对象"""
         logger = cls._get_logger()
         try:
-            scan_opts_data = data.get("scan_options", {})
+            name = str(data["name"]).strip()
+            if not name or name in {".", ".."} or "/" in name or "\\" in name:
+                raise ValueError("website.name must not contain path separators")
+            scan_opts_data = dict(data.get("scan_options", {}))
+            log_config = dict(data.get("log_config", {}))
+            if log_config.get("access_log_path") and not scan_opts_data.get("access_log_path"):
+                scan_opts_data["access_log_path"] = log_config["access_log_path"]
             scan_options = ScanOptions(**scan_opts_data)
 
             path = data["path"]
@@ -319,17 +328,20 @@ class ConfigRegistry:
                 path = normalize_path(path)
 
             site = Website(
-                name=data["name"],
+                name=name,
                 path=path,
                 port=data["port"],
                 enabled=data.get("enabled", True),
-                scan_options=scan_options
+                scan_options=scan_options,
+                log_config=log_config,
             )
             logger.debug(f"[CONFIG] 创建网站: {site}")
             return site
         except Exception as e:
             logger.error(f"[CONFIG] 创建网站失败 '{data.get('name', '未知')}': {e}")
-            return None
+            raise ValueError(
+                f"Invalid website configuration for {data.get('name', 'unknown')!r}: {e}"
+            ) from e
 
 
 def _is_tool_script() -> bool:

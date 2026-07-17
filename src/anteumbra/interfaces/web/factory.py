@@ -27,12 +27,8 @@ _app_instance: Optional[Flask] = None
 
 
 def _ensure_password_configured():
-    """首次运行：如果密码未配置，自动生成随机密码并写入 .env 文件。
-
-    优先级：环境变量 > .env 文件 > 自动生成
-    """
+    """Ensure first-run admin and session secrets exist in the deployment .env."""
     from pathlib import Path as _Path
-    import string as _string
 
     # 获取已加载的配置路径（ConfigRegistry 初始化后已设置）
     cfg_path = _Path(ConfigRegistry._config_path) if ConfigRegistry._config_path else None
@@ -41,56 +37,49 @@ def _ensure_password_configured():
         return
     root = cfg_path.parent
 
-    # 检查 ANTEUMBRA_PASSWORD_HASH 是否已设置（环境变量或已加载的配置）
     cfg = ConfigRegistry.get_raw_config()
     pw_hash = cfg.get("web_admin", {}).get("password_hash", "")
+    secret_key = cfg.get("security", {}).get("secret_key", "")
+    env_file = root / ".env"
+    generated_password = None
+    updates = {}
 
-    # 如果已配置有效 hash（非空且非占位符），跳过
-    if pw_hash and not pw_hash.startswith("${"):
+    if not pw_hash or str(pw_hash).startswith("${"):
+        import string
+        from werkzeug.security import generate_password_hash
+
+        generated_password = "".join(
+            secrets.choice(string.ascii_letters + string.digits) for _ in range(16)
+        )
+        updates["ANTEUMBRA_PASSWORD_HASH"] = generate_password_hash(generated_password)
+
+    invalid_secrets = {
+        "",
+        "change_this_to_a_random_32_char_string",
+        "YOUR_SECRET_KEY_HERE",
+    }
+    if str(secret_key).strip() in invalid_secrets or str(secret_key).startswith("${"):
+        updates["ANTEUMBRA_SECRET_KEY"] = secrets.token_urlsafe(48)
+
+    if not updates:
         return
 
-    # 检查 .env 文件是否已有 ANTEUMBRA_PASSWORD_HASH
-    env_file = root / ".env"
-    env_has_pw = False
-    if env_file.exists():
-        env_has_pw = "ANTEUMBRA_PASSWORD_HASH" in env_file.read_text(encoding="utf-8")
+    from dotenv import set_key
 
-    if env_has_pw:
-        # .env 已存在但 initialize 没读到——重新加载
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(str(env_file), override=True)
-            ConfigRegistry.initialize(str(cfg_path), force=True)
-            return
-        except Exception:
-            logger.debug("Failed to reload .env for password setup", exc_info=True)
-            return
+    env_file.touch(exist_ok=True)
+    for key, value in updates.items():
+        set_key(str(env_file), key, value, quote_mode="auto")
+        os.environ[key] = value
 
-    # 生成随机密码
-    import secrets as _secrets
-    pwd = ''.join(_secrets.choice(_string.ascii_letters + _string.digits) for _ in range(12))
-    from werkzeug.security import generate_password_hash
-    h = generate_password_hash(pwd)
-
-    # 写入 .env 文件
-    env_file.write_text(
-        f"# Anteumbra auto-generated admin password hash\n"
-        f"# Regenerate: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
-        f"ANTEUMBRA_PASSWORD_HASH={h}\n",
-        encoding="utf-8"
-    )
-
-    # 设置环境变量，重新初始化让配置生效
-    os.environ["ANTEUMBRA_PASSWORD_HASH"] = h
     ConfigRegistry.initialize(str(cfg_path), force=True)
 
-    # 打印凭据
-    print(f"\n{'='*60}")
-    print(f"  Anteumbra — 首次运行")
-    print(f"  管理员账号: admin")
-    print(f"  管理员密码: {pwd}")
-    print(f"  (已写入 {env_file})")
-    print(f"{'='*60}\n")
+    if generated_password:
+        print(f"\n{'=' * 60}")
+        print("  Anteumbra first-run credentials")
+        print("  Admin username: admin")
+        print(f"  Admin password: {generated_password}")
+        print(f"  Stored in: {env_file}")
+        print(f"{'=' * 60}\n")
 
 
 def create_app(config_path: str = None) -> Flask:
@@ -172,22 +161,40 @@ def create_app(config_path: str = None) -> Flask:
             'anteumbra_version': get_version(),
             'anteumbra_release_date': get_release_date(),
         }
-    app.config['SECRET_KEY'] = secrets.token_urlsafe(32)  # 改为随机生成
+    security_config = ConfigRegistry.get_raw_config().get("security", {})
+    configured_secret = str(security_config.get("secret_key", "")).strip()
+    if not configured_secret:
+        configured_secret = os.environ.get("ANTEUMBRA_SECRET_KEY", "").strip()
+    if not configured_secret:
+        configured_secret = secrets.token_urlsafe(48)
+        logger.warning("No persistent session secret was configured; using an ephemeral key")
+    app.config['SECRET_KEY'] = configured_secret
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
     app.config['TEMPLATES_AUTO_RELOAD'] = True
 
     # === 新增Session配置 ===
-    app.config['SESSION_TYPE'] = ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_type", "filesystem")
-    app.config['SESSION_FILE_DIR'] = normalize_path(
-        ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_dir", "data/sessions")
+    web_admin_config = ConfigRegistry.get_raw_config().get("web_admin", {})
+    session_type = web_admin_config.get("session_type", "filesystem")
+    session_dir = normalize_path(
+        web_admin_config.get("session_dir", "data/sessions")
     )
-    app.config['SESSION_PERMANENT'] = ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_permanent",
-                                                                                               False)
+    if session_type == "filesystem":
+        from cachelib.file import FileSystemCache
+
+        app.config['SESSION_TYPE'] = 'cachelib'
+        app.config['SESSION_CACHELIB'] = FileSystemCache(
+            cache_dir=str(session_dir),
+            threshold=int(web_admin_config.get("session_file_threshold", 500)),
+            mode=0o600,
+        )
+    else:
+        app.config['SESSION_TYPE'] = session_type
+    app.config['SESSION_PERMANENT'] = web_admin_config.get("session_permanent", False)
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
-        seconds=ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_lifetime", 3600)
+        seconds=web_admin_config.get("session_lifetime", 3600)
     )
     # v1.9.6: 开发环境 HTTP 下不使用 Secure cookie，否则浏览器不发送 cookie
-    app.config['SESSION_COOKIE_SECURE'] = ConfigRegistry.get_raw_config().get("web_admin", {}).get("session_cookie_secure", False)
+    app.config['SESSION_COOKIE_SECURE'] = web_admin_config.get("session_cookie_secure", False)
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -264,16 +271,24 @@ def get_app() -> Flask:
     return _app_instance
 
 
+def create_runtime_server(app: Flask, host: str, port: int, threaded: bool = True):
+    """Bind the runtime HTTP server synchronously so startup failures are visible."""
+    from werkzeug.serving import WSGIRequestHandler, make_server
+
+    class QuietRequestHandler(WSGIRequestHandler):
+        server_version = ""
+        sys_version = ""
+
+    return make_server(
+        host,
+        port,
+        app,
+        threaded=threaded,
+        request_handler=QuietRequestHandler,
+    )
+
+
 def run_app(host: str = "127.0.0.1", port: int = 8080, threaded: bool = True):
-    """统一启动Flask应用"""
-    app = create_app()
-    # v1.7.9: V-005修复 — 禁掉Werkzeug开发服务器的版本信息输出
-    # Werkzeug在底层BaseHTTPRequestHandler里硬编码了server_version和sys_version，
-    # 不关掉的话每个响应都会带 Server: Werkzeug/x.x.x Python/x.x.x
-    try:
-        from werkzeug.serving import WSGIRequestHandler
-        WSGIRequestHandler.server_version = ""    # 清掉 Werkzeug 版本
-        WSGIRequestHandler.sys_version = ""       # 清掉 Python 版本
-    except Exception:
-        logger.debug("Failed to suppress Werkzeug server version headers", exc_info=True)
-    app.run(host=host, port=port, threaded=threaded, debug=False)
+    """Run the web application in the foreground."""
+    server = create_runtime_server(create_app(), host, port, threaded=threaded)
+    server.serve_forever()

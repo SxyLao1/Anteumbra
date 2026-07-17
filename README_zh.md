@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.25-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.26-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -43,12 +43,14 @@ anteumbra run
 
 打开 `http://127.0.0.1:8080/admin`。默认用户名是 `admin`；初始密码由 `anteumbra install` 打印。也可以在 `anteumbra config wizard` 中输入新密码。
 
-可选扩展：
+基础安装已包含 YARA 扫描。需要相似度引擎时安装 `full` 扩展：
 
 ```bash
-pip install "anteumbra[yara]"  # 编译型 YARA 支持
-pip install "anteumbra[full]"  # YARA + 可选相似度引擎
+pip install anteumbra           # 已包含 yara-python
+pip install "anteumbra[full]"  # 增加 ssdeep 和 py-tlsh
 ```
+
+`anteumbra[yara]` 仍可作为兼容旧命令的别名使用，但不会在基础包之外增加依赖。
 
 ## 常用配置
 
@@ -82,7 +84,7 @@ anteumbra config reload
 
 ## 核心能力
 
-- Windows / Linux 文件监控
+- Windows / Linux 多站点文件监控
 - 手动扫描、扫描历史和可打印报告
 - 基于 YARA 的 PHP、ASP、JSP、ASPX、哥斯拉、冰蝎等 WebShell 检测
 - Nginx、Apache、Tomcat 访问日志行为分析
@@ -90,7 +92,7 @@ anteumbra config reload
 - 隔离、还原、误报标记和审计流
 - JSON 与 SQLite 双存储后端，支持 WAL
 - CEF、JSON Lines、Syslog 格式 SIEM 导出
-- 带 SSE 日志流和配置管理的 Web 面板
+- 带历史/实时合并 SSE 日志、运行能力状态和配置管理的 Web 面板
 - 插件管理器与 WAF / 事件源扩展接口
 
 ## 源码安装
@@ -152,5 +154,5 @@ MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.25 · MIT License</sub>
+  <sub>Anteumbra v1.0.26 · MIT License</sub>
 </div>

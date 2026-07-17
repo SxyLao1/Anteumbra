@@ -417,7 +417,12 @@ def system_session_cleanup():
                             'age_days': age_days,
                             'state': state
                         })
-                    except Exception:
+                    except OSError:
+                        current_app.logger.debug(
+                            "Skipping unreadable session file %s",
+                            sess_file,
+                            exc_info=True,
+                        )
                         continue
                 all_sessions.sort(key=lambda x: x['mtime'], reverse=True)
 

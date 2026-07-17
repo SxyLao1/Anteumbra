@@ -255,6 +255,10 @@ def quarantine_file(
                             f"[QUARANTINE] Source file not found, skip: {file_path}")
             return None
 
+        # Load metadata before moving the file.  If the JSON store is missing,
+        # _load_db() recovers files already on disk; loading after the move
+        # would mistake the new file for an orphan and create a placeholder.
+        records = _load_db()
         quarantine_dir = _get_quarantine_dir()
 
         # 生成隔离ID：时间戳 + 8位随机hex
@@ -298,14 +302,88 @@ def quarantine_file(
             "status": "quarantined",  # quarantined | restored | deleted
         }
 
-        # 写入数据库
-        records = _load_db()
+        # 写入数据库。元数据提交失败时必须把文件放回原处，避免出现
+        # "文件已移动但隔离记录不可用" 的半成功状态。
         records.insert(0, record)  # 新记录放前面
-        _save_db(records)
+        try:
+            _save_db(records)
+        except Exception as save_error:
+            rollback_error = None
+            try:
+                src.parent.mkdir(parents=True, exist_ok=True)
+                if quarantine_file.exists() and not src.exists():
+                    shutil.move(str(quarantine_file), str(src))
+            except Exception as exc:
+                rollback_error = exc
+                logger.critical(
+                    "Quarantine metadata save and file rollback both failed: %s",
+                    qid,
+                    exc_info=True,
+                )
+            if rollback_error is not None:
+                raise RuntimeError(
+                    f"Quarantine metadata save failed and rollback failed for {qid}: "
+                    f"{rollback_error}"
+                ) from save_error
+            raise
 
         log_with_symbol("quarantine_add", "INFO",
                         f"[QUARANTINE] File quarantined: {src.name} -> {qid}")
 
+        return record
+
+
+def rollback_quarantine(quarantine_id: str) -> Dict[str, Any]:
+    """Undo a newly-created quarantine operation.
+
+    This is used by the application service when Registry persistence fails
+    after the quarantine store has committed.  The file and metadata are
+    restored atomically from the caller's point of view.
+    """
+    with _quarantine_lock:
+        records = _load_db()
+        record = next(
+            (item for item in records if item.get("quarantine_id") == quarantine_id),
+            None,
+        )
+        if record is None:
+            raise ValueError(f"Quarantine record not found: {quarantine_id}")
+        if record.get("status") != "quarantined":
+            raise ValueError(
+                f"Quarantine record cannot be rolled back: {record.get('status')}"
+            )
+
+        quarantine_path = normalize_path(record["quarantine_path"])
+        original_path = normalize_path(record["original_path"])
+        if original_path.exists():
+            raise FileExistsError(
+                f"Cannot roll back quarantine; destination exists: {original_path}"
+            )
+        if not quarantine_path.exists():
+            raise FileNotFoundError(
+                f"Cannot roll back quarantine; stored file is missing: {quarantine_path}"
+            )
+
+        original_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(quarantine_path), str(original_path))
+        remaining = [item for item in records if item is not record]
+        try:
+            _save_db(remaining)
+        except Exception as save_error:
+            try:
+                quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(original_path), str(quarantine_path))
+            except Exception as rollback_error:
+                logger.critical(
+                    "Quarantine rollback metadata save and compensation both failed: %s",
+                    quarantine_id,
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"Rollback persistence and compensation failed for {quarantine_id}: "
+                    f"{rollback_error}"
+                ) from save_error
+            raise
         return record
 
 
@@ -335,30 +413,111 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
 
         quarantine_path = normalize_path(record["quarantine_path"])
         original_path = normalize_path(record["original_path"])
+        if original_path.exists():
+            raise FileExistsError(
+                f"Cannot restore quarantine; destination exists: {original_path}"
+            )
+        if not quarantine_path.exists():
+            raise FileNotFoundError(
+                f"Cannot restore quarantine; stored file is missing: {quarantine_path}"
+            )
 
         # 确保原始目录存在
         original_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 移动回原始位置
-        shutil.move(str(quarantine_path), str(original_path))
+        restore_key = str(original_path.resolve())
+        previous_record = dict(record)
+        _recently_restored[restore_key] = time.time() + _restored_ttl
 
-        # v1.7.9: 加入恢复白名单，30秒内不被重新隔离
-        _recently_restored[str(original_path.resolve())] = time.time() + _restored_ttl
+        # 移动回原始位置
+        try:
+            shutil.move(str(quarantine_path), str(original_path))
+        except Exception:
+            _recently_restored.pop(restore_key, None)
+            raise
 
         # 更新记录状态
         record["status"] = "restored"
         record["restore_time"] = datetime.now().isoformat()
-        _save_db(records)
-
         try:
-            from anteumbra.infrastructure.suspicious_registry import mark_restored
-            mark_restored(str(original_path))
-        except Exception:
-            logger.debug("Failed to clear registry quarantine state after restore", exc_info=True)
+            _save_db(records)
+        except Exception as save_error:
+            record.clear()
+            record.update(previous_record)
+            _recently_restored.pop(restore_key, None)
+            try:
+                quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(original_path), str(quarantine_path))
+            except Exception as rollback_error:
+                logger.critical(
+                    "Restore metadata save and file rollback both failed: %s",
+                    quarantine_id,
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"Restore persistence and rollback failed for {quarantine_id}: "
+                    f"{rollback_error}"
+                ) from save_error
+            raise
 
         log_with_symbol("quarantine_restore", "INFO",
                         f"[QUARANTINE] File restored: {quarantine_id} -> {original_path}")
 
+        return record
+
+
+def rollback_restore(quarantine_id: str) -> Dict[str, Any]:
+    """Compensate a restore when its linked Registry update fails."""
+    with _quarantine_lock:
+        records = _load_db()
+        record = next(
+            (item for item in records if item.get("quarantine_id") == quarantine_id),
+            None,
+        )
+        if record is None:
+            raise ValueError(f"Quarantine record not found: {quarantine_id}")
+        if record.get("status") != "restored":
+            raise ValueError(
+                f"Restored record cannot be rolled back: {record.get('status')}"
+            )
+
+        quarantine_path = normalize_path(record["quarantine_path"])
+        original_path = normalize_path(record["original_path"])
+        if quarantine_path.exists():
+            raise FileExistsError(
+                f"Cannot roll back restore; quarantine destination exists: {quarantine_path}"
+            )
+        if not original_path.exists():
+            raise FileNotFoundError(
+                f"Cannot roll back restore; restored file is missing: {original_path}"
+            )
+
+        previous_record = dict(record)
+        quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(original_path), str(quarantine_path))
+        record["status"] = "quarantined"
+        record.pop("restore_time", None)
+        try:
+            _save_db(records)
+        except Exception as save_error:
+            record.clear()
+            record.update(previous_record)
+            try:
+                original_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(quarantine_path), str(original_path))
+            except Exception as rollback_error:
+                logger.critical(
+                    "Restore rollback persistence and compensation both failed: %s",
+                    quarantine_id,
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"Restore rollback persistence and compensation failed for "
+                    f"{quarantine_id}: {rollback_error}"
+                ) from save_error
+            raise
+
+        _recently_restored.pop(str(original_path.resolve()), None)
         return record
 
 
@@ -381,15 +540,45 @@ def delete_quarantine(quarantine_id: str) -> None:
             raise ValueError(f"隔离记录不存在: {quarantine_id}")
 
         quarantine_path = normalize_path(record["quarantine_path"])
+        previous_record = dict(record)
+        delete_pending_path = None
 
-        # 如果文件还在隔离目录，物理删除
+        # Rename first so both metadata and the file can be compensated until
+        # the final unlink succeeds.
         if quarantine_path.exists():
-            quarantine_path.unlink()
+            delete_pending_path = quarantine_path.with_name(
+                f"{quarantine_path.name}.delete-pending-{uuid.uuid4().hex[:8]}"
+            )
+            quarantine_path.replace(delete_pending_path)
 
         # 更新记录状态
         record["status"] = "deleted"
         record["delete_time"] = datetime.now().isoformat()
-        _save_db(records)
+        try:
+            _save_db(records)
+            if delete_pending_path is not None:
+                delete_pending_path.unlink()
+        except Exception as delete_error:
+            record.clear()
+            record.update(previous_record)
+            compensation_error = None
+            try:
+                if delete_pending_path is not None and delete_pending_path.exists():
+                    delete_pending_path.replace(quarantine_path)
+                _save_db(records)
+            except Exception as exc:
+                compensation_error = exc
+                logger.critical(
+                    "Quarantine deletion and compensation both failed: %s",
+                    quarantine_id,
+                    exc_info=True,
+                )
+            if compensation_error is not None:
+                raise RuntimeError(
+                    f"Deletion and compensation failed for {quarantine_id}: "
+                    f"{compensation_error}"
+                ) from delete_error
+            raise
 
         log_with_symbol("quarantine_delete", "INFO",
                         f"[QUARANTINE] File permanently deleted: {quarantine_id}")
@@ -426,22 +615,24 @@ def get_quarantine_list(
     Returns:
         隔离记录列表
     """
-    records = _load_db()
-    # v1.0.10: normalize field names — SQLite records may have created_at instead of quarantine_time
-    for r in records:
-        if isinstance(r, dict) and "quarantine_time" not in r and "created_at" in r:
-            r["quarantine_time"] = r["created_at"]
-    if status:
-        records = [r for r in records if r["status"] == status]
-    return records[offset:offset + limit]
+    with _quarantine_lock:
+        records = _load_db()
+        # v1.0.10: normalize field names — SQLite records may have created_at instead of quarantine_time
+        for r in records:
+            if isinstance(r, dict) and "quarantine_time" not in r and "created_at" in r:
+                r["quarantine_time"] = r["created_at"]
+        if status:
+            records = [r for r in records if r["status"] == status]
+        return records[offset:offset + limit]
 
 
 def get_quarantine_detail(quarantine_id: str) -> Optional[Dict[str, Any]]:
     """获取单个隔离记录详情"""
-    records = _load_db()
-    for r in records:
-        if r["quarantine_id"] == quarantine_id:
-            return r
+    with _quarantine_lock:
+        records = _load_db()
+        for r in records:
+            if r["quarantine_id"] == quarantine_id:
+                return r
     return None
 
 
@@ -452,20 +643,20 @@ def get_quarantine_stats() -> Dict[str, int]:
     may return records from the wrong table (registry vs quarantine), so
     we validate the returned records have the expected structure.
     """
-    records = _load_db()
-    # v2.0 fix: detect wrong-table records and reload from JSON directly
-    if records and "status" not in records[0]:
-        db_path = _get_db_path()
-        if db_path.exists():
-            try:
-                with open(db_path, 'r', encoding='utf-8') as f:
-                    records = json.load(f)
-            except Exception:
-                records = []
-    stats = {
-        "total": len(records),
-        "quarantined": sum(1 for r in records if r.get("status") == "quarantined"),
-        "restored": sum(1 for r in records if r.get("status") == "restored"),
-        "deleted": sum(1 for r in records if r.get("status") == "deleted"),
-    }
-    return stats
+    with _quarantine_lock:
+        records = _load_db()
+        # v2.0 fix: detect wrong-table records and reload from JSON directly
+        if records and "status" not in records[0]:
+            db_path = _get_db_path()
+            if db_path.exists():
+                try:
+                    with open(db_path, 'r', encoding='utf-8') as f:
+                        records = json.load(f)
+                except Exception:
+                    records = []
+        return {
+            "total": len(records),
+            "quarantined": sum(1 for r in records if r.get("status") == "quarantined"),
+            "restored": sum(1 for r in records if r.get("status") == "restored"),
+            "deleted": sum(1 for r in records if r.get("status") == "deleted"),
+        }

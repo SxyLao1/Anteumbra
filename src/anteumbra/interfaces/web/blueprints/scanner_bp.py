@@ -105,7 +105,21 @@ def _complete_payload(result) -> dict:
         "errors": result.errors,
         "duration": round(result.end_time - result.start_time, 1) if result.end_time else 0,
         "status": result.status,
+        "error_message": getattr(result, "error_message", ""),
     }
+
+
+def _parse_extensions(value) -> list[str] | None:
+    if value is None:
+        return None
+    raw_items = value if isinstance(value, (list, tuple)) else str(value).split(",")
+    extensions = []
+    for item in raw_items:
+        extension = str(item).strip().lower()
+        if not extension:
+            continue
+        extensions.append(extension if extension.startswith(".") else f".{extension}")
+    return extensions or None
 
 
 def _run_scan_job(scan_id: str) -> None:
@@ -116,6 +130,7 @@ def _run_scan_job(scan_id: str) -> None:
 
     target_dir = job["target_dir"]
     recursive = job["recursive"]
+    extensions = job["extensions"]
     progress_queue = job["queue"]
     cancel_flag = job["cancel_flag"]
 
@@ -144,6 +159,7 @@ def _run_scan_job(scan_id: str) -> None:
         result = scanner.scan_directory(
             target_dir=target,
             recursive=recursive,
+            extensions=extensions,
             progress_callback=progress_cb,
             cancelled_check=cancelled,
         )
@@ -169,6 +185,7 @@ def scanner_run():
     data = _request_data()
     target_dir = str(data.get('target_dir', '')).strip()
     recursive = _is_true(data.get('recursive', '1'))
+    extensions = _parse_extensions(data.get('extensions'))
 
     if not target_dir:
         return jsonify({"success": False, "error": "missing target_dir"}), 400
@@ -179,6 +196,7 @@ def scanner_run():
         "scan_id": scan_id,
         "target_dir": target_dir,
         "recursive": recursive,
+        "extensions": extensions,
         "queue": queue.Queue(),
         "cancel_flag": {"cancelled": False},
         "created_at": time.time(),
@@ -303,8 +321,8 @@ def scanner_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.application.registry_service import get_all, mark_quarantined, add as reg_add
-        from anteumbra.application.quarantine_service import quarantine_file
+        from anteumbra.application.registry_service import get_all, add as reg_add
+        from anteumbra.application.quarantine_service import quarantine_registered_file
         from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
 
         target = path_to_key(file_path)
@@ -339,7 +357,7 @@ def scanner_quarantine():
 
         features = record.get("features", []) if record else ["scanner_manual_quarantine"]
         rule_name = features[0] if features else "manual_scan_quarantine"
-        result = quarantine_file(
+        result = quarantine_registered_file(
             file_path=str(file_path),
             rule_name=rule_name,
             features=features,
@@ -349,7 +367,6 @@ def scanner_quarantine():
         if result is None:
             return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
 
-        mark_quarantined(str(file_path), result["quarantine_id"])
         current_app.logger.info(
             f"[SCANNER] 手动隔离: {file_path} -> {result['quarantine_id']}")
         return jsonify({

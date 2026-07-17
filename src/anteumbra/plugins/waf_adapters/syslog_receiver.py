@@ -84,8 +84,8 @@ class SyslogWAFReceiver(Plugin, StreamEventSource):
         if self._socket:
             try:
                 self._socket.close()
-            except Exception:
-                pass
+            except OSError:
+                logger.debug("SyslogWAF: socket close failed", exc_info=True)
             self._socket = None
 
     def start(self) -> None:

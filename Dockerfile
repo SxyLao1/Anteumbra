@@ -1,4 +1,4 @@
-# Anteumbra v1.0.25 - Web Perimeter Threat Intelligence
+# Anteumbra v1.0.26 - Web Perimeter Threat Intelligence
 # Multi-stage build with a dedicated runtime virtualenv.
 
 FROM python:3.12-slim AS builder
@@ -21,31 +21,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN python -m venv "$VIRTUAL_ENV" \
     && pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir yara-python>=4.3.0 \
+    && pip install --no-cache-dir 'yara-python>=4.5.0' \
     && (pip install --no-cache-dir ssdeep || echo "[Docker] ssdeep skipped; fuzzy hashing will degrade gracefully") \
     && (pip install --no-cache-dir py-tlsh || echo "[Docker] py-tlsh skipped; TLSH hashing will degrade gracefully") \
     && pip install --no-cache-dir \
     'flask>=2.3.3,<3.0.0' \
-    flask-wtf>=1.2.1 \
-    flask-session>=0.5.0 \
-    flask-babel>=3.1.0 \
-    wtforms>=3.1.2 \
-    watchdog>=3.0.0 \
-    click>=8.1.0 \
-    requests>=2.32.3 \
-    psutil>=5.9.8 \
-    tomli>=2.0.1 \
-    tomli-w>=1.0.0 \
-    colorama>=0.4.6 \
-    urllib3>=2.2.2 \
-    python-dotenv>=1.0.0 \
-    gunicorn>=22.0.0
+    'flask-wtf>=1.2.1' \
+    'flask-session>=0.8.0,<1.0.0' \
+    'cachelib>=0.13.0' \
+    'flask-babel>=3.1.0' \
+    'wtforms>=3.1.2' \
+    'watchdog>=3.0.0' \
+    'click>=8.1.0' \
+    'requests>=2.32.3' \
+    'psutil>=5.9.8' \
+    'tomli>=2.0.1' \
+    'tomli-w>=1.0.0' \
+    'colorama>=0.4.6' \
+    'urllib3>=2.2.2' \
+    'python-dotenv>=1.0.0' \
+    'gunicorn>=22.0.0'
 
 FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.25"
+LABEL org.opencontainers.image.version="1.0.26"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence - passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 

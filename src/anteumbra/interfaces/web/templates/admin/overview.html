@@ -1,5 +1,11 @@
 <!-- v1.8.0: Overview — 安全态势首页 -->
-<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; height: 100%;">
+<div data-testid="runtime-capabilities" style="display:flex;align-items:center;gap:16px;min-height:38px;padding:6px 12px;margin-bottom:10px;border-left:3px solid {{ '#ffaa00' if runtime_capabilities.status == 'degraded' else '#00ff41' }};background:#0a0a0a;color:#ccc;font-size:11px;flex-wrap:wrap;">
+  <strong style="color:{{ '#ffaa00' if runtime_capabilities.status == 'degraded' else '#00ff41' }};">{{ runtime_capabilities.status.upper() }}</strong>
+  <span>{{ _('Detection') }}: {{ 'YARA + Emergency' if runtime_capabilities.detection.mode == 'yara_and_emergency' else 'Emergency signatures' }}</span>
+  <span>{{ _('Notifications') }}: {{ 'External (' + runtime_capabilities.notifications.configured_channels|join(', ') + ')' if runtime_capabilities.notifications.mode == 'external' else 'Local logs only' }}</span>
+  {% for warning in runtime_capabilities.warnings %}<span style="color:#ffaa00;">{{ warning.message }}</span>{% endfor %}
+</div>
+<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; height: calc(100% - 48px); min-height: 0;">
   <!-- 安全报告面板 -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">

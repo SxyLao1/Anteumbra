@@ -92,15 +92,17 @@ def stream_logs():
         abort(403)
 
     logger = current_app.logger
-    site_name = request.args.get('site')
-    if not site_name:
-        try:
-            websites = ConfigRegistry.get_enabled_websites()
-            site_name = websites[0].name if websites else "Default Website"
-        except Exception:
-            site_name = "Default Website"
-
-    log_file = normalize_path(f"logs/{site_name}/monitor.log")
+    requested_site = request.args.get('site')
+    try:
+        websites = ConfigRegistry.get_enabled_websites()
+    except Exception:
+        websites = []
+    if requested_site:
+        websites = [site for site in websites if site.name == requested_site]
+        if not websites:
+            abort(404)
+    site_names = [site.name for site in websites] or ["Default Website"]
+    log_files = [normalize_path(f"logs/{name}/monitor.log") for name in site_names]
     show_all_levels = request.args.get('levels', '') == 'all'
 
     if not show_all_levels:
@@ -119,6 +121,7 @@ def stream_logs():
 
     def generate():
         client_queue = None
+        handles = []
         try:
             client_queue = register_sse_client()
             if not client_queue:
@@ -126,22 +129,20 @@ def stream_logs():
                 return
 
             client_queue._client_ip = client_ip
-            # v1.0.10: 确保日志文件存在（首次运行 / 新网站尚无 monitor.log）
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            if not log_file.exists():
-                log_file.touch()
-                logger.info(f"[SSE] Log file created: {log_file}")
+            for log_file in log_files:
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                log_file.touch(exist_ok=True)
+                handle = open(
+                    log_file,
+                    'r',
+                    encoding='utf-8',
+                    errors='ignore',
+                    buffering=1,
+                )
+                handle.seek(0, 2)
+                handles.append(handle)
 
-            if sys.platform == "win32":
-                f = open(log_file, 'r', encoding='utf-8', errors='ignore', buffering=1)
-                try:
-                    f.seek(0, 2)
-                except Exception:
-                    logger.debug("Failed to seek to end of log file in SSE stream", exc_info=True)
-            else:
-                f = open(log_file, 'r', encoding='utf-8', errors='ignore', buffering=1)
-                f.seek(0, 2)
-
+            last_heartbeat = time.monotonic()
             while True:
                 try:
                     signal = client_queue.get_nowait()
@@ -153,8 +154,12 @@ def stream_logs():
                 except Exception:
                     break
 
-                line = f.readline()
-                if line:
+                emitted = False
+                for handle in handles:
+                    line = handle.readline()
+                    if not line:
+                        continue
+                    emitted = True
                     log_line = line.strip()
                     if allowed_levels_set is not None:
                         level_match = re.search(r'\] (\w+) -', log_line)
@@ -167,13 +172,24 @@ def stream_logs():
                     cleaned = log_line.replace('\n', ' ').replace('\r', ' ')
                     persist_log_line(cleaned)
                     yield f"data: {cleaned}\n\n"
-                else:
+
+                now = time.monotonic()
+                if now - last_heartbeat >= 15.0:
+                    yield "data: [SSE][HEARTBEAT]\n\n"
+                    last_heartbeat = now
+                    emitted = True
+                if not emitted:
                     time.sleep(0.1)
 
         except Exception as e:
             error_msg = str(e).replace('\n', ' ')
             yield f"data: [SSE][ERROR] {error_msg}\n\n"
         finally:
+            for handle in handles:
+                try:
+                    handle.close()
+                except OSError:
+                    logger.debug("Failed to close SSE log handle", exc_info=True)
             if client_queue:
                 unregister_sse_client(client_queue)
                 remaining = get_connected_client_count()
@@ -210,35 +226,33 @@ def logs_history():
             except Exception as e:
                 current_app.logger.warning(f"[LOGS_HISTORY] Buffer read failed: {e}")
 
-        if not lines:
-            log_candidates = []
-            try:
-                websites = ConfigRegistry.get_enabled_websites()
-                for website in websites:
-                    log_candidates.append(normalize_path(f"logs/{website.name}/monitor.log"))
-            except Exception:
-                current_app.logger.debug("Failed to resolve website log candidates", exc_info=True)
-            log_candidates.extend([
-                normalize_path("logs/Default Website/monitor.log"),
-                normalize_path("logs/Website-PhpStudy/monitor.log"),
-                normalize_path("logs/Anteumbra/monitor.log"),
-            ])
+        log_candidates = []
+        try:
+            websites = ConfigRegistry.get_enabled_websites()
+            for website in websites:
+                log_candidates.append(normalize_path(f"logs/{website.name}/monitor.log"))
+        except Exception:
+            current_app.logger.debug("Failed to resolve website log candidates", exc_info=True)
+        log_candidates.extend([
+            normalize_path("logs/Default Website/monitor.log"),
+            normalize_path("logs/Website-PhpStudy/monitor.log"),
+            normalize_path("logs/Anteumbra/monitor.log"),
+        ])
 
-            seen = set()
-            for log_file in log_candidates:
-                key = str(log_file)
-                if key in seen or not log_file.exists():
-                    continue
-                seen.add(key)
-                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    f.seek(0, 2)
-                    size = f.tell()
-                    buf_size = min(size, 500 * 1024)
-                    f.seek(max(0, size - buf_size))
-                    chunk = f.read()
-                    lines = chunk.splitlines()[-1000:]
-                if lines:
-                    break
+        seen_paths = set()
+        for log_file in log_candidates:
+            key = str(log_file)
+            if key in seen_paths or not log_file.exists():
+                continue
+            seen_paths.add(key)
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                f.seek(0, 2)
+                size = f.tell()
+                buf_size = min(size, 500 * 1024)
+                f.seek(max(0, size - buf_size))
+                lines.extend(f.read().splitlines()[-1000:])
+
+        lines = sorted(dict.fromkeys(lines))[-1000:]
 
         if not lines:
             return "<div class='log-line info'>[INFO] No log history found</div>"
@@ -273,57 +287,54 @@ def logs_history():
 @require_auth
 def access_log_analysis():
     """Render a read-only access-log behavior analysis for the Log Analyzer modal."""
-    cfg = ConfigRegistry.get_raw_config().get("website", {}).get("log_config", {})
-    enabled = bool(cfg.get("log_monitor_enabled", False))
-    raw_path = str(cfg.get("access_log_path", "")).strip()
-
     def line(level: str, text: str) -> str:
         return f'<div class="log-line {level}">{html.escape(text)}</div>'
 
     parts = [line("info", "[ACCESS_ANALYSIS] Web access log analysis")]
-    if not enabled:
-        parts.append(line("warn", "[ACCESS_ANALYSIS][DISABLED] Enable website.log_config.log_monitor_enabled to analyze web access logs."))
-        return ''.join(parts)
-    if not raw_path:
-        parts.append(line("warn", "[ACCESS_ANALYSIS][MISSING] website.log_config.access_log_path is empty."))
-        return ''.join(parts)
-
     try:
-        from anteumbra.infrastructure.monitoring.log_analyzer import resolve_access_log_path
+        from anteumbra.application.log_analysis_service import analyze_access_logs
 
-        log_path = resolve_access_log_path(raw_path)
+        results = analyze_access_logs(ConfigRegistry.get_enabled_websites())
     except Exception as exc:
-        current_app.logger.warning("[ACCESS_ANALYSIS] failed to resolve log path: %s", exc, exc_info=True)
-        log_path = None
-
-    parts.append(line("info", f"[ACCESS_ANALYSIS][CONFIG] path={raw_path}"))
-    if not log_path:
-        parts.append(line("error", f"[ACCESS_ANALYSIS][MISSING] access log file does not exist or wildcard has no matches: {raw_path}"))
+        current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
+        parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))
         return ''.join(parts)
-    parts.append(line("info", f"[ACCESS_ANALYSIS][SOURCE] selected={log_path}"))
 
-    try:
-        from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
-        engine = LogHeuristicEngine()
-        events = engine.feed_file(log_path)
-        stats = engine.get_stats()
+    if not results:
+        parts.append(line("warn", "[ACCESS_ANALYSIS][DISABLED] No enabled websites are configured."))
+        return ''.join(parts)
+
+    for result in results:
+        site = result["website"]
+        status = result["status"]
+        parts.append(line("info", f"[ACCESS_ANALYSIS][SITE] {site}"))
+        if status == "disabled":
+            parts.append(line("warn", f"[ACCESS_ANALYSIS][DISABLED] {site}"))
+            continue
+        if status in {"missing", "error"}:
+            parts.append(line(
+                "error",
+                f"[ACCESS_ANALYSIS][{status.upper()}] {site}: {result['error']} "
+                f"path={result['configured_path']}",
+            ))
+            continue
+
+        parts.append(line("info", f"[ACCESS_ANALYSIS][SOURCE] selected={result['selected_path']}"))
+        stats = result["stats"]
         parts.append(line(
             "info",
             f"[ACCESS_ANALYSIS][SUMMARY] analyzed={stats.get('total_analyzed', 0)} alerts={stats.get('total_alerts', 0)} ips={stats.get('ips_tracked', 0)}",
         ))
-        if not events:
+        if not result["events"]:
             parts.append(line("info", "[ACCESS_ANALYSIS][CLEAN] No suspicious access-log behavior detected."))
-            return ''.join(parts)
-        for event in events[-200:]:
+            continue
+        for event in result["events"]:
             severity = str(event.get("severity", "medium")).upper()
             event_type = event.get("type", "unknown")
             ip = event.get("ip", "unknown")
             target = event.get("path") or event.get("user_agent") or event.get("tools") or ""
             detail = event.get("reason") or event.get("count") or event.get("unique_paths") or ""
             parts.append(line("warn", f"[ACCESS_ANALYSIS][{severity}] {event_type} ip={ip} target={target} detail={detail}"))
-    except Exception as exc:
-        current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
-        parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))
 
     return ''.join(parts)
 

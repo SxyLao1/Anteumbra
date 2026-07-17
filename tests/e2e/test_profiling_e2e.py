@@ -57,12 +57,15 @@ class TestMockWAFFullChain:
         assert feed_count >= 3, f"Should have fed >= 3 events, got {feed_count}"
 
         profiles = graph.get_active_profiles()
-        for p in profiles:
-            # Events with same UA should have aggregated IPs
-            if len(p.ip_pool) >= 2:
-                return  # Success: found aggregated profile
-
-        pytest.skip("No profile with multiple IPs — may need more diverse test data")
+        sqlmap_profiles = [
+            profile
+            for profile in profiles
+            if "sqlmap" in profile.ua_fingerprint.lower()
+        ]
+        assert any(
+            {"10.99.99.1", "10.99.99.2"}.issubset(profile.ip_pool)
+            for profile in sqlmap_profiles
+        ), "Same SQLMap fingerprint in one time window must aggregate both IPs"
 
     def test_profile_has_risk_score(self, waf_events_file, reset_threat_graph):
         """Profile should have a risk_score after ingesting events."""

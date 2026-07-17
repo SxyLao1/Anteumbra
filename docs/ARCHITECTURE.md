@@ -1,4 +1,4 @@
-# Anteumbra Technical White Paper v1.0.25
+# Anteumbra Technical White Paper v1.0.26
 
 > **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
 
@@ -137,9 +137,10 @@ class PluginManager:
 - `dispatch(event) → List[DomainEvent]` — Synchronous distribution (each handler has a 30s timeout)
 - `register(plugin) / unregister(name)` — Plugin lifecycle management
 
-#### 16 Application Service Modules
+#### Application Orchestration and Service Modules
 
-Each service is a thin facade that re-exports public APIs from infrastructure:
+Some services remain thin facades that re-export stable public APIs from
+infrastructure:
 
 ```python
 # application/sse_service.py (example)
@@ -150,7 +151,29 @@ from anteumbra.infrastructure.utils.sse_manager import (
 __all__ = ["register_sse_client", ...]
 ```
 
-**Purpose**: Fix DDD dependency direction. The Interfaces layer accesses Infrastructure through the Application layer instead of importing directly.
+Other modules now own real use cases and cross-resource behavior:
+
+| Module | Responsibility |
+|--------|----------------|
+| `launcher.py` | Composition root, multi-site resource startup, status, and deterministic shutdown |
+| `jsonl_consumer.py` | Incremental JSONL acknowledgement, truncation/rotation handling, and dead letters |
+| `quarantine_service.py` | Quarantine/restore transactions with filesystem and Registry compensation |
+| `log_analysis_service.py` | Per-site access-log analysis without parser imports in web routes |
+| `runtime_health_service.py` | Shared optional capabilities and critical config/WAL/Registry health assessment for CLI and web APIs |
+
+**Purpose**: Interfaces call Application APIs rather than concrete parsers and
+stores. This boundary is improving, but several legacy facades and global
+singletons remain; directory placement alone does not mean full dependency
+inversion.
+
+#### Runtime Lifecycle
+
+`launcher.start_all()` is the process composition root. It binds the web
+listener, activates plugins, creates file and access-log monitors for every
+enabled site, starts profiling/SSE/metrics workers, and records each owned
+resource. `stop_all()` uses that ownership list for idempotent shutdown. Optional
+capability failures become explicit warnings; inability to start any file
+monitor is fatal.
 
 ### 2.3 Infrastructure Layer
 
@@ -447,12 +470,19 @@ Web Server (Nginx/Apache/IIS)
        │
        ├── If quarantine.auto_quarantine_enabled:
        │   → emit("file_quarantined", ...)
+       │   → quarantine_handler
+       │   → quarantine_service (file + Registry compensation)
        │
        └── emit("alert_requested", ...)
             → notifier_handler → email/WeChat/webhook
 ```
 
 ### 5.2 Threat Profiling Data Flow
+
+Append-only WAF JSONL input is consumed by `JsonlEventTailer`. Complete records
+are acknowledged one by one; malformed JSON and handler failures are written to
+`data/waf_events.deadletter.jsonl`, then the cursor advances. Incomplete trailing
+lines wait for the next poll, and replaced or truncated files restart at byte 0.
 
 ```
 ┌──────────────────────┐    ┌──────────────────────┐
@@ -489,6 +519,10 @@ Web Server (Nginx/Apache/IIS)
 
 ### 5.3 Log Analysis Data Flow
 
+Each enabled website owns its log configuration. `log_analysis_service` selects
+the Nginx/Apache/Tomcat parser through the site-bound analyzer and returns a
+site-labelled result; one site's missing log does not suppress another site.
+
 ```
 Web Access Log (access.log)
         │
@@ -522,12 +556,15 @@ Web Access Log (access.log)
 ### 5.4 SSE Real-Time Push Flow
 
 ```
+All enabled site logs → merged timestamp history
+                         │
 Flask View → SSE EventStream
      │
      │ register_sse_client() → Queue
      │
      ├── Monitor Log lines → persist_log_line() → LogBuffer
      ├── Registry Updates → trigger_registry_update()
+     ├── 15-second heartbeat → keepalive
      └── Client disconnect → unregister_sse_client()
             │
             ▼
@@ -735,11 +772,11 @@ Merge conditions:
 ### 9.3 "How does a new module connect to the event bus?"
 
 ```
-1. If the module is in the infrastructure layer:
-   - Lazy-import PluginManager
-   - from anteumbra.application.plugin_manager import get_plugin_manager
-   - Call pm.emit("event_type", "source_name", payload)
-   - This is a known DDD design trade-off (13 lazy-import points)
+1. If an existing infrastructure module already emits events:
+   - Its current compatibility path lazy-imports PluginManager
+   - Do not spread that pattern into unrelated modules
+   - Prefer an Application use case or an injected Domain event-publisher port
+   - Existing reverse imports are tracked architecture debt for v1.1.0
 
 2. If adding a new event type:
    - Ensure at least one plugin declares it in supported_events
@@ -755,9 +792,9 @@ Merge conditions:
 
 | Change Type | Version Bump | Example |
 |-------------|:------------:|---------|
-| New feature (new blueprint, new detection engine, new export format) | MINOR | 1.1.0 |
-| Bug fix, code quality, performance optimization, refactoring | PATCH | 1.0.10 |
-| Incompatible API changes, architecture rewrite | MAJOR | 2.0.0 |
+| New milestone or incompatible product architecture | MILESTONE | 2.0.0 |
+| User-facing feature line | FEATURE | 1.1.0 |
+| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.26 |
 
 ---
 
@@ -766,7 +803,7 @@ Merge conditions:
 | Technology | Purpose |
 |------------|---------|
 | **Python 3.10+** | Primary language |
-| **Flask 3.x** | Web framework |
+| **Flask 2.3.x** | Web framework |
 | **HTMX 2.x** | Frontend interactivity (no JS framework dependency) |
 | **Jinja2** | Template engine |
 | **YARA 4.x** | WebShell rule matching |
@@ -785,7 +822,7 @@ Merge conditions:
 | Looking for... | File |
 |----------------|------|
 | Version number | `src/anteumbra/__init__.py:__version__` |
-| All exception handling | grep `except.*:` → `pass` has been eliminated |
+| Silent broad exceptions | `rg -U "except Exception.*\\n\\s+pass" src/anteumbra` (must return no matches) |
 | All event emission points | grep `pm.emit(` |
 | All thread locks | grep `Lock()` |
 | All database tables | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
@@ -795,5 +832,5 @@ Merge conditions:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.25 — Evolving alongside the code</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.26 — Evolving alongside the code</sub>
 </div>

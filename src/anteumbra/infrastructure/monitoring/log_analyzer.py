@@ -91,8 +91,12 @@ class LogAnalyzer:
 
         # 如果scan_options中没有，尝试从全局配置读取
         if not access_log_path_cfg:
-            config = ConfigRegistry.get_raw_config()
-            log_config = config.get("website", {}).get("log_config", {})
+            log_config = getattr(self.website, "log_config", {}) or {}
+            if not log_config:
+                config = ConfigRegistry.get_raw_config()
+                website_config = config.get("website", {})
+                if isinstance(website_config, dict):
+                    log_config = website_config.get("log_config", {})
             access_log_path_cfg = log_config.get("access_log_path", "").strip()
 
         if not access_log_path_cfg:
@@ -167,8 +171,12 @@ class LogAnalyzer:
                 ip = match.group("ip")
 
                 # 修复：正确读取配置中的filter_internal_ip
-                config = ConfigRegistry.get_raw_config()
-                log_config = config.get("website", {}).get("log_config", {})
+                log_config = getattr(self.website, "log_config", {}) or {}
+                if not log_config:
+                    config = ConfigRegistry.get_raw_config()
+                    website_config = config.get("website", {})
+                    if isinstance(website_config, dict):
+                        log_config = website_config.get("log_config", {})
                 filter_internal = log_config.get("filter_internal_ip", False)
 
                 if filter_internal and self._is_internal_ip(ip):
@@ -258,10 +266,10 @@ class LogAnalyzer:
                 time_str = match.group("time")
                 try:
                     return datetime.strptime(time_str.split()[0], "%d/%B/%Y:%H:%M:%S")
-                except Exception:
+                except ValueError:
                     try:
                         return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-                    except Exception:
+                    except ValueError:
                         return None
         return None
 

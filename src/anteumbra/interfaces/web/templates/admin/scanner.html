@@ -38,7 +38,9 @@
   <div class="card" id="scan-progress-card" style="display: none; flex-direction: column;">
     <div class="card-header">
       <span><span class="card-header-icon">↻</span> {{ _('SCAN PROGRESS') }}</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="stopScan()">{{ _('Stop') }}</button>
+      <span id="scan-status" data-testid="scan-status" data-state="idle"
+            role="status" aria-live="polite" style="font-size:10px;color:#888;margin-left:auto;">{{ _('Idle') }}</span>
+      <button class="btn btn-ghost btn-sm" id="scan-stop-btn" style="font-size:10px;" onclick="stopScan()">{{ _('Stop') }}</button>
     </div>
     <div class="card-body" style="padding: 16px;">
       <div style="margin-bottom: 8px;">

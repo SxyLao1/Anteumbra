@@ -70,6 +70,10 @@ def test_flask():
 
 # ── Test 3: WAF proxy accepts and stores events ──────────
 def test_waf_proxy():
+    if "pytest" in sys.modules and os.environ.get("ANTEUMBRA_LIVE_E2E") != "1":
+        import pytest
+
+        pytest.skip("set ANTEUMBRA_LIVE_E2E=1 after starting the WAF proxy on port 8081")
     test_log = Path("data/e2e_waf_test.jsonl")
     if test_log.exists():
         test_log.unlink()

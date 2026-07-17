@@ -16,6 +16,7 @@ import logging
 import os
 import posixpath
 import re
+import socket
 import sys
 import time
 import signal
@@ -81,7 +82,10 @@ def _find_project_root() -> Path:
             if p.exists():
                 return p
     except Exception:
-        pass
+        logging.getLogger(__name__).debug(
+            "Failed to discover the registered Anteumbra installation",
+            exc_info=True,
+        )
 
     # 3. CWD 向上遍历
     d = Path.cwd().resolve()
@@ -117,6 +121,33 @@ def _is_running(pid: int) -> bool:
             return True
         except OSError:
             return False
+
+
+def _service_ready(host: str, port: int, timeout: float = 0.25) -> bool:
+    """Return whether the configured HTTP listener accepts connections."""
+    connect_host = host
+    if host in {"0.0.0.0", "::", "[::]"}:
+        connect_host = "127.0.0.1"
+    try:
+        with socket.create_connection((connect_host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _wait_for_process_exit(
+    pid: int,
+    *,
+    timeout: float = 5.0,
+    interval: float = 0.1,
+) -> bool:
+    """Wait until a process exits instead of trusting a kill command result."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _is_running(pid):
+            return True
+        time.sleep(interval)
+    return not _is_running(pid)
 
 
 def _get_python() -> str:
@@ -156,7 +187,7 @@ def _resolve_bind_options(root: Path, host: str | None, port: int | None) -> tup
 @click.version_option(__version__, prog_name="anteumbra")
 @click.pass_context
 def cli(ctx):
-    """Anteumbra — Lightweight Web Perimeter Security Platform."""
+    """Anteumbra - Lightweight Web Perimeter Security Platform."""
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         # Show quick status
@@ -190,11 +221,6 @@ def run(host, port, debug):
     click.echo(f"  Address: {host}:{port}")
     click.echo(f"  PID:     {os.getpid()}")
 
-    # Write PID file
-    pid_dir = root / "data"
-    pid_dir.mkdir(parents=True, exist_ok=True)
-    (pid_dir / "anteumbra.pid").write_text(str(os.getpid()))
-
     # v1.0.10: 使用包内 launcher 启动全部子系统（不再依赖 run.py）
     from anteumbra.application.launcher import start_all
     start_all(host=host, port=port)
@@ -218,6 +244,10 @@ def start(host, port):
     if pid and _is_running(pid):
         click.echo(f"Anteumbra is already running (PID {pid}). Use 'anteumbra stop' first.")
         raise SystemExit(1)
+    if pid:
+        stale_pid_file = root / PID_FILE
+        stale_pid_file.unlink(missing_ok=True)
+        click.echo(f"Removed stale PID file for process {pid}.")
 
     log_file = root / "data" / "anteumbra.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -232,39 +262,48 @@ def start(host, port):
         str(port),
     ]
 
+    popen_kwargs = {
+        "cwd": str(root),
+        "stderr": subprocess.STDOUT,
+        "env": {**os.environ, "PYTHONIOENCODING": "utf-8"},
+    }
     if sys.platform == "win32":
-        # Windows: use pythonw.exe (no console window)
         pythonw = Path(sys.exec_prefix) / "pythonw.exe"
         if not pythonw.exists():
-            pythonw = Path(sys.executable)  # fallback
+            pythonw = Path(sys.executable)
         cmd[0] = str(pythonw)
-        subprocess.Popen(
-            cmd,
-            cwd=str(root),
-            creationflags=subprocess.CREATE_NO_WINDOW
-            if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+        popen_kwargs["creationflags"] = (
+            subprocess.CREATE_NO_WINDOW
+            if hasattr(subprocess, "CREATE_NO_WINDOW")
+            else 0
         )
     else:
-        # Unix: fork + redirect output
-        subprocess.Popen(
-            cmd,
-            cwd=str(root),
-            stdout=open(str(log_file), "a"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        popen_kwargs["start_new_session"] = True
 
-    # Wait briefly for PID file to appear
-    for _ in range(20):
+    with open(log_file, "a", encoding="utf-8", buffering=1) as log_stream:
+        popen_kwargs["stdout"] = log_stream
+        process = subprocess.Popen(cmd, **popen_kwargs)
+
+    # A PID file alone is not readiness.  Wait for both process startup and
+    # the configured HTTP listener so configuration/bind failures are visible.
+    for _ in range(60):
         time.sleep(0.25)
+        poll = getattr(process, "poll", None)
+        if callable(poll) and poll() is not None:
+            click.echo(f"Anteumbra failed to start. Check {log_file}", err=True)
+            raise SystemExit(1)
         pid = _read_pid()
-        if pid:
+        if pid and _service_ready(host, port):
             click.echo(f"Anteumbra started (PID {pid}).")
             click.echo(f"  Admin: http://{host}:{port}/admin")
             click.echo(f"  Log:   {log_file}")
             return
 
-    click.echo("Anteumbra started (PID file not yet written).")
+    click.echo(
+        f"Anteumbra did not become ready within 15 seconds. Check {log_file}",
+        err=True,
+    )
+    raise SystemExit(1)
 
 
 # ── Stop ────────────────────────────────────────
@@ -272,6 +311,7 @@ def start(host, port):
 @cli.command()
 def stop():
     """Stop a running Anteumbra instance via its PID file."""
+    root = _find_project_root()
     pid = _read_pid()
 
     if not pid:
@@ -280,24 +320,35 @@ def stop():
 
     if not _is_running(pid):
         click.echo(f"PID {pid} is not alive. Removing stale PID file.")
-        (Path.cwd() / PID_FILE).unlink(missing_ok=True)
+        (root / PID_FILE).unlink(missing_ok=True)
         return
 
     click.echo(f"Stopping Anteumbra (PID {pid})...")
     try:
         if sys.platform == "win32":
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                         capture_output=True)
+            result = subprocess.run(
+                ["taskkill", "/PID", str(pid), "/F"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0 and _is_running(pid):
+                detail = (result.stderr or result.stdout or "unknown error").strip()
+                raise RuntimeError(f"taskkill failed ({result.returncode}): {detail}")
+            stopped = _wait_for_process_exit(pid)
         else:
             os.kill(pid, signal.SIGTERM)
-            time.sleep(1)
-            if _is_running(pid):
+            stopped = _wait_for_process_exit(pid)
+            if not stopped:
                 os.kill(pid, signal.SIGKILL)
+                stopped = _wait_for_process_exit(pid)
+        if not stopped:
+            raise RuntimeError(f"process {pid} is still running after termination")
     except Exception as e:
         click.echo(f"Error stopping process: {e}", err=True)
         raise SystemExit(1) from e
 
-    (Path.cwd() / PID_FILE).unlink(missing_ok=True)
+    (root / PID_FILE).unlink(missing_ok=True)
     click.echo("Anteumbra stopped.")
 
 
@@ -306,6 +357,7 @@ def stop():
 @cli.command()
 def status():
     """Check if Anteumbra is running."""
+    root = _find_project_root()
     pid = _read_pid()
 
     if not pid:
@@ -322,8 +374,8 @@ def status():
         except ImportError:
             logging.getLogger(__name__).debug("psutil not available for uptime/memory stats", exc_info=True)
     else:
-        click.echo(f"Status: STOPPED (PID {pid} is dead — removing stale PID)")
-        (Path.cwd() / PID_FILE).unlink(missing_ok=True)
+        click.echo(f"Status: STOPPED (PID {pid} is dead; removing stale PID)")
+        (root / PID_FILE).unlink(missing_ok=True)
 
 
 # ── Config management ──────────────────────────────
@@ -539,6 +591,43 @@ def _secret_prompt(text: str, default: str = "") -> str:
     )
 
 
+def _generate_deployment_credentials() -> tuple[str, str, str]:
+    """Return a plaintext admin password, its hash, and a session secret."""
+    import secrets as secrets_module
+    import string
+    from werkzeug.security import generate_password_hash
+
+    password = "".join(
+        secrets_module.choice(string.ascii_letters + string.digits)
+        for _ in range(16)
+    )
+    return password, generate_password_hash(password), secrets_module.token_urlsafe(48)
+
+
+def _write_generated_env(env_file: Path) -> str:
+    """Create a complete deployment .env and return the admin password."""
+    password, password_hash, secret_key = _generate_deployment_credentials()
+    env_file.write_text(
+        "# Anteumbra deployment environment\n"
+        "# Restart Anteumbra after changing these values.\n\n"
+        "# Admin credentials\n"
+        f"ANTEUMBRA_PASSWORD_HASH={password_hash}\n\n"
+        "# Flask session and CSRF signing key\n"
+        f"ANTEUMBRA_SECRET_KEY={secret_key}\n\n"
+        "# Email notifications (disabled until enabled in config.toml)\n"
+        "ANTEUMBRA_EMAIL_USERNAME=\n"
+        "ANTEUMBRA_EMAIL_PASSWORD=\n"
+        "ANTEUMBRA_EMAIL_FROM=\n"
+        "ANTEUMBRA_EMAIL_TO=\n\n"
+        "# ServerChan/WeChat notifications (disabled until enabled in config.toml)\n"
+        "ANTEUMBRA_WECHAT_API_KEY=\n\n"
+        "# External WAF integration\n"
+        "ANTEUMBRA_WAF_API_KEY=\n",
+        encoding="utf-8",
+    )
+    return password
+
+
 def _create_config_template(target: Path, overwrite: bool | None = None) -> str | None:
     """Generate config.toml, .env, default site dir, and bundled rules."""
     import shutil
@@ -567,39 +656,7 @@ def _create_config_template(target: Path, overwrite: bool | None = None) -> str 
     # v1.0.10: 生成完整 .env 文件（含所有通知推送字段）
     env_file = target.parent / ".env"
     if not env_file.exists() or overwrite is True or click.confirm(f"{env_file} already exists. Overwrite?"):
-        import secrets as _sec
-        import string as _str
-        from werkzeug.security import generate_password_hash
-        pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
-        h = generate_password_hash(pwd)
-        env_file.write_text(
-            f"# Anteumbra .env — 环境变量配置\n"
-            f"# 修改后重启 anteumbra 生效\n"
-            f"\n"
-            f"# ── 管理员密码 (auto-generated) ──────────────\n"
-            f"# 修改方式: Settings → Config Editor，或运行:\n"
-            f"# python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\"\n"
-            f"ANTEUMBRA_PASSWORD_HASH={h}\n"
-            f"\n"
-            f"# ── Flask 密钥 ─────────────────────────────\n"
-            f"ANTEUMBRA_SECRET_KEY=change_this_to_a_random_32_char_string\n"
-            f"\n"
-            f"# ── 邮件通知 (SMTP) ────────────────────────\n"
-            f"# 填入真实凭据以启用邮件告警\n"
-            f"ANTEUMBRA_EMAIL_USERNAME=\n"
-            f"ANTEUMBRA_EMAIL_PASSWORD=\n"
-            f"ANTEUMBRA_EMAIL_FROM=\n"
-            f"ANTEUMBRA_EMAIL_TO=\n"
-            f"\n"
-            f"# ── 微信通知 (ServerChan) ───────────────────\n"
-            f"# 填入 SendKey 以启用微信推送\n"
-            f"ANTEUMBRA_WECHAT_API_KEY=\n"
-            f"\n"
-            f"# ── WAF API ─────────────────────────────────\n"
-            f"# 对接外部 WAF 设备时使用\n"
-            f"ANTEUMBRA_WAF_API_KEY=\n",
-            encoding="utf-8"
-        )
+        pwd = _write_generated_env(env_file)
         click.echo(f".env written to {env_file}")
         click.echo(f"  Admin username: admin")
         click.echo(f"  Admin password: {pwd}")
@@ -624,7 +681,7 @@ def _create_config_template(target: Path, overwrite: bool | None = None) -> str 
     elif rules_src and rules_dst.exists():
         click.echo(f"YARA rules already exist at {rules_dst} (skipped)")
     elif not rules_src:
-        click.echo("Warning: YARA rules source not found — rules will be unavailable until added")
+        click.echo("Warning: YARA rules source not found; rules will be unavailable until added")
         click.echo("  You can manually copy rules/ from the Anteumbra repository")
 
     click.echo("Edit config.toml to configure websites, WAF, notifications, etc.")
@@ -645,21 +702,67 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
     except Exception as exc:
         return [f"Failed to load config: {exc}"], warnings
 
-    website = cfg.get("website", {})
-    if not isinstance(website, dict):
-        errors.append("[website] must be a table.")
-        website = {}
+    raw_websites = cfg.get("website", {})
+    if isinstance(raw_websites, dict):
+        websites = [raw_websites]
+    elif isinstance(raw_websites, list) and all(
+        isinstance(item, dict) for item in raw_websites
+    ):
+        websites = raw_websites
+    else:
+        errors.append("[website] must be a table or an array of tables.")
+        websites = []
 
-    if website.get("enabled", True):
+    enabled_websites = 0
+    for index, website in enumerate(websites, start=1):
+        label = "[website]" if len(websites) == 1 else f"[[website]] #{index}"
+        if not website.get("enabled", True):
+            continue
+        enabled_websites += 1
+
+        site_name = str(website.get("name", "")).strip()
+        if (
+            not site_name
+            or site_name in {".", ".."}
+            or "/" in site_name
+            or "\\" in site_name
+        ):
+            errors.append(f"{label}.name is required and must not contain path separators.")
+
         site_path = str(website.get("path", "")).strip()
         if not site_path:
-            errors.append("[website].path is required when website.enabled=true.")
+            errors.append(f"{label}.path is required when enabled=true.")
         else:
             resolved = Path(site_path)
             if not resolved.is_absolute():
                 resolved = config_path.parent / resolved
             if not resolved.exists():
-                errors.append(f"Website path does not exist: {resolved.resolve()}")
+                errors.append(f"Website path does not exist ({label}): {resolved.resolve()}")
+
+        site_port = website.get("port")
+        if not isinstance(site_port, int) or not (1 <= site_port <= 65535):
+            errors.append(f"{label}.port must be an integer between 1 and 65535.")
+
+        log_config = website.get("log_config", {})
+        if isinstance(log_config, dict) and log_config.get("log_monitor_enabled"):
+            access_log = str(log_config.get("access_log_path", "")).strip()
+            if not access_log:
+                errors.append(f"{label} enables access log monitoring without a path.")
+            elif _has_glob(access_log):
+                matches = _glob_for_config_path(access_log, config_path)
+                if not matches:
+                    errors.append(f"Access log wildcard has no matches ({label}): {access_log}")
+            else:
+                log_path = Path(access_log)
+                if not log_path.is_absolute():
+                    log_path = config_path.parent / log_path
+                if not log_path.exists():
+                    errors.append(
+                        f"Access log path does not exist ({label}): {log_path.resolve()}"
+                    )
+
+    if not enabled_websites:
+        errors.append("At least one website must be enabled.")
 
     web_admin = cfg.get("web_admin", {})
     if not isinstance(web_admin, dict):
@@ -673,31 +776,25 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
     if not str(web_admin.get("password_hash", "")).strip():
         warnings.append("Admin password hash is empty. Set ANTEUMBRA_PASSWORD_HASH in .env.")
 
-    secret = os.environ.get("ANTEUMBRA_SECRET_KEY", "")
-    if not secret or secret == "change_this_to_a_random_32_char_string":
+    security = cfg.get("security", {})
+    secret = security.get("secret_key", "") if isinstance(security, dict) else ""
+    if not secret or secret in {
+        "change_this_to_a_random_32_char_string",
+        "YOUR_SECRET_KEY_HERE",
+    }:
         warnings.append("ANTEUMBRA_SECRET_KEY is not customized.")
-
-    log_config = website.get("log_config", {})
-    if isinstance(log_config, dict) and log_config.get("log_monitor_enabled"):
-        access_log = str(log_config.get("access_log_path", "")).strip()
-        if not access_log:
-            errors.append("Access log monitoring is enabled but access_log_path is empty.")
-        else:
-            if _has_glob(access_log):
-                matches = _glob_for_config_path(access_log, config_path)
-                if not matches:
-                    errors.append(f"Access log wildcard has no matches: {access_log}")
-            else:
-                log_path = Path(access_log)
-                if not log_path.is_absolute():
-                    log_path = config_path.parent / log_path
-                if not log_path.exists():
-                    errors.append(f"Access log path does not exist: {log_path.resolve()}")
 
     waf_source = cfg.get("waf_source", {})
     if isinstance(waf_source, dict) and waf_source.get("enabled"):
         if not str(waf_source.get("url", "")).strip():
             errors.append("WAF source is enabled but [waf_source].url is empty.")
+
+    from anteumbra.application.runtime_health_service import assess_runtime_capabilities
+
+    warnings.extend(
+        warning["message"]
+        for warning in assess_runtime_capabilities(cfg)["warnings"]
+    )
 
     return errors, warnings
 
@@ -903,6 +1000,8 @@ def config_wizard(config_path):
     wechat_key = _secret_prompt("ServerChan/WeChat SendKey (optional)")
     if wechat_key:
         _write_env_value(target.parent / ".env", "ANTEUMBRA_WECHAT_API_KEY", wechat_key)
+        _set_dotted_value(data, "notifier.enabled", True)
+        _set_dotted_value(data, "notifier.wechat.enabled", True)
 
     _write_toml_file(target, data)
     click.echo(f"Config wizard wrote {target}")
@@ -990,7 +1089,7 @@ def install(path, force):
 
     if config_src and config_src != config_dst:
         shutil.copy(config_src, config_dst)
-        click.echo(f"Config template → {config_dst}")
+        click.echo(f"Config template -> {config_dst}")
     elif not config_src:
         click.echo("Error: bundled config.toml template not found. Reinstall the anteumbra package.", err=True)
 
@@ -1011,7 +1110,7 @@ def install(path, force):
         if webshell_src.exists() and not webshell_dst.exists():
             shutil.copytree(webshell_src, webshell_dst)
             yar_count = len(list(webshell_dst.glob("*.yar")))
-            click.echo(f"YARA rules → {webshell_dst} ({yar_count} files)")
+            click.echo(f"YARA rules -> {webshell_dst} ({yar_count} files)")
         elif webshell_dst.exists():
             click.echo(f"YARA rules already exist at {webshell_dst} (skipped)")
     else:
@@ -1020,32 +1119,7 @@ def install(path, force):
     # ── 生成 .env ─────────────────────────────────
     env_file = target / ".env"
     if not env_file.exists() or force:
-        from werkzeug.security import generate_password_hash
-        pwd = ''.join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(12))
-        h = generate_password_hash(pwd)
-        env_file.write_text(
-            f"# Anteumbra .env — 环境变量配置\n"
-            f"# 修改后重启 anteumbra 生效\n"
-            f"\n"
-            f"# ── 管理员密码 (auto-generated) ──────────────\n"
-            f"ANTEUMBRA_PASSWORD_HASH={h}\n"
-            f"\n"
-            f"# ── Flask 密钥 ─────────────────────────────\n"
-            f"ANTEUMBRA_SECRET_KEY=change_this_to_a_random_32_char_string\n"
-            f"\n"
-            f"# ── 邮件通知 (SMTP) ────────────────────────\n"
-            f"ANTEUMBRA_EMAIL_USERNAME=\n"
-            f"ANTEUMBRA_EMAIL_PASSWORD=\n"
-            f"ANTEUMBRA_EMAIL_FROM=\n"
-            f"ANTEUMBRA_EMAIL_TO=\n"
-            f"\n"
-            f"# ── 微信通知 (ServerChan) ───────────────────\n"
-            f"ANTEUMBRA_WECHAT_API_KEY=\n"
-            f"\n"
-            f"# ── WAF API ─────────────────────────────────\n"
-            f"ANTEUMBRA_WAF_API_KEY=\n",
-            encoding="utf-8"
-        )
+        pwd = _write_generated_env(env_file)
         click.echo(f".env written to {env_file}")
     else:
         click.echo(f".env already exists at {env_file} (skipped)")
@@ -1066,7 +1140,14 @@ def install(path, force):
     )
 
     # ── 注册全局安装 ──────────────────────────────
-    register_install(str(target), __version__)
+    try:
+        register_install(str(target), __version__)
+    except OSError as exc:
+        click.echo(
+            "Warning: installation completed, but the user-level instance "
+            f"registry could not be updated: {exc}",
+            err=True,
+        )
 
     # ── 完成 ──────────────────────────────────────
     click.echo(f"\n{'='*60}")

@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0
+# Anteumbra User Manual v1.0.26
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -65,7 +65,8 @@ Your Web Server (Nginx/Apache/IIS)
 
 - **Python** 3.10+
 - **OS**: Windows 10+ or Linux (kernel 4.x+)
-- **Optional**: ssdeep, py-tlsh, yara-python (for full hash engine support)
+- **Included**: yara-python for compiled YARA detection
+- **Optional**: ssdeep and py-tlsh for additional similarity engines
 
 ### 2.2 From PyPI
 
@@ -80,7 +81,9 @@ anteumbra run
 
 PyPI install is the normal path for users and deployments. The `install` command creates the runtime instance, writes `config.toml` and `.env`, copies bundled YARA rules, and prints the initial admin password.
 
-Install `anteumbra[yara]` to enable compiled YARA rule validation and scanning, or `anteumbra[full]` for YARA plus optional similarity hash engines.
+The base package includes compiled YARA rule validation and scanning. Install
+`anteumbra[full]` only when the optional `ssdeep` and `py-tlsh` similarity
+engines are required. `anteumbra[yara]` remains an empty compatibility alias.
 
 ### 2.3 From Source
 
@@ -126,7 +129,8 @@ Before startup, `anteumbra install` creates `config.toml`, `.env`, bundled rules
 On startup, Anteumbra:
 1. Loads `config.toml` and `.env` from the runtime instance directory
 2. Verifies at least one enabled website path exists
-3. Starts the file monitor, background workers, and web dashboard
+3. Starts one file monitor and, when configured, one access-log monitor per enabled website
+4. Reports `STARTED WITH WARNINGS` when optional capabilities are degraded instead of hiding the reason
 
 Open `http://127.0.0.1:8080/admin` and log in with username `admin`.
 
@@ -153,6 +157,11 @@ path = "/var/www/html"     # Web root to monitor
 port = 80
 enabled = true
 ```
+
+For multiple sites, replace the single `[website]` table with repeated
+`[[website]]` tables. Every enabled entry must have a path-safe `name`, an
+existing `path`, and a valid `port`; each site receives independent file and
+access-log monitors.
 
 ### 3.2 Generate Password Hash
 
@@ -230,7 +239,12 @@ send_key = "${ANTEUMBRA_WECHAT_API_KEY:-}"
 enabled = false
 ```
 
-### 3.5 Storage Backend
+Fresh templates keep the top-level notifier and every outbound channel
+disabled. A channel is usable only when both switches are enabled and all
+required credentials are present; incomplete credentials do not trigger a
+connection attempt. Restart after editing notification credentials.
+
+### 3.6 Storage Backend
 
 ```toml
 [storage]
@@ -242,7 +256,7 @@ db_path = "data/anteumbra.db"
 - `sqlite` — High performance, WAL mode, FK constraints, 13 indexed columns
 - `both` — Dual-write with SQLite-primary reads (recommended for production)
 
-### 3.6 IP Blocking
+### 3.7 IP Blocking
 
 ```toml
 [ip_blocker]
@@ -257,7 +271,7 @@ url = "https://firewall.example.com/api/block"
 api_key = "${ANTEUMBRA_WAF_API_KEY:-}"
 ```
 
-### 3.7 Full Configuration Reference
+### 3.8 Full Configuration Reference
 
 See `config.toml` comments for all 130+ keys across 27 sections. Key sections:
 
@@ -313,8 +327,15 @@ Options:
   --port INTEGER   Bind port (default: config web_admin.port)
 ```
 
+Background startup writes to `data/anteumbra.log` and waits up to 15 seconds
+for both the PID file and configured HTTP listener. It exits non-zero and
+points to that log when the process exits or never becomes ready.
+
 ### `anteumbra stop`
-Stops the running process. On Windows uses `taskkill /F`, on Linux sends `SIGTERM` then `SIGKILL`.
+Stops the running process. On Windows it uses `taskkill /F`; on Linux it sends
+`SIGTERM` and falls back to `SIGKILL`. The command verifies actual process exit
+before deleting the PID file or reporting success. A termination failure returns
+non-zero and preserves the PID for diagnosis or retry.
 
 ### `anteumbra config`
 ```
@@ -347,6 +368,7 @@ The main dashboard shows:
 - **Active detections** count and recent findings
 - **Threat profiles** with risk scores
 - **System status** (monitor, WAL, registry health)
+- **Detection and notification capability mode**, including degraded reasons
 - **Real-time log stream** via SSE
 
 ### 5.2 Records
@@ -420,8 +442,10 @@ Uses ssdeep/TLSH/SimHash to group files with ≥80% similarity. Helps identify:
 `/admin/scanner` — Active directory scanning.
 
 - Select a target directory
+- Limit the scan to comma-separated extensions; a leading dot is optional
 - Real-time progress via SSE
-- Scan history with results, duration, findings count
+- Explicit completed, stopped, and failed states with a reusable scan form
+- Automatically refreshed scan history with results, duration, and findings count
 - Printable reports
 
 ### 5.9 Live Log Stream
@@ -430,7 +454,8 @@ Uses ssdeep/TLSH/SimHash to group files with ≥80% similarity. Helps identify:
 
 - Level filtering (configurable in `web_admin.sse_log_levels`)
 - Auto-scroll with pause-on-hover
-- Persisted buffer (last 100 lines survive page refresh)
+- Merged history from every enabled site's monitor log before live events
+- Quiet reconnects and 15-second keepalive heartbeats
 
 ### 5.10 Settings
 
@@ -782,19 +807,25 @@ server {
 ### 12.3 Health Check
 
 ```
-GET /api/v1/health          # Public health (no auth)
-GET /admin/health            # Authenticated health with diagnostics
+GET /api/v1/health          # Public metrics + checks + capability modes
+GET /admin/api/v1/health    # Minimal public load-balancer status
+GET /admin/health           # Authenticated full diagnostics
 ```
+
+Optional engine or notification degradation returns HTTP `200` with warning
+details. Invalid configuration and critical Registry/WAL failures return HTTP
+`503`. Use `/api/v1/health` when automation needs metrics/capabilities and the
+minimal `/admin/api/v1/health` when only a status is required.
 
 ### 12.4 Getting Help
 
 - **GitHub Issues**: https://github.com/SxyLao1/Anteumbra/issues
 - **README**: Project overview and architecture
 - **ARCHITECTURE.md**: Technical deep-dive for developers
-- **ANTEUMBRA_USAGE_GUIDE.md**: Internal development guide
+- **ROADMAP.md**: Current readiness, known debt, and planned architecture work
 
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.25 — MIT License</sub>
+  <sub>Anteumbra v1.0.26 — MIT License</sub>
 </div>

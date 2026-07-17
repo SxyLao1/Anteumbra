@@ -56,11 +56,12 @@ def browser():
 
 
 @pytest.fixture
-def server_url(monkeypatch):
+def server_url(monkeypatch, tmp_path):
     """Start a FRESH Flask app for each test — no state accumulation."""
-    os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
-    os.environ["PYTEST_CURRENT_TEST"] = "true"
-    os.environ.setdefault("ANTEUMBRA_HOME", "")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ANTEUMBRA_TOOL_MODE", "true")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "true")
+    monkeypatch.setenv("ANTEUMBRA_HOME", str(tmp_path))
 
     # Monkey-patch credentials
     import anteumbra.interfaces.web.auth as auth_mod
@@ -78,6 +79,11 @@ def server_url(monkeypatch):
     import anteumbra.interfaces.web.factory as factory_mod
     factory_mod._app_instance = None
 
+    from anteumbra.infrastructure import quarantine as quarantine_mod
+    quarantine_mod._quarantine_dir = None
+    quarantine_mod._quarantine_db = None
+    quarantine_mod._recently_restored = {}
+
     from anteumbra.interfaces.web.factory import create_app
     app = create_app()
     app.config["TESTING"] = True
@@ -86,10 +92,12 @@ def server_url(monkeypatch):
     port = _find_free_port()
     base_url = f"http://127.0.0.1:{port}"
 
+    from anteumbra.interfaces.web.factory import create_runtime_server
+    server = create_runtime_server(app, "127.0.0.1", port)
     server_thread = threading.Thread(
-        target=app.run,
-        kwargs={"host": "127.0.0.1", "port": port, "threaded": True, "debug": False},
+        target=server.serve_forever,
         daemon=True,
+        name=f"AnteumbraTestServer-{port}",
     )
     server_thread.start()
 
@@ -108,8 +116,13 @@ def server_url(monkeypatch):
     yield base_url
 
     # Teardown
+    server.shutdown()
+    server_thread.join(timeout=5.0)
+    server.server_close()
     auth_mod.get_admin_credentials = original_get_creds
     factory_mod._app_instance = None
+    quarantine_mod._quarantine_dir = None
+    quarantine_mod._quarantine_db = None
 
 
 @pytest.fixture

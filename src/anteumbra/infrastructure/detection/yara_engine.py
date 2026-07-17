@@ -195,7 +195,12 @@ class YaraEngine:
                     "size": stats.st_size,
                     "modified": datetime.fromtimestamp(stats.st_mtime).isoformat()
                 })
-            except Exception:
+            except OSError:
+                self.logger.debug(
+                    "[YARA] Failed to stat rule file: %s",
+                    yar_file,
+                    exc_info=True,
+                )
                 continue
         return files
 

@@ -59,6 +59,7 @@ def load_scans_from_disk() -> list:
                 logger.debug("Failed to parse scan file %s", f.name, exc_info=True)
         return scans
     except Exception:
+        logger.debug("Failed to load scan history", exc_info=True)
         return []
 
 
@@ -81,6 +82,10 @@ def verify_file_in_registry(file_path: str) -> bool:
                 return True
         return False
     except Exception:
+        logger.warning(
+            "Registry lookup failed while authorizing file access",
+            exc_info=True,
+        )
         return False
 
 
@@ -97,6 +102,11 @@ def verify_file_in_quarantine(qid: str) -> Optional[Path]:
             return p
         return None
     except Exception:
+        logger.warning(
+            "Quarantine lookup failed for id %s",
+            qid,
+            exc_info=True,
+        )
         return None
 
 

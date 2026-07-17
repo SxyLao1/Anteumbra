@@ -7,6 +7,8 @@ Fixes DDD dependency direction: Interfaces → Application → Infrastructure.
 """
 from anteumbra.infrastructure.utils.sse_manager import (
     start_sse_worker,
+    stop_sse_worker,
+    is_sse_worker_running,
     register_sse_client,
     unregister_sse_client,
     get_connected_client_count,
@@ -22,6 +24,8 @@ from anteumbra.infrastructure.utils.sse_manager import (
 
 __all__ = [
     "start_sse_worker",
+    "stop_sse_worker",
+    "is_sse_worker_running",
     "register_sse_client",
     "unregister_sse_client",
     "get_connected_client_count",

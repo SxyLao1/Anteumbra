@@ -70,7 +70,8 @@ class Notifier:
     def __init__(self, config: Dict[str, Any], logger: logging.Logger):
         self.config = config
         self.logger = logger
-        self.enabled = config.get("enabled", False)
+        self.requested_enabled = bool(config.get("enabled", False))
+        self.enabled = False
         self._wechat_failure_count = 0
 
         # v1.7.0重构：从配置读取熔断阈值
@@ -97,6 +98,13 @@ class Notifier:
             "wechat": self._init_wechat(),
             "webhook": self._init_webhook()
         }
+        self.enabled = self.requested_enabled and any(
+            channel["enabled"] for channel in self.channels.values()
+        )
+        if self.requested_enabled and not self.enabled:
+            self.logger.warning(
+                "[NOTIFIER] No configured external channel is ready; using local logs only"
+            )
 
         # 立即启动工作线程
         if self.enabled:
@@ -136,7 +144,7 @@ class Notifier:
                     if len(batch) == 1:
                         message, level = batch[0]
                         try:
-                            self.send_alert(message, level=level)
+                            self.send_alert(message, level=level, _already_counted=True)
                         except Exception as e:
                             self.logger.error(f"[ALERT][WORKER] 发送失败: {e}", exc_info=True)
                     else:
@@ -145,7 +153,11 @@ class Notifier:
                         if len(levels) == 1:
                             combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, (msg, _) in enumerate(batch)])
                             try:
-                                self.send_alert(f"批量告警 ({len(batch)}条)\n{combined}", level=list(levels)[0])
+                                self.send_alert(
+                                    f"批量告警 ({len(batch)}条)\n{combined}",
+                                    level=list(levels)[0],
+                                    _already_counted=True,
+                                )
                             except Exception as e:
                                 self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
                         else:
@@ -154,7 +166,11 @@ class Notifier:
                             critical_msgs = [msg for msg, lvl in batch if lvl == max_level]
                             combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, msg in enumerate(critical_msgs)])
                             try:
-                                self.send_alert(f"批量告警 ({len(batch)}条, 最高级别{max_level})\n{combined}", level=max_level)
+                                self.send_alert(
+                                    f"批量告警 ({len(batch)}条, 最高级别{max_level})\n{combined}",
+                                    level=max_level,
+                                    _already_counted=True,
+                                )
                             except Exception as e:
                                 self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
 
@@ -189,6 +205,17 @@ class Notifier:
         - 溢出：立即持久化到磁盘
         - 异常：双保险持久化
         """
+        metrics = get_metrics()
+        metrics.increment("alert_total")
+        if not self.enabled:
+            metrics.record_notification("skipped", "no external channel is configured")
+            self.logger.warning(
+                "[NOTIFIER][LOCAL_ONLY][%s] %s",
+                level,
+                message.splitlines()[0][:500],
+            )
+            return False
+
         try:
             # v1.7.9: 队列防积压策略——超过100条时丢弃最旧的50%
             qsize = self._alert_queue.qsize()
@@ -203,6 +230,7 @@ class Notifier:
                 level,
                 self._alert_queue.qsize(),
             )
+            return True
         except queue.Full:
             # 队列满：立即持久化
             self._persist_overflow(message, level)
@@ -211,10 +239,12 @@ class Notifier:
                 f"[ALERT][OVERFLOW] 队列已满({self._alert_queue.qsize()}), "
                 f"已持久化: {message[:50]}..."
             )
+            return False
         except Exception as e:
             # 任何异常都触发持久化（最后防线）
             self.logger.error(f"[ALERT][QUEUE] 入队失败: {e}", exc_info=True)
             self._persist_overflow(message, level)
+            return False
 
     def _drain_old_alerts(self, count: int):
         """v1.7.9: 丢弃队列中最旧的N条告警（防止积压）"""
@@ -277,14 +307,30 @@ class Notifier:
             import os
             email_password = os.environ.get("ANTEUMBRA_EMAIL_PASSWORD", "")
 
+        recipients = email_cfg.get("to_addrs", [])
+        if isinstance(recipients, str):
+            recipients = [recipients]
+        requested = bool(email_cfg.get("enabled", False))
+        ready = all((
+            str(email_cfg.get("smtp_host", "")).strip(),
+            str(email_cfg.get("username", "")).strip(),
+            str(email_password).strip(),
+            str(email_cfg.get("from_addr", "")).strip(),
+            any(str(address).strip() for address in recipients),
+        ))
+        if requested and not ready:
+            self.logger.warning(
+                "[NOTIFIER][EMAIL] Channel disabled because required credentials are incomplete"
+            )
+
         return {
-            "enabled": email_cfg.get("enabled", False),
+            "enabled": requested and ready,
             "smtp_host": email_cfg.get("smtp_host", ""),
             "smtp_port": email_cfg.get("smtp_port", 587),
             "username": email_cfg.get("username", ""),
             "password": email_password,
             "from_addr": email_cfg.get("from_addr", ""),
-            "to_addrs": email_cfg.get("to_addrs", []),
+            "to_addrs": recipients,
             "use_tls": email_cfg.get("use_tls", True),
             "use_ssl": email_cfg.get("use_ssl", False),
             "timeout": base_timeout
@@ -297,25 +343,45 @@ class Notifier:
         # 从配置读取超时和阈值
         base_timeout = wechat_cfg.get("timeout", 10)
 
+        send_key = str(wechat_cfg.get("send_key", "")).strip()
+        requested = bool(wechat_cfg.get("enabled", False))
+        if requested and not send_key:
+            self.logger.warning(
+                "[NOTIFIER][WECHAT] Channel disabled because SendKey is missing"
+            )
         return {
-            "enabled": wechat_cfg.get("enabled", False),
-            "send_key": wechat_cfg.get("send_key", ""),
+            "enabled": requested and bool(send_key),
+            "send_key": send_key,
             "timeout": base_timeout,
             "channel": wechat_cfg.get("channel", "9"),
-            "noip": wechat_cfg.get("noip", False)
+            "noip": wechat_cfg.get("noip", False),
+            "verify_ssl": wechat_cfg.get("verify_ssl", True),
         }
 
     def _init_webhook(self) -> Dict[str, Any]:
         """初始化Webhook配置"""
         webhook_cfg = self.config.get("webhook", {})
+        url = str(webhook_cfg.get("url", "")).strip()
+        requested = bool(webhook_cfg.get("enabled", False))
+        if requested and not url:
+            self.logger.warning(
+                "[NOTIFIER][WEBHOOK] Channel disabled because URL is missing"
+            )
         return {
-            "enabled": webhook_cfg.get("enabled", False),
-            "url": webhook_cfg.get("url", ""),
+            "enabled": requested and bool(url),
+            "url": url,
             "headers": webhook_cfg.get("headers", {}),
             "timeout": webhook_cfg.get("timeout", 10)
         }
 
-    def send_alert(self, message: str, level: str = "CRITICAL", analysis: Optional[Dict[str, Any]] = None):
+    def send_alert(
+        self,
+        message: str,
+        level: str = "CRITICAL",
+        analysis: Optional[Dict[str, Any]] = None,
+        *,
+        _already_counted: bool = False,
+    ) -> bool:
         """
         发送告警（主入口）
 
@@ -324,9 +390,17 @@ class Notifier:
             level: 告警级别 INFO/WARNING/CRITICAL
             analysis: 可选的日志分析结果
         """
+        metrics = get_metrics()
+        if not _already_counted:
+            metrics.increment("alert_total")
         if not self.enabled:
-            self.logger.debug("[NOTIFIER] 告警功能未启用")
-            return
+            metrics.record_notification("skipped", "no external channel is configured")
+            self.logger.warning(
+                "[NOTIFIER][LOCAL_ONLY][%s] %s",
+                level,
+                message.splitlines()[0][:500],
+            )
+            return False
 
         # 必须在调用发送方法前完成消息增强
         enhanced_message = message
@@ -340,34 +414,49 @@ class Notifier:
                     enhanced_message += f"   {ip}: {count}次\n"
                 enhanced_message += f"日志文件: {analysis.get('log_path', '未知')}"
 
-        # 必须传递参数，微信失败不影响邮件
-        # 通道1：微信（可能熔断）
+        results = {}
+        metrics.record_notification("attempted")
+
         if self.channels["wechat"]["enabled"] and self._wechat_circuit_enabled:
             try:
-                self._send_wechat(enhanced_message, level)  # ← 必须传参数
+                results["wechat"] = self._send_wechat(enhanced_message, level)
             except Exception as e:
-                self.logger.error(f"[NOTIFIER][WECHAT] 调用异常: {e}")  # 确保异常不向上抛
+                results["wechat"] = False
+                self.logger.error(f"[NOTIFIER][WECHAT] 调用异常: {e}")
 
-        # 通道2：邮件（高可靠性，永不熔断）
         if self.channels["email"]["enabled"]:
             try:
-                self._send_email(enhanced_message, level)  # ← 必须传参数
+                results["email"] = self._send_email(enhanced_message, level)
             except Exception as e:
+                results["email"] = False
                 self.logger.error(f"[NOTIFIER][EMAIL] 调用异常: {e}")
 
-        # 通道3：Webhook（可选）
         if self.channels["webhook"]["enabled"]:
             try:
-                self._send_webhook(enhanced_message, level)
+                results["webhook"] = self._send_webhook(enhanced_message, level)
             except Exception as e:
+                results["webhook"] = False
                 self.logger.error(f"[NOTIFIER][WEBHOOK] 调用异常: {e}")
+
+        if not results:
+            metrics.record_notification("skipped", "all configured channels are unavailable")
+            return False
+
+        successes = sum(bool(value) for value in results.values())
+        if successes == len(results):
+            metrics.record_notification("success")
+        elif successes:
+            metrics.record_notification("partial", "one or more notification channels failed")
+        else:
+            metrics.record_notification("failed", "all notification channels failed")
 
         # 日志输出必须在所有通道尝试后，避免重复
         # 提取核心消息（第一行）用于日志，保持日志简洁
         core_message = enhanced_message.split('\n')[0].strip()
         self.logger.critical(f"[NOTIFIER][ALERT][{level}] {core_message}")
+        return successes > 0
 
-    def _send_email(self, message: str, level: str):
+    def _send_email(self, message: str, level: str) -> bool:
         """发送邮件告警"""
         try:
             cfg = self.channels["email"]
@@ -397,23 +486,26 @@ class Notifier:
 
             recipients = [_mask_email(addr) for addr in cfg["to_addrs"]]
             self.logger.info(f"[NOTIFIER][EMAIL] 发送成功 -> {recipients}")
+            return True
 
         except Exception as e:
             self.logger.error("[NOTIFIER][EMAIL] send failed: %s", e, exc_info=True)
+            return False
 
-    def _send_wechat(self, message: str, level: str):
+    def _send_wechat(self, message: str, level: str) -> bool:
         """发送微信告警（Server酱）- 熔断降级版【必须完整替换】"""
 
         if not self._wechat_circuit_enabled:
             self.logger.warning("[NOTIFIER][WECHAT] 熔断中，跳过发送")
-            return
+            return False
 
+        success = False
         try:
             cfg = self.channels["wechat"]
             send_key = cfg["send_key"]
             if not send_key:
                 self.logger.warning("[NOTIFIER][WECHAT] SendKey未配置，推送已跳过")
-                return
+                return False
 
             # VPN/代理环境优化
             import urllib3
@@ -430,7 +522,7 @@ class Notifier:
             }
 
             session = requests.Session()
-            session.verify = False
+            session.verify = bool(cfg.get("verify_ssl", True))
 
             if os.environ.get("HTTPS_PROXY"):
                 self.logger.debug(f"[NOTIFIER][WECHAT] 检测到系统代理: {_mask_url_secret(os.environ['HTTPS_PROXY'])}")
@@ -467,6 +559,7 @@ class Notifier:
 
             # 成功：重置熔断计数
             self._wechat_failure_count = 0
+            success = True
             self.logger.debug("[NOTIFIER][WECHAT] 发送成功")
 
         # 异常处理：所有路径统一增加熔断计数
@@ -501,8 +594,9 @@ class Notifier:
                     self._send_email(fallback_msg, "CRITICAL")
                 except Exception as mail_e:
                     self.logger.critical(f"[NOTIFIER][FUSE] 邮件通知也失败: {mail_e}")
+        return success
 
-    def _send_webhook(self, message: str, level: str):
+    def _send_webhook(self, message: str, level: str) -> bool:
         """发送Webhook告警（钉钉/企微）"""
         try:
             cfg = self.channels["webhook"]
@@ -526,9 +620,11 @@ class Notifier:
             response.raise_for_status()
 
             self.logger.info(f"[NOTIFIER][WEBHOOK] 发送成功")
+            return True
 
         except Exception as e:
             self.logger.error(f"[NOTIFIER][WEBHOOK] 发送失败: {e}", exc_info=True)
+            return False
 
     def _stop_alert_worker(self):
         """停止告警工作线程"""
@@ -562,6 +658,8 @@ def get_notifier(logger: logging.Logger) -> Notifier:
 def reset_notifier():
     """重置notifier单例（配置热加载后调用，重置熔断器状态）"""
     global _notifier_instance
+    if _notifier_instance:
+        _notifier_instance._stop_alert_worker()
     _notifier_instance = None
     logging.getLogger("webshell.notifier").info("[NOTIFIER] 实例已重置（熔断器状态清除）")
 

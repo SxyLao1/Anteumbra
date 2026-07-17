@@ -70,6 +70,8 @@ class TestHealthCheck:
         assert data["status"] in ("healthy", "warning", "degraded"), (
             f"Unexpected status value: {data['status']}"
         )
+        assert data["checks"] == {"config": "ok", "registry": "ok", "wal": "ok"}
+        assert data["capabilities"] is not None
 
     def test_admin_public_health_returns_200_or_302(self, client):
         """GET /admin/api/v1/health (admin bp, public) should return 200 (no auth needed).
@@ -94,43 +96,29 @@ class TestHealthCheck:
             assert "status" in data
 
     def test_admin_authenticated_health_has_layered_info(self, client):
-        """GET /admin/admin/health returns layered component checks when authenticated.
+        """GET /admin/health requires auth and returns full diagnostics."""
+        unauthenticated = client.get("/admin/health")
+        assert unauthenticated.status_code == 302
 
-        This endpoint requires login, so unauthenticated access gets a redirect.
-        503 is acceptable in test mode with degraded config.
-        We verify the route exists (not 404) and doesn't crash (not 500).
-        """
-        resp = client.get("/admin/admin/health")
-        # Without auth, should redirect to login (302) — not crash (500)
-        assert resp.status_code != 500, (
-            f"Health endpoint should not crash: {resp.get_data(as_text=True)}"
-        )
-        if resp.status_code == 503:
-            data = resp.get_json()
-            if data and data.get("status") == "degraded":
-                return  # acceptable: degraded in test env
-        # Either 302 (redirect to login) or 200 (if auth bypassed) is fine
-        assert resp.status_code in (200, 302, 404, 503), (
-            f"Unexpected status: {resp.status_code}"
-        )
+        with client.session_transaction() as flask_session:
+            flask_session["authenticated"] = True
+            flask_session["username"] = "admin"
 
-    def test_health_no_version_leak(self, client):
-        """Public health check should NOT expose version number.
+        resp = client.get("/admin/health")
+        assert resp.status_code in (200, 503), resp.get_data(as_text=True)
+        data = resp.get_json()
+        assert data is not None
+        assert data["status"] in ("healthy", "degraded")
+        assert data["checks"].keys() == {"config", "registry", "wal"}
+        assert data["capabilities"] is not None
 
-        Per architecture: /api/v1/health is intentionally minimal.
-        The /admin/admin/health endpoint DOeS expose version but requires auth.
-        """
+    def test_public_metrics_health_uses_package_version(self, client):
+        """The public metrics health version must use the package source."""
+        import anteumbra
+
         resp = client.get("/api/v1/health")
-        if resp.status_code == 200:
-            data = resp.get_json()
-            # The metrics blueprint health does include version by design,
-            # so skip if it does — this is a known architectural decision.
-            if "version" in data:
-                pytest.skip(
-                    "/api/v1/health includes version by design "
-                    "(metrics blueprint). The no-leak rule applies to "
-                    "Server header, not JSON body."
-                )
+        assert resp.status_code == 200
+        assert resp.get_json()["version"] == anteumbra.__version__
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -267,20 +255,8 @@ class TestVersionSource:
             "module, not hardcode a version string"
         )
 
-        # Check that __init__.py also avoids hardcoding
-        init_path = (
-            Path(__file__).parent.parent.parent
-            / "src" / "anteumbra" / "__init__.py"
-        )
-        if init_path.exists():
-            init_source = init_path.read_text(encoding="utf-8")
-            # __init__.py SHOULD either call get_version() or document
-            # that it's the single source. Currently it hardcodes "1.0.2".
-            if 'get_version()' not in init_source:
-                pytest.skip(
-                    "anteumbra.__init__ still hardcodes __version__. "
-                    "Consider: __version__ = get_version() to unify."
-                )
+        # anteumbra.__version__ is intentionally the literal single source.
+        # pyproject.toml and every runtime surface import that value.
 
     def test_version_not_unknown(self):
         """get_version() should return a real version, not 'unknown'."""
@@ -293,6 +269,29 @@ class TestVersionSource:
         )
         # Version should look like a semver (e.g., "1.0.4")
         assert "." in v, f"Version '{v}' does not look like a semver"
+
+    def test_dockerfile_quotes_every_base_runtime_requirement(self):
+        """Docker's shell must receive the same constrained dependencies as pip."""
+        project_root = Path(__file__).parent.parent.parent
+        dockerfile = (project_root / "Dockerfile").read_text(encoding="utf-8")
+
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
+
+        with open(project_root / "pyproject.toml", "rb") as handle:
+            requirements = tomllib.load(handle)["project"]["dependencies"]
+
+        missing = [
+            requirement
+            for requirement in requirements
+            if f"'{requirement}'" not in dockerfile
+        ]
+        assert not missing, (
+            "Dockerfile must quote every base dependency so shell operators in "
+            f"version constraints are not treated as redirections: {missing}"
+        )
 
 
 class TestCliInstall:
@@ -415,6 +414,50 @@ class TestCliInstall:
         assert (target / "rules" / "webshell").is_dir()
         assert list((target / "rules" / "webshell").glob("*.yar"))
         assert registered["path"] == str(target.resolve())
+        env_text = (target / ".env").read_text(encoding="utf-8")
+        secret_line = next(
+            line for line in env_text.splitlines()
+            if line.startswith("ANTEUMBRA_SECRET_KEY=")
+        )
+        secret = secret_line.partition("=")[2]
+        assert secret != "change_this_to_a_random_32_char_string"
+        assert len(secret) >= 43
+
+    def test_install_succeeds_when_user_registry_is_read_only(self, tmp_path, monkeypatch):
+        """A convenience registry failure must not invalidate a complete instance."""
+        from anteumbra.cli import install_registry
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance"
+
+        def deny_registry_write(*_args):
+            raise PermissionError("read-only home")
+
+        monkeypatch.setattr(install_registry, "get_install_info", lambda: None)
+        monkeypatch.setattr(
+            install_registry,
+            "register_install",
+            deny_registry_write,
+        )
+
+        result = CliRunner().invoke(cli, ["install", str(target), "--force"])
+
+        assert result.exit_code == 0, result.output
+        assert "installation completed" in result.output
+        assert "registry could not be updated" in result.output
+        assert (target / "config.toml").exists()
+        assert (target / ".env").exists()
+        assert (target / ".anteumbra_install").exists()
+
+    def test_install_registry_read_failure_is_treated_as_unregistered(self, monkeypatch):
+        from anteumbra.cli import install_registry
+
+        def deny_registry_read():
+            raise PermissionError("read-only home")
+
+        monkeypatch.setattr(install_registry, "_registry_path", deny_registry_read)
+
+        assert install_registry.get_install_info() is None
 
     def test_config_command_creates_runnable_default_site(self, tmp_path):
         """anteumbra config should create a config plus the default monitored directory."""
@@ -429,6 +472,9 @@ class TestCliInstall:
         assert (target.parent / "sites" / "default").is_dir()
         assert 'path = "sites/default"' in target.read_text(encoding="utf-8")
         assert (target.parent / "rules" / "webshell").is_dir()
+        assert "ANTEUMBRA_SECRET_KEY=change_this" not in (
+            target.parent / ".env"
+        ).read_text(encoding="utf-8")
 
     def test_config_subcommands_update_config_and_env(self, tmp_path):
         """CLI config subcommands should support scripted first-run setup."""
@@ -478,6 +524,53 @@ class TestCliInstall:
         result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
         assert result.exit_code != 0
         assert "Website path does not exist" in result.output
+
+    def test_config_validate_supports_multiple_websites(self, tmp_path):
+        """Every enabled [[website]] entry should be validated independently."""
+        import tomli_w
+        from anteumbra.cli.main import cli
+
+        first = tmp_path / "site-a"
+        second = tmp_path / "site-b"
+        first.mkdir()
+        second.mkdir()
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            tomli_w.dumps({
+                "website": [
+                    {
+                        "name": "A",
+                        "path": str(first),
+                        "port": 80,
+                        "enabled": True,
+                        "log_config": {"log_monitor_enabled": False},
+                    },
+                    {
+                        "name": "B",
+                        "path": str(second),
+                        "port": 8081,
+                        "enabled": True,
+                        "log_config": {"log_monitor_enabled": False},
+                    },
+                ],
+                "web_admin": {
+                    "port": 8080,
+                    "password_hash": "configured",
+                },
+                "security": {"secret_key": "a-persistent-secret-key"},
+                "waf_source": {"enabled": False},
+                "notifier": {"enabled": False},
+                "scanner": {"yara": {"enabled": False}},
+            }),
+            encoding="utf-8",
+        )
+
+        result = CliRunner().invoke(
+            cli, ["config", "validate", "--config", str(config_path)]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Config OK" in result.output
 
     def test_config_validate_accepts_tomcat_access_log_wildcards(self, tmp_path):
         """Tomcat AccessLogValve files are usually date-suffixed and configured by glob."""
@@ -604,6 +697,9 @@ class TestCliInstall:
         assert cfg["web_admin"]["port"] == 8098
         assert cfg["website"]["log_config"]["log_monitor_enabled"] is False
         assert cfg["waf_source"]["enabled"] is False
+        assert cfg["notifier"]["enabled"] is False
+        assert cfg["notifier"]["wechat"]["enabled"] is False
+        assert cfg["notifier"]["email"]["enabled"] is False
 
     def test_config_wizard_tomcat_access_log_preset(self, tmp_path):
         """Wizard should guide Tomcat users without requiring wildcard typing."""
@@ -682,6 +778,7 @@ class TestCliInstall:
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
         monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
         monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
         monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
 
@@ -695,6 +792,10 @@ class TestCliInstall:
         assert "run" in cmd
         assert "run.py" not in " ".join(cmd)
         assert calls[0][1]["cwd"] == str(tmp_path)
+        assert calls[0][1]["stdout"] is not None
+        assert calls[0][1]["stderr"] == cli_main.subprocess.STDOUT
+        assert calls[0][1]["env"]["PYTHONIOENCODING"] == "utf-8"
+        assert (tmp_path / "data" / "anteumbra.log").exists()
 
     def test_start_uses_configured_admin_port_by_default(self, tmp_path, monkeypatch):
         """start should honor web_admin.port when --port is not explicitly passed."""
@@ -717,6 +818,7 @@ class TestCliInstall:
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
         monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
         monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
         monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
 
@@ -726,6 +828,67 @@ class TestCliInstall:
         cmd = calls[0][0]
         assert "--port" in cmd
         assert cmd[cmd.index("--port") + 1] == "18444"
+
+    def test_stop_preserves_pid_when_taskkill_fails(self, tmp_path, monkeypatch):
+        """stop must not report success or lose recovery state on kill failure."""
+        import anteumbra.cli.main as cli_main
+
+        pid_file = tmp_path / cli_main.PID_FILE
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("12345", encoding="utf-8")
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli_main, "_read_pid", lambda: 12345)
+        monkeypatch.setattr(cli_main, "_is_running", lambda _pid: True)
+        monkeypatch.setattr(cli_main.sys, "platform", "win32")
+        monkeypatch.setattr(
+            cli_main.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="ERROR: Access denied",
+            ),
+        )
+
+        result = CliRunner().invoke(cli_main.cli, ["stop"])
+
+        assert result.exit_code == 1
+        assert "taskkill failed (1): ERROR: Access denied" in result.output
+        assert pid_file.exists()
+
+    def test_stop_removes_pid_after_confirmed_exit(self, tmp_path, monkeypatch):
+        """stop reports success only after observing that the process exited."""
+        import anteumbra.cli.main as cli_main
+
+        pid_file = tmp_path / cli_main.PID_FILE
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("12345", encoding="utf-8")
+        running_states = iter([True, False])
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli_main, "_read_pid", lambda: 12345)
+        monkeypatch.setattr(
+            cli_main,
+            "_is_running",
+            lambda _pid: next(running_states, False),
+        )
+        monkeypatch.setattr(cli_main.sys, "platform", "win32")
+        monkeypatch.setattr(
+            cli_main.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=0,
+                stdout="SUCCESS",
+                stderr="",
+            ),
+        )
+
+        result = CliRunner().invoke(cli_main.cli, ["stop"])
+
+        assert result.exit_code == 0, result.output
+        assert "Anteumbra stopped." in result.output
+        assert not pid_file.exists()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -770,8 +933,7 @@ class TestProcessLifecycle:
         project_root = Path(__file__).parent.parent.parent
         run_py = project_root / "run.py"
 
-        if not run_py.exists():
-            pytest.skip(f"run.py not found at {run_py}")
+        assert run_py.exists(), f"run.py not found at {run_py}"
 
         # We use flask run directly rather than run.py to avoid starting
         # all the background threads (monitor, WAF, etc.)
@@ -800,17 +962,10 @@ class TestProcessLifecycle:
             # Wait for port to be ready
             is_listening = _wait_for_port("127.0.0.1", test_port, timeout=20)
             if not is_listening:
-                # Flask might have failed to start. Check if process is still alive.
-                if proc.poll() is not None:
-                    pytest.skip(
-                        f"Flask process exited with code {proc.returncode} "
-                        f"— likely missing config or dependencies in test env"
-                    )
-                else:
-                    pytest.skip(
-                        f"Port {test_port} not listening after {_STARTUP_TIMEOUT}s "
-                        f"— Flask may need config.toml in cwd"
-                    )
+                pytest.fail(
+                    f"Flask did not listen on {test_port}; "
+                    f"returncode={proc.poll()}"
+                )
 
             # Verify we can connect
             sock = socket.create_connection(("127.0.0.1", test_port), timeout=3)
@@ -853,13 +1008,13 @@ class TestProcessLifecycle:
         if not is_listening:
             if proc.poll() is not None:
                 proc.wait()
-                pytest.skip(
+                pytest.fail(
                     f"Flask exited with code {proc.returncode} — "
                     f"test env may lack config.toml"
                 )
             proc.kill()
             proc.wait()
-            pytest.skip("Flask did not start listening within timeout")
+            pytest.fail("Flask did not start listening within timeout")
 
         # Now terminate
         proc.terminate()
@@ -893,8 +1048,7 @@ class TestProcessLifecycle:
         # v1.0.10: PID writing moved from run.py to launcher.start_all()
         # Verify the launcher contains the PID file logic
         launcher_path = project_root / "src" / "anteumbra" / "application" / "launcher.py"
-        if not launcher_path.exists():
-            pytest.skip("launcher.py not found")
+        assert launcher_path.exists(), "launcher.py not found"
 
         source = launcher_path.read_text(encoding="utf-8")
         assert "anteumbra.pid" in source, (

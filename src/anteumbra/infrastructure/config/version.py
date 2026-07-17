@@ -3,8 +3,11 @@
 Version is defined in ``anteumbra.__init__.__version__``.
 pyproject.toml reads it dynamically via ``attr`` directive at build time.
 """
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 _ANTEUMBRA_VERSION = None
 _ANTEUMBRA_RELEASE_DATE = None
@@ -25,7 +28,7 @@ def _find_config():
         if os.path.exists(root_config):
             return root_config
     except Exception:
-        pass
+        logger.debug("Failed to locate the source-tree config", exc_info=True)
     return None
 
 

@@ -173,7 +173,7 @@ def quarantine_batch():
         if not qids:
             return jsonify({"error": "missing qids"}), 400
 
-        results = {"success": 0, "failed": 0, "skipped": 0}
+        results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
 
         for qid in qids:
             try:
@@ -188,13 +188,18 @@ def quarantine_batch():
                     results["success"] += 1
                 else:
                     return jsonify({"error": "unknown action"}), 400
-            except Exception:
+            except Exception as exc:
                 results["failed"] += 1
+                results["errors"].append({"quarantine_id": qid, "error": str(exc)})
+                current_app.logger.error(
+                    "[QUARANTINE][BATCH] %s failed for %s: %s",
+                    action, qid, exc, exc_info=True,
+                )
 
         # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
         resp = jsonify(results)
         resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
-        return resp
+        return resp, 207 if results["failed"] else 200
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][BATCH] error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

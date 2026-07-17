@@ -19,7 +19,7 @@ from flask import (
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.registry_service import (
-    get_all, remove as registry_remove, mark_quarantined,
+    get_all, remove as registry_remove,
     mark_false_positive, soft_delete_record, clear_memory_cache,
 )
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
@@ -142,7 +142,7 @@ def manual_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.application.quarantine_service import quarantine_file
+        from anteumbra.application.quarantine_service import quarantine_registered_file
 
         target = path_to_key(file_path)
         record = None
@@ -158,14 +158,13 @@ def manual_quarantine():
 
         features = record.get("features", [])
         rule_name = features[0] if features else "manual_quarantine"
-        result = quarantine_file(
+        result = quarantine_registered_file(
             file_path=str(file_path), rule_name=rule_name,
             features=features, original_path=str(file_path))
 
         if result is None:
             return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
 
-        mark_quarantined(str(file_path), result["quarantine_id"])
         current_app.logger.info(f"[RECORDS] 手动隔离成功: {file_path} -> {result['quarantine_id']}")
         return jsonify({"success": True, "quarantine_id": result["quarantine_id"],
                         "message": f"已隔离: {result['quarantine_id']}"})
@@ -184,31 +183,40 @@ def records_batch():
         if not file_paths:
             return jsonify({'error': 'missing file_paths'}), 400
 
-        from anteumbra.application.quarantine_service import quarantine_file
+        from anteumbra.application.quarantine_service import quarantine_registered_file
 
-        results = {'success': 0, 'failed': 0, 'skipped': 0}
+        results = {'success': 0, 'failed': 0, 'skipped': 0, 'errors': []}
         if action == 'quarantine':
+            records_by_path = {
+                item.get('file_path'): item
+                for item in get_all(include_deleted=True)
+                if item.get('file_path')
+            }
             for fp in file_paths:
                 try:
                     target = path_to_key(fp)
-                    record = None
-                    for r in get_all(include_deleted=True):
-                        if r.get('file_path') == target:
-                            record = r
-                            break
+                    record = records_by_path.get(target)
                     if not record or record.get('quarantine_id'):
                         results['skipped'] += 1
                         continue
                     features = record.get('features', [])
                     rule = features[0] if features else 'batch'
-                    qr = quarantine_file(str(fp), rule, features, str(fp))
+                    qr = quarantine_registered_file(str(fp), rule, features, str(fp))
                     if qr:
-                        mark_quarantined(str(fp), qr['quarantine_id'])
                         results['success'] += 1
                     else:
                         results['failed'] += 1
-                except Exception:
+                        results['errors'].append({
+                            'file_path': fp,
+                            'error': 'source file is missing or could not be moved',
+                        })
+                except Exception as exc:
                     results['failed'] += 1
+                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    current_app.logger.error(
+                        '[RECORDS] batch quarantine failed for %s: %s',
+                        fp, exc, exc_info=True,
+                    )
         elif action == 'false_positive':
             # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
             for fp in file_paths:
@@ -217,8 +225,13 @@ def records_batch():
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
-                except Exception:
+                except Exception as exc:
                     results['failed'] += 1
+                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    current_app.logger.error(
+                        '[RECORDS] batch false-positive failed for %s: %s',
+                        fp, exc, exc_info=True,
+                    )
         elif action == 'delete':
             # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
             for fp in file_paths:
@@ -227,15 +240,20 @@ def records_batch():
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
-                except Exception:
+                except Exception as exc:
                     results['failed'] += 1
+                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    current_app.logger.error(
+                        '[RECORDS] batch delete failed for %s: %s',
+                        fp, exc, exc_info=True,
+                    )
         else:
             return jsonify({'error': 'unknown action'}), 400
 
         # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
         resp = jsonify(results)
         resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
-        return resp
+        return resp, 207 if results['failed'] else 200
     except Exception as e:
         current_app.logger.error(f'[RECORDS] batch error: {e}', exc_info=True)
         return jsonify({'error': str(e)}), 500

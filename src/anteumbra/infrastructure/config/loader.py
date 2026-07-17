@@ -101,7 +101,10 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
                     if reg_config.exists():
                         config_file = reg_config
             except Exception:
-                pass
+                logger.debug(
+                    "Failed to discover config from the installation registry",
+                    exc_info=True,
+                )
         if not config_file.exists():
             import anteumbra as _pkg
             pkg_dir = Path(_pkg.__file__).resolve().parent

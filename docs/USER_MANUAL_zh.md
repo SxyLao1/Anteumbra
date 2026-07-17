@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0
+# Anteumbra 用户手册 v1.0.26
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -65,7 +65,8 @@ Anteumbra 是一个**被动的 Web 边界安全观测平台**。它不会内联�
 
 - **Python** 3.10+
 - **操作系统**：Windows 10+ 或 Linux（内核 4.x+）
-- **可选**：ssdeep、py-tlsh、yara-python（用于完整哈希引擎支持）
+- **基础包含**：用于编译型 YARA 检测的 yara-python
+- **可选**：用于补充相似度检测的 ssdeep、py-tlsh
 
 ### 2.2 从 PyPI 安装
 
@@ -78,7 +79,9 @@ anteumbra config validate
 anteumbra run
 ```
 
-如需启用编译型 YARA 规则校验和扫描，请安装 `anteumbra[yara]`；如需同时启用可选相似哈希引擎，请安装 `anteumbra[full]`。
+基础包已包含编译型 YARA 规则校验和扫描。只有需要可选的 `ssdeep`、
+`py-tlsh` 相似度引擎时才安装 `anteumbra[full]`。`anteumbra[yara]` 作为
+兼容旧命令的空别名保留。
 
 ### 2.3 从源码安装
 
@@ -120,7 +123,8 @@ anteumbra run
 启动时，Anteumbra 会：
 1. 从运行实例目录加载 `config.toml` 和 `.env`
 2. 检查至少有一个启用的网站路径真实存在
-3. 启动文件监控、后台任务和 Web 仪表盘
+3. 为每个启用站点启动独立文件监控，并按配置启动独立访问日志监控
+4. 可选能力降级时显示 `STARTED WITH WARNINGS` 和具体原因，不再静默隐藏
 
 打开 `http://127.0.0.1:8080/admin`，使用用户名 `admin` 登录。
 
@@ -147,6 +151,10 @@ path = "/var/www/html"     # 要监控的 Web 根目录
 port = 80
 enabled = true
 ```
+
+多站点配置时，将单个 `[website]` 表替换为多个 `[[website]]` 表。每个启用项
+必须有不含路径分隔符的 `name`、真实存在的 `path` 和有效 `port`；各站点使用
+独立的文件监控器和访问日志监控器。
 
 ### 3.2 生成密码哈希
 
@@ -224,7 +232,11 @@ send_key = "${ANTEUMBRA_WECHAT_API_KEY:-}"
 enabled = false
 ```
 
-### 3.5 存储后端
+全新模板默认关闭 notifier 总开关和所有外发通道。只有总开关、通道开关均启用
+且必需凭据完整时，通道才可用；凭据不完整时不会尝试建立外部连接。修改通知
+凭据后请重启服务。
+
+### 3.6 存储后端
 
 ```toml
 [storage]
@@ -236,7 +248,7 @@ db_path = "data/anteumbra.db"
 - `sqlite` — 高性能、WAL 模式、外键约束、13 个索引列
 - `both` — 双写，SQLite 优先读取（生产环境推荐）
 
-### 3.6 IP 封禁
+### 3.7 IP 封禁
 
 ```toml
 [ip_blocker]
@@ -251,7 +263,7 @@ url = "https://firewall.example.com/api/block"
 api_key = "${ANTEUMBRA_WAF_API_KEY:-}"
 ```
 
-### 3.7 完整配置参考
+### 3.8 完整配置参考
 
 参见 `config.toml` 注释，涵盖 27 个配置节中的 130+ 个配置项。主要配置节：
 
@@ -307,8 +319,13 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
   --port INTEGER   绑定端口（默认读取 config web_admin.port）
 ```
 
+后台启动统一写入 `data/anteumbra.log`，并在 15 秒内同时等待 PID 文件和配置的
+HTTP 监听端口就绪。进程提前退出或未能就绪时，命令返回非零并提示检查该日志。
+
 ### `anteumbra stop`
-停止正在运行的进程。Windows 上使用 `taskkill /F`，Linux 上发送 `SIGTERM` 然后 `SIGKILL`。
+停止正在运行的进程。Windows 上使用 `taskkill /F`；Linux 上先发送 `SIGTERM`，
+必要时回退到 `SIGKILL`。命令只有在确认进程实际退出后才删除 PID 文件并报告
+成功；终止失败会返回非零并保留 PID，便于诊断或重试。
 
 ### `anteumbra config`
 ```
@@ -339,6 +356,7 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
 - **活跃检测**数量及近期发现
 - **威胁画像**及风险评分
 - **系统状态**（监控器、WAL、Registry 健康度）
+- **检测与通知能力模式**，包括具体降级原因
 - **实时日志流**通过 SSE
 
 ### 5.2 检测记录
@@ -412,8 +430,10 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
 `/admin/scanner` — 主动目录扫描。
 
 - 选择目标目录
+- 用逗号分隔扩展名限制扫描范围，扩展名前的点号可省略
 - 通过 SSE 实时显示进度
-- 扫描历史，包含结果、耗时、发现数量
+- 明确显示已完成、已停止和失败状态，结束后可直接再次扫描
+- 自动刷新的扫描历史，包含结果、耗时和发现数量
 - 可打印报告
 
 ### 5.9 实时日志流
@@ -422,7 +442,8 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
 
 - 级别过滤（可在 `web_admin.sse_log_levels` 中配置）
 - 自动滚动，悬停暂停
-- 持久化缓冲区（最后 100 行在页面刷新后保留）
+- 先合并所有启用站点的历史监控日志，再接入实时事件
+- 静默重连，并使用 15 秒心跳保持连接
 
 ### 5.10 设置
 
@@ -770,19 +791,24 @@ server {
 ### 12.3 健康检查
 
 ```
-GET /api/v1/health          # 公开健康检查（无需认证）
-GET /admin/health            # 需认证的健康检查，含诊断信息
+GET /api/v1/health          # 公开 Metrics、关键检查和能力模式
+GET /admin/api/v1/health    # 面向负载均衡器的最小公开状态
+GET /admin/health           # 需认证的完整诊断
 ```
+
+可选引擎或通知能力降级时返回 HTTP `200` 并携带告警详情；配置无效、Registry
+或 WAL 等关键能力失败时返回 HTTP `503`。需要 Metrics/能力字段的自动化使用
+`/api/v1/health`；只需状态时使用最小化的 `/admin/api/v1/health`。
 
 ### 12.4 获取帮助
 
 - **GitHub Issues**：https://github.com/SxyLao1/Anteumbra/issues
 - **README**：项目概览与架构
 - **ARCHITECTURE.md**：面向开发者的技术深入文档
-- **ANTEUMBRA_USAGE_GUIDE.md**：内部开发指南
+- **ROADMAP.md**：当前发布状态、已知债务和架构路线
 
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.25 — MIT License</sub>
+  <sub>Anteumbra v1.0.26 — MIT License</sub>
 </div>

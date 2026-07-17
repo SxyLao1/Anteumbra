@@ -85,6 +85,10 @@ class LogMonitor:
         if self in LogMonitor._active_monitors:
             LogMonitor._active_monitors.remove(self)
 
+    @property
+    def is_running(self) -> bool:
+        return self._is_running
+
     def _monitor_loop(self):
         """监控循环（v1.6.6：增强容错与轮转检测）"""
         log_with_symbol("log_monitor_info", "info", f"开始监控循环", self.logger)

@@ -89,8 +89,23 @@ class QuarantineHandlerPlugin(Plugin):
             quarantine_enabled = ConfigRegistry.get_raw_config().get(
                 "quarantine", {}
             ).get("auto_quarantine_enabled", True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "[QUARANTINE] unable to read auto-quarantine config; skipping %s: %s",
+                file_path,
+                exc,
+                exc_info=True,
+            )
+            self._emit_alert(
+                "quarantine_skipped",
+                ts,
+                file_path,
+                first_seen_ip,
+                features,
+                "WARNING",
+                reason=f"config unavailable: {exc}",
+            )
+            return None
 
         # -- Check recently-restored whitelist --
         try:
@@ -98,8 +113,23 @@ class QuarantineHandlerPlugin(Plugin):
             if is_recently_restored(file_path):
                 logger.info("[QUARANTINE] 跳过刚恢复文件: %s", file_path)
                 return None
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "[QUARANTINE] unable to check recently restored files; skipping %s: %s",
+                file_path,
+                exc,
+                exc_info=True,
+            )
+            self._emit_alert(
+                "quarantine_skipped",
+                ts,
+                file_path,
+                first_seen_ip,
+                features,
+                "WARNING",
+                reason=f"restore guard unavailable: {exc}",
+            )
+            return None
 
         if not quarantine_enabled:
             # Emit skipped alert
@@ -110,8 +140,8 @@ class QuarantineHandlerPlugin(Plugin):
 
         # -- Perform quarantine --
         try:
-            from anteumbra.infrastructure.quarantine import quarantine_file
-            result = quarantine_file(
+            from anteumbra.application.quarantine_service import quarantine_registered_file
+            result = quarantine_registered_file(
                 file_path=file_path,
                 rule_name=rule_name,
                 features=features,
@@ -125,13 +155,7 @@ class QuarantineHandlerPlugin(Plugin):
             return None
 
         if result is not None:
-            # -- Success: update registry + batch notify --
-            try:
-                from anteumbra.infrastructure.suspicious_registry import mark_quarantined
-                mark_quarantined(file_path, result["quarantine_id"])
-            except Exception as e:
-                logger.warning("[QUARANTINE] mark_quarantined 失败: %s", e)
-
+            # -- Success: application service committed quarantine + Registry --
             # Batch notification (aggregated, not per-file)
             self._batch_queued += 1
             elapsed = _time.time() - self._batch_last_flush
@@ -166,7 +190,12 @@ class QuarantineHandlerPlugin(Plugin):
                     **extra,
                 })
         except Exception:
-            pass
+            logger.warning(
+                "[QUARANTINE] failed to emit alert type=%s for %s",
+                alert_type,
+                file_path,
+                exc_info=True,
+            )
 
     def _flush_batch(self) -> None:
         """Send aggregated batch quarantine-success notification."""
@@ -186,4 +215,8 @@ class QuarantineHandlerPlugin(Plugin):
                     "level": "INFO",
                 })
         except Exception:
-            pass
+            logger.warning(
+                "[QUARANTINE] failed to emit batch alert for %d files",
+                count,
+                exc_info=True,
+            )

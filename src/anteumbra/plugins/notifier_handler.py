@@ -62,6 +62,10 @@ class NotifierHandlerPlugin(Plugin):
 
     def deactivate(self) -> None:
         logger.info("NotifierHandler: 已停用")
+        if self._notifier is not None:
+            from anteumbra.infrastructure.monitoring.notifier import shutdown_notifier
+
+            shutdown_notifier()
         self._notifier = None
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
@@ -86,7 +90,10 @@ class NotifierHandlerPlugin(Plugin):
             ctx["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
             ctx["block_device_count"] = len(blocker_cfg.get("devices", []))
         except Exception:
-            pass
+            logger.warning(
+                "NotifierHandler: failed to enrich alert with runtime config",
+                exc_info=True,
+            )
 
         # Format message
         try:

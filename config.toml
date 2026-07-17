@@ -1,5 +1,5 @@
 [system]
-release_date = "TBD"
+release_date = "2026-07-17"
 
 project_root = "."
 
@@ -439,18 +439,18 @@ health_check_port = 8080
 health_check_host = "127.0.0.1"
 
 [notifier]
-enabled = true
+enabled = false
 
 [notifier.wechat]
-enabled = true
+enabled = false
 send_key = "${ANTEUMBRA_WECHAT_API_KEY:-}"
-verify_ssl = false
+verify_ssl = true
 timeout = 10
 channel = "9"
 noip = false
 
 [notifier.email]
-enabled = true
+enabled = false
 smtp_host = "smtp.163.com"
 smtp_port = 465
 username = "${ANTEUMBRA_EMAIL_USERNAME:-}"

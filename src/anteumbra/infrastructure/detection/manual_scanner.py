@@ -110,10 +110,14 @@ class ManualScanner:
             target = Path(str(target_dir))
         if not target.exists():
             result.status = "error"
+            result.end_time = time.time()
+            result.errors = 1
             result.error_message = f"目录不存在: {target_dir}"
             return result
         if not target.is_dir():
             result.status = "error"
+            result.end_time = time.time()
+            result.errors = 1
             result.error_message = f"路径不是目录: {target_dir}"
             return result
 

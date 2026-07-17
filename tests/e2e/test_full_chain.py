@@ -124,7 +124,7 @@ class TestFullChain:
             profile.target_files.add(str(webshell_path))
         except Exception as _re:
             registry_err = f"{type(_re).__name__}: {_re}"
-            pytest.skip(f"Step 3: Registry unavailable: {registry_err}")
+            pytest.fail(f"Step 3: Registry unavailable: {registry_err}")
 
         # ── Step 4: Quarantine file ───────────────────────────
         quarantine_success = False
@@ -163,7 +163,7 @@ class TestFullChain:
             quarantine_err = f"{type(_qe).__name__}: {_qe}"
 
         if not quarantine_success:
-            pytest.skip(f"Step 4: Quarantine unavailable: {quarantine_err}")
+            pytest.fail(f"Step 4: Quarantine unavailable: {quarantine_err}")
 
         assert quarantine_success, "Step 4 FAIL: File was not quarantined"
 

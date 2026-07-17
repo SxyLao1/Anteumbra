@@ -9,7 +9,7 @@ v1.7.4增强：ScanOptions支持access_log_path配置
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
@@ -110,6 +110,7 @@ class Website:
     port: int
     enabled: bool = False
     scan_options: ScanOptions = field(default_factory=ScanOptions)
+    log_config: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """对象创建后的自动验证"""

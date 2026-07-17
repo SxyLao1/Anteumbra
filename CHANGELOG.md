@@ -4,6 +4,41 @@
 
 ---
 
+## [1.0.26] - 2026-07-17
+
+### Fixed
+- Reworked startup orchestration so every enabled website receives its own file and access-log monitor, startup failures are reported, and all started resources are stopped deterministically.
+- Added an acknowledged JSONL event tailer with cursor persistence, file rotation/truncation handling, and dead-letter output so malformed or unprocessable WAF events cannot stall profiling.
+- Made quarantine, restore, and permanent-delete workflows compensate file operations when Registry updates fail; batch APIs now report per-item failures with HTTP `207`.
+- Made auto-quarantine fail conservatively when configuration or the recently-restored guard is unavailable.
+- Removed normal SSE connection noise, merged historical logs across enabled sites, added heartbeats, and exposed notification delivery state through metrics and the dashboard.
+- Disabled outbound notification channels in fresh templates until both configuration and credentials are complete; enabled TLS verification for WeChat delivery by default.
+- Made background CLI startup wait for both the PID and HTTP listener, log daemon output consistently, and return non-zero when readiness fails.
+- Made `anteumbra stop` verify the Windows `taskkill` result and actual process exit; failed termination now returns non-zero and preserves the PID file for diagnosis or retry.
+- Generated a persistent high-entropy Flask secret and 16-character initial password for both `install` and `config init` without overwriting unrelated `.env` values.
+- Mapped legacy Flask-Session `filesystem` configuration to the supported `cachelib` backend.
+- Made manual scanner states explicit, restored the scan form after terminal states, refreshed history automatically, and preserved zero-second durations.
+- Made scanner cancellation wait for backend confirmation, reported invalid targets as failures, and applied the extension filter entered in the UI.
+- Prevented delayed or stale dashboard navigation responses from replacing the page most recently selected by the operator.
+- Kept a complete instance installation usable when the optional user-level instance registry is read-only, with a clear warning instead of a traceback.
+- Corrected successful monitor startup and configuration diagnostics that were incorrectly recorded as `CRITICAL` events.
+- Forced UTF-8 for the background runtime process so Windows daemon logs preserve Chinese diagnostics instead of writing local-code-page mojibake.
+- Aligned Docker's manually installed runtime dependencies with `pyproject.toml`, including `cachelib`, and quoted version constraints so the shell cannot treat `>` as output redirection.
+
+### Changed
+- Added application services for runtime health, access-log analysis, transactional quarantine, and resilient JSONL consumption.
+- Added Nginx, Apache, and Tomcat access-log analysis per configured site instead of coupling web routes directly to parser infrastructure.
+- Included `yara-python` in the base package; the legacy `yara` extra remains an empty compatibility alias, while `full` adds only `ssdeep` and `py-tlsh`.
+- Added runtime capability reporting that distinguishes optional degraded features from critical configuration, Registry, and WAL failures.
+- Unified public metrics, minimal load-balancer, and authenticated diagnostic health endpoints through one Application health assessment; optional degradation stays HTTP `200`, while critical probes return `503`.
+
+### Tests
+- Replaced mocked-success browser batch tests with real backend workflows that verify source files, Registry records, and Quarantine state.
+- Added lifecycle, multi-site, JSONL poison-message, notification-safety, runtime-health, log-analysis, and quarantine compensation regression coverage.
+- Passed `428` non-UI tests with one explicit live-WAF skip and all `41` Playwright UI tests (`469` passed total).
+- Verified the final wheel through a fresh non-editable install, instance creation, configuration validation, YARA loading, background start/health/stop, UTF-8 daemon logs, and in-app browser workflows.
+- Built and ran the v1.0.26 Docker image as the non-root `anteumbra` user, passed dependency and health checks, and confirmed a monitored PHP webshell produced a two-rule YARA hit, Registry record, alert metrics, and duplicate-event suppression.
+
 ## [1.0.25] - 2026-07-11
 
 ### Fixed

@@ -16,7 +16,6 @@ from flask import Blueprint, jsonify
 from pathlib import Path
 from typing import Dict, Any, Optional
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +25,11 @@ metrics_bp = Blueprint('metrics', __name__, url_prefix='/api/v1')
 
 @metrics_bp.route("/health")
 def health_check():
-    """健康检查（容错版，避免500错误）"""
+    """Public metrics plus shared runtime health and capability status."""
     try:
         from anteumbra.application.metrics_service import get_metrics
+        from anteumbra.application.runtime_health_service import assess_system_health
+
         metrics = get_metrics()
 
         # 安全获取指标，避免psutil异常
@@ -44,12 +45,19 @@ def health_check():
         # 安全访问registry队列大小
         registry_qsize = data.get("registry_qsize", 0)
 
+        health = assess_system_health()
+        status = health["status"]
+        if registry_qsize >= 1000 and status == "healthy":
+            status = "warning"
+
         return jsonify({
-            "status": "healthy" if registry_qsize < 1000 else "warning",
+            "status": status,
             "version": get_version(),
             "platform": sys.platform,
+            "checks": health["checks"],
+            "capabilities": health["capabilities"],
             **data
-        })
+        }), health["http_status"]
     except Exception as e:
         # v1.0.9: remove traceback leak — only log internally, never expose to caller
         import traceback
@@ -59,7 +67,7 @@ def health_check():
             "status": "error",
             "error": "Internal health check error",
             "version": get_version()
-        }), 500
+        }), 503
 
 
 class MetricsCollector:

@@ -486,6 +486,11 @@ class ThreatGraph:
                 with open(self._persist_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
             except Exception:
+                logger.warning(
+                    "[THREAT_GRAPH] Failed to load persisted JSON from %s",
+                    self._persist_path,
+                    exc_info=True,
+                )
                 return
 
         # Reconstruct domain objects from data dict (shared logic)

@@ -10,6 +10,7 @@ window.AnteumbraSSEManager = {
   healthCheckTimer: null,
   MAX_LOG_LINES: 500,
   historyLoaded: false,
+  historyLoading: null,
   _analyzerOpen: false,
   _allLevels: false,
 
@@ -19,7 +20,13 @@ window.AnteumbraSSEManager = {
     }
     // Load history before opening the live stream.
     if (!this.historyLoaded) {
-      this.loadHistory();
+      if (!this.historyLoading) {
+        this.historyLoading = this.loadHistory().finally(() => {
+          this.historyLoading = null;
+          this.createConnection();
+        });
+      }
+      return null;
     }
     return this.createConnection();
   },
@@ -29,9 +36,9 @@ window.AnteumbraSSEManager = {
     var logStream = document.getElementById('live-log-stream');
     if (!logStream) {
       // Keep historyLoaded=false so the next DOM-ready call can retry.
-      return;
+      return Promise.resolve(false);
     }
-    fetch('/admin/logs/history')
+    return fetch('/admin/logs/history')
       .then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
@@ -49,7 +56,6 @@ window.AnteumbraSSEManager = {
   },
 
   createConnection() {
-    console.log('[SSE-MGR] Creating new connection...');
     if (this.eventSource) { this.eventSource.close(); }
 
     const tokenMeta = document.querySelector('meta[name="sse-token"]');
@@ -62,7 +68,6 @@ window.AnteumbraSSEManager = {
     this.eventSource = new EventSource(sseUrl, { withCredentials: true });
 
     this.eventSource.onopen = () => {
-      console.log('[SSE-MGR] Connected');
       this.isConnected = true;
       this.lastActivity = Date.now();
       this.reconnectAttempts = 0;
@@ -71,7 +76,6 @@ window.AnteumbraSSEManager = {
     };
 
     this.eventSource.onerror = (e) => {
-      console.error('[SSE-MGR] Error:', e);
       this.isConnected = false;
       this.updateStatus('disconnected');
       this.stopHealthCheck();
@@ -83,7 +87,6 @@ window.AnteumbraSSEManager = {
       const delay = baseDelay + jitter;
       this.reconnectAttempts++;
 
-      console.log('[SSE-MGR] Reconnect in ' + Math.round(delay) + 'ms (attempt ' + this.reconnectAttempts + ')');
       this.reconnectTimer = setTimeout(() => this.getConnection(), delay);
     };
 
@@ -190,7 +193,6 @@ window.AnteumbraSSEManager = {
       this.reconnectAttempts = 0;
       this.historyLoaded = false;
       this.updateStatus('disconnected');
-      console.log('[SSE-MGR] Disconnected');
     }
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
   },

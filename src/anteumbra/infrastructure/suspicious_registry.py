@@ -99,7 +99,7 @@ _async_save_thread: Optional[threading.Thread] = None
 _async_save_enabled = False
 _async_save_interval = 60
 _async_running = False
-_async_lock = threading.Lock()
+_async_lock = threading.RLock()
 _snapshot_lock = threading.Lock()
 _last_registry_snapshot: Optional[List[Dict]] = None  # 数据快照
 
@@ -527,10 +527,11 @@ def _repo_shadow_save(data: List[Dict]):
         _get_logger().debug("Repository shadow save unavailable", exc_info=True)
 
 
-def _save_registry_sync(data: List[Dict]):
+def _save_registry_sync(data: List[Dict]) -> bool:
     """同步保存注册表（Windows终极版：关闭所有句柄后替换）"""
     logger = _get_logger()
     global _save_lock
+    registry_path = _REGISTRY_PATH
 
     with _save_lock:
         try:
@@ -597,7 +598,7 @@ def _save_registry_sync(data: List[Dict]):
 
         except PermissionError:
             logger.warning(f"Registry file permission denied: {registry_path}, using in-memory mode")
-            return
+            return False
         except Exception as e:
             logger = logging.getLogger("monitor.suspicious_registry")
             logger.error(f"[REGISTRY][SAVE] 失败: {e}", exc_info=True)
@@ -609,9 +610,11 @@ def _save_registry_sync(data: List[Dict]):
                 logger.critical(f"[REGISTRY][FALLBACK] 已写入紧急备份: {fallback_path}")
             except Exception:
                 _get_logger().debug("Emergency backup write failed", exc_info=True)
+            return False
 
     # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
     _repo_shadow_save(data)
+    return True
 
 def _save_registry(data: List[Dict]):
     """保存注册表（根据配置自动选择同步或异步）"""
@@ -764,65 +767,72 @@ def mark_alerted(file_path: Path):
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
 
-def mark_quarantined(file_path: str, quarantine_id: str):
+def mark_quarantined(file_path: str, quarantine_id: str) -> bool:
     """v1.7.9: 标记文件已被隔离 — 更新 Registry 条目并设 file_exists=False"""
     _ensure_initialized()
     try:
-        registry = _load_registry()
-        abs_path = path_to_key(file_path)
-        for item in registry:
-            if item["file_path"] == abs_path:
-                item["file_exists"] = False
-                item["quarantine_id"] = quarantine_id
-                item["quarantined_at"] = datetime.now().isoformat()
-                _save_registry_sync(registry)  # 必须同步写入，否则会被紧跟的DELETE事件覆盖
-                log_with_symbol("quarantine_add", "info",
-                                f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
+        with _async_lock:
+            registry = _load_registry()
+            abs_path = path_to_key(file_path)
+            for item in registry:
+                if item["file_path"] == abs_path:
+                    item["file_exists"] = False
+                    item["quarantine_id"] = quarantine_id
+                    item["quarantined_at"] = datetime.now().isoformat()
+                    if not _save_registry_sync(registry):
+                        return False
+                    log_with_symbol("quarantine_add", "info",
+                                    f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
 
-                # v2.0: Emit event for PluginManager handlers
-                try:
-                    from anteumbra.application.plugin_manager import get_plugin_manager
-                    pm = get_plugin_manager()
-                    if pm.is_enabled:
-                        pm.emit("registry_changed", "suspicious_registry", {
-                            "operation": "mark_quarantined",
-                            "file_path": abs_path,
-                            "quarantine_id": quarantine_id,
-                        })
-                except Exception:
-                    _get_logger().debug("PluginManager emit registry_changed (mark_quarantined) failed", exc_info=True)
-                break
+                    # v2.0: Emit event for PluginManager handlers
+                    try:
+                        from anteumbra.application.plugin_manager import get_plugin_manager
+                        pm = get_plugin_manager()
+                        if pm.is_enabled:
+                            pm.emit("registry_changed", "suspicious_registry", {
+                                "operation": "mark_quarantined",
+                                "file_path": abs_path,
+                                "quarantine_id": quarantine_id,
+                            })
+                    except Exception:
+                        _get_logger().debug("PluginManager emit registry_changed (mark_quarantined) failed", exc_info=True)
+                    return True
+            _get_logger().warning("Registry record not found for quarantine: %s", abs_path)
+            return False
     except Exception as e:
         log_with_symbol("error_registry_save", "error", f"标记隔离失败: {e}")
+        return False
 
 
 def mark_restored(file_path: str) -> bool:
     """Clear quarantine state after a file is restored from quarantine."""
     _ensure_initialized()
     try:
-        registry = _load_registry()
-        abs_path = path_to_key(file_path)
-        for item in registry:
-            if item["file_path"] == abs_path:
-                item["file_exists"] = True
-                item["quarantine_id"] = None
-                item["restored_at"] = datetime.now().isoformat()
-                _save_registry_sync(registry)
-                log_with_symbol("quarantine_restore", "info",
-                                f"Registry restored: {Path(file_path).name}")
+        with _async_lock:
+            registry = _load_registry()
+            abs_path = path_to_key(file_path)
+            for item in registry:
+                if item["file_path"] == abs_path:
+                    item["file_exists"] = True
+                    item["quarantine_id"] = None
+                    item["restored_at"] = datetime.now().isoformat()
+                    if not _save_registry_sync(registry):
+                        return False
+                    log_with_symbol("quarantine_restore", "info",
+                                    f"Registry restored: {Path(file_path).name}")
 
-                try:
-                    from anteumbra.application.plugin_manager import get_plugin_manager
-                    pm = get_plugin_manager()
-                    if pm.is_enabled:
-                        pm.emit("registry_changed", "suspicious_registry", {
-                            "operation": "mark_restored",
-                            "file_path": abs_path,
-                        })
-                except Exception:
-                    _get_logger().debug("PluginManager emit registry_changed (mark_restored) failed", exc_info=True)
-                return True
-        return False
+                    try:
+                        from anteumbra.application.plugin_manager import get_plugin_manager
+                        pm = get_plugin_manager()
+                        if pm.is_enabled:
+                            pm.emit("registry_changed", "suspicious_registry", {
+                                "operation": "mark_restored",
+                                "file_path": abs_path,
+                            })
+                    except Exception:
+                        _get_logger().debug("PluginManager emit registry_changed (mark_restored) failed", exc_info=True)
+                    return True
+            return False
     except Exception as e:
         log_with_symbol("error_registry_save", "error", f"标记恢复失败: {e}")
         return False
@@ -961,29 +971,29 @@ def remove(file_path: Union[Path, str]) -> bool:
         return False
 
     try:
-        registry = _load_registry()
-        found = False
+        with _async_lock:
+            registry = _load_registry()
+            found = False
 
-        for item in registry:
-            if item["file_path"] == abs_path:
-                # v1.7.9: 如果已被隔离（有quarantine_id），只标记file_exists=False，保留隔离信息
-                if item.get("quarantine_id"):
-                    item["file_exists"] = False
-                    logger.info(f"[REGISTRY][DELETE_AFTER_QUARANTINE] 已隔离文件被删除: {item['quarantine_id']}")
-                else:
-                    item["file_exists"] = False
-                    item["deleted_at"] = datetime.now().isoformat()
-                    logger.info(f"[REGISTRY][MARK_DELETED] 标记删除: {abs_path}")
-                found = True
-                break
+            for item in registry:
+                if item["file_path"] == abs_path:
+                    # v1.7.9: 如果已被隔离（有quarantine_id），只标记file_exists=False，保留隔离信息
+                    if item.get("quarantine_id"):
+                        item["file_exists"] = False
+                        logger.info(f"[REGISTRY][DELETE_AFTER_QUARANTINE] 已隔离文件被删除: {item['quarantine_id']}")
+                    else:
+                        item["file_exists"] = False
+                        item["deleted_at"] = datetime.now().isoformat()
+                        logger.info(f"[REGISTRY][MARK_DELETED] 标记删除: {abs_path}")
+                    found = True
+                    break
 
-        if not found:
-            log_with_symbol("notice", "info", f"记录不存在: {abs_path[:50]}...", logger)
-            return False
+            if not found:
+                log_with_symbol("notice", "info", f"记录不存在: {abs_path[:50]}...", logger)
+                return False
 
-        # 保存更改
-        _save_registry_sync(registry)
-        _flush_sync()
+            if not _save_registry_sync(registry):
+                return False
 
         log_with_symbol("registry_remove", "info", f"标记删除成功: {abs_path}", logger)
 

@@ -42,6 +42,7 @@ function toggleDashboardAudit() {
 /* 当前页面状态（用于Refresh按钮） */
 var _currentPath = 'dashboard_content';
 var _currentTitle = 'Dashboard';
+var _contentRequestId = 0;
 
 /* Loading占位HTML */
 var _loadingHtml = '<div class="empty-state"><div class="spinner"></div><p>Initializing dashboard...</p></div>';
@@ -133,6 +134,8 @@ function loadDashboard() {
   if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin' && window.location.pathname !== '/admin/overview') {
     return;
   }
+  if (_currentPath !== 'dashboard_content') return;
+  var requestId = ++_contentRequestId;
   var contentArea = document.getElementById('main-content');
   if (!contentArea) return;
 
@@ -151,6 +154,7 @@ function loadDashboard() {
       return r.text();
     })
     .then(function(html) {
+      if (requestId !== _contentRequestId) return;
       // 嵌套防护
       if (html.indexOf('app-header') !== -1 || html.indexOf('app-shell') !== -1) {
         console.error('[Dashboard] Nested page detected, redirecting...');
@@ -195,6 +199,7 @@ function loadDashboard() {
 
     })
     .catch(function(err) {
+      if (requestId !== _contentRequestId) return;
       console.error('[Dashboard] Load failed:', err);
       contentArea.innerHTML = '<div class="empty-state"><div style="font-size:32px;margin-bottom:12px;">⚠</div><p>Failed to load dashboard: ' + err.message + '</p></div>';
     });
@@ -210,6 +215,7 @@ function loadContent(path, title) {
   // 更新状态
   _currentPath = path;
   _currentTitle = title || path;
+  var requestId = ++_contentRequestId;
 
   // 更新 header 中的页面标题显示
   var brandSub = document.querySelector('.brand-sub');
@@ -232,6 +238,7 @@ function loadContent(path, title) {
       return r.text();
     })
     .then(function(html) {
+      if (requestId !== _contentRequestId) return;
       // 嵌套防护
       if (html.indexOf('app-header') !== -1 || html.indexOf('app-shell') !== -1) {
         console.error('[Dashboard] Nested page detected, redirecting...');
@@ -262,6 +269,7 @@ function loadContent(path, title) {
       }
     })
     .catch(function(err) {
+      if (requestId !== _contentRequestId) return;
       console.error('[Content] Load failed:', err);
       contentArea.innerHTML = '<div class="empty-state"><div style="font-size:32px;margin-bottom:12px;">⚠</div><p>' + err.message + '</p></div>';
     });
