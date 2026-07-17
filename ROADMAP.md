@@ -2,7 +2,7 @@
 
 > **Current Version**: v1.0.26 (2026-07-17)
 > **Vision**: Web perimeter threat intelligence: passive file detection, access-log behavior analysis, attacker profiling, and operator-friendly response.
-> **Current Status**: Beta-quality release candidate with local wheel, editable-source, browser, and Docker distribution smoke tests complete. Remaining work is tag/PyPI publication, release discipline, deeper configuration architecture, and production hardening.
+> **Current Status**: v1.0.26 is published to PyPI as a Beta-quality release candidate. Local and public-wheel, editable-source, browser, and Docker distribution smoke tests are complete; deeper configuration architecture and production hardening remain.
 
 ---
 
@@ -45,7 +45,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.23 | Web audit entry points, quieter SSE logs, notifier visibility | Done |
 | 1.0.24 | Tomcat access-log analyzer and CLI presets | Done |
 | 1.0.25 | Docker full-runtime deployment and documentation sync | Done |
-| 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Done; ready to tag |
+| 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Released to PyPI |
 
 ---
 
@@ -61,8 +61,8 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Verify Docker build/run/health/detection path | Done: healthy non-root container and monitored two-rule YARA hit passed |
 | P0 | Confirm README commands match real output | Done in clean-install CLI pass |
 | P1 | Run deployment, architecture, and relevant web regression tests | Done: 428 non-UI passed, 1 live-WAF skip; 41 UI passed |
-| P1 | Tag release and push only after the final clean install check | Pending |
-| P1 | Publish to PyPI from tag using the release workflow | Pending |
+| P1 | Tag release and push only after the final clean install check | Done: `v1.0.26` points to `e23e33e` |
+| P1 | Publish to PyPI from tag using the release workflow | Done: Trusted Publishing and public-index clean install passed |
 
 ---
 
