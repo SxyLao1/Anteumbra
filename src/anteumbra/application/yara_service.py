@@ -8,16 +8,18 @@ Establishes the DDD dependency direction:
 """
 from anteumbra.infrastructure.detection.yara_engine import (
     get_bundled_rules_path,
-    get_yara_engine,
     resolve_yara_rules_path,
+    build_yara_engine,
+    DisabledYaraEngine,
     YaraEngine,
     YaraMatch,
 )
 
 __all__ = [
     "get_bundled_rules_path",
-    "get_yara_engine",
     "resolve_yara_rules_path",
+    "build_yara_engine",
+    "DisabledYaraEngine",
     "YaraEngine",
     "YaraMatch",
 ]

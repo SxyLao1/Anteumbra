@@ -1,10 +1,10 @@
 """Web factory first-run secret persistence tests."""
 
 import os
+from types import SimpleNamespace
 
 
 def test_first_run_adds_missing_secrets_without_overwriting_env(tmp_path, monkeypatch):
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
     from anteumbra.interfaces.web import factory
 
     config_path = tmp_path / "config.toml"
@@ -14,22 +14,16 @@ def test_first_run_adds_missing_secrets_without_overwriting_env(tmp_path, monkey
 
     monkeypatch.delenv("ANTEUMBRA_PASSWORD_HASH", raising=False)
     monkeypatch.delenv("ANTEUMBRA_SECRET_KEY", raising=False)
-    monkeypatch.setattr(ConfigRegistry, "_config_path", config_path)
-    monkeypatch.setattr(
-        ConfigRegistry,
-        "get_raw_config",
-        classmethod(lambda cls: {
+    provider = SimpleNamespace(
+        path=config_path,
+        get=lambda: {
             "web_admin": {"password_hash": ""},
             "security": {"secret_key": ""},
-        }),
-    )
-    monkeypatch.setattr(
-        ConfigRegistry,
-        "initialize",
-        classmethod(lambda cls, *_args, **_kwargs: None),
+        },
+        reload=lambda: {},
     )
 
-    factory._ensure_password_configured()
+    factory._ensure_password_configured(provider)
 
     env_text = env_path.read_text(encoding="utf-8")
     assert "CUSTOM_SETTING=preserved" in env_text

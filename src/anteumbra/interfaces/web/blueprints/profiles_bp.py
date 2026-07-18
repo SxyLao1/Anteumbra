@@ -15,6 +15,7 @@ from flask import (
 )
 
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,9 @@ profiles_bp = Blueprint('profiles', __name__, url_prefix='/admin')
 def profiles_list():
     """画像列表页 — 服务端渲染 + 分页 + 搜索"""
     try:
-        from anteumbra.application.threat_graph_service import get_threat_graph
-        graph = get_threat_graph()
+        graph = get_runtime().threat_graph
+        if graph is None:
+            raise RuntimeError("ThreatGraph is not configured")
         all_profiles = graph.get_active_profiles(min_score=0.1)
 
         q = request.args.get('q', '').lower()
@@ -93,8 +95,9 @@ def profiles_list():
 def profiles_data():
     """画像数据 API"""
     try:
-        from anteumbra.application.threat_graph_service import get_threat_graph
-        graph = get_threat_graph()
+        graph = get_runtime().threat_graph
+        if graph is None:
+            raise RuntimeError("ThreatGraph is not configured")
         profiles = graph.get_active_profiles(min_score=0.1)
         result = []
         for p in profiles[:50]:
@@ -125,8 +128,9 @@ def profiles_data():
 def profile_detail_page(profile_id):
     """画像详情（攻击链时间线 + 关联文件 + 关联记录）"""
     try:
-        from anteumbra.application.threat_graph_service import get_threat_graph
-        graph = get_threat_graph()
+        graph = get_runtime().threat_graph
+        if graph is None:
+            raise RuntimeError("ThreatGraph is not configured")
         profile = graph.query_profile(profile_id)
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
@@ -160,9 +164,10 @@ def profile_detail_page(profile_id):
         # File clusters
         file_clusters = []
         try:
-            from anteumbra.application.file_cluster_service import get_file_cluster_engine
             from anteumbra.application.quarantine_service import get_quarantine_list
-            ce = get_file_cluster_engine()
+            ce = get_runtime().file_cluster_engine
+            if ce is None:
+                raise RuntimeError("FileClusterEngine is not configured")
             quarantined_map = {}
             for q in get_quarantine_list(status="quarantined", limit=500):
                 orig = q.get('original_path', '')
@@ -234,8 +239,9 @@ def profile_detail_page(profile_id):
 def profile_report(profile_id):
     """攻击者画像报告（可打印 HTML）"""
     try:
-        from anteumbra.application.threat_graph_service import get_threat_graph
-        graph = get_threat_graph()
+        graph = get_runtime().threat_graph
+        if graph is None:
+            raise RuntimeError("ThreatGraph is not configured")
         profile = graph.query_profile(profile_id)
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
@@ -258,8 +264,9 @@ def profile_report(profile_id):
 def file_clusters_page():
     """文件聚类列表页面"""
     try:
-        from anteumbra.application.file_cluster_service import get_file_cluster_engine
-        engine = get_file_cluster_engine()
+        engine = get_runtime().file_cluster_engine
+        if engine is None:
+            raise RuntimeError("FileClusterEngine is not configured")
         clusters = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)
         enriched = []
         for c in clusters:
@@ -294,8 +301,9 @@ def file_clusters_page():
 def clusters_stats():
     """文件聚类统计 API"""
     try:
-        from anteumbra.application.file_cluster_service import get_file_cluster_engine
-        engine = get_file_cluster_engine()
+        engine = get_runtime().file_cluster_engine
+        if engine is None:
+            raise RuntimeError("FileClusterEngine is not configured")
         stats = engine.get_stats()
         top = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)[:10]
         stats["top_clusters"] = [{

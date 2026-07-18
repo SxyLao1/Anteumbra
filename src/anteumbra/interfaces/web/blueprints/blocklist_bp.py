@@ -13,6 +13,7 @@ from flask import (
 )
 
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,9 @@ def blocklist_add():
 
         if profile_id and not data.get('reason'):
             try:
-                from anteumbra.application.threat_graph_service import get_threat_graph
-                tg = get_threat_graph()
+                tg = get_runtime().threat_graph
+                if tg is None:
+                    raise RuntimeError("ThreatGraph is not configured")
                 profile = tg.query_profile(profile_id)
                 if profile:
                     tool = profile.tool_signature or 'Unknown tool'

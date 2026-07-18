@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 v1.8.3: 文件相似度哈希引擎 — 三轨降级
-
 Track 1: ssdeep (CTPH, best accuracy, needs libfuzzy C library)
 Track 2: py-tlsh (Trend Micro TLSH, pure Python)
 Track 3: Built-in SimHash (zero dependency, always available)
@@ -146,14 +145,3 @@ class HashEngine:
                 return self._simhash.similarity(v1, v2)
         except Exception:
             return 0.0
-
-
-# Singleton
-_engine = None
-
-
-def get_hash_engine() -> HashEngine:
-    global _engine
-    if _engine is None:
-        _engine = HashEngine()
-    return _engine

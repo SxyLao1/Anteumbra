@@ -9,20 +9,68 @@ import sys
 import tempfile
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def isolate_environment(monkeypatch):
+@pytest.fixture(scope="session", autouse=True)
+def isolate_environment(tmp_path_factory):
     """Ensure tests don't touch real data directories.
 
-    Sets ANTEUMBRA_TOOL_MODE=true and redirects data/ to a temp dir.
+    Set tool mode and resolve every relative runtime path below ``tmp_path``.
     """
-    monkeypatch.setenv("ANTEUMBRA_TOOL_MODE", "true")
-    monkeypatch.setenv("PYTEST_CURRENT_TEST", "true")
-    # Prevent accidental imports from old Anteumbra installation
-    monkeypatch.setenv("ANTEUMBRA_HOME", "")
+    runtime_root = tmp_path_factory.mktemp("anteumbra-e2e-runtime")
+    patcher = pytest.MonkeyPatch()
+    patcher.setenv("ANTEUMBRA_TOOL_MODE", "true")
+    patcher.setenv("PYTEST_CURRENT_TEST", "true")
+    patcher.setenv("ANTEUMBRA_HOME", str(runtime_root))
+    patcher.chdir(runtime_root)
+    yield runtime_root
+    patcher.undo()
+
+
+@pytest.fixture
+def hash_engine():
+    """Return an independently owned similarity engine."""
+    from anteumbra.infrastructure.detection.hash_engine import HashEngine
+
+    return HashEngine()
+
+
+@pytest.fixture
+def file_cluster_engine(hash_engine):
+    """Return an independently owned file-clustering engine."""
+    from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
+
+    return FileClusterEngine(hash_engine)
+
+
+@pytest.fixture
+def threat_graph(file_cluster_engine):
+    """Return an independently owned in-memory threat graph."""
+    from anteumbra.infrastructure.threat_graph import ThreatGraph
+
+    return ThreatGraph({}, file_cluster_engine)
+
+
+@pytest.fixture
+def scanner_service(tmp_path):
+    """Return an independently owned fallback scanner pipeline."""
+    import logging
+
+    from anteumbra.infrastructure.detection.scanner import ScannerService
+    from anteumbra.infrastructure.detection.yara_engine import DisabledYaraEngine
+    from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
+
+    config = {
+        "filesizes": {"max_scan_file_size_mb": 10},
+        "paths": {"monitor_extensions": [".php", ".asp", ".aspx", ".jsp", ".jspx"]},
+    }
+    provider = SimpleNamespace(get=lambda: config)
+    yara_engine = DisabledYaraEngine(tmp_path / "rules", logging.getLogger("test.yara"))
+    metrics = MetricsCollector(tmp_path / "metrics.json")
+    return ScannerService(provider, yara_engine, metrics)
 
 
 @pytest.fixture

@@ -21,9 +21,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
-
 from anteumbra.domain.site import SiteIdentity
-from anteumbra.infrastructure.detection.scanner import quick_scan_yara
+from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 
 logger = logging.getLogger("monitor.manual_scanner")
@@ -57,12 +56,19 @@ class ManualScanner:
         app_logger=None,
         site_id: Optional[str] = None,
         site_name: Optional[str] = None,
+        *,
+        config_provider: ConfigProviderPort,
+        scanner_service,
+        metrics: MetricsPort,
     ):
         self.logger = app_logger or logger
         self._known_paths: Set[str] = set()
         self._registry_records: Dict[str, Dict] = {}
         self._site_id = site_id
         self._site_name = site_name
+        self.config_provider = config_provider
+        self.scanner_service = scanner_service
+        self.metrics = metrics
 
     def _build_known_index(self):
         """预加载 Registry 全部记录到内存索引，O(1) 去重查找"""
@@ -137,14 +143,12 @@ class ManualScanner:
         # ── 默认扩展名 ──
         website = None
         try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-
-            identity = ConfigRegistry.resolve_site_identity(
+            identity = self.config_provider.resolve_site_identity(
                 str(target),
                 site_id=site_id or self._site_id,
                 site_name=site_name or self._site_name,
             )
-            website = ConfigRegistry.get_website(identity.site_id)
+            website = self.config_provider.get_website(identity.site_id)
         except Exception:
             identity = SiteIdentity.from_values(
                 site_id or self._site_id,
@@ -161,14 +165,10 @@ class ManualScanner:
             else:
                 extensions = None
         if extensions is None:
-            try:
-                from anteumbra.infrastructure.config.registry import ConfigRegistry
-                cfg = ConfigRegistry.get_raw_config()
-                extensions = cfg.get("paths", {}).get(
-                    "monitor_extensions", [".php", ".asp", ".aspx", ".jsp", ".jspx"]
-                )
-            except Exception:
-                extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+            cfg = self.config_provider.get()
+            extensions = cfg.get("paths", {}).get(
+                "monitor_extensions", [".php", ".asp", ".aspx", ".jsp", ".jspx"]
+            )
 
         # ── 排除目录 ──
         # A manual scan uses the selected site's policy. An unassigned path
@@ -241,13 +241,12 @@ class ManualScanner:
                 is_known = norm_key in self._known_paths
 
                 # ── 扫描 ──
-                scan_result = quick_scan_yara(file_path, scan_options, self.logger)
-                try:
-                    from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-                    get_metrics().increment_site("scan_total", self._site_id)
-                except Exception:
-                    self.logger.debug("Failed to record manual scan site metric", exc_info=True)
+                scan_result = self.scanner_service.scan(
+                    file_path,
+                    scan_options,
+                    self.logger,
+                )
+                self.metrics.increment_site("scan_total", self._site_id)
 
                 if scan_result and scan_result.is_suspicious:
                     scan_result.detection_source = "active"
@@ -347,18 +346,3 @@ class ManualScanner:
                 logger.debug("Final progress callback failed in scan_directory", exc_info=True)
 
         return result
-
-
-# ── 便捷函数 ──
-
-
-def quick_manual_scan(
-    target_dir: str,
-    recursive: bool = True,
-    extensions: Optional[List[str]] = None,
-) -> ManualScanResult:
-    """同步扫描快捷函数（供 CLI / 调试使用）"""
-    scanner = ManualScanner()
-    return scanner.scan_directory(
-        Path(target_dir), recursive=recursive, extensions=extensions
-    )

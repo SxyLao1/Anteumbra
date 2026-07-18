@@ -8,14 +8,10 @@
 Metrics Blueprint：提供健康检查和指标API
 """
 from anteumbra.application.config_service import get_version
-import json
 import logging
 import sys
-import time
 from flask import Blueprint, jsonify
-from pathlib import Path
-from typing import Dict, Any, Optional
-from anteumbra.application.path_service import normalize_path
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +23,11 @@ metrics_bp = Blueprint('metrics', __name__, url_prefix='/api/v1')
 def health_check():
     """Public metrics plus shared runtime health and capability status."""
     try:
-        from anteumbra.application.metrics_service import get_metrics
         from anteumbra.application.runtime_health_service import assess_system_health
 
-        metrics = get_metrics()
+        metrics = get_runtime().metrics
+        if metrics is None:
+            raise RuntimeError("MetricsCollector is not configured")
 
         # 安全获取指标，避免psutil异常
         try:
@@ -68,55 +65,3 @@ def health_check():
             "error": "Internal health check error",
             "version": get_version()
         }), 503
-
-
-class MetricsCollector:
-    """Prometheus风格指标收集器"""
-
-    def __init__(self, data_path: Path = normalize_path("data/metrics.json")):
-        self.data_path = data_path
-        self.data_path.parent.mkdir(parents=True, exist_ok=True)
-        self._stats = {
-            "scan_total": 0,
-            "scan_suspicious": 0,
-            "alert_total": 0,
-            "alert_cooldown_suppressed": 0,
-            "registry_size": 0,
-            "log_lines_processed": 0,
-            "uptime_seconds": 0
-        }
-        self._start_time = time.time()
-        # 微信推送失败计数
-        self._stats["wechat_failures"] = 0
-
-    def record_wechat_failure(self):
-        self._stats["wechat_failures"] += 1
-
-    def record_memory_usage(self):
-        import psutil
-        p = psutil.Process()
-        self._stats["memory_mb"] = p.memory_info().rss / 1024 / 1024
-
-    def increment(self, metric: str, value: int = 1):
-        self._stats[metric] = self._stats.get(metric, 0) + value
-
-    def get(self) -> Dict[str, Any]:
-        self._stats["uptime_seconds"] = time.time() - self._start_time
-        self._stats["registry_size"] = 0
-        return self._stats
-
-    def persist(self):
-        """每分钟持久化"""
-        self.data_path.write_text(json.dumps(self.get(), indent=2), encoding='utf-8')
-
-
-# 全局实例
-_metrics_instance: Optional['MetricsCollector'] = None
-
-
-def get_metrics() -> MetricsCollector:
-    """获取指标收集器单例"""
-    global _metrics_instance
-    if _metrics_instance is None:
-        _metrics_instance = MetricsCollector()
-    return _metrics_instance

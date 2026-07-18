@@ -32,7 +32,7 @@ def test_scanner_honors_custom_extensions(page, server_url, tmp_path, monkeypatc
     target.mkdir()
     (target / "sample.custom").write_text("plain content", encoding="utf-8")
     monkeypatch.setattr(
-        "anteumbra.infrastructure.detection.manual_scanner.quick_scan_yara",
+        "anteumbra.infrastructure.detection.scanner.ScannerService.scan",
         lambda *_args, **_kwargs: None,
     )
 
@@ -76,7 +76,7 @@ def test_cancel_waits_for_backend_and_reaches_stopped_state(
         return None
 
     monkeypatch.setattr(
-        "anteumbra.infrastructure.detection.manual_scanner.quick_scan_yara",
+        "anteumbra.infrastructure.detection.scanner.ScannerService.scan",
         slow_clean_scan,
     )
 

@@ -19,17 +19,13 @@ from flask import (
     Response, current_app, stream_with_context
 )
 
-from anteumbra.application.config_service import (
-    get_enabled_websites,
-    get_runtime_config,
-    resolve_site_identity,
-)
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.blueprints._shared import (
     save_scan_to_disk, load_scans_from_disk,
     _cache_put, _cache_get, _cache_cleanup_stale,
 )
+from anteumbra.interfaces.web.runtime import get_runtime
 
 # ── Blueprint ──────────────────────────────────────────────
 
@@ -49,8 +45,8 @@ _SCAN_JOB_TTL = 3600
 def scanner_page():
     """主动扫描器页面"""
     try:
-        config = get_runtime_config()
-        websites = get_enabled_websites()
+        config = get_runtime().config.get()
+        websites = get_runtime().config.get_enabled_websites()
         default_site = next(iter(websites), None) if len(websites) == 1 else None
         default_dir = str(default_site.path) if default_site else ""
 
@@ -143,12 +139,18 @@ def _run_scan_job(scan_id: str) -> None:
     site_name = job["site_name"]
     progress_queue = job["queue"]
     cancel_flag = job["cancel_flag"]
+    runtime = job["runtime"]
 
     from anteumbra.application.scanner_service import ManualScanner
 
     try:
         scanner = ManualScanner(
-            _scan_logger, site_id=site_id, site_name=site_name
+            _scan_logger,
+            site_id=site_id,
+            site_name=site_name,
+            config_provider=runtime.config,
+            scanner_service=runtime.scanner,
+            metrics=runtime.metrics,
         )
         target = normalize_path(Path(target_dir))
 
@@ -205,8 +207,11 @@ def scanner_run():
     if not target_dir:
         return jsonify({"success": False, "error": "missing target_dir"}), 400
 
+    runtime = get_runtime()
+    if runtime.scanner is None or runtime.metrics is None:
+        return jsonify({"success": False, "error": "scanner runtime is unavailable"}), 503
     try:
-        identity = resolve_site_identity(
+        identity = runtime.config.resolve_site_identity(
             target_dir, site_id=requested_site_id
         )
     except ValueError as exc:
@@ -228,6 +233,7 @@ def scanner_run():
         "thread": None,
         "result": None,
         "error": None,
+        "runtime": runtime,
     }
     thread = threading.Thread(target=_run_scan_job, args=(scan_id,), daemon=True)
     job["thread"] = thread
@@ -345,7 +351,7 @@ def scanner_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
         requested_site_id = request.form.get("site_id") or None
-        identity = resolve_site_identity(
+        identity = get_runtime().config.resolve_site_identity(
             file_path, site_id=requested_site_id
         )
 

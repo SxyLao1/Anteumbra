@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
@@ -149,9 +149,15 @@ def resolve_yara_rules_path(
 class YaraEngine:
     """YARA engine with file-level compile and scan isolation."""
 
-    def __init__(self, rules_path: str | Path, logger: logging.Logger):
+    def __init__(
+        self,
+        rules_path: str | Path,
+        logger: logging.Logger,
+        config_provider: ConfigProviderPort,
+    ):
         self.rules_path = normalize_path(rules_path).resolve()
         self.logger = logger
+        self.config_provider = config_provider
         self.compiled_rules: Optional[CompositeYaraRules] = None
         self.loaded_rule_files: Tuple[str, ...] = ()
         self.load_errors: Dict[str, str] = {}
@@ -233,19 +239,8 @@ class YaraEngine:
         """Reload rule files without exposing a partially compiled ruleset."""
         return self._load_rules()
 
-    @staticmethod
-    def _config() -> Dict[str, Any]:
-        try:
-            return ConfigRegistry.get_raw_config()
-        except RuntimeError:
-            try:
-                ConfigRegistry.initialize()
-                return ConfigRegistry.get_raw_config()
-            except (FileNotFoundError, RuntimeError):
-                return {}
-
     def _scan_timeout(self) -> int | None:
-        config = self._config()
+        config = self.config_provider.get()
         value = config.get("timeouts", {}).get("scan_timeout", 30)
         try:
             parsed = int(value)
@@ -308,7 +303,7 @@ class YaraEngine:
             self.logger.warning("[YARA] File does not exist: %s", file_path)
             return []
 
-        config = self._config()
+        config = self.config_provider.get()
         max_size_mb = config.get("filesizes", {}).get("max_scan_file_size_mb", 10)
         if file_path.stat().st_size > max_size_mb * 1024 * 1024:
             self.logger.warning("[YARA] File is too large; skipping %s", file_path.name)
@@ -372,56 +367,49 @@ class YaraEngine:
             return False, str(exc)
 
 
-_yara_engine: Optional[YaraEngine] = None
+
+class DisabledYaraEngine:
+    """Explicit null object used when YARA scanning is disabled."""
+
+    compiled_rules = None
+    loaded_rule_files: Tuple[str, ...] = ()
+    load_errors: Dict[str, str] = {}
+
+    def __init__(self, rules_path: str | Path, logger: logging.Logger) -> None:
+        self.rules_path = normalize_path(rules_path).resolve()
+        self.logger = logger
+
+    def scan(self, _path: str | Path) -> List[YaraMatch]:
+        return []
+
+    def scan_data(
+        self,
+        _data: bytes | str,
+        source_name: str = "<memory>",
+    ) -> List[YaraMatch]:
+        return []
+
+    def get_rule_stats(self) -> Dict[str, Any]:
+        return {"enabled": False, "loaded_files": 0, "rules": 0}
+
+    def reload(self) -> bool:
+        return False
 
 
-def get_yara_engine(logger: logging.Logger = None) -> YaraEngine:
-    """Return the lazily initialized process-wide YARA engine."""
-    global _yara_engine
-    if logger is None:
-        logger = logging.getLogger("anteumbra.yara_engine")
-        if not logger.handlers:
-            logger.setLevel(logging.INFO)
-            handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("[%(asctime)s] [YARA] %(message)s"))
-            logger.addHandler(handler)
-
-    if _yara_engine is None:
-        try:
-            ConfigRegistry.initialize()
-        except RuntimeError:
-            pass
-
-        config = ConfigRegistry.get_raw_config()
-        yara_cfg = config.get("scanner", {}).get("yara", {})
-        if yara_cfg.get("enabled", False):
-            paths_cfg = config.get("paths", {})
-            configured_path = (
-                yara_cfg.get("rules_path")
-                or paths_cfg.get("yara_rules_path", "rules/webshell")
-            )
-            rules_path = resolve_yara_rules_path(configured_path, logger)
-            _yara_engine = YaraEngine(rules_path, logger)
-        else:
-            class DummyEngine:
-                compiled_rules = None
-                rules_path = normalize_path("rules/webshell").resolve()
-                loaded_rule_files: Tuple[str, ...] = ()
-                load_errors: Dict[str, str] = {}
-
-                def scan(self, path):
-                    return []
-
-                def scan_data(self, data, source_name="<memory>"):
-                    return []
-
-                def get_rule_stats(self):
-                    return {}
-
-                def reload(self):
-                    return False
-
-            _yara_engine = DummyEngine()
-            logger.warning("[YARA] Engine is disabled")
-
-    return _yara_engine
+def build_yara_engine(
+    config_provider: ConfigProviderPort,
+    logger: logging.Logger,
+) -> YaraEngine | DisabledYaraEngine:
+    """Build one YARA engine from an explicit runtime configuration."""
+    config = config_provider.get()
+    yara_config = config.get("scanner", {}).get("yara", {})
+    paths_config = config.get("paths", {})
+    configured_path = (
+        yara_config.get("rules_path")
+        or paths_config.get("yara_rules_path", "rules/webshell")
+    )
+    rules_path = resolve_yara_rules_path(configured_path, logger)
+    if not yara_config.get("enabled", False):
+        logger.warning("[YARA] Engine is disabled")
+        return DisabledYaraEngine(rules_path, logger)
+    return YaraEngine(rules_path, logger, config_provider)

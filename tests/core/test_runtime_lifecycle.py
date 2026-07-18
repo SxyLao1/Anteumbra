@@ -37,26 +37,24 @@ def test_sse_cleanup_leaves_a_disconnect_signal_for_the_generator():
 
 
 def test_metrics_worker_start_is_idempotent_and_stops(tmp_path, monkeypatch):
-    from anteumbra.infrastructure.monitoring import metrics
+    from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
 
-    metrics.stop_metrics(persist=False)
-    collector = metrics.MetricsCollector(tmp_path / "metrics.json")
-    monkeypatch.setattr(metrics, "_metrics_instance", collector)
+    collector = MetricsCollector(tmp_path / "metrics.json")
     monkeypatch.setattr(collector, "record_memory_usage", lambda: None)
     monkeypatch.setattr(collector, "get", lambda: dict(collector._stats))
 
     try:
-        metrics.preload_metrics()
-        first_thread = metrics._metrics_thread
-        metrics.preload_metrics()
+        collector.start()
+        first_thread = collector._worker
+        collector.start()
 
-        assert metrics.is_metrics_running() is True
-        assert metrics._metrics_thread is first_thread
-        assert metrics.stop_metrics() is True
-        assert metrics.is_metrics_running() is False
+        assert collector.is_running is True
+        assert collector._worker is first_thread
+        assert collector.stop() is True
+        assert collector.is_running is False
         assert collector.data_path.exists()
     finally:
-        metrics.stop_metrics(persist=False)
+        collector.stop(persist=False)
 
 
 def test_metrics_reports_total_registry_size(tmp_path, monkeypatch):
@@ -152,7 +150,6 @@ def test_config_registry_parses_per_site_log_configuration(tmp_path):
 
 def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     from anteumbra.application import launcher
-    from anteumbra.infrastructure.monitoring import metrics
     from anteumbra.infrastructure.utils import sse_manager
 
     monkeypatch.chdir(tmp_path)
@@ -169,7 +166,9 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     graph = SimpleNamespace(persist=lambda: calls.append("graph"))
     stop_event = __import__("threading").Event()
     monkeypatch.setattr(sse_manager, "stop_sse_worker", lambda: calls.append("sse"))
-    monkeypatch.setattr(metrics, "stop_metrics", lambda: calls.append("metrics"))
+    container = SimpleNamespace(
+        metrics=SimpleNamespace(stop=lambda: calls.append("metrics")),
+    )
 
     launcher._launcher_state.clear()
     launcher._launcher_state.update({
@@ -184,6 +183,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         "threat_graph": graph,
         "sse_started": True,
         "threads": [],
+        "container": container,
     })
 
     launcher.stop_all()

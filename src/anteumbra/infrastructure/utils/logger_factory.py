@@ -69,43 +69,21 @@ def log_with_symbol(
 
 
 def _load_from_registry(symbol_key: str) -> str:
-    """从ConfigRegistry单例加载符号（带自动修复）"""
+    """Load a configured symbol while the compatibility facade still exists."""
     try:
-        # ============================================================================
-        # 核心修复：确保ConfigRegistry真正就绪
-        # ============================================================================
-        # 检查1：实例存在
-        if ConfigRegistry._instance is None:
-            raise RuntimeError("ConfigRegistry._instance 为 None")
-
-        # 检查2：已初始化标记
-        if not ConfigRegistry._initialized:
-            raise RuntimeError("ConfigRegistry._initialized = False")
-
-        # 检查3：配置对象存在
-        if ConfigRegistry._config is None:
-            raise RuntimeError("ConfigRegistry._config 为 None")
-
-        # 检查4：symbols段存在
-        if "logging" not in ConfigRegistry._config or "symbols" not in ConfigRegistry._config["logging"]:
-            raise RuntimeError("ConfigRegistry._config 结构不完整")
-
-        symbols_cfg = ConfigRegistry._config["logging"]["symbols"]
+        symbols_cfg = ConfigRegistry.get_raw_config().get("logging", {}).get("symbols", {})
 
         if symbol_key in symbols_cfg:
             return symbols_cfg[symbol_key]
-        else:
-            # 符号不存在，记录调试信息
-            if _is_tool_mode():
-                available = list(symbols_cfg.keys())
-                logger.debug(f"[CONFIG REGISTRY] Symbol '{symbol_key}' not found")
-                logger.debug(f"[CONFIG REGISTRY] Available symbols: {available[:10]}")
-            return f"[UNKNOWN][{symbol_key}]"
+        if _is_tool_mode():
+            available = list(symbols_cfg.keys())
+            logger.debug("[CONFIG REGISTRY] Symbol %r not found", symbol_key)
+            logger.debug("[CONFIG REGISTRY] Available symbols: %s", available[:10])
+        return f"[UNKNOWN][{symbol_key}]"
 
-    except Exception as e:
-        # 仅在工具模式打印调试信息（避免生产环境噪音）
+    except (RuntimeError, KeyError, TypeError) as exc:
         if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true":
-            logger.debug(f"[CONFIG REGISTRY] Load failed: {e}")
+            logger.debug("[CONFIG REGISTRY] Load failed: %s", exc)
         return f"[UNKNOWN][{symbol_key}]"
 
 def _load_directly(symbol_key: str) -> str:
@@ -116,7 +94,7 @@ def _load_directly(symbol_key: str) -> str:
             logger.warning(f"[CONFIG DIRECT] config.toml not found: {config_file}")
             return f"[UNKNOWN][{symbol_key}]"
 
-        from config.loader import load_toml_config
+        from anteumbra.infrastructure.config.loader import load_toml_config
         config = load_toml_config(str(config_file))
 
         symbols_cfg = config.get("logging", {}).get("symbols", {})

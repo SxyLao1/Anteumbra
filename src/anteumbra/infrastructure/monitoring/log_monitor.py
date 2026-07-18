@@ -16,28 +16,35 @@ import os
 from pathlib import Path
 from threading import Thread
 from typing import Optional, Dict, List
+from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
 from anteumbra.infrastructure.suspicious_registry import get_all, mark_alerted, increment_access
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.infrastructure.monitoring.notifier import format_alert_message
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-
 
 class LogMonitor:
     """日志监控器（v1.6.6 三层冷却策略）"""
 
-    _active_monitors: List['LogMonitor'] = []
-
-    def __init__(self, logger, analyzer):
+    def __init__(
+        self,
+        logger,
+        analyzer,
+        *,
+        config_provider: ConfigProviderPort,
+        notifier,
+    ):
         self.logger = logger
         self.analyzer = analyzer
+        self.config_provider = config_provider
+        self.notifier = notifier
         self.website = analyzer.website
         self.site_id = analyzer.website.site_id
         self._is_running = False
         self._thread: Optional[Thread] = None
 
         # v1.7.0重构：从配置读取三层冷却配置
-        config = ConfigRegistry.get_raw_config()
+        config = config_provider.get()
         log_monitor_cfg = config.get("thresholds", {})  # 复用thresholds段
 
         self._initial_cooldown = log_monitor_cfg.get("initial_alert_cooldown_seconds", 60.0)
@@ -50,9 +57,6 @@ class LogMonitor:
 
         self._last_size = 0
         self._last_log_scan_complete = True
-
-        # v1.7.4新增：注册活跃实例
-        LogMonitor._active_monitors.append(self)
 
     def start(self):
         """启动监控（修复状态初始化）"""
@@ -82,10 +86,6 @@ class LogMonitor:
             self._thread.join(timeout=2.0)
 
         log_with_symbol("log_monitor_stop", "info", f"停止监控", self.logger)
-
-        # v1.7.4新增：从活跃实例列表移除
-        if self in LogMonitor._active_monitors:
-            LogMonitor._active_monitors.remove(self)
 
     @property
     def is_running(self) -> bool:
@@ -228,7 +228,7 @@ class LogMonitor:
             (alert_level: str, should_alert: bool)
         """
         # 配置参数（从config.toml读取）
-        config = ConfigRegistry.get_raw_config()
+        config = self.config_provider.get()
         thresholds_cfg = config.get("thresholds", {})
 
         # 基础参数
@@ -429,13 +429,10 @@ class LogMonitor:
             # v1.8.4: 异步发送（使用统一消息构建器）
             def _send_async():
                 try:
-                    from anteumbra.infrastructure.monitoring.notifier import get_notifier, format_alert_message
-                    notifier = get_notifier(self.logger)
                     # 读取系统状态（隔离/封禁开关）
                     sys_status = {"auto_quarantine_enabled": True, "auto_block_enabled": False, "block_device_count": 0}
                     try:
-                        from anteumbra.infrastructure.config.registry import ConfigRegistry
-                        cfg = ConfigRegistry.get_raw_config()
+                        cfg = self.config_provider.get()
                         sys_status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
                         blocker_cfg = cfg.get("ip_blocker", {})
                         sys_status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
@@ -454,7 +451,7 @@ class LogMonitor:
                     }
                     ctx.update(sys_status)
                     message = format_alert_message(ctx)
-                    notifier.send_alert(
+                    self.notifier.send_alert(
                         message,
                         level=alert_level,
                         site_id=self.site_id,
@@ -466,25 +463,3 @@ class LogMonitor:
 
         except Exception as e:
             self.logger.error(f"[ALERT] 触发严重错误: {e}", exc_info=True)
-
-    # v1.7.4新增：类方法，用于热加载后更新所有实例的log_path
-    @classmethod
-    def update_all_analyzer_paths(cls):
-        """热加载后更新所有LogAnalyzer的log_path"""
-        logger = logging.getLogger("monitor.log_monitor")
-        log_with_symbol("notice", "info",
-                        f"正在更新 {len(cls._active_monitors)} 个LogMonitor实例的log_path", logger)
-
-        for monitor in cls._active_monitors:
-            if hasattr(monitor, 'analyzer') and hasattr(monitor.analyzer, 'get_configured_path'):
-                old_path = monitor.analyzer.log_path
-                new_path = monitor.analyzer.get_configured_path()
-
-                if new_path != old_path:
-                    monitor.analyzer.log_path = new_path
-                    log_with_symbol("success", "info",
-                                    f"LogMonitor路径更新: {old_path.name if old_path else 'None'} -> {new_path.name if new_path else 'None'}",
-                                    logger)
-                else:
-                    log_with_symbol("debug_scan", "debug",
-                                    f"LogMonitor路径未变化: {old_path}", logger)

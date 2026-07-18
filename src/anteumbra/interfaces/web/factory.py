@@ -12,25 +12,17 @@ import os
 import secrets
 import time
 from datetime import timedelta
+from pathlib import Path
 
 from flask import Flask, request, session, jsonify
-from typing import Optional
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
-from anteumbra.application.config_service import (
-    get_config_path,
-    get_runtime_config,
-    initialize_config,
-    reload_config,
-)
+from anteumbra.application.runtime_container import RuntimeContainer
+from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.application.path_service import normalize_path
 from flask_wtf.csrf import generate_csrf
 
 logger = logging.getLogger(__name__)
-
-# 全局应用实例
-_app_instance: Optional[Flask] = None
-
 
 def _session_cookie_secure(web_admin_config: dict) -> bool:
     """Use secure sessions automatically when an HTTPS proxy is configured."""
@@ -49,17 +41,12 @@ def _trusted_proxy_hops(web_admin_config: dict) -> int:
         return 1
 
 
-def _ensure_password_configured():
+def _ensure_password_configured(config_provider: ConfigProviderPort) -> None:
     """Ensure first-run admin and session secrets exist in the deployment .env."""
-    from pathlib import Path as _Path
-
-    cfg_path = get_config_path()
-    if cfg_path is None or not cfg_path.exists():
-        logger.debug("Config path unknown, skipping password auto-setup")
-        return
+    cfg_path = config_provider.path
     root = cfg_path.parent
 
-    cfg = get_runtime_config()
+    cfg = config_provider.get()
     pw_hash = cfg.get("web_admin", {}).get("password_hash", "")
     secret_key = cfg.get("security", {}).get("secret_key", "")
     env_file = root / ".env"
@@ -93,7 +80,7 @@ def _ensure_password_configured():
         set_key(str(env_file), key, value, quote_mode="auto")
         os.environ[key] = value
 
-    reload_config(str(cfg_path))
+    config_provider.reload()
 
     if generated_password:
         print(f"\n{'=' * 60}")
@@ -104,31 +91,34 @@ def _ensure_password_configured():
         print(f"{'=' * 60}\n")
 
 
-def create_app(config_path: str = None, *, plugin_manager=None) -> Flask:
+def create_app(
+    config_path: str | None = None,
+    *,
+    runtime: RuntimeContainer | None = None,
+    plugin_manager=None,
+) -> Flask:
     """创建Flask应用实例
 
     Args:
         config_path: config.toml 路径。None 时自动探测（CWD > 源码树 > 父目录）。
     """
-    global _app_instance
+    if runtime is None:
+        from anteumbra.application.launcher import build_runtime_container
 
-    if _app_instance is not None:
-        return _app_instance
-
-    # v1.0.9 fix: 确保配置已初始化（run.py 会先调，但 CLI 直接调 create_app 时不会）
-    # 优先使用 CWD 的 config.toml（部署环境），其次源码树内（开发环境）
-    if config_path:
-        initialize_config(config_path)
+        runtime = build_runtime_container(
+            config_path,
+            plugin_manager=plugin_manager,
+        )
     else:
-        from pathlib import Path as _Path
-        cwd_config = _Path.cwd() / "config.toml"
-        if cwd_config.exists():
-            initialize_config(str(cwd_config))
-        else:
-            initialize_config()
+        if config_path is not None and Path(config_path).resolve() != runtime.config.path:
+            raise ValueError("config_path conflicts with the supplied RuntimeContainer")
+        if plugin_manager is not None:
+            if runtime.plugin_manager not in (None, plugin_manager):
+                raise ValueError("plugin_manager conflicts with the supplied RuntimeContainer")
+            runtime.plugin_manager = plugin_manager
 
-    # v1.0.9: 首次运行 — 密码为空则自动生成随机密码写入 .env
-    _ensure_password_configured()
+    _ensure_password_configured(runtime.config)
+    resolved_config = runtime.config.get()
 
     # 先静默werkzeug横幅
     from anteumbra.application.logging_service import silence_werkzeug
@@ -136,8 +126,9 @@ def create_app(config_path: str = None, *, plugin_manager=None) -> Flask:
 
     # 创建主应用
     app = Flask(__name__)
-    app.extensions["anteumbra.plugin_manager"] = plugin_manager
-    web_admin_config = get_runtime_config().get("web_admin", {})
+    app.extensions["anteumbra.runtime"] = runtime
+    app.extensions["anteumbra.plugin_manager"] = runtime.plugin_manager
+    web_admin_config = resolved_config.get("web_admin", {})
     from anteumbra.interfaces.web.proxy import TrustedProxyFix
 
     app.wsgi_app = TrustedProxyFix(
@@ -192,7 +183,7 @@ def create_app(config_path: str = None, *, plugin_manager=None) -> Flask:
             'anteumbra_version': get_version(),
             'anteumbra_release_date': get_release_date(),
         }
-    security_config = get_runtime_config().get("security", {})
+    security_config = resolved_config.get("security", {})
     configured_secret = str(security_config.get("secret_key", "")).strip()
     if not configured_secret:
         configured_secret = os.environ.get("ANTEUMBRA_SECRET_KEY", "").strip()
@@ -288,16 +279,7 @@ def create_app(config_path: str = None, *, plugin_manager=None) -> Flask:
     def inject_csrf():
         return dict(csrf_token=generate_csrf)
 
-    _app_instance = app
     return app
-
-
-def get_app() -> Flask:
-    """获取已创建的应用实例"""
-    global _app_instance
-    if _app_instance is None:
-        raise RuntimeError("Flask app not initialized. Call create_app() first.")
-    return _app_instance
 
 
 class WaitressRuntimeServer:

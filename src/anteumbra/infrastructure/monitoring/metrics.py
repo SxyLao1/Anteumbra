@@ -73,6 +73,9 @@ class MetricsCollector:
         }
         self._start_time = time.time()
         self._site_stats: Dict[str, Dict[str, Any]] = {}
+        self._worker: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._lifecycle_lock = threading.Lock()
         # 微信推送失败计数
         self._stats["wechat_failures"] = 0
 
@@ -250,11 +253,59 @@ class MetricsCollector:
             except Exception as e:
                 logging.getLogger("monitor.metrics").warning(f"[METRICS] 加载失败: {e}")
 
-# 全局实例
+    def start(self) -> None:
+        """Load persisted state and start this collector's persistence worker."""
+        with self._lifecycle_lock:
+            if self._worker is not None and self._worker.is_alive():
+                return
+            try:
+                self.record_memory_usage()
+            except Exception:
+                logging.getLogger("monitor.metrics").debug(
+                    "Initial memory sample failed",
+                    exc_info=True,
+                )
+            self.load_persisted()
+            self.get()
+            self._stop_event.clear()
+            self._worker = threading.Thread(
+                target=self._persistence_worker,
+                daemon=True,
+                name="MetricsPersistence",
+            )
+            self._worker.start()
+
+    def _persistence_worker(self) -> None:
+        logger = logging.getLogger("monitor.metrics")
+        while not self._stop_event.wait(60.0):
+            try:
+                self.persist()
+            except Exception:
+                logger.exception("[METRICS][PERSIST] Failed")
+
+    def stop(self, timeout: float = 2.0, persist: bool = True) -> bool:
+        """Stop this collector's worker and optionally persist a final sample."""
+        with self._lifecycle_lock:
+            worker = self._worker
+            self._stop_event.set()
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(timeout=timeout)
+        stopped = worker is None or not worker.is_alive()
+        if persist:
+            self.persist()
+        with self._lifecycle_lock:
+            if self._worker is worker and stopped:
+                self._worker = None
+        return stopped
+
+    @property
+    def is_running(self) -> bool:
+        """Return whether this collector's persistence worker is alive."""
+        with self._lifecycle_lock:
+            return bool(self._worker and self._worker.is_alive())
+
+# Temporary compatibility instance. Runtime code uses RuntimeContainer.metrics.
 _metrics_instance: Optional[MetricsCollector] = None
-_metrics_thread: Optional[threading.Thread] = None
-_metrics_stop_event = threading.Event()
-_metrics_lifecycle_lock = threading.Lock()
 
 
 def get_metrics() -> MetricsCollector:
@@ -264,74 +315,18 @@ def get_metrics() -> MetricsCollector:
         _metrics_instance = MetricsCollector()
     return _metrics_instance
 
-def preload_metrics():
-    """启动时预热metrics，避免首次访问延迟"""
-    global _metrics_thread
-    try:
-        with _metrics_lifecycle_lock:
-            if _metrics_thread is not None and _metrics_thread.is_alive():
-                return
-
-            metrics = get_metrics()
-            metrics.record_memory_usage()
-            metrics.load_persisted()
-            metrics.get()
-
-            logger = logging.getLogger("monitor.metrics")
-            logger.info(
-                "[METRICS][LOAD] Historical data loaded: scan_total=%s",
-                metrics._stats["scan_total"],
-            )
-
-            _metrics_stop_event.clear()
-
-            def _persistence_worker():
-                while not _metrics_stop_event.wait(60.0):
-                    try:
-                        metrics.persist()
-                        logger.debug("[METRICS][PERSIST] Metrics saved")
-                    except Exception as e:
-                        logger.error("[METRICS][PERSIST] Failed: %s", e, exc_info=True)
-
-            _metrics_thread = threading.Thread(
-                target=_persistence_worker,
-                daemon=True,
-                name="MetricsPersistence",
-            )
-            _metrics_thread.start()
-            logger.info("[METRICS][PERSIST] Persistence worker started")
-
-    except Exception as e:
-        logging.getLogger("monitor.metrics").warning(f"[METRICS] Preload failed: {e}")
+def preload_metrics() -> None:
+    """Compatibility wrapper for callers not yet holding the collector."""
+    get_metrics().start()
 
 
 def stop_metrics(timeout: float = 2.0, persist: bool = True) -> bool:
-    """Stop the metrics persistence worker, optionally saving one final sample."""
-    global _metrics_thread
-
-    with _metrics_lifecycle_lock:
-        thread = _metrics_thread
-        _metrics_stop_event.set()
-
-    if thread is not None and thread is not threading.current_thread():
-        thread.join(timeout=timeout)
-    stopped = thread is None or not thread.is_alive()
-
-    if persist and _metrics_instance is not None:
-        try:
-            _metrics_instance.persist()
-        except Exception:
-            logging.getLogger("monitor.metrics").exception(
-                "[METRICS][PERSIST] Final persistence failed"
-            )
-
-    with _metrics_lifecycle_lock:
-        if _metrics_thread is thread and stopped:
-            _metrics_thread = None
-    return stopped
+    """Compatibility wrapper for callers not yet holding the collector."""
+    if _metrics_instance is None:
+        return True
+    return _metrics_instance.stop(timeout=timeout, persist=persist)
 
 
 def is_metrics_running() -> bool:
-    """Return whether the persistence worker is alive."""
-    with _metrics_lifecycle_lock:
-        return bool(_metrics_thread and _metrics_thread.is_alive())
+    """Compatibility wrapper for callers not yet holding the collector."""
+    return bool(_metrics_instance and _metrics_instance.is_running)

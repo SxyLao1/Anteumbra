@@ -5,11 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from anteumbra.application.metrics_service import get_metrics
 from anteumbra.application.quarantine_service import get_quarantine_stats
 from anteumbra.application.registry_service import get_all
 from anteumbra.domain.site import SiteIdentity
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 
 
 def _recent_events(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -33,7 +31,12 @@ def _protection_rate(quarantined: int, total: int) -> float:
     return round((min(quarantined, total) / total * 100), 1) if total else 0.0
 
 
-def build_dashboard_summary(site_id: Optional[str] = None) -> dict[str, Any]:
+def build_dashboard_summary(
+    site_id: Optional[str] = None,
+    *,
+    metrics,
+    websites,
+) -> dict[str, Any]:
     """Return aggregate and per-site dashboard data without a UI site selector."""
     normalized_site_id = str(site_id).strip().lower() if site_id else None
     records = get_all(
@@ -42,11 +45,11 @@ def build_dashboard_summary(site_id: Optional[str] = None) -> dict[str, Any]:
         site_id=normalized_site_id,
     )
     quarantine_stats = get_quarantine_stats(site_id=normalized_site_id)
-    metric_sites = get_metrics().get().get("sites", {})
+    metric_sites = metrics.get().get("sites", {})
 
     identities = {
         site.site_id: SiteIdentity(site.site_id, site.name)
-        for site in ConfigRegistry.get_enabled_websites()
+        for site in websites
     }
     for record in records:
         identity = SiteIdentity.from_values(

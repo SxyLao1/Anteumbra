@@ -26,18 +26,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter, get_formatter
+from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter
 
 logger = logging.getLogger(__name__)
-
-_siem_lock = threading.Lock()
-
 
 class SIEMExporter:
     """SIEM export engine — file and/or syslog output."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self._config = config or {}
+        self._lock = threading.Lock()
         self._enabled = self._config.get("enabled", False)
         if not self._enabled:
             return
@@ -50,7 +48,7 @@ class SIEMExporter:
         self._syslog_port = int(self._config.get("syslog_port", 514))
         self._syslog_protocol = self._config.get("syslog_protocol", "udp")
 
-        self._formatter = get_formatter(self._config)
+        self._formatter = SIEMFormatter(self._config)
         self._sock: Optional[socket.socket] = None
         self._total_exported = 0
 
@@ -83,7 +81,7 @@ class SIEMExporter:
             return None
         try:
             line = self._formatter.format_event(raw_event)
-            with _siem_lock:
+            with self._lock:
                 # File output
                 self._write_file(line)
                 self._total_exported += 1
@@ -107,11 +105,8 @@ class SIEMExporter:
         return count
 
     def _write_file(self, line: str) -> None:
-        try:
-            with open(self._export_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except Exception as e:
-            logger.error("SIEMExporter: file write failed: %s", e)
+        with open(self._export_path, "a", encoding="utf-8") as file_handle:
+            file_handle.write(line + "\n")
 
     def _send_syslog(self, line: str) -> None:
         if not self._sock:
@@ -149,6 +144,24 @@ class SIEMExporter:
             "syslog_active": self._sock is not None,
             "file_size_mb": round(self._export_path.stat().st_size / 1024 / 1024, 2) if self._export_path.exists() else 0,
         }
+    @property
+    def export_path(self) -> Path:
+        """Return the configured file export path."""
+        return self._export_path
+
+    @property
+    def format(self) -> str:
+        """Return the active output format."""
+        return self._format
+
+    def set_format(self, output_format: str) -> None:
+        """Switch to a supported format through a validated public API."""
+        normalized = str(output_format).strip().lower()
+        if normalized not in {"json", "json_lines", "cef", "syslog"}:
+            raise ValueError(f"Unsupported SIEM format: {output_format}")
+        self._format = normalized
+        self._config = {**self._config, "format": normalized}
+        self._formatter = SIEMFormatter(self._config)
 
     def export_existing(self, records: List[Dict], category: str = "webshell.detected") -> int:
         """Export existing detection records as SIEM events."""
@@ -203,26 +216,3 @@ class SIEMExporter:
             except Exception:
                 logger.debug("Failed to close syslog socket during exporter shutdown", exc_info=True)
             self._sock = None
-
-
-# ── Singleton ──────────────────────────────────────────
-
-_exporter: Optional[SIEMExporter] = None
-_exporter_lock = threading.Lock()
-
-
-def get_siem_exporter() -> SIEMExporter:
-    """Get or create singleton SIEM exporter from config (thread-safe)."""
-    global _exporter
-    if _exporter is None:
-        with _exporter_lock:
-            if _exporter is None:
-                from anteumbra.infrastructure.config.registry import ConfigRegistry
-                cfg = ConfigRegistry.get_raw_config().get("siem", {})
-                _exporter = SIEMExporter(cfg)
-    return _exporter
-
-
-def emit_detection_event(record: Dict[str, Any], category: str = "webshell.detected") -> Optional[str]:
-    """Hook: emit SIEM event when a new detection record is added."""
-    return get_siem_exporter().emit_detection(record, category)

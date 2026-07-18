@@ -21,39 +21,20 @@ from anteumbra.infrastructure.utils.path_utils import path_to_key
 
 
 @pytest.fixture(autouse=True)
-def clean_registry(monkeypatch):
-    """Reset registry state before each test.
-
-    v1.1.0: Force JSON-only backend to avoid SQLite leak from previous runs.
-    _repo_load_registry() reads from SQLite when backend='both', which would
-    pick up stale records from E2E tests. We monkey-patch it to return None
-    so the registry falls through to the isolated JSON file.
-    """
+def clean_registry(monkeypatch, tmp_path):
+    """Own an isolated JSON registry for every test."""
     from anteumbra.infrastructure import suspicious_registry as sr
 
-    # Force JSON-only mode (bypass SQLite which has stale data from other tests)
+    registry_path = tmp_path / "test_registry.json"
+    monkeypatch.setattr(sr, "_REGISTRY_PATH", registry_path)
+    monkeypatch.setattr(sr, "_REGISTRY_BACKUP_PATH", registry_path.with_suffix(".json.bak"))
+    monkeypatch.setattr(sr, "_ensure_initialized", lambda: None)
+    monkeypatch.setattr(sr, "_async_save_enabled", False)
+    monkeypatch.setattr(sr, "_async_save_queue", None)
     monkeypatch.setattr(sr, "_repo_load_registry", lambda: None)
     monkeypatch.setattr(sr, "_repo_shadow_save", lambda data: None)
-
-    # Force _ensure_initialized to set the test-isolated path BEFORE cleanup.
-    # _force_init_at_import() sets _REGISTRY_PATH to the production path at
-    # module load; _ensure_initialized() overrides it to the test temp path.
-    sr._ensure_initialized()
-
-    # Now clean the test-isolated files
     sr._clear_memory_cache()
-    rp = sr._REGISTRY_PATH
-    if rp and rp.exists():
-        rp.unlink()
-    bak = rp.with_suffix(".json.bak") if rp else None
-    if bak and bak.exists():
-        bak.unlink()
     yield
-    # Teardown: clean test data
-    if rp and rp.exists():
-        rp.unlink()
-    if bak and bak.exists():
-        bak.unlink()
 
 
 @pytest.fixture
@@ -360,7 +341,7 @@ class TestCompactRegistry:
     def test_compact_returns_stats(self):
         from anteumbra.infrastructure.suspicious_registry import compact_registry
 
-        stats = compact_registry()
+        stats = compact_registry({})
         assert "total" in stats
         assert "cleaned" in stats
         assert "remaining" in stats

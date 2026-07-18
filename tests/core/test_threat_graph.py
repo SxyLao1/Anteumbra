@@ -14,10 +14,19 @@ from unittest.mock import patch
 
 import pytest
 
-from anteumbra.infrastructure.threat_graph import ThreatGraph, get_threat_graph
+from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
+from anteumbra.infrastructure.detection.hash_engine import HashEngine
+from anteumbra.infrastructure.threat_graph import ThreatGraph
 
 
 # ── Fixtures ──────────────────────────────────────────────────
+
+
+def _new_graph() -> ThreatGraph:
+    return ThreatGraph(
+        {"storage": {"backend": "json"}},
+        FileClusterEngine(HashEngine()),
+    )
 
 
 @pytest.fixture
@@ -29,7 +38,7 @@ def graph(monkeypatch):
         cfg_reg.ConfigRegistry, "get_raw_config",
         lambda: {"storage": {"backend": "json"}},
     )
-    tg = ThreatGraph()
+    tg = _new_graph()
     tg._profiles = {}
     tg._ip_table = {}
     tg._file_table = {}
@@ -375,7 +384,7 @@ class TestPersistLoad:
         assert persist_path.exists()
 
         # Load into a new graph
-        tg2 = ThreatGraph()
+        tg2 = _new_graph()
         tg2.set_persist_path(str(persist_path))
         tg2.load()
         assert len(tg2._profiles) == len(graph._profiles)
@@ -395,7 +404,7 @@ class TestPersistLoad:
 
         monkeypatch.setattr(persistence, "get_shadow_repository", unexpected_shadow_read)
 
-        recovered = ThreatGraph()
+        recovered = _new_graph()
         recovered.set_persist_path(str(persist_path))
         recovered.load()
 
@@ -414,20 +423,21 @@ class TestPersistLoad:
         assert len(graph._profiles) == 0
 
 
-# ── Singleton ─────────────────────────────────────────────────
+# ── Runtime ownership ─────────────────────────────────────────
 
 
-class TestGetThreatGraph:
-    """Test get_threat_graph() singleton factory."""
+class TestThreatGraphOwnership:
+    """Threat graphs are independently owned runtime resources."""
 
-    def test_get_threat_graph_returns_instance(self):
-        tg = get_threat_graph()
+    def test_constructor_returns_instance(self):
+        tg = _new_graph()
         assert isinstance(tg, ThreatGraph)
 
-    def test_get_threat_graph_is_singleton(self):
-        tg1 = get_threat_graph()
-        tg2 = get_threat_graph()
-        assert tg1 is tg2
+    def test_instances_do_not_share_mutable_state(self):
+        first = _new_graph()
+        second = _new_graph()
+        first._profiles["test"] = object()
+        assert second._profiles == {}
 
 
 # ── Edge Cases ────────────────────────────────────────────────

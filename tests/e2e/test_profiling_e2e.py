@@ -20,18 +20,9 @@ import pytest
 class TestMockWAFFullChain:
     """Feed WAF events and verify full profile generation pipeline."""
 
-    @pytest.fixture(autouse=True)
-    def reset_threat_graph(self, monkeypatch):
-        """Reset ThreatGraph singleton before each test."""
-        from anteumbra.infrastructure import threat_graph as tg
-        monkeypatch.setattr(tg, "_graph", None)
-        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
-
-    def test_waf_events_create_profile(self, waf_events_file, reset_threat_graph):
+    def test_waf_events_create_profile(self, waf_events_file, threat_graph):
         """Feed WAF events and verify at least one attacker profile is created."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
             for line in f:
                 if line.strip():
@@ -41,11 +32,9 @@ class TestMockWAFFullChain:
         profiles = graph.get_active_profiles()
         assert len(profiles) >= 1, f"Expected >= 1 profile, got {len(profiles)}"
 
-    def test_profile_aggregates_multiple_events(self, waf_events_file, reset_threat_graph):
+    def test_profile_aggregates_multiple_events(self, waf_events_file, threat_graph):
         """Multiple events from same UA should aggregate into one profile."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         feed_count = 0
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
             for line in f:
@@ -67,11 +56,9 @@ class TestMockWAFFullChain:
             for profile in sqlmap_profiles
         ), "Same SQLMap fingerprint in one time window must aggregate both IPs"
 
-    def test_profile_has_risk_score(self, waf_events_file, reset_threat_graph):
+    def test_profile_has_risk_score(self, waf_events_file, threat_graph):
         """Profile should have a risk_score after ingesting events."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
             for line in f:
                 if line.strip():
@@ -87,17 +74,9 @@ class TestMockWAFFullChain:
 class TestProxyPoolClustering:
     """100 IPs using same tool → 1 profile (after merge)."""
 
-    @pytest.fixture(autouse=True)
-    def reset_threat_graph(self, monkeypatch):
-        from anteumbra.infrastructure import threat_graph as tg
-        monkeypatch.setattr(tg, "_graph", None)
-        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
-
-    def test_proxy_pool_100_ip_to_1_profile(self, reset_threat_graph):
+    def test_proxy_pool_100_ip_to_1_profile(self, threat_graph):
         """100 different IPs with same UA should merge into one profile."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         base_ts = datetime.now().isoformat()
         ua = "AntSword/2.1.15"
         url = "/uploads/shell.php"
@@ -135,7 +114,7 @@ class TestProxyPoolClustering:
 class TestFileClustering:
     """50 webshell files → 1 file cluster."""
 
-    def test_red_team_50_files_to_1_cluster(self, tmp_path, reset_threat_graph=None):
+    def test_red_team_50_files_to_1_cluster(self, tmp_path):
         """50 similar PHP webshells should cluster together via fuzzy hash."""
         try:
             import ppdeep
@@ -251,18 +230,9 @@ class TestFileClustering:
 class TestDecayFormula:
     """24h/half decay formula verification."""
 
-    @pytest.fixture(autouse=True)
-    def reset_threat_graph(self, monkeypatch):
-        from anteumbra.infrastructure import threat_graph as tg
-        monkeypatch.setattr(tg, "_graph", None)
-        # Prevent load() from restoring persisted profiles from disk
-        monkeypatch.setattr(tg.ThreatGraph, 'load', lambda self: None)
-
-    def test_decay_24h_reduces_score_by_half(self, reset_threat_graph):
+    def test_decay_24h_reduces_score_by_half(self, threat_graph):
         """After 24h inactivity, profile risk_score should be raw_score * 0.5."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         now = datetime.now()
 
         # Ingest event to create a profile
@@ -294,11 +264,9 @@ class TestDecayFormula:
             f"Expected risk_score ≈ {expected_score}, got {p.risk_score}"
         )
 
-    def test_decay_72h_sets_dormant(self, reset_threat_graph):
+    def test_decay_72h_sets_dormant(self, threat_graph):
         """After 72h inactivity, profile should be marked dormant with score * 0.1."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         now = datetime.now()
 
         evt = {
@@ -324,11 +292,9 @@ class TestDecayFormula:
             f"Expected risk_score ≈ {expected_score}, got {p.risk_score}"
         )
 
-    def test_decay_168h_expires(self, reset_threat_graph):
+    def test_decay_168h_expires(self, threat_graph):
         """After 7 days, profile should be marked expired."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
         now = datetime.now()
 
         evt = {

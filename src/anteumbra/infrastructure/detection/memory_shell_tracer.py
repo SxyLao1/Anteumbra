@@ -232,13 +232,9 @@ def trace_memory_shell(ip: str, detection_time: Optional[datetime] = None,
     return MemoryShellTracer().trace(ip, detection_time, log_paths=log_paths)
 
 
-def emit_critical_alert(trace_result: Dict) -> bool:
+def emit_critical_alert(trace_result: Dict, *, notifier, siem_exporter) -> bool:
     """Emit a CRITICAL alert for a confirmed memory shell detection."""
     try:
-        from anteumbra.infrastructure.monitoring.notifier import get_notifier
-        import logging as _logging
-        notifier = get_notifier(_logging.getLogger("monitor.notifier"))
-
         matched = trace_result.get("matched")
         title = "MEMORY SHELL: "
         if matched:
@@ -271,8 +267,7 @@ def emit_critical_alert(trace_result: Dict) -> bool:
 
         # Emit to SIEM
         try:
-            from anteumbra.infrastructure.monitoring.siem_exporter import emit_detection_event
-            emit_detection_event({
+            siem_exporter.emit_detection({
                 "id": "memshell-" + trace_result["ip"],
                 "detected_at": trace_result["time"],
                 "file_path": matched.get("fp", "") if matched else "",

@@ -1154,13 +1154,13 @@ def is_suspicious(path: Path, site_id: Optional[str] = None) -> bool:
     """检查是否在清单中"""
     return get(path, site_id=site_id) is not None
 
-def compact_registry():
+def compact_registry(runtime_config: Optional[Dict] = None):
     """压缩注册表"""
     _ensure_initialized()
     try:
         _init_paths()
 
-        config = ConfigRegistry.get_raw_config()
+        config = runtime_config if runtime_config is not None else ConfigRegistry.get_raw_config()
         filesizes_cfg = config.get("filesizes", {})
         compact_days = filesizes_cfg.get("registry_compact_days", 30)
 
@@ -1318,70 +1318,6 @@ def clear_memory_cache():
 
 # 优雅关闭注册
 atexit.register(_shutdown_async_saver)
-
-
-def _force_init_at_import():
-    """在模块导入时强制初始化（修复None问题）- v1.7.6-Patch2"""
-    global _REGISTRY_PATH, _REGISTRY_BACKUP_PATH
-
-    # 如果已经初始化且不为None，跳过
-    if _REGISTRY_PATH is not None:
-        return
-
-    logger = logging.getLogger("monitor.suspicious_registry")
-    logger.debug("[REGISTRY] 强制初始化开始...")
-
-    # ============================================
-    # 核心修复：处理 ConfigRegistry 未就绪的情况
-    # ============================================
-    try:
-        # 尝试从配置读取
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
-
-        # 确保ConfigRegistry已初始化（带重试）
-        for attempt in range(3):
-            try:
-                if not ConfigRegistry._initialized:
-                    ConfigRegistry.initialize()
-                config = ConfigRegistry.get_raw_config()
-                paths = config.get("paths", {})
-                data_dir = normalize_path(paths.get("data_dir", "data"))
-                break
-            except Exception as e:
-                logger.warning(f"[REGISTRY] 配置读取尝试{attempt + 1}/3失败: {e}")
-                if attempt == 2:
-                    raise
-                time.sleep(0.1)
-    except Exception as e:
-        # 配置未就绪，使用硬编码默认值（避免None）
-        logger.warning(
-            f"[REGISTRY] 配置初始化失败: {e}，使用硬编码默认值"
-        )
-        data_dir = normalize_path("data")
-
-    # 确保目录存在
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    # 设置全局路径（确保不是None）
-    _REGISTRY_PATH = data_dir / "suspicious_registry.json"
-    _REGISTRY_BACKUP_PATH = _REGISTRY_PATH.with_suffix('.json.bak')
-
-    # ============================================
-    # 核心修复：验证路径对象创建成功
-    # ============================================
-    if _REGISTRY_PATH is None:
-        logger.critical("[REGISTRY] 致命错误: _REGISTRY_PATH 初始化失败为 None")
-        raise RuntimeError("_REGISTRY_PATH 初始化失败")
-
-    logger.debug(
-        f"[REGISTRY] 初始化完成:"
-        f"\n  - Registry: {_REGISTRY_PATH}"
-        f"\n  - Backup: {_REGISTRY_BACKUP_PATH}"
-    )
-
-# v1.0.9: defer path initialization to _ensure_initialized() (called lazily
-# by all public functions). Import-time side effects were breaking test isolation
-# and causing ConfigRegistry dependency before app bootstrap.
 
 
 # 辅助函数：避免在函数内重复写logger

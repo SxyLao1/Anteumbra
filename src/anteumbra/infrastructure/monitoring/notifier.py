@@ -23,8 +23,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from datetime import datetime
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.monitoring.metrics import get_metrics
+from anteumbra.domain.runtime import MetricsPort
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 _notifier_logger = logging.getLogger(__name__)
@@ -67,9 +66,15 @@ def _sanitize_log_text(value: object) -> str:
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
 
-    def __init__(self, config: Dict[str, Any], logger: logging.Logger):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        logger: logging.Logger,
+        metrics: MetricsPort,
+    ):
         self.config = config
         self.logger = logger
+        self.metrics = metrics
         self.requested_enabled = bool(config.get("enabled", False))
         self.enabled = False
         self._wechat_failure_count = 0
@@ -249,7 +254,7 @@ class Notifier:
         - 溢出：立即持久化到磁盘
         - 异常：双保险持久化
         """
-        metrics = get_metrics()
+        metrics = self.metrics
         metrics.increment("alert_total", site_id=site_id)
         if not self.enabled:
             metrics.record_notification(
@@ -448,7 +453,7 @@ class Notifier:
             level: 告警级别 INFO/WARNING/CRITICAL
             analysis: 可选的日志分析结果
         """
-        metrics = get_metrics()
+        metrics = self.metrics
         if not _already_counted:
             metrics.increment("alert_total", site_id=site_id)
         if not self.enabled:
@@ -726,11 +731,14 @@ _notifier_instance: Optional[Notifier] = None
 
 
 def get_notifier(logger: logging.Logger) -> Notifier:
-    """获取通知器单例"""
+    """Compatibility factory for callers not yet wired by RuntimeContainer."""
     global _notifier_instance
     if _notifier_instance is None:
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
         config = ConfigRegistry.get_raw_config().get("notifier", {})
-        _notifier_instance = Notifier(config, logger)
+        _notifier_instance = Notifier(config, logger, get_metrics())
     return _notifier_instance
 
 def reset_notifier():

@@ -54,6 +54,9 @@ class SuspiciousRegistryAdapter:
 class MetricsAdapter:
     """Adapt the process metrics singleton to the injected metrics port."""
 
+    def __init__(self, metrics) -> None:
+        self._metrics = metrics
+
     def increment(
         self,
         metric: str,
@@ -61,15 +64,11 @@ class MetricsAdapter:
         *,
         site_id: str | None = None,
     ) -> None:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-        get_metrics().increment(metric, value, site_id=site_id)
+        self._metrics.increment(metric, value, site_id=site_id)
 
     def increment_site(self, metric: str, site_id: str, value: int = 1) -> None:
         """Record site-only data for legacy producers that already increment totals."""
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-        get_metrics().increment_site(metric, site_id, value)
+        self._metrics.increment_site(metric, site_id, value)
 
 
 class NullEventPublisher:
@@ -83,10 +82,12 @@ def build_compatibility_runtime_services(
     config: Mapping[str, Any], websites: Iterable[object]
 ) -> RuntimeServices:
     """Build minimal infrastructure-only services for legacy direct construction."""
+    from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
     context = RuntimeContext.from_websites(config, list(websites))
     return RuntimeServices(
         context=context,
         registry=SuspiciousRegistryAdapter(NullEventPublisher()),
-        metrics=MetricsAdapter(),
+        metrics=MetricsAdapter(get_metrics()),
         events=NullEventPublisher(),
     )

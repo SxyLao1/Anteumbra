@@ -198,22 +198,11 @@ class SIEMFormatter:
 # Convenience functions (module-level API)
 # ============================================================================
 
-_formatter: Optional[SIEMFormatter] = None
-
-
-def get_formatter(config: Optional[Dict[str, Any]] = None) -> SIEMFormatter:
-    """Get or create singleton formatter instance."""
-    global _formatter
-    if _formatter is None or config is not None:
-        _formatter = SIEMFormatter(config)
-    return _formatter
-
-
 def format_event(event: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> str:
     """One-shot event formatting."""
-    return get_formatter(config).format_event(event)
+    return SIEMFormatter(config).format_event(event)
 
 
 def format_batch(events: List[Dict[str, Any]], config: Optional[Dict[str, Any]] = None) -> str:
     """One-shot batch formatting."""
-    return get_formatter(config).format_batch(events)
+    return SIEMFormatter(config).format_batch(events)

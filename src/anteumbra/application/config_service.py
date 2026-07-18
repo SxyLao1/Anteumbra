@@ -35,7 +35,10 @@ def get_runtime_config() -> dict[str, Any]:
 
 def get_config_path() -> Path | None:
     """Return the active config.toml path without exposing registry internals."""
-    return Path(ConfigRegistry._config_path) if ConfigRegistry._config_path else None
+    try:
+        return ConfigRegistry.get_config_path()
+    except RuntimeError:
+        return None
 
 
 def get_websites():

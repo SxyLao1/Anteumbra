@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 v1.8.3: 文件相似度聚类引擎
-
 基于 ssdeep/py-tlsh/SimHash 哈希，将相似文件归入同一簇。
 阈值 > 0.80 归为同一文件簇（代表同一工具生成的变种）。
 """
@@ -12,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from anteumbra.infrastructure.detection.hash_engine import HashEngine, get_hash_engine
+from anteumbra.infrastructure.detection.hash_engine import HashEngine
 
 logger = logging.getLogger("monitor.file_cluster")
 
@@ -20,8 +19,9 @@ logger = logging.getLogger("monitor.file_cluster")
 class FileCluster:
     """文件簇——一组相似度高的文件"""
 
-    def __init__(self, cluster_id: str):
+    def __init__(self, cluster_id: str, hash_engine: HashEngine):
         self.cluster_id = cluster_id
+        self.hash_engine = hash_engine
         self.files: Dict[str, str] = {}  # {file_path: hash_value}
         self.representative_hash: str = ""  # 簇的代表哈希（第一个文件）
         self.created_at = datetime.now()
@@ -34,8 +34,7 @@ class FileCluster:
             self.files[file_path] = hash_value
             return True
 
-        engine = get_hash_engine()
-        sim = engine.compare(self.representative_hash, hash_value)
+        sim = self.hash_engine.compare(self.representative_hash, hash_value)
 
         # v2.0: 小文件兜底 — CTPH 对小文件( < 4KB )基本无效
         if sim < 0.80:
@@ -76,8 +75,8 @@ class FileCluster:
 class FileClusterEngine:
     """文件聚类引擎"""
 
-    def __init__(self, engine: Optional[HashEngine] = None):
-        self.hash_engine = engine or get_hash_engine()
+    def __init__(self, engine: HashEngine):
+        self.hash_engine = engine
         self._clusters: Dict[str, FileCluster] = {}  # cluster_id -> FileCluster
         self._file_index: Dict[str, str] = {}  # file_path -> cluster_id
 
@@ -99,7 +98,7 @@ class FileClusterEngine:
 
         # Create new cluster
         cid = hashlib.sha256(hash_value.encode()).hexdigest()[:12]
-        cluster = FileCluster(cid)
+        cluster = FileCluster(cid, self.hash_engine)
         cluster.add_file(file_path, hash_value)
         self._clusters[cid] = cluster
         self._file_index[file_path] = cid
@@ -132,15 +131,3 @@ class FileClusterEngine:
             "avg_files_per_cluster": round(total_files / max(len(self._clusters), 1), 1),
             "active_track": self.hash_engine.track_name,
         }
-
-
-# Singleton
-_cluster_engine: Optional[FileClusterEngine] = None
-
-
-def get_file_cluster_engine() -> FileClusterEngine:
-    global _cluster_engine
-    if _cluster_engine is None:
-        _cluster_engine = FileClusterEngine()
-        logger.info(f"[CLUSTER] Engine initialized: track={_cluster_engine.hash_engine.track_name}")
-    return _cluster_engine

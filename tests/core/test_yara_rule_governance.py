@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yara
@@ -18,7 +19,12 @@ RULES_DIR = (
 
 @pytest.fixture(scope="module")
 def engine():
-    return YaraEngine(RULES_DIR, logging.getLogger("test.yara.governance"))
+    provider = SimpleNamespace(get=lambda: {"timeouts": {"scan_timeout": 30}})
+    return YaraEngine(
+        RULES_DIR,
+        logging.getLogger("test.yara.governance"),
+        provider,
+    )
 
 
 def _rule_names(engine, data):

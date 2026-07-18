@@ -24,9 +24,6 @@ import pytest
 @pytest.fixture(scope="module")
 def _app():
     """Create the Flask app once per test module."""
-    import anteumbra.interfaces.web.factory as _factory
-    _factory._app_instance = None
-
     os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
     from anteumbra.interfaces.web.factory import create_app
@@ -612,7 +609,7 @@ class TestPentestRegressions:
                 self.findings = []
 
         class DummyScanner:
-            def __init__(self, logger, site_id=None, site_name=None):
+            def __init__(self, logger, site_id=None, site_name=None, **_dependencies):
                 self.logger = logger
                 self.site_id = site_id
                 self.site_name = site_name

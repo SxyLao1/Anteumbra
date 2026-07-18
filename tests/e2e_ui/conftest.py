@@ -75,10 +75,6 @@ def server_url(monkeypatch, tmp_path):
     project_root = Path(__file__).resolve().parent.parent.parent
     sys.path.insert(0, str(project_root))
 
-    # Reset singleton
-    import anteumbra.interfaces.web.factory as factory_mod
-    factory_mod._app_instance = None
-
     from anteumbra.infrastructure import quarantine as quarantine_mod
     quarantine_mod._quarantine_dir = None
     quarantine_mod._quarantine_db = None
@@ -120,7 +116,6 @@ def server_url(monkeypatch, tmp_path):
     server_thread.join(timeout=5.0)
     server.server_close()
     auth_mod.get_admin_credentials = original_get_creds
-    factory_mod._app_instance = None
     quarantine_mod._quarantine_dir = None
     quarantine_mod._quarantine_db = None
 

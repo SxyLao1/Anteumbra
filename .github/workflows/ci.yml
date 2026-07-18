@@ -54,7 +54,6 @@ jobs:
         run: |
           python -m pytest tests/ \
             --ignore=tests/e2e_ui \
-            --ignore=tests/e2e_test.py \
             -v \
             --tb=short \
             -p no:warnings

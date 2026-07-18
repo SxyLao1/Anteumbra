@@ -10,17 +10,19 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.config_service import (
-    get_config_path,
-    get_runtime_config,
-    load_config,
-    reload_config,
-)
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/admin')
+
+
+def _siem_exporter():
+    exporter = get_runtime().siem_exporter
+    if exporter is None:
+        raise RuntimeError("SIEMExporter is not configured")
+    return exporter
 
 
 @settings_bp.route('/settings')
@@ -39,7 +41,7 @@ def settings_page():
 def settings_notifications():
     """v1.8.0: Web Config Panel -- notification config form"""
     try:
-        cfg = load_config()
+        cfg = get_runtime().config.get()
         notifier = cfg.get('notifier', {})
         email = notifier.get('email', {})
         wechat = notifier.get('wechat', {})
@@ -56,7 +58,7 @@ def settings_notifications():
 def settings_config_editor():
     """v1.8.0: Dynamic config.toml editor -- server-side struct parsing, template rendering"""
     try:
-        config_path = get_config_path()
+        config_path = get_runtime().config.path
         sections = {}
         current_section = None
         pending_desc = None
@@ -131,8 +133,8 @@ def settings_config_save():
         changes = data.get('changes', {})
         if not changes:
             return jsonify({'success': False, 'error': 'No changes'}), 400
-        config_path = get_config_path()
-        raw = get_runtime_config()
+        config_path = get_runtime().config.path
+        raw = get_runtime().config.get()
         for full_key, new_val in changes.items():
             parts = full_key.split('.')
             target = raw
@@ -167,7 +169,7 @@ def settings_config_save():
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(tomli_w.dumps(raw))
         try:
-            reload_config()
+            get_runtime().config.reload()
         except Exception:
             logger.debug("Runtime config reload failed after config save", exc_info=True)
         return jsonify({'success': True, 'message': 'Config saved'})
@@ -181,7 +183,7 @@ def settings_config_save():
 def settings_config_data():
     """v1.8.0: Return config.toml structured data + comment descriptions"""
     try:
-        config_path = get_config_path()
+        config_path = get_runtime().config.path
         sections = {}
         current_section = None
         pending_desc = None
@@ -235,7 +237,7 @@ def settings_env_save():
     try:
         data = request.get_json()
         vars_data = data.get('vars', {})
-        config_path = get_config_path()
+        config_path = get_runtime().config.path
         env_path = os.path.join(os.path.dirname(config_path), '.env')
 
         existing = {}
@@ -260,7 +262,7 @@ def settings_env_save():
             if v:
                 os.environ[k] = v
         try:
-            reload_config()
+            get_runtime().config.reload()
         except Exception:
             logger.debug("Runtime config reload failed after .env save", exc_info=True)
 
@@ -298,7 +300,7 @@ def settings_notifications_save():
         if section not in ('email', 'wechat', 'webhook') or key not in ('enabled',):
             return jsonify({"error": "Invalid parameters"}), 400
 
-        config_path = get_config_path()
+        config_path = get_runtime().config.path
         with open(config_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
@@ -333,18 +335,17 @@ def siem_export():
     """Export detection records as SIEM-formatted events (JSON Lines / CEF)."""
     fmt = request.args.get('format', '')
     try:
-        from anteumbra.application.siem_service import get_siem_exporter
         from anteumbra.application.registry_service import get_all
-        exporter = get_siem_exporter()
+        exporter = _siem_exporter()
         if fmt:
-            exporter._format = fmt
+            exporter.set_format(fmt)
         records = get_all(include_deleted=False)
         count = exporter.export_existing(records)
-        export_path = exporter._export_path
+        export_path = exporter.export_path
         return jsonify({
             "success": True,
             "exported": count,
-            "format": exporter._format,
+            "format": exporter.format,
             "file": str(export_path),
             "size_bytes": export_path.stat().st_size if export_path.exists() else 0,
         })
@@ -358,8 +359,7 @@ def siem_export():
 def siem_stats():
     """Get SIEM exporter statistics."""
     try:
-        from anteumbra.application.siem_service import get_siem_exporter
-        return jsonify(get_siem_exporter().get_stats())
+        return jsonify(_siem_exporter().get_stats())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -371,8 +371,7 @@ def siem_stats():
 def settings_siem_status():
     """SIEM export status panel for Settings page."""
     try:
-        from anteumbra.application.siem_service import get_siem_exporter
-        e = get_siem_exporter()
+        e = _siem_exporter()
         s = e.get_stats()
         export_path = Path(s["export_file"])
         has_data = export_path.exists() and export_path.stat().st_size > 0
@@ -390,7 +389,7 @@ def settings_siem_status():
 def settings_storage_status():
     """Storage backend status panel for Settings page."""
     try:
-        cfg = get_runtime_config().get("storage", {})
+        cfg = get_runtime().config.get().get("storage", {})
         backend = cfg.get("backend", "json")
         db_path = cfg.get("db_path", "data/anteumbra.db")
         db = Path(db_path)

@@ -18,19 +18,9 @@ import pytest
 class TestWAFProfiling:
     """Feed WAF events and verify attacker profiles are generated."""
 
-    @pytest.fixture(autouse=True)
-    def reset_threat_graph(self, monkeypatch):
-        """Isolate ThreatGraph by resetting its singleton."""
-        from anteumbra.infrastructure import threat_graph as tg
-
-        # Reset singleton
-        monkeypatch.setattr(tg, "_graph", None)
-
-    def test_feed_events_creates_profiles(self, waf_events_file, reset_threat_graph):
+    def test_feed_events_creates_profiles(self, waf_events_file, threat_graph):
         """Feed WAF events and verify profiles are created for each attacker IP."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
 
         # Feed all events
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
@@ -55,11 +45,9 @@ class TestWAFProfiling:
             f"10.99.99.1 (SQLMap attacker) should have a profile, got IPs: {all_ips}"
         )
 
-    def test_sqlmap_attacker_has_high_risk(self, waf_events_file, reset_threat_graph):
+    def test_sqlmap_attacker_has_high_risk(self, waf_events_file, threat_graph):
         """Verify the SQLMap attacker (4 high-score events) gets a high risk score."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
 
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
             for line in f:
@@ -85,11 +73,9 @@ class TestWAFProfiling:
             f"UA fingerprint should contain 'sqlmap', got: {sqlmap.ua_fingerprint}"
         )
 
-    def test_antsword_attacker_has_target_files(self, waf_events_file, reset_threat_graph):
+    def test_antsword_attacker_has_target_files(self, waf_events_file, threat_graph):
         """Verify AntSword attacker profile includes the uploaded webshell paths."""
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
 
         with open(str(waf_events_file), 'r', encoding='utf-8') as f:
             for line in f:
@@ -111,15 +97,13 @@ class TestWAFProfiling:
             f"UA fingerprint should contain 'antsword', got: {ant.ua_fingerprint}"
         )
 
-    def test_ingest_registry_entry_links_to_profile(self, waf_events_file, reset_threat_graph):
+    def test_ingest_registry_entry_links_to_profile(self, waf_events_file, threat_graph):
         """Verify that feeding a registry entry links to an existing IP profile.
 
         The registry entry's first_seen_ip must first have a profile created
         via WAF events, then the registry entry will link to it.
         """
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        graph = get_threat_graph()
+        graph = threat_graph
 
         # First, create an IP reputation entry by feeding a WAF event
         waf_event = {

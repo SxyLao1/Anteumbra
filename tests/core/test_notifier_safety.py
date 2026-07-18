@@ -20,6 +20,9 @@ class FakeMetrics:
         self.outcomes.append((status, error))
         self.site_outcomes.append((status, error, site_id))
 
+    def record_wechat_failure(self, *, site_id=None):
+        self.increment("wechat_failures", site_id=site_id)
+
 
 def test_incomplete_enabled_channels_never_attempt_network(tmp_path, monkeypatch):
     from anteumbra.infrastructure.monitoring import notifier as notifier_module
@@ -32,7 +35,6 @@ def test_incomplete_enabled_channels_never_attempt_network(tmp_path, monkeypatch
         lambda *_args, **_kwargs: smtp_calls.append(True),
     )
     metrics = FakeMetrics()
-    monkeypatch.setattr(notifier_module, "get_metrics", lambda: metrics)
 
     notifier = notifier_module.Notifier(
         {
@@ -48,6 +50,7 @@ def test_incomplete_enabled_channels_never_attempt_network(tmp_path, monkeypatch
             "wechat": {"enabled": True, "send_key": ""},
         },
         logging.getLogger("test.notifier.incomplete"),
+        metrics,
     )
 
     assert notifier.enabled is False
@@ -65,9 +68,8 @@ def test_notification_metrics_keep_the_originating_site(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     metrics = FakeMetrics()
-    monkeypatch.setattr(notifier_module, "get_metrics", lambda: metrics)
     notifier = notifier_module.Notifier(
-        {"enabled": False}, logging.getLogger("test.notifier.site-metrics")
+        {"enabled": False}, logging.getLogger("test.notifier.site-metrics"), metrics
     )
 
     assert notifier._safe_notify("detected", site_id="alpha") is False
@@ -83,8 +85,9 @@ def test_notification_batch_never_combines_sites(tmp_path, monkeypatch):
     from anteumbra.infrastructure.monitoring import notifier as notifier_module
 
     monkeypatch.chdir(tmp_path)
+    metrics = FakeMetrics()
     notifier = notifier_module.Notifier(
-        {"enabled": False}, logging.getLogger("test.notifier.site-batch")
+        {"enabled": False}, logging.getLogger("test.notifier.site-batch"), metrics
     )
     sent = []
     monkeypatch.setattr(
@@ -111,7 +114,6 @@ def test_successful_email_updates_notification_metrics(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     metrics = FakeMetrics()
-    monkeypatch.setattr(notifier_module, "get_metrics", lambda: metrics)
 
     class FakeSmtp:
         def __init__(self, *_args, **_kwargs):
@@ -143,6 +145,7 @@ def test_successful_email_updates_notification_metrics(tmp_path, monkeypatch):
             },
         },
         logging.getLogger("test.notifier.email"),
+        metrics,
     )
 
     try:

@@ -20,7 +20,7 @@ import pytest
 class TestFullChain:
     """Verify the complete security operations pipeline end-to-end."""
 
-    def test_full_chain_waf_to_block_ledger(self, tmp_path, monkeypatch):
+    def test_full_chain_waf_to_block_ledger(self, tmp_path, monkeypatch, threat_graph):
         """
         Complete pipeline SOP verification:
 
@@ -32,7 +32,6 @@ class TestFullChain:
 
         Each step verifies intermediate state.
         """
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
         from anteumbra.infrastructure.block_ledger import add_entry, get_entries, get_by_ip
 
         # ── Setup: temp data directories ──────────────────────
@@ -46,7 +45,7 @@ class TestFullChain:
         (www_dir / "uploads").mkdir()
 
         # ── Step 1: Feed mock WAF events ──────────────────────
-        graph = get_threat_graph()
+        graph = threat_graph
         graph.set_persist_path(str(data_dir / "threat_intel" / "threat_graph.json"))
 
         attacker_ip = "192.168.99.66"

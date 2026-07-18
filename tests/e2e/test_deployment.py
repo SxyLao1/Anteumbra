@@ -29,11 +29,8 @@ from click.testing import CliRunner
 def _app():
     """Create the Flask app once per test module.
 
-    Resets the singleton so each module gets a fresh instance.
+    Each factory call creates an independent Flask application.
     """
-    import anteumbra.interfaces.web.factory as _factory
-    _factory._app_instance = None
-
     # Ensure ANTEUMBRA_TOOL_MODE is set so we don't touch real data
     os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
@@ -745,15 +742,20 @@ class TestCliInstall:
     def test_launcher_handles_missing_website_path_without_traceback(self, tmp_path, monkeypatch, capsys):
         """Bad user config should fail cleanly before starting background services."""
         from anteumbra.application import launcher
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
 
         missing = tmp_path / "missing-site"
         website = SimpleNamespace(name="Missing Site", path=missing)
+        provider = SimpleNamespace(
+            get=lambda: {},
+            get_enabled_websites=lambda: [website],
+        )
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(ConfigRegistry, "initialize", classmethod(lambda cls: None))
-        monkeypatch.setattr(ConfigRegistry, "get_enabled_websites", classmethod(lambda cls: [website]))
-        monkeypatch.setattr(ConfigRegistry, "get_raw_config", classmethod(lambda cls: {}))
+        monkeypatch.setattr(
+            launcher,
+            "build_runtime_container",
+            lambda: SimpleNamespace(config=provider),
+        )
 
         launcher.start_all(host="127.0.0.1", port=8765)
 
@@ -989,7 +991,7 @@ class TestProcessLifecycle:
                  "--host", "127.0.0.1", "--port", str(test_port),
                  "--no-debugger", "--no-reload"],
                 env=env,
-                cwd=str(project_root),
+                cwd=str(tmp_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -1032,7 +1034,7 @@ class TestProcessLifecycle:
              "--host", "127.0.0.1", "--port", str(test_port),
              "--no-debugger", "--no-reload"],
             env=env,
-            cwd=str(project_root),
+            cwd=str(tmp_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

@@ -7,6 +7,7 @@ from anteumbra.domain.event_source import EventSource, PollableEventSource, Stre
 from anteumbra.domain.waf_source import WAFEvent, WAFEventSource
 from anteumbra.domain.site import SiteIdentity, SiteResolver, SiteRoot, derive_site_id
 from anteumbra.domain.runtime import (
+    ConfigProviderPort,
     DetectionRegistryPort,
     EventPublisherPort,
     MetricsPort,
@@ -22,6 +23,6 @@ __all__ = [
     "EventSource", "PollableEventSource", "StreamEventSource",
     "WAFEvent", "WAFEventSource",
     "SiteIdentity", "SiteResolver", "SiteRoot", "derive_site_id",
-    "DetectionRegistryPort", "EventPublisherPort", "MetricsPort",
+    "ConfigProviderPort", "DetectionRegistryPort", "EventPublisherPort", "MetricsPort",
     "RuntimeContext", "RuntimeServices",
 ]

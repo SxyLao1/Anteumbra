@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
+from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
 
@@ -17,16 +18,62 @@ _launcher_state: dict[str, Any] = {}
 _state_lock = threading.RLock()
 
 
+def build_runtime_container(
+    config_path: str | Path | None = None,
+    *,
+    plugin_manager: Any | None = None,
+) -> RuntimeContainer:
+    """Build one runtime container at the process composition root."""
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
+    from anteumbra.infrastructure.config.registry import ConfigRegistry
+    from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
+    from anteumbra.infrastructure.detection.hash_engine import HashEngine
+    from anteumbra.infrastructure.detection.scanner import ScannerService
+    from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
+    from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
+    from anteumbra.infrastructure.monitoring.notifier import Notifier
+    from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
+    from anteumbra.infrastructure.threat_graph import ThreatGraph
+    from anteumbra.infrastructure.utils.logger_factory import get_logger
+    from anteumbra.infrastructure.utils.path_utils import normalize_path
+
+    provider = TomlConfigProvider(config_path)
+    ConfigRegistry.bind(provider)
+    config = provider.get()
+    data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
+    metrics = MetricsCollector(data_dir / "metrics.json")
+    notifier = Notifier(config.get("notifier", {}), get_logger("monitor.notifier"), metrics)
+    siem_exporter = SIEMExporter(config.get("siem", {}))
+    hash_engine = HashEngine()
+    file_cluster_engine = FileClusterEngine(hash_engine)
+    threat_graph = ThreatGraph(config, file_cluster_engine)
+    threat_graph.set_persist_path(data_dir / "threat_intel" / "threat_graph.json")
+    threat_graph.load()
+    yara_engine = build_yara_engine(provider, get_logger("yara"))
+    scanner = ScannerService(provider, yara_engine, metrics)
+    return RuntimeContainer(
+        config=provider,
+        plugin_manager=plugin_manager,
+        metrics=metrics,
+        notifier=notifier,
+        siem_exporter=siem_exporter,
+        hash_engine=hash_engine,
+        file_cluster_engine=file_cluster_engine,
+        threat_graph=threat_graph,
+        yara_engine=yara_engine,
+        scanner=scanner,
+    )
+
+
 def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     """Start all runtime components and block until interrupted."""
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
     from anteumbra.infrastructure.config.version import get_version
     from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.infrastructure.utils.path_utils import normalize_path
 
-    ConfigRegistry.initialize()
-    config = ConfigRegistry.get_raw_config()
-    websites = ConfigRegistry.get_enabled_websites()
+    container = build_runtime_container()
+    config = container.config.get()
+    websites = container.config.get_enabled_websites()
     if not websites:
         print("[FATAL] No enabled websites in config.toml")
         return
@@ -60,6 +107,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             "monitors": [],
             "log_monitors": [],
             "threads": [],
+            "container": container,
         })
 
     print(f"Anteumbra v{get_version()} - Web Perimeter Security")
@@ -71,7 +119,15 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     print("-" * 50)
 
     try:
-        plugin_manager = _start_plugins(config, warnings)
+        plugin_manager = _start_plugins(
+            config,
+            warnings,
+            container.metrics,
+            container.notifier,
+            container.siem_exporter,
+            container.threat_graph,
+        )
+        container.plugin_manager = plugin_manager
 
         from anteumbra.application.runtime_adapters import build_runtime_services
 
@@ -79,17 +135,22 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             config,
             websites,
             event_publisher=plugin_manager,
+            metrics=container.metrics,
         )
 
         from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
-        app = create_app(plugin_manager=plugin_manager)
+        app = create_app(runtime=container)
         web_server = create_runtime_server(app, host, port)
         _launcher_state["web_server"] = web_server
 
         _migrate_site_metadata(warnings)
         monitors, log_monitors, site_warnings = _start_site_monitors(
-            websites, runtime_services=runtime_services
+            websites,
+            runtime_services=runtime_services,
+            config_provider=container.config,
+            notifier=container.notifier,
+            scan_callback=container.scanner.scan,
         )
         warnings.extend(site_warnings)
         _launcher_state["monitors"] = monitors
@@ -99,9 +160,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
 
         _start_waf_poller(warnings)
 
-        from anteumbra.infrastructure.threat_graph import get_threat_graph
-
-        threat_graph = get_threat_graph()
+        threat_graph = container.threat_graph
         _launcher_state["threat_graph"] = threat_graph
         print("[OK] ThreatGraph initialized")
         profile_threads = _start_profile_workers(
@@ -112,8 +171,8 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         _launcher_state["threads"].extend(profile_threads)
 
         _start_sse(warnings)
-        _start_metrics(warnings)
-        _start_siem(warnings)
+        _start_metrics(container.metrics, warnings)
+        _start_siem(container.siem_exporter, warnings)
 
         web_thread = threading.Thread(
             target=web_server.serve_forever,
@@ -179,6 +238,8 @@ def _start_site_monitors(
     scan_callback: Callable[..., Any] | None = None,
     analyzer_factory: Callable[..., Any] | None = None,
     log_monitor_factory: Callable[..., Any] | None = None,
+    config_provider: Any | None = None,
+    notifier: Any | None = None,
 ) -> tuple[list[Any], list[Any], list[str]]:
     if monitor_factory is None:
         from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
@@ -189,9 +250,7 @@ def _start_site_monitors(
 
         logger_factory = get_logger
     if scan_callback is None:
-        from anteumbra.infrastructure.detection.scanner import quick_scan_yara
-
-        scan_callback = quick_scan_yara
+        raise ValueError("scan_callback must be supplied by the composition root")
     if analyzer_factory is None:
         from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
 
@@ -233,7 +292,15 @@ def _start_site_monitors(
             continue
         try:
             analyzer = analyzer_factory(website, site_logger)
-            log_monitor = log_monitor_factory(site_logger, analyzer)
+            if config_provider is None or notifier is None:
+                log_monitor = log_monitor_factory(site_logger, analyzer)
+            else:
+                log_monitor = log_monitor_factory(
+                    site_logger,
+                    analyzer,
+                    config_provider=config_provider,
+                    notifier=notifier,
+                )
             log_monitor.start()
             if getattr(log_monitor, "is_running", True):
                 log_monitors.append(log_monitor)
@@ -286,17 +353,27 @@ def _start_profile_workers(threat_graph, runtime_logger, stop_event) -> list[thr
     return threads
 
 
-def _start_plugins(config: dict[str, Any], warnings: list[str]):
+def _start_plugins(
+    config: dict[str, Any],
+    warnings: list[str],
+    metrics,
+    notifier,
+    siem_exporter,
+    threat_graph,
+):
     try:
         from anteumbra.application.plugin_manager import PluginManager
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-        metrics = get_metrics()
         manager = PluginManager(
             metric_recorder=lambda name: metrics.increment(name),
         )
         manager.set_plugin_factories(
-            _build_builtin_plugin_factories(config, manager)
+            _build_builtin_plugin_factories(
+                config,
+                manager,
+                notifier,
+                siem_exporter,
+                threat_graph,
+            )
         )
         manager.init_from_config(config)
         _launcher_state["plugin_manager"] = manager
@@ -316,17 +393,14 @@ def _start_plugins(config: dict[str, Any], warnings: list[str]):
 def _build_builtin_plugin_factories(
     config: dict[str, Any],
     event_publisher,
+    notifier,
+    siem_exporter,
+    threat_graph,
 ) -> dict[str, Callable[[], Any]]:
     """Wire official plugins without allowing them to locate runtime services."""
     from anteumbra.application.quarantine_service import quarantine_registered_file
-    from anteumbra.infrastructure.monitoring.notifier import (
-        format_alert_message,
-        get_notifier,
-    )
-    from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
+    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.infrastructure.quarantine import is_recently_restored
-    from anteumbra.infrastructure.threat_graph import get_threat_graph
-    from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.plugins.notifier_handler import NotifierHandlerPlugin
     from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
@@ -334,7 +408,7 @@ def _build_builtin_plugin_factories(
 
     return {
         "notifier_handler": lambda: NotifierHandlerPlugin(
-            get_notifier(get_logger("monitor.notifier")),
+            notifier,
             format_alert_message,
             config,
         ),
@@ -344,9 +418,9 @@ def _build_builtin_plugin_factories(
             events=event_publisher,
             runtime_config=config,
         ),
-        "siem_handler": lambda: SIEMHandlerPlugin(get_siem_exporter()),
+        "siem_handler": lambda: SIEMHandlerPlugin(siem_exporter),
         "threat_graph_handler": lambda: ThreatGraphHandlerPlugin(
-            get_threat_graph(),
+            threat_graph,
             event_publisher,
         ),
     }
@@ -377,23 +451,18 @@ def _start_sse(warnings: list[str]) -> None:
         warnings.append(f"SSE worker failed: {exc}")
 
 
-def _start_metrics(warnings: list[str]) -> None:
+def _start_metrics(metrics, warnings: list[str]) -> None:
     try:
-        from anteumbra.infrastructure.monitoring.metrics import preload_metrics
-
-        preload_metrics()
+        metrics.start()
     except Exception as exc:
         logger.exception("Metrics startup failed")
         warnings.append(f"Metrics failed: {exc}")
 
 
-def _start_siem(warnings: list[str]) -> None:
+def _start_siem(exporter, warnings: list[str]) -> None:
     try:
-        from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
-
-        exporter = get_siem_exporter()
-        if exporter.enabled:
-            print(f"[OK] SIEM export: {exporter._format} -> {exporter._export_path}")
+        if exporter is not None and exporter.enabled:
+            print(f"[OK] SIEM export: {exporter.format} -> {exporter.export_path}")
     except Exception as exc:
         logger.exception("SIEM startup failed")
         warnings.append(f"SIEM exporter failed: {exc}")
@@ -446,6 +515,15 @@ def stop_all() -> None:
     if manager:
         _stop_resource("plugin manager", manager.shutdown)
 
+    container = state.get("container")
+    notifier = getattr(container, "notifier", None)
+    if notifier:
+        _stop_resource("notifier", notifier.shutdown)
+
+    siem_exporter = getattr(container, "siem_exporter", None)
+    if siem_exporter:
+        _stop_resource("SIEM exporter", siem_exporter.close)
+
     if state.get("sse_started"):
         try:
             from anteumbra.infrastructure.utils.sse_manager import stop_sse_worker
@@ -454,12 +532,9 @@ def stop_all() -> None:
         except ImportError:
             logger.exception("SSE shutdown import failed")
 
-    try:
-        from anteumbra.infrastructure.monitoring.metrics import stop_metrics
-
-        _stop_resource("metrics", stop_metrics)
-    except ImportError:
-        logger.exception("Metrics shutdown import failed")
+    metrics = getattr(container, "metrics", None)
+    if metrics:
+        _stop_resource("metrics", metrics.stop)
 
     threat_graph = state.get("threat_graph")
     if threat_graph:

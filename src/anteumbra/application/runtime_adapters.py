@@ -13,12 +13,13 @@ def build_runtime_services(
     websites: Iterable[object],
     *,
     event_publisher: EventPublisherPort,
+    metrics,
 ) -> RuntimeServices:
     """Build explicitly wired services for the normal application runtime."""
     context = RuntimeContext.from_websites(config, list(websites))
     return RuntimeServices(
         context=context,
         registry=SuspiciousRegistryAdapter(event_publisher),
-        metrics=MetricsAdapter(),
+        metrics=MetricsAdapter(metrics),
         events=event_publisher,
     )

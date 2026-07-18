@@ -15,8 +15,8 @@ from anteumbra.application.quarantine_service import (
     get_quarantine_list, get_quarantine_detail, get_quarantine_stats,
     restore_file, delete_quarantine
 )
-from anteumbra.application.config_service import get_runtime_config
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.runtime import get_runtime
 
 quarantine_bp = Blueprint('quarantine', __name__, url_prefix='/admin')
 
@@ -46,7 +46,7 @@ def quarantine_list():
         except (ValueError, TypeError):
             page = 1
 
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         all_records = get_quarantine_list(
@@ -131,7 +131,7 @@ def quarantine_detail():
 
 def _render_quarantine_list(status=None, site_id=None):
     """v1.7.9: 渲染隔离列表片段，供 restore/delete 后刷新用"""
-    config = get_runtime_config()
+    config = get_runtime().config.get()
     per_page = config.get("web_admin", {}).get("items_per_page", 20)
     all_records = get_quarantine_list(status=status, site_id=site_id)
     total = len(all_records)

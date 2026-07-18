@@ -76,16 +76,9 @@ class TestFileClustering:
             f"got {similarity}% — cross-language clustering is wrong"
         )
 
-    def test_cluster_engine_stats(self, variant_webshells):
-        """Verify file cluster engine is available (may not exist in all versions)."""
-        try:
-            from anteumbra.infrastructure.detection.file_cluster import (
-                get_file_cluster_engine,
-            )
-        except ImportError:
-            pytest.skip("file_cluster module not available")
-
-        engine = get_file_cluster_engine()
+    def test_cluster_engine_stats(self, variant_webshells, file_cluster_engine):
+        """Verify an explicitly owned file cluster engine."""
+        engine = file_cluster_engine
 
         # Cluster the PHP files
         for fname in ["eval_v1.php", "eval_v2.php", "eval_v3.php"]:

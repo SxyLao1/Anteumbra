@@ -23,9 +23,8 @@ import hashlib, json, os, re, threading, time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
-
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from typing import Dict, List, Mapping, Optional, Set, Tuple
+from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.models import (
     AttackEvent, AttackerProfile, IPReputation, FileReputation
@@ -48,25 +47,27 @@ class ThreatGraph:
         ip_info = graph.query_ip("10.0.0.1")
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        config: Mapping[str, object],
+        file_cluster_engine: FileClusterEngine,
+    ):
         self._lock = threading.RLock()
+        self._file_cluster_engine = file_cluster_engine
         self._profiles: Dict[str, AttackerProfile] = {}
         self._ip_table: Dict[str, IPReputation] = {}
         self._file_table: Dict[str, FileReputation] = {}
         self._persist_path: Optional[Path] = None
-        self._management_ips: list = []
-        self._time_window: int = 4
-        self._load_config()
-
-    def _load_config(self):
-        """v1.9.0: 从 config.toml 加载画像参数"""
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            cfg = ConfigRegistry.get_raw_config()
-            self._management_ips = cfg.get('management', {}).get('ips', [])
-            self._time_window = cfg.get('profiling', {}).get('time_window_hours', 4)
-        except Exception:
-            logger.debug("Failed to load threat graph config", exc_info=True)
+        management = config.get("management", {})
+        profiling = config.get("profiling", {})
+        self._management_ips = list(
+            management.get("ips", []) if isinstance(management, Mapping) else []
+        )
+        self._time_window = int(
+            profiling.get("time_window_hours", 4)
+            if isinstance(profiling, Mapping)
+            else 4
+        )
 
     def _is_management_ip(self, ip: str) -> bool:
         """检查是否管理IP——这些IP不参与画像但监控层仍会告警"""
@@ -243,8 +244,7 @@ class ThreatGraph:
             # v1.8.3: 文件相似度聚类
             cluster_id = None
             try:
-                from anteumbra.infrastructure.detection.file_cluster import get_file_cluster_engine
-                cluster_id, hash_val = get_file_cluster_engine().cluster_file(file_path)
+                cluster_id, hash_val = self._file_cluster_engine.cluster_file(file_path)
                 if cluster_id:
                     logger.info(f"[PROFILE] File {Path(file_path).name} -> cluster {cluster_id[:8]}")
             except Exception as e:
@@ -518,19 +518,3 @@ class ThreatGraph:
                 )
         except Exception as e:
             log_with_symbol("error_scan", "error", f"[THREAT_GRAPH] Load failed: {e}")
-
-
-# ═══════════════════════════════════════════════════════════════
-# Singleton
-# ═══════════════════════════════════════════════════════════════
-
-_graph: Optional[ThreatGraph] = None
-
-
-def get_threat_graph() -> ThreatGraph:
-    global _graph
-    if _graph is None:
-        _graph = ThreatGraph()
-        _graph.set_persist_path(normalize_path("data/threat_intel/threat_graph.json"))
-        _graph.load()
-    return _graph

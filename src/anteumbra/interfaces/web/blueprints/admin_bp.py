@@ -30,10 +30,6 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
-from anteumbra.application.config_service import (
-    get_enabled_websites,
-    get_runtime_config,
-)
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.path_service import normalize_path, path_to_key
 from anteumbra.application.platform_service import check_port_reachable
@@ -45,6 +41,7 @@ from anteumbra.interfaces.web.auth import (
     is_ip_allowed,
     require_auth,
 )
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +134,7 @@ def dashboard_index():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
         client_ip = request.remote_addr
-        websites = get_enabled_websites()
+        websites = get_runtime().config.get_enabled_websites()
         website_info = _website_info(websites)
         return render_template(
             'admin/dashboard.html',
@@ -162,12 +159,12 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        log_history_html = _monitor_log_history(get_enabled_websites())
+        log_history_html = _monitor_log_history(get_runtime().config.get_enabled_websites())
 
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
         runtime_capabilities = assess_runtime_capabilities(
-            get_runtime_config()
+            get_runtime().config.get()
         )
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
@@ -197,7 +194,14 @@ def dashboard_content():
     try:
         from anteumbra.application.dashboard_service import build_dashboard_summary
 
-        summary = build_dashboard_summary(request.args.get("site_id") or None)
+        runtime = get_runtime()
+        if runtime.metrics is None:
+            raise RuntimeError("MetricsCollector is not configured")
+        summary = build_dashboard_summary(
+            request.args.get("site_id") or None,
+            metrics=runtime.metrics,
+            websites=runtime.config.get_enabled_websites(),
+        )
         stats = summary["aggregate"]
         recent = summary["recent_events"]
 
@@ -223,7 +227,7 @@ def monitor_content():
             username = session.get('username', 'admin')
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
-        websites = get_enabled_websites()
+        websites = get_runtime().config.get_enabled_websites()
 
         log_history_html = ""
         try:
@@ -362,7 +366,7 @@ def dashboard():
         auth_bytes = auth_str.encode('utf-8')
         auth_header = base64.b64encode(auth_bytes).decode('utf-8')
         session['sse_token'] = auth_header
-    websites = get_enabled_websites()
+    websites = get_runtime().config.get_enabled_websites()
     website_info = _website_info(websites)
     return render_template(
         'admin/dashboard.html',
@@ -378,8 +382,9 @@ def dashboard():
 def get_metric(metric_name):
     """获取单个指标（v1.7.2修复：返回HTML片段）"""
     try:
-        from anteumbra.application.metrics_service import get_metrics
-        metrics = get_metrics()
+        metrics = get_runtime().metrics
+        if metrics is None:
+            raise RuntimeError("MetricsCollector is not configured")
 
         # 安全获取指标，避免psutil异常
         try:
@@ -441,8 +446,9 @@ def metrics_page():
     # is safe because dict.get() handles missing keys gracefully.
     data = {}
     try:
-        from anteumbra.application.metrics_service import get_metrics
-        m = get_metrics()
+        m = get_runtime().metrics
+        if m is None:
+            raise RuntimeError("MetricsCollector is not configured")
         data = m.get()
     except Exception:
         logger.debug("Failed to fetch metrics data for metrics_page", exc_info=True)
@@ -458,8 +464,9 @@ def metrics_page():
 def metrics_data():
     """性能指标数据（v1.7.6-Patch12: 移除SSE属性，纯HTMX轮询）"""
     try:
-        from anteumbra.application.metrics_service import get_metrics
-        metrics = get_metrics()
+        metrics = get_runtime().metrics
+        if metrics is None:
+            raise RuntimeError("MetricsCollector is not configured")
 
         # 安全获取内存数据
         try:
@@ -472,7 +479,7 @@ def metrics_data():
 
         # 安全获取阈值配置
         try:
-            config = get_runtime_config()
+            config = get_runtime().config.get()
             thresholds = config.get("thresholds", {})
             visual_alert = thresholds.get("visual_alert", {})
             warning_threshold = visual_alert.get("warning_threshold", 1)

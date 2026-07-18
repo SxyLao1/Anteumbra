@@ -1,7 +1,6 @@
 import logging
 from types import SimpleNamespace
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.detection.yara_engine import (
     CompositeYaraRules,
     YaraEngine,
@@ -23,19 +22,16 @@ rule Test_PHP_Dynamic_Execution {
 '''
 
 
-def _configure_scanning(monkeypatch, timeout=5):
-    monkeypatch.setattr(
-        ConfigRegistry,
-        "get_raw_config",
-        classmethod(lambda cls: {
+def _config_provider(timeout=5):
+    return SimpleNamespace(
+        get=lambda: {
             "filesizes": {"max_scan_file_size_mb": 10},
             "timeouts": {"scan_timeout": timeout},
-        }),
+        },
     )
 
 
-def test_invalid_file_does_not_disable_valid_rules(monkeypatch, tmp_path):
-    _configure_scanning(monkeypatch)
+def test_invalid_file_does_not_disable_valid_rules(tmp_path):
     (tmp_path / "good.yar").write_text(VALID_RULE, encoding="utf-8")
     (tmp_path / "broken.yar").write_text(
         "rule Broken { condition:",
@@ -44,7 +40,11 @@ def test_invalid_file_does_not_disable_valid_rules(monkeypatch, tmp_path):
     sample = tmp_path / "sample.php"
     sample.write_text("<?php eval($_POST['x']);", encoding="utf-8")
 
-    engine = YaraEngine(tmp_path, logging.getLogger("test.yara.invalid"))
+    engine = YaraEngine(
+        tmp_path,
+        logging.getLogger("test.yara.invalid"),
+        _config_provider(),
+    )
 
     assert engine.compiled_rules
     assert len(engine.compiled_rules) == 1
@@ -86,11 +86,14 @@ def test_runtime_failure_is_isolated_to_one_compiled_file():
     assert 1 <= calls[0]["timeout"] <= 3
 
 
-def test_failed_reload_retains_previous_working_rules(monkeypatch, tmp_path):
-    _configure_scanning(monkeypatch)
+def test_failed_reload_retains_previous_working_rules(tmp_path):
     rule_path = tmp_path / "active.yar"
     rule_path.write_text(VALID_RULE, encoding="utf-8")
-    engine = YaraEngine(tmp_path, logging.getLogger("test.yara.reload"))
+    engine = YaraEngine(
+        tmp_path,
+        logging.getLogger("test.yara.reload"),
+        _config_provider(),
+    )
 
     rule_path.write_text("rule Broken { condition:", encoding="utf-8")
 
@@ -113,19 +116,13 @@ def test_empty_configured_directory_uses_bundled_rules(tmp_path):
     assert next(resolved.glob("*.yar"), None) is not None
 
 
-def test_direct_engine_uses_defaults_when_registry_is_unavailable(monkeypatch, tmp_path):
+def test_direct_engine_uses_defaults_from_provider(tmp_path):
     (tmp_path / "good.yar").write_text(VALID_RULE, encoding="utf-8")
-    monkeypatch.setattr(
-        ConfigRegistry,
-        "get_raw_config",
-        classmethod(lambda cls: (_ for _ in ()).throw(RuntimeError("not ready"))),
+    engine = YaraEngine(
+        tmp_path,
+        logging.getLogger("test.yara.defaults"),
+        SimpleNamespace(get=lambda: {}),
     )
-    monkeypatch.setattr(
-        ConfigRegistry,
-        "initialize",
-        classmethod(lambda cls: (_ for _ in ()).throw(FileNotFoundError("missing"))),
-    )
-    engine = YaraEngine(tmp_path, logging.getLogger("test.yara.defaults"))
 
     matches = engine.scan_data(b"eval($_POST", "defaults-test")
 

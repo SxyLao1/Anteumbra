@@ -9,6 +9,41 @@ from typing import Any, Iterable, Mapping, Protocol
 from anteumbra.domain.site import SiteIdentity, SiteResolver
 
 
+class ConfigProviderPort(Protocol):
+    """Expose one runtime-owned, atomically reloadable configuration."""
+
+    @property
+    def path(self) -> Path:
+        """Return the active configuration source path."""
+
+    @property
+    def generation(self) -> int:
+        """Return the current successful reload generation."""
+
+    def get(self) -> dict[str, Any]:
+        """Return a defensive copy of the resolved configuration."""
+
+    def get_websites(self) -> list[Any]:
+        """Return every configured site, including disabled sites."""
+
+    def get_enabled_websites(self) -> list[Any]:
+        """Return enabled configured sites."""
+
+    def get_website(self, site_id: str) -> Any | None:
+        """Return one configured site by stable ID."""
+
+    def resolve_site_identity(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+        site_name: str | None = None,
+    ) -> SiteIdentity:
+        """Resolve explicit or path-derived site ownership."""
+
+    def reload(self, config_path: str | Path | None = None) -> dict[str, Any]:
+        """Atomically publish a newly loaded valid configuration."""
+
+
 class DetectionRegistryPort(Protocol):
     """Persist detected files with their explicit site ownership."""
 
@@ -41,6 +76,18 @@ class MetricsPort(Protocol):
 
     def increment_site(self, metric: str, site_id: str, value: int = 1) -> None:
         """Increment only the site bucket when a legacy caller owns the global total."""
+
+    def record_notification(
+        self,
+        status: str,
+        error: str = "",
+        *,
+        site_id: str | None = None,
+    ) -> None:
+        """Record one notification outcome."""
+
+    def record_wechat_failure(self, *, site_id: str | None = None) -> None:
+        """Record one WeChat channel failure."""
 
 
 class EventPublisherPort(Protocol):

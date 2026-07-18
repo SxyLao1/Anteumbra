@@ -13,11 +13,6 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.config_service import (
-    get_config_path,
-    get_runtime_config,
-    reload_config,
-)
 from anteumbra.application.registry_service import (
     get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
@@ -25,6 +20,7 @@ from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.config_history_service import get_config_history_logger
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +68,6 @@ def system_management():
 def system_registry_panel():
     """Registry status monitoring data (independent refresh)"""
     try:
-        from anteumbra.application.metrics_service import get_metrics
         from anteumbra.application.wal_service import get_wal_info
 
 
@@ -165,7 +160,7 @@ def system_session_panel():
             )
 
         page = max(1, request.args.get('page', 1, type=int))
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
 
         now = datetime.now()
@@ -229,7 +224,7 @@ def system_session_panel():
 def system_config_panel():
     """Config hot-reload monitoring data"""
     try:
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         config_data = json.dumps(config, sort_keys=True)
         config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
@@ -256,14 +251,15 @@ def system_config_panel():
         end = start + per_page
         paginated_history = formatted_history[start:end]
 
-        from anteumbra.application.yara_service import get_yara_engine
-        engine = get_yara_engine(current_app.logger)
+        engine = get_runtime().yara_engine
+        if engine is None:
+            raise RuntimeError("YaraEngine is not configured")
         rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
 
         return render_template(
             'admin/panels/config_panel.html',
             config_signature=config_signature,
-            config_path=str(get_config_path()),
+            config_path=str(get_runtime().config.path),
             history=paginated_history,
             page=page, total_pages=total_pages, total=total,
             rule_stats=rule_stats,
@@ -431,7 +427,7 @@ def system_session_cleanup():
                 all_sessions.sort(key=lambda x: x['mtime'], reverse=True)
 
         page = 1
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
         total = len(all_sessions)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -467,9 +463,9 @@ def system_session_cleanup():
 def system_config_reload():
     """Manual config hot-reload (returns rendered panel HTML)"""
     try:
-        reload_config()
+        get_runtime().config.reload()
 
-        config_data = json.dumps(get_runtime_config(), sort_keys=True)
+        config_data = json.dumps(get_runtime().config.get(), sort_keys=True)
         config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
         history_logger = get_config_history_logger()
@@ -484,8 +480,9 @@ def system_config_reload():
                 item += f" | Duration: {record['duration_ms']}ms"
             formatted_history.append(item)
 
-        from anteumbra.application.yara_service import get_yara_engine
-        engine = get_yara_engine(current_app.logger)
+        engine = get_runtime().yara_engine
+        if engine is None:
+            raise RuntimeError("YaraEngine is not configured")
         rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
 
         log_with_symbol("notice", "info", "Config hot-reload triggered", current_app.logger)
@@ -493,7 +490,7 @@ def system_config_reload():
         return render_template(
             'admin/panels/config_panel.html',
             config_signature=config_signature,
-            config_path=str(get_config_path()),
+            config_path=str(get_runtime().config.path),
             history=formatted_history,
             rule_stats=rule_stats,
             yara_enabled=len(rule_stats) > 0,

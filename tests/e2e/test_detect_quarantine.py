@@ -31,7 +31,12 @@ def monitor_target(tmp_path):
 class TestDetectAndQuarantine:
     """Full detection → quarantine E2E chain."""
 
-    def test_scanner_detects_webshell(self, monitor_target, webshell_samples):
+    def test_scanner_detects_webshell(
+        self,
+        monitor_target,
+        webshell_samples,
+        scanner_service,
+    ):
         """Deploy a webshell and verify the scanner detects it."""
         from anteumbra.infrastructure.detection.scanner import quick_scan_yara
         from anteumbra.infrastructure.models import ScanOptions
@@ -46,14 +51,19 @@ class TestDetectAndQuarantine:
 
         # Scan it with YARA (uses EmergencyScanner as fallback if YARA not configured)
         opts = ScanOptions(monitor_extensions=[".php"])
-        result = quick_scan_yara(dest, opts, logger)
+        result = quick_scan_yara(
+            dest,
+            opts,
+            logger,
+            scanner_service=scanner_service,
+        )
         # scanner returns a ScanResult — may or may not flag depending on rules
         assert result is not None, "Scanner should return a result (not None)"
         # Note: in test env without compiled YARA rules, EmergencyScanner may
         # not flag it. We verify the scanner pipeline runs without error.
         assert hasattr(result, 'file_path'), "Result should have file_path"
 
-    def test_scanner_cleans_normal_file(self, monitor_target):
+    def test_scanner_cleans_normal_file(self, monitor_target, scanner_service):
         """Verify scanner does NOT crash on clean files."""
         from anteumbra.infrastructure.detection.scanner import quick_scan_yara
         from anteumbra.infrastructure.models import ScanOptions
@@ -68,7 +78,12 @@ class TestDetectAndQuarantine:
         ?>""")
 
         opts = ScanOptions(monitor_extensions=[".php"])
-        result = quick_scan_yara(clean, opts, logger)
+        result = quick_scan_yara(
+            clean,
+            opts,
+            logger,
+            scanner_service=scanner_service,
+        )
         assert result is not None, "Scanner should return a result for clean file"
         # Clean file should not be flagged as suspicious
         assert result.is_suspicious is False, (

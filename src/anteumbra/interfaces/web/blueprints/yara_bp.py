@@ -19,14 +19,13 @@ from flask import Blueprint, request, jsonify, render_template, abort, current_a
 from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
 
-from anteumbra.application.config_service import get_runtime_config
 from anteumbra.application.yara_service import (
-    get_yara_engine,
     resolve_yara_rules_path,
 )
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
+from anteumbra.interfaces.web.runtime import get_runtime
 
 try:
     import yara
@@ -42,7 +41,7 @@ _rule_operation_lock = threading.RLock()
 
 def _get_rules_path(config: Optional[Dict] = None) -> Path:
     """Return the rule directory used by the active scanner."""
-    config = config or get_runtime_config()
+    config = config or get_runtime().config.get()
     paths_cfg = config.get("paths", {})
     yara_cfg = config.get("scanner", {}).get("yara", {})
     configured_path = (
@@ -54,7 +53,9 @@ def _get_rules_path(config: Optional[Dict] = None) -> Path:
 
 def _reload_rules(expected_filename: Optional[str] = None) -> Tuple[bool, str]:
     """Reload the scanner and verify that a changed file joined the active set."""
-    engine = get_yara_engine(current_app.logger)
+    engine = get_runtime().yara_engine
+    if engine is None:
+        return False, "YaraEngine is not configured"
     if Path(engine.rules_path).resolve() != _get_rules_path().resolve():
         return False, "活动规则目录与当前配置不一致，请重启 Anteumbra"
     if not engine.reload():
@@ -174,7 +175,7 @@ def list_rules():
         page = max(1, int(request.args.get('page', 1)))
 
         # v1.7.5修复：从配置读取YARA分页大小
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         default_per_page = config.get("web_admin", {}).get("yara_items_per_page", 6)
         per_page = max(1, int(request.args.get('per_page', default_per_page)))
 
@@ -370,7 +371,7 @@ def upload_rule():
             }), 400
 
         # 验证2：文件大小限制（从config.toml读取）
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         filesizes_cfg = config.get("filesizes", {})
         max_rule_size_kb = filesizes_cfg.get("max_rule_file_size_kb", 100)
 
@@ -534,7 +535,7 @@ def search_rules():
 
         # 获取分页参数
         page = max(1, int(request.args.get('page', 1)))
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("yara_items_per_page", 6)
 
         total = len(filtered)

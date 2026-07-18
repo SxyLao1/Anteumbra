@@ -3,7 +3,6 @@ import os
 import time
 from pathlib import Path
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.models import ScanOptions, Website
 from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer, resolve_access_log_path
 
@@ -39,15 +38,6 @@ def test_log_analyzer_matches_tomcat_shell_access(tmp_path):
             ]
         ),
     )
-
-    ConfigRegistry.reset()
-    ConfigRegistry._config = {
-        "website": {
-            "log_config": {
-                "filter_internal_ip": False,
-            }
-        }
-    }
 
     website = Website(
         name="TomcatLab",

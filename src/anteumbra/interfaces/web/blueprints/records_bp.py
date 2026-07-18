@@ -16,7 +16,6 @@ from flask import (
     Response, current_app, abort
 )
 
-from anteumbra.application.config_service import get_runtime_config
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.registry_service import (
     get_all, remove as registry_remove,
@@ -27,6 +26,7 @@ from anteumbra.application.sse_service import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_registry, verify_file_in_quarantine, html_escape,
 )
+from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def get_records():
             current_app.logger.warning(f"[RECORDS] 无效page参数: '{page_str}'，使用默认值1")
             page = 1
 
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         if force_reload:
@@ -333,8 +333,9 @@ def get_record_detail():
 
         linked_profiles = []
         try:
-            from anteumbra.application.threat_graph_service import get_threat_graph
-            tg = get_threat_graph()
+            tg = get_runtime().threat_graph
+            if tg is None:
+                raise RuntimeError("ThreatGraph is not configured")
             for pid, profile in tg._profiles.items():
                 if file_path in profile.target_files:
                     linked_profiles.append({
@@ -424,7 +425,7 @@ def remove_file(file_path):
         )
         enhanced = _enhance_records(filtered_records)
 
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
         total = len(enhanced)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -463,7 +464,7 @@ def mark_false_positive_route(file_path):
         )
         enhanced = _enhance_records(filtered_records)
 
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
         total = len(enhanced)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -486,7 +487,7 @@ def audit_records():
     """审计日志 — 懒加载 HTMX 分页"""
     try:
         page = max(1, request.args.get('page', 1, type=int))
-        config = get_runtime_config()
+        config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         all_records = get_all(

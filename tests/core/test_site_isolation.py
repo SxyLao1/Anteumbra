@@ -258,7 +258,7 @@ def test_monitor_events_include_site_identity(tmp_path):
     assert events.events[0][2]["site_name"] == "Alpha"
 
 
-def test_quick_scan_respects_the_selected_site_extensions(monkeypatch, tmp_path):
+def test_quick_scan_respects_the_selected_site_extensions(tmp_path):
     from types import SimpleNamespace
 
     from anteumbra.domain.entities import ScanResult
@@ -268,16 +268,15 @@ def test_quick_scan_respects_the_selected_site_extensions(monkeypatch, tmp_path)
     sample = tmp_path / "shell.custom"
     sample.write_text("payload", encoding="utf-8")
     expected = ScanResult(sample, True, ["test-rule"], engine="test")
-    monkeypatch.setattr(
-        scanner,
-        "get_scanner_chain",
-        lambda _logger: SimpleNamespace(scan=lambda _path: expected),
+    scanner_service = SimpleNamespace(
+        scan=lambda _path, _options, _logger: expected,
     )
 
     result = scanner.quick_scan_yara(
         sample,
         ScanOptions(monitor_extensions=[".custom"]),
         __import__("logging").getLogger("test.site.extensions"),
+        scanner_service=scanner_service,
     )
 
     assert result is expected
@@ -285,9 +284,9 @@ def test_quick_scan_respects_the_selected_site_extensions(monkeypatch, tmp_path)
 
 def test_manual_scan_preserves_an_explicit_site_identity(monkeypatch, tmp_path):
     from anteumbra.domain.entities import ScanResult
+    from anteumbra.domain.site import SiteIdentity
     from anteumbra.infrastructure import suspicious_registry
     from anteumbra.infrastructure.detection import manual_scanner
-    from anteumbra.infrastructure.monitoring import metrics
 
     target = tmp_path / "manual"
     target.mkdir()
@@ -306,21 +305,26 @@ def test_manual_scan_preserves_an_explicit_site_identity(monkeypatch, tmp_path):
         "add",
         lambda path, features, **kwargs: added.append((path, features, kwargs)),
     )
-    monkeypatch.setattr(
-        manual_scanner,
-        "quick_scan_yara",
-        lambda path, options, _logger: (
+    scanner_service = SimpleNamespace(
+        scan=lambda path, options, _logger: (
             scan_options.append(options)
             or ScanResult(path, True, ["test-rule"], engine="test")
+        )
+    )
+    provider = SimpleNamespace(
+        resolve_site_identity=lambda _path, site_id=None, site_name=None: (
+            SiteIdentity.from_values(site_id, site_name or str(site_id))
         ),
+        get_website=lambda _site_id: None,
+        get=lambda: {},
     )
-    monkeypatch.setattr(
-        metrics,
-        "get_metrics",
-        lambda: SimpleNamespace(increment_site=lambda *_args, **_kwargs: None),
-    )
+    metric_recorder = SimpleNamespace(increment_site=lambda *_args, **_kwargs: None)
 
-    result = manual_scanner.ManualScanner().scan_directory(
+    result = manual_scanner.ManualScanner(
+        config_provider=provider,
+        scanner_service=scanner_service,
+        metrics=metric_recorder,
+    ).scan_directory(
         target,
         extensions=[".custom"],
         site_id="alpha",
@@ -366,24 +370,18 @@ def test_dashboard_summary_keeps_aggregate_and_site_boundaries(monkeypatch):
         }
         return counts[site_id]
 
-    class Config:
-        @staticmethod
-        def get_enabled_websites():
-            return [
-                SimpleNamespace(site_id="alpha", name="Alpha"),
-                SimpleNamespace(site_id="beta", name="Beta"),
-            ]
-
     monkeypatch.setattr(dashboard_service, "get_all", get_all)
     monkeypatch.setattr(dashboard_service, "get_quarantine_stats", quarantine_stats)
-    monkeypatch.setattr(dashboard_service, "ConfigRegistry", Config)
-    monkeypatch.setattr(
-        dashboard_service,
-        "get_metrics",
-        lambda: SimpleNamespace(get=lambda: {"sites": {"alpha": {"scan_total": 4}}}),
-    )
+    metrics = SimpleNamespace(get=lambda: {"sites": {"alpha": {"scan_total": 4}}})
+    websites = [
+        SimpleNamespace(site_id="alpha", name="Alpha"),
+        SimpleNamespace(site_id="beta", name="Beta"),
+    ]
 
-    summary = dashboard_service.build_dashboard_summary()
+    summary = dashboard_service.build_dashboard_summary(
+        metrics=metrics,
+        websites=websites,
+    )
 
     assert summary["aggregate"]["total_detections"] == 2
     assert summary["aggregate"]["false_positives"] == 1
