@@ -94,7 +94,7 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
             config_file = cwd_config
         else:
             try:
-                from anteumbra.cli.install_registry import get_install_info
+                from anteumbra.infrastructure.config.install_registry import get_install_info
                 info = get_install_info()
                 if info:
                     reg_config = Path(info["install_path"]) / "config.toml"

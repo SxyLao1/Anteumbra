@@ -30,9 +30,12 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import (
+    get_enabled_websites,
+    get_runtime_config,
+)
 from anteumbra.application.logging_service import log_with_symbol
-from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
+from anteumbra.application.path_service import normalize_path, path_to_key
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.application.sse_service import register_sse_client, unregister_sse_client, \
     trigger_registry_update
@@ -134,7 +137,7 @@ def dashboard_index():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
         client_ip = request.remote_addr
-        websites = ConfigRegistry.get_enabled_websites()
+        websites = get_enabled_websites()
         website_info = _website_info(websites)
         return render_template(
             'admin/dashboard.html',
@@ -159,12 +162,12 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        log_history_html = _monitor_log_history(ConfigRegistry.get_enabled_websites())
+        log_history_html = _monitor_log_history(get_enabled_websites())
 
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
         runtime_capabilities = assess_runtime_capabilities(
-            ConfigRegistry.get_raw_config()
+            get_runtime_config()
         )
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
@@ -220,7 +223,7 @@ def monitor_content():
             username = session.get('username', 'admin')
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
-        websites = ConfigRegistry.get_enabled_websites()
+        websites = get_enabled_websites()
 
         log_history_html = ""
         try:
@@ -359,7 +362,7 @@ def dashboard():
         auth_bytes = auth_str.encode('utf-8')
         auth_header = base64.b64encode(auth_bytes).decode('utf-8')
         session['sse_token'] = auth_header
-    websites = ConfigRegistry.get_enabled_websites()
+    websites = get_enabled_websites()
     website_info = _website_info(websites)
     return render_template(
         'admin/dashboard.html',
@@ -469,7 +472,7 @@ def metrics_data():
 
         # 安全获取阈值配置
         try:
-            config = ConfigRegistry.get_raw_config()
+            config = get_runtime_config()
             thresholds = config.get("thresholds", {})
             visual_alert = thresholds.get("visual_alert", {})
             warning_threshold = visual_alert.get("warning_threshold", 1)

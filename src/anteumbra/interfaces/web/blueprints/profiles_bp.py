@@ -195,7 +195,7 @@ def profile_detail_page(profile_id):
         try:
             from anteumbra.application.registry_service import get_all as reg_get_all
             from anteumbra.application.quarantine_service import get_quarantine_list
-            from anteumbra.infrastructure.utils.path_utils import path_to_key
+            from anteumbra.application.path_service import path_to_key
             all_reg = reg_get_all(include_deleted=True)
             qmap = {}
             for q in get_quarantine_list(status="quarantined", limit=1000):

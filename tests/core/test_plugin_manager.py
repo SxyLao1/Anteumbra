@@ -3,7 +3,7 @@ import pytest
 import queue
 from anteumbra.domain.plugin import Plugin, DomainEvent
 from anteumbra.domain.notifier import Notifier, AlertMessage, AlertLevel
-from anteumbra.application.plugin_manager import PluginManager, get_plugin_manager
+from anteumbra.application.plugin_manager import PluginManager
 
 
 class _TestPlugin(Plugin):
@@ -48,10 +48,8 @@ class _TestNotifier(Plugin, Notifier):
 
 
 class TestPluginManager:
-    def test_singleton(self):
-        pm1 = get_plugin_manager()
-        pm2 = get_plugin_manager()
-        assert pm1 is pm2
+    def test_managers_are_runtime_owned(self):
+        assert PluginManager() is not PluginManager()
 
     def test_register_and_list(self):
         pm = PluginManager()

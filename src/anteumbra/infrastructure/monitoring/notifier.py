@@ -717,6 +717,10 @@ class Notifier:
             else:
                 self.logger.info("[NOTIFIER] 工作线程已停止")
 
+    def shutdown(self) -> None:
+        """Release the notifier worker owned by the application runtime."""
+        self._stop_alert_worker()
+
 # 全局单例实例
 _notifier_instance: Optional[Notifier] = None
 

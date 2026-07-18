@@ -390,7 +390,7 @@ class TestCliInstall:
 
     def test_install_creates_complete_deployment_instance(self, tmp_path, monkeypatch):
         """anteumbra install should create config, env, rules and registry marker."""
-        from anteumbra.cli import install_registry
+        from anteumbra.infrastructure.config import install_registry
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance"
@@ -425,7 +425,7 @@ class TestCliInstall:
 
     def test_install_succeeds_when_user_registry_is_read_only(self, tmp_path, monkeypatch):
         """A convenience registry failure must not invalidate a complete instance."""
-        from anteumbra.cli import install_registry
+        from anteumbra.infrastructure.config import install_registry
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance"
@@ -450,7 +450,7 @@ class TestCliInstall:
         assert (target / ".anteumbra_install").exists()
 
     def test_install_registry_read_failure_is_treated_as_unregistered(self, monkeypatch):
-        from anteumbra.cli import install_registry
+        from anteumbra.infrastructure.config import install_registry
 
         def deny_registry_read():
             raise PermissionError("read-only home")

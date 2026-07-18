@@ -16,13 +16,13 @@ from flask import (
     Response, current_app, abort
 )
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import get_runtime_config
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.registry_service import (
     get_all, remove as registry_remove,
     mark_false_positive, soft_delete_record, clear_memory_cache,
 )
-from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
+from anteumbra.application.path_service import normalize_path, path_to_key
 from anteumbra.application.sse_service import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_registry, verify_file_in_quarantine, html_escape,
@@ -124,7 +124,7 @@ def get_records():
             current_app.logger.warning(f"[RECORDS] 无效page参数: '{page_str}'，使用默认值1")
             page = 1
 
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         if force_reload:
@@ -424,7 +424,7 @@ def remove_file(file_path):
         )
         enhanced = _enhance_records(filtered_records)
 
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
         total = len(enhanced)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -463,7 +463,7 @@ def mark_false_positive_route(file_path):
         )
         enhanced = _enhance_records(filtered_records)
 
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
         total = len(enhanced)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -486,7 +486,7 @@ def audit_records():
     """审计日志 — 懒加载 HTMX 分页"""
     try:
         page = max(1, request.args.get('page', 1, type=int))
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         all_records = get_all(

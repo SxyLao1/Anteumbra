@@ -1,5 +1,5 @@
 def test_local_runtime_config_precedes_registered_install(monkeypatch, tmp_path):
-    from anteumbra.cli import install_registry
+    from anteumbra.infrastructure.config import install_registry
     from anteumbra.cli import main as cli_main
 
     local_runtime = tmp_path / "local-runtime"

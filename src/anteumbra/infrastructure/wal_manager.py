@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from anteumbra.domain.runtime import EventPublisherPort
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
@@ -101,7 +102,9 @@ def read_entries() -> List[Dict]:
     return entries
 
 
-def archive_current_wal() -> Optional[Path]:
+def archive_current_wal(
+    event_publisher: EventPublisherPort | None = None,
+) -> Optional[Path]:
     """将当前 WAL 归档并创建新的空 WAL"""
     _init_wal_path()
     if not _WAL_PATH or not _WAL_PATH.exists():
@@ -113,25 +116,32 @@ def archive_current_wal() -> Optional[Path]:
         _WAL_PATH.touch()
         with open(_WAL_PATH, 'w', encoding='utf-8') as f:
             f.write(f"# WAL restarted at {datetime.now().isoformat()}\n")
-        _emit_wal_event("wal_archived", {"archive_path": str(wal_backup)})
+        _emit_wal_event(
+            event_publisher,
+            "wal_archived",
+            {"archive_path": str(wal_backup)},
+        )
         return wal_backup
     except Exception as e:
         log_with_symbol("error_wal_archive", "error", f"归档失败: {e}")
         return None
 
 
-def _emit_wal_event(event_type: str, extra: Dict = None) -> None:
-    """Emit WAL lifecycle event through PluginManager (best-effort)."""
+def _emit_wal_event(
+    event_publisher: EventPublisherPort | None,
+    event_type: str,
+    extra: Dict = None,
+) -> None:
+    """Emit a WAL lifecycle event through the caller-owned publisher."""
+    if event_publisher is None:
+        return
     try:
-        from anteumbra.application.plugin_manager import get_plugin_manager
-        pm = get_plugin_manager()
-        if pm.is_enabled:
-            payload = {"event_type": event_type}
-            if extra:
-                payload.update(extra)
-            pm.emit(event_type, "wal_manager", payload)
+        payload = {"event_type": event_type}
+        if extra:
+            payload.update(extra)
+        event_publisher.publish(event_type, "wal_manager", payload)
     except Exception:
-        logger.debug("PluginManager emit WAL event failed", exc_info=True)
+        logger.debug("WAL event publish failed", exc_info=True)
 
 
 def _rotate_if_needed():
@@ -203,7 +213,10 @@ def _cleanup_archives():
                 log_with_symbol("warning", "warning", f"删除失败 {old_file}: {e}")
 
 
-def replay(callbacks: Dict[str, callable]) -> int:
+def replay(
+    callbacks: Dict[str, callable],
+    event_publisher: EventPublisherPort | None = None,
+) -> int:
     """重放 WAL（通过回调函数执行操作）
 
     callbacks = {
@@ -251,8 +264,12 @@ def replay(callbacks: Dict[str, callable]) -> int:
                     logger.error(f"重放行失败: {e}", exc_info=True)
 
             logger.info(f"重放完成，恢复 {recovered} 条记录")
-            _emit_wal_event("wal_replayed", {"recovered_count": recovered})
-            archive_current_wal()
+            _emit_wal_event(
+                event_publisher,
+                "wal_replayed",
+                {"recovered_count": recovered},
+            )
+            archive_current_wal(event_publisher)
             return recovered
 
         finally:

@@ -20,14 +20,17 @@ from flask import (
     Response, current_app, stream_with_context, session,
 )
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import (
+    get_enabled_websites,
+    get_runtime_config,
+)
 from anteumbra.application.registry_service import (
     get_all, compact_registry,
     get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.session_service import cleanup_sessions
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.application.path_service import normalize_path
 from anteumbra.application.sse_service import (
     register_sse_client, unregister_sse_client, get_connected_client_count,
     get_ip_client_count, get_ip_clients, persist_log_line,
@@ -54,7 +57,7 @@ def stream_logs():
 
     client_ip = request.remote_addr
 
-    config = ConfigRegistry.get_raw_config()
+    config = get_runtime_config()
     web_admin_cfg = config.get("web_admin", {})
 
     def _to_int(val, default=5):
@@ -98,7 +101,7 @@ def stream_logs():
     logger = current_app.logger
     requested_site = request.args.get('site')
     try:
-        websites = ConfigRegistry.get_enabled_websites()
+        websites = get_enabled_websites()
     except Exception:
         websites = []
     if requested_site:
@@ -111,7 +114,7 @@ def stream_logs():
 
     if not show_all_levels:
         try:
-            config = ConfigRegistry.get_raw_config()
+            config = get_runtime_config()
             web_admin_cfg = config.get("web_admin", {})
             allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
             allowed_levels_set = set(level.upper() for level in allowed_levels)
@@ -233,7 +236,7 @@ def logs_history():
 
         log_candidates = []
         try:
-            websites = ConfigRegistry.get_enabled_websites()
+            websites = get_enabled_websites()
             for website in websites:
                 log_candidates.append(normalize_path(f"logs/{website.name}/monitor.log"))
         except Exception:
@@ -299,7 +302,7 @@ def access_log_analysis():
     try:
         from anteumbra.application.log_analysis_service import analyze_access_logs
 
-        results = analyze_access_logs(ConfigRegistry.get_enabled_websites())
+        results = analyze_access_logs(get_enabled_websites())
     except Exception as exc:
         current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
         parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))
@@ -481,7 +484,7 @@ def session_list():
         return "<p style='color: #888;'>No session files</p>"
 
     page = max(1, request.args.get('page', 1, type=int))
-    config = ConfigRegistry.get_raw_config()
+    config = get_runtime_config()
     per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
 
     sessions = []
@@ -560,7 +563,7 @@ def config_history():
         return "<p style='color: #888;'>No config reload history</p>"
 
     page = max(1, request.args.get('page', 1, type=int))
-    config = ConfigRegistry.get_raw_config()
+    config = get_runtime_config()
     per_page = config.get("web_admin", {}).get("config_items_per_page", 10)
 
     history = []
@@ -603,7 +606,7 @@ def config_signature():
     """Return current config signature for display only."""
     import hashlib
     try:
-        config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
+        config_data = json.dumps(get_runtime_config(), sort_keys=True)
         md5 = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
         return f"config.toml [{md5}]"
     except Exception:
@@ -618,7 +621,7 @@ def sse_history():
     """Return persisted log history"""
     try:
         from anteumbra.application.sse_service import get_log_buffer
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         web_admin_cfg = config.get("web_admin", {})
         allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
         buffer_logs = get_log_buffer()

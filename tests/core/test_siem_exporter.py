@@ -112,15 +112,15 @@ class TestSIEMExporter:
         assert p.exists()
 
 
-def test_siem_handler_exports_registry_events(monkeypatch):
+def test_siem_handler_exports_registry_events():
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
 
     emitted = []
-    monkeypatch.setattr(
-        "anteumbra.infrastructure.monitoring.siem_exporter.emit_detection_event",
-        lambda payload: emitted.append(payload),
-    )
-    plugin = SIEMHandlerPlugin()
+    class Exporter:
+        def emit_detection(self, payload):
+            emitted.append(payload)
+
+    plugin = SIEMHandlerPlugin(Exporter())
     plugin.activate({"enabled": True})
 
     plugin.on_event(DomainEvent(

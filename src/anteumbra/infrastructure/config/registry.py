@@ -85,7 +85,7 @@ class ConfigRegistry:
             else:
                 # 检查全局安装注册表
                 try:
-                    from anteumbra.cli.install_registry import get_install_info
+                    from anteumbra.infrastructure.config.install_registry import get_install_info
                     info = get_install_info()
                     if info:
                         reg_config = Path(info["install_path"]) / "config.toml"

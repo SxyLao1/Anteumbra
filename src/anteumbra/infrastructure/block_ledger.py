@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from anteumbra.domain.runtime import EventPublisherPort
+
 logger = logging.getLogger("monitor.block_ledger")
 
 _LEDGER_PATH = None
@@ -104,6 +106,7 @@ def add_entry(
     profile_id: str = "",
     blocked_by: str = "admin",
     broadcast_results: Optional[List[Dict]] = None,
+    event_publisher: EventPublisherPort | None = None,
 ) -> Dict:
     """添加封禁记录。返回新条目。"""
     with _LEDGER_LOCK:
@@ -120,7 +123,7 @@ def add_entry(
                     entry["broadcast_devices"] = [r.get("device", "") for r in broadcast_results]
                     entry["broadcast_status"] = "success" if all(r.get("success") for r in broadcast_results) else "partial"
                 _save(entries)
-                _emit_block_event(entry)
+                _emit_block_event(entry, event_publisher)
                 return entry
 
         # 新条目
@@ -140,25 +143,27 @@ def add_entry(
         entries.append(entry)
         _save(entries)
         logger.info(f"[BLOCK_LEDGER] {ip} — {source} — {reason[:60]}")
-        _emit_block_event(entry)
+        _emit_block_event(entry, event_publisher)
         return entry
 
 
-def _emit_block_event(entry: Dict) -> None:
-    """Emit block_executed event through PluginManager (best-effort)."""
+def _emit_block_event(
+    entry: Dict,
+    event_publisher: EventPublisherPort | None,
+) -> None:
+    """Emit block_executed through the caller-owned event publisher."""
+    if event_publisher is None:
+        return
     try:
-        from anteumbra.application.plugin_manager import get_plugin_manager
-        pm = get_plugin_manager()
-        if pm.is_enabled:
-            pm.emit("block_executed", "block_ledger", {
-                "ip": entry.get("ip", ""),
-                "source": entry.get("source", "manual"),
-                "reason": entry.get("reason", ""),
-                "profile_id": entry.get("profile_id", ""),
-                "broadcast_status": entry.get("broadcast_status", "pending"),
-            })
+        event_publisher.publish("block_executed", "block_ledger", {
+            "ip": entry.get("ip", ""),
+            "source": entry.get("source", "manual"),
+            "reason": entry.get("reason", ""),
+            "profile_id": entry.get("profile_id", ""),
+            "broadcast_status": entry.get("broadcast_status", "pending"),
+        })
     except Exception:
-        logger.debug("PluginManager emit block_executed failed", exc_info=True)
+        logger.debug("Block event publish failed", exc_info=True)
 
 
 def update_notes(ip: str, notes: str) -> bool:

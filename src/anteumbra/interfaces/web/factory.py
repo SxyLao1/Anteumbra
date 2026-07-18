@@ -17,8 +17,13 @@ from flask import Flask, request, session, jsonify
 from typing import Optional
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
-from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.application.config_service import (
+    get_config_path,
+    get_runtime_config,
+    initialize_config,
+    reload_config,
+)
+from anteumbra.application.path_service import normalize_path
 from flask_wtf.csrf import generate_csrf
 
 logger = logging.getLogger(__name__)
@@ -48,14 +53,13 @@ def _ensure_password_configured():
     """Ensure first-run admin and session secrets exist in the deployment .env."""
     from pathlib import Path as _Path
 
-    # 获取已加载的配置路径（ConfigRegistry 初始化后已设置）
-    cfg_path = _Path(ConfigRegistry._config_path) if ConfigRegistry._config_path else None
+    cfg_path = get_config_path()
     if cfg_path is None or not cfg_path.exists():
         logger.debug("Config path unknown, skipping password auto-setup")
         return
     root = cfg_path.parent
 
-    cfg = ConfigRegistry.get_raw_config()
+    cfg = get_runtime_config()
     pw_hash = cfg.get("web_admin", {}).get("password_hash", "")
     secret_key = cfg.get("security", {}).get("secret_key", "")
     env_file = root / ".env"
@@ -89,7 +93,7 @@ def _ensure_password_configured():
         set_key(str(env_file), key, value, quote_mode="auto")
         os.environ[key] = value
 
-    ConfigRegistry.initialize(str(cfg_path), force=True)
+    reload_config(str(cfg_path))
 
     if generated_password:
         print(f"\n{'=' * 60}")
@@ -100,7 +104,7 @@ def _ensure_password_configured():
         print(f"{'=' * 60}\n")
 
 
-def create_app(config_path: str = None) -> Flask:
+def create_app(config_path: str = None, *, plugin_manager=None) -> Flask:
     """创建Flask应用实例
 
     Args:
@@ -114,14 +118,14 @@ def create_app(config_path: str = None) -> Flask:
     # v1.0.9 fix: 确保配置已初始化（run.py 会先调，但 CLI 直接调 create_app 时不会）
     # 优先使用 CWD 的 config.toml（部署环境），其次源码树内（开发环境）
     if config_path:
-        ConfigRegistry.initialize(config_path)
+        initialize_config(config_path)
     else:
         from pathlib import Path as _Path
         cwd_config = _Path.cwd() / "config.toml"
         if cwd_config.exists():
-            ConfigRegistry.initialize(str(cwd_config))
+            initialize_config(str(cwd_config))
         else:
-            ConfigRegistry.initialize()
+            initialize_config()
 
     # v1.0.9: 首次运行 — 密码为空则自动生成随机密码写入 .env
     _ensure_password_configured()
@@ -132,7 +136,8 @@ def create_app(config_path: str = None) -> Flask:
 
     # 创建主应用
     app = Flask(__name__)
-    web_admin_config = ConfigRegistry.get_raw_config().get("web_admin", {})
+    app.extensions["anteumbra.plugin_manager"] = plugin_manager
+    web_admin_config = get_runtime_config().get("web_admin", {})
     from anteumbra.interfaces.web.proxy import TrustedProxyFix
 
     app.wsgi_app = TrustedProxyFix(
@@ -187,7 +192,7 @@ def create_app(config_path: str = None) -> Flask:
             'anteumbra_version': get_version(),
             'anteumbra_release_date': get_release_date(),
         }
-    security_config = ConfigRegistry.get_raw_config().get("security", {})
+    security_config = get_runtime_config().get("security", {})
     configured_secret = str(security_config.get("secret_key", "")).strip()
     if not configured_secret:
         configured_secret = os.environ.get("ANTEUMBRA_SECRET_KEY", "").strip()

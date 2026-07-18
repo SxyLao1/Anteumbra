@@ -3,12 +3,12 @@
 from functools import wraps
 from ipaddress import ip_address, ip_network
 from flask import request, session, redirect, url_for, make_response
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import get_runtime_config
 
 
 def get_admin_credentials():
     """从配置读取管理员凭证"""
-    cfg = ConfigRegistry.get_raw_config().get("web_admin", {})
+    cfg = get_runtime_config().get("web_admin", {})
     username = cfg.get("username", "admin")
     password_hash = cfg.get("password_hash", "")
     allowed_ips = cfg.get("allowed_ips", ["127.0.0.1"])

@@ -1,9 +1,4 @@
-"""Architecture boundary tests.
-
-These tests intentionally use a ratchet model:
-current migration debt is listed in allowlists, while new violations fail.
-When a dependency is cleaned up, remove it from the relevant allowlist.
-"""
+"""Architecture boundary tests for the modular-monolith dependency rules."""
 
 from __future__ import annotations
 
@@ -86,40 +81,6 @@ def _format_edges(edges: Iterable[ImportEdge]) -> str:
     )
 
 
-# Known migration debt. The rule is no new direct web -> infrastructure imports.
-# Prefer application services for config/path/storage/monitoring access.
-KNOWN_INTERFACES_TO_INFRASTRUCTURE: set[tuple[str, str]] = {
-    ("interfaces/web/auth.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/factory.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/factory.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/_shared.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/admin_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/admin_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/metrics.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/monitor_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/profiles_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/quarantine_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/records_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/records_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/scanner_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/scanner_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-    ("interfaces/web/blueprints/settings_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/system_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/yara_bp.py", "anteumbra.infrastructure.config.registry"),
-    ("interfaces/web/blueprints/yara_bp.py", "anteumbra.infrastructure.utils.path_utils"),
-}
-
-
-# Known migration debt. Infrastructure should receive an event publisher port
-# instead of importing the application PluginManager directly.
-KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER: set[tuple[str, str]] = {
-    ("infrastructure/block_ledger.py", "anteumbra.application.plugin_manager"),
-    ("infrastructure/suspicious_registry.py", "anteumbra.application.plugin_manager"),
-    ("infrastructure/wal_manager.py", "anteumbra.application.plugin_manager"),
-}
-
-
 # The launcher is the composition root and may start the web interface.
 KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
     ("application/launcher.py", "anteumbra.interfaces.web.factory"),
@@ -166,62 +127,31 @@ def test_packaged_code_does_not_import_top_level_tools():
     )
 
 
-def test_interfaces_do_not_add_new_direct_infrastructure_imports():
+def test_interfaces_do_not_import_infrastructure():
     violations = [
         edge
         for edge in _internal_import_edges()
         if edge.source_layer == "interfaces"
         and edge.imported_layer == "infrastructure"
-        and edge.key not in KNOWN_INTERFACES_TO_INFRASTRUCTURE
     ]
     assert not violations, (
         "interfaces must depend on application/domain, not infrastructure. "
-        "Route new access through an application service, or document existing debt "
-        "in KNOWN_INTERFACES_TO_INFRASTRUCTURE:\n"
+        "Route access through an application service:\n"
         + _format_edges(violations)
     )
 
 
-def test_known_interfaces_to_infrastructure_debt_still_matches_reality():
-    actual = {
-        edge.key
-        for edge in _internal_import_edges()
-        if edge.source_layer == "interfaces" and edge.imported_layer == "infrastructure"
-    }
-    stale_allowlist = KNOWN_INTERFACES_TO_INFRASTRUCTURE - actual
-    assert not stale_allowlist, (
-        "remove cleaned-up web -> infrastructure imports from the allowlist:\n"
-        + "\n".join(f"{source}: {imported}" for source, imported in sorted(stale_allowlist))
-    )
-
-
-def test_infrastructure_does_not_add_new_plugin_manager_imports():
+def test_infrastructure_does_not_import_plugin_manager():
     violations = [
         edge
         for edge in _internal_import_edges()
         if edge.source_layer == "infrastructure"
         and edge.imported == "anteumbra.application.plugin_manager"
-        and edge.key not in KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER
     ]
     assert not violations, (
         "infrastructure should not import PluginManager directly. "
-        "Use an EventPublisher port/facade instead, or document existing debt "
-        "in KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER:\n"
+        "Use an EventPublisher port supplied by the composition root:\n"
         + _format_edges(violations)
-    )
-
-
-def test_known_infrastructure_plugin_manager_debt_still_matches_reality():
-    actual = {
-        edge.key
-        for edge in _internal_import_edges()
-        if edge.source_layer == "infrastructure"
-        and edge.imported == "anteumbra.application.plugin_manager"
-    }
-    stale_allowlist = KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER - actual
-    assert not stale_allowlist, (
-        "remove cleaned-up infrastructure -> PluginManager imports from the allowlist:\n"
-        + "\n".join(f"{source}: {imported}" for source, imported in sorted(stale_allowlist))
     )
 
 

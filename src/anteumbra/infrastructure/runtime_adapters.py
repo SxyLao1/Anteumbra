@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from anteumbra.domain.runtime import RuntimeContext, RuntimeServices
+from anteumbra.domain.runtime import EventPublisherPort, RuntimeContext, RuntimeServices
 from anteumbra.domain.site import SiteIdentity
 
 
@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 class SuspiciousRegistryAdapter:
     """Adapt the legacy registry module to the explicit detection port."""
+
+    def __init__(self, event_publisher: EventPublisherPort) -> None:
+        self._events = event_publisher
 
     def add(
         self,
@@ -34,13 +37,18 @@ class SuspiciousRegistryAdapter:
             detection_source=detection_source,
             site_id=site.site_id,
             site_name=site.site_name,
+            event_publisher=self._events,
         )
 
     def remove(self, file_path: Path, *, site: SiteIdentity) -> bool:
         """Mark a Registry record removed without crossing site boundaries."""
         from anteumbra.infrastructure.suspicious_registry import remove
 
-        return remove(file_path, site_id=site.site_id)
+        return remove(
+            file_path,
+            site_id=site.site_id,
+            event_publisher=self._events,
+        )
 
 
 class MetricsAdapter:
@@ -78,7 +86,7 @@ def build_compatibility_runtime_services(
     context = RuntimeContext.from_websites(config, list(websites))
     return RuntimeServices(
         context=context,
-        registry=SuspiciousRegistryAdapter(),
+        registry=SuspiciousRegistryAdapter(NullEventPublisher()),
         metrics=MetricsAdapter(),
         events=NullEventPublisher(),
     )

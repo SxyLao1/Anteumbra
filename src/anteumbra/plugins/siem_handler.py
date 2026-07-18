@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 class SIEMHandlerPlugin(Plugin):
     """Export every suspicious-registry detection without coupling Registry to SIEM."""
 
+    def __init__(self, exporter: object) -> None:
+        self._exporter = exporter
+
     @property
     def name(self) -> str:
         return "siem_handler"
@@ -33,9 +36,7 @@ class SIEMHandlerPlugin(Plugin):
         if not getattr(self, "_enabled", True):
             return None
         try:
-            from anteumbra.infrastructure.monitoring.siem_exporter import emit_detection_event
-
-            emit_detection_event(dict(event.payload or {}))
+            self._exporter.emit_detection(dict(event.payload or {}))
         except Exception:
             logger.exception("SIEMHandler: failed to export record_added event")
         return None

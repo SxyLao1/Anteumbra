@@ -16,6 +16,7 @@ import importlib
 import logging
 import queue
 import threading
+from collections.abc import Callable, Mapping
 from typing import Dict, List, Optional, Any
 
 from anteumbra.domain import Plugin, DomainEvent
@@ -28,12 +29,14 @@ logger = logging.getLogger(__name__)
 
 
 class PluginManager:
-    """插件管理器 — 单例，管理所有插件的生命周期"""
+    """Own plugin lifecycle and event dispatch for one application runtime."""
 
-    _instance: Optional["PluginManager"] = None
-    _lock = threading.Lock()
-
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        metric_recorder: Callable[[str], None] | None = None,
+        plugin_factories: Mapping[str, Callable[[], Plugin]] | None = None,
+    ) -> None:
         self._rwlock = threading.RLock()                 # Thread-safe access to all dicts
         self._plugins: Dict[str, Plugin] = {}           # name → Plugin 实例
         self._detectors: Dict[str, Detector] = {}       # name → Detector
@@ -49,15 +52,17 @@ class PluginManager:
         self._worker_running: bool = False
         self._worker_thread: Optional[threading.Thread] = None
         self._abandoned_threads: List[tuple[str, threading.Thread]] = []
+        self._metric_recorder = metric_recorder
+        self._plugin_factories = dict(plugin_factories or {})
 
-    @classmethod
-    def get_instance(cls) -> "PluginManager":
-        """获取单例"""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
-        return cls._instance
+    def set_plugin_factories(
+        self,
+        factories: Mapping[str, Callable[[], Plugin]],
+    ) -> None:
+        """Set built-in factories before runtime initialization."""
+        if self._plugins:
+            raise RuntimeError("plugin factories cannot change after registration")
+        self._plugin_factories = dict(factories)
 
     # ── 初始化 ──────────────────────────────────────────
 
@@ -210,14 +215,14 @@ class PluginManager:
                     plugin.name,
                     event.event_type,
                 )
-                _record_metric("plugin_handler_skipped")
+                self._record_metric("plugin_handler_skipped")
                 continue
             if len(self._abandoned_threads) >= self._max_abandoned_threads:
                 logger.error(
                     "PluginManager: abandoned handler limit reached; skipping plugin '%s'",
                     plugin.name,
                 )
-                _record_metric("plugin_handler_skipped")
+                self._record_metric("plugin_handler_skipped")
                 continue
             result_container = []
             exc_container = []
@@ -237,7 +242,7 @@ class PluginManager:
                     plugin.name, event.event_type, self._dispatch_timeout,
                 )
                 self._abandoned_threads.append((plugin.name, t))
-                _record_metric("plugin_handler_timeout")
+                self._record_metric("plugin_handler_timeout")
                 continue
             if exc_container:
                 logger.error(
@@ -279,9 +284,18 @@ class PluginManager:
                 "PluginManager: event queue full; dispatching '%s' synchronously",
                 event_type,
             )
-            _record_metric("plugin_queue_overflow")
+            self._record_metric("plugin_queue_overflow")
             self.dispatch(event)
         return None
+
+    def publish(
+        self,
+        event_type: str,
+        source: str,
+        payload: Mapping[str, Any],
+    ) -> None:
+        """Implement the runtime event-publisher port."""
+        self.emit(event_type, source, dict(payload))
 
     def _has_abandoned_handler(self, plugin_name: str) -> bool:
         return any(name == plugin_name for name, _ in self._abandoned_threads)
@@ -345,6 +359,12 @@ class PluginManager:
     def _load_builtin(self, name: str) -> Optional[Plugin]:
         """加载内置插件（从 plugins/ 目录）"""
         try:
+            factory = self._plugin_factories.get(name)
+            if factory is not None:
+                instance = factory()
+                self.register(instance)
+                return instance
+
             module = importlib.import_module(f"anteumbra.plugins.{name}")
             # 查找模块中第一个 Plugin 子类
             plugin_cls = None
@@ -368,19 +388,13 @@ class PluginManager:
             logger.error("PluginManager: 加载内置插件 '%s' 失败: %s", name, e)
             return None
 
-
-# ── 便捷函数 ──────────────────────────────────────────
-
-def get_plugin_manager() -> PluginManager:
-    """获取插件管理器单例"""
-    return PluginManager.get_instance()
-
-
-def init_plugins(config: Dict[str, Any]) -> PluginManager:
-    """初始化插件系统（app.py 启动时调用）"""
-    pm = get_plugin_manager()
-    pm.init_from_config(config)
-    return pm
+    def _record_metric(self, name: str) -> None:
+        if self._metric_recorder is None:
+            return
+        try:
+            self._metric_recorder(name)
+        except Exception:
+            logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)
 
 
 def _positive_int(value: Any, *, default: int) -> int:
@@ -395,12 +409,3 @@ def _positive_float(value: Any, *, default: float) -> float:
         return max(0.01, float(value))
     except (TypeError, ValueError):
         return default
-
-
-def _record_metric(name: str) -> None:
-    try:
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-        get_metrics().increment(name)
-    except Exception:
-        logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)

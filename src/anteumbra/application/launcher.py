@@ -31,10 +31,6 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         print("[FATAL] No enabled websites in config.toml")
         return
 
-    from anteumbra.application.runtime_adapters import build_runtime_services
-
-    runtime_services = build_runtime_services(config, websites)
-
     missing_paths: list[Path] = []
     for website in websites:
         website.path = normalize_path(website.path)
@@ -75,13 +71,21 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     print("-" * 50)
 
     try:
+        plugin_manager = _start_plugins(config, warnings)
+
+        from anteumbra.application.runtime_adapters import build_runtime_services
+
+        runtime_services = build_runtime_services(
+            config,
+            websites,
+            event_publisher=plugin_manager,
+        )
+
         from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
-        app = create_app()
+        app = create_app(plugin_manager=plugin_manager)
         web_server = create_runtime_server(app, host, port)
         _launcher_state["web_server"] = web_server
-
-        _start_plugins(config, warnings)
 
         _migrate_site_metadata(warnings)
         monitors, log_monitors, site_warnings = _start_site_monitors(
@@ -282,19 +286,70 @@ def _start_profile_workers(threat_graph, runtime_logger, stop_event) -> list[thr
     return threads
 
 
-def _start_plugins(config: dict[str, Any], warnings: list[str]) -> None:
+def _start_plugins(config: dict[str, Any], warnings: list[str]):
     try:
-        from anteumbra.application.plugin_manager import init_plugins
+        from anteumbra.application.plugin_manager import PluginManager
+        from anteumbra.infrastructure.monitoring.metrics import get_metrics
 
-        manager = init_plugins(config)
+        metrics = get_metrics()
+        manager = PluginManager(
+            metric_recorder=lambda name: metrics.increment(name),
+        )
+        manager.set_plugin_factories(
+            _build_builtin_plugin_factories(config, manager)
+        )
+        manager.init_from_config(config)
         _launcher_state["plugin_manager"] = manager
         if manager.is_enabled:
             plugins = manager.list_all()
             names = ", ".join(plugin["name"] for plugin in plugins)
             print(f"[OK] Plugins: {len(plugins)} loaded ({names})")
+        return manager
     except Exception as exc:
         logger.exception("Plugin startup failed")
         warnings.append(f"Plugin system failed: {exc}")
+        from anteumbra.infrastructure.runtime_adapters import NullEventPublisher
+
+        return NullEventPublisher()
+
+
+def _build_builtin_plugin_factories(
+    config: dict[str, Any],
+    event_publisher,
+) -> dict[str, Callable[[], Any]]:
+    """Wire official plugins without allowing them to locate runtime services."""
+    from anteumbra.application.quarantine_service import quarantine_registered_file
+    from anteumbra.infrastructure.monitoring.notifier import (
+        format_alert_message,
+        get_notifier,
+    )
+    from anteumbra.infrastructure.monitoring.siem_exporter import get_siem_exporter
+    from anteumbra.infrastructure.quarantine import is_recently_restored
+    from anteumbra.infrastructure.threat_graph import get_threat_graph
+    from anteumbra.infrastructure.utils.logger_factory import get_logger
+    from anteumbra.plugins.notifier_handler import NotifierHandlerPlugin
+    from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
+    from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
+    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
+
+    return {
+        "notifier_handler": lambda: NotifierHandlerPlugin(
+            get_notifier(get_logger("monitor.notifier")),
+            format_alert_message,
+            config,
+        ),
+        "quarantine_handler": lambda: QuarantineHandlerPlugin(
+            quarantine_file=quarantine_registered_file,
+            recently_restored=is_recently_restored,
+            events=event_publisher,
+            runtime_config=config,
+        ),
+        "siem_handler": lambda: SIEMHandlerPlugin(get_siem_exporter()),
+        "threat_graph_handler": lambda: ThreatGraphHandlerPlugin(
+            get_threat_graph(),
+            event_publisher,
+        ),
+    }
 
 
 def _start_waf_poller(warnings: list[str]) -> None:

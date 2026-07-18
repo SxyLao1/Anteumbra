@@ -12,6 +12,7 @@ were previously scattered across FileMonitorHandler.
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from collections.abc import Callable, Mapping
 from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import Plugin, DomainEvent
@@ -38,9 +39,16 @@ if not logger.handlers:
 class NotifierHandlerPlugin(Plugin):
     """Bridge plugin: subscribes to alert_requested and delegates to concrete Notifier."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        notifier: object,
+        formatter: Callable[[dict[str, Any]], str],
+        runtime_config: Mapping[str, Any],
+    ) -> None:
         super().__init__()
-        self._notifier = None
+        self._notifier = notifier
+        self._formatter = formatter
+        self._runtime_config = runtime_config
         self._logger = None
 
     @property
@@ -56,17 +64,14 @@ class NotifierHandlerPlugin(Plugin):
         return ["alert_requested"]
 
     def activate(self, config: Dict[str, Any]) -> None:
-        # Lazy-init notifier on first alert to avoid config dependency at import time
         logger.info("NotifierHandler: 已激活")
         self._logger = logger
 
     def deactivate(self) -> None:
         logger.info("NotifierHandler: 已停用")
-        if self._notifier is not None:
-            from anteumbra.infrastructure.monitoring.notifier import shutdown_notifier
-
-            shutdown_notifier()
-        self._notifier = None
+        shutdown = getattr(self._notifier, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
         """Handle alert_requested — format and send via concrete Notifier."""
@@ -82,23 +87,16 @@ class NotifierHandlerPlugin(Plugin):
         ctx = dict(payload)
 
         # Enrich with system status
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            cfg = ConfigRegistry.get_raw_config()
-            ctx["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
-            blocker_cfg = cfg.get("ip_blocker", {})
-            ctx["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
-            ctx["block_device_count"] = len(blocker_cfg.get("devices", []))
-        except Exception:
-            logger.warning(
-                "NotifierHandler: failed to enrich alert with runtime config",
-                exc_info=True,
-            )
+        ctx["auto_quarantine_enabled"] = self._runtime_config.get(
+            "quarantine", {}
+        ).get("auto_quarantine_enabled", True)
+        blocker_cfg = self._runtime_config.get("ip_blocker", {})
+        ctx["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
+        ctx["block_device_count"] = len(blocker_cfg.get("devices", []))
 
         # Format message
         try:
-            from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-            message = format_alert_message(ctx)
+            message = self._formatter(ctx)
         except Exception as e:
             logger.warning("NotifierHandler: format_alert_message 失败: %s", e)
             message = f"[Anteumbra {level}] {alert_type}"
@@ -113,9 +111,6 @@ class NotifierHandlerPlugin(Plugin):
     def _send(self, message: str, level: str, site_id: str | None = None) -> None:
         """Send alert through concrete Notifier instance (best-effort)."""
         try:
-            if self._notifier is None:
-                from anteumbra.infrastructure.monitoring.notifier import get_notifier
-                self._notifier = get_notifier(self._logger or logging.getLogger("monitor.notifier"))
             self._notifier._safe_notify(message, level=level, site_id=site_id)
             logger.info("NotifierHandler: queued alert level=%s", level)
         except Exception as e:

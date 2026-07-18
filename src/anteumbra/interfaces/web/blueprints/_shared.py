@@ -75,7 +75,7 @@ def verify_file_in_registry(file_path: str) -> bool:
     """
     try:
         from anteumbra.application.registry_service import get_all
-        from anteumbra.infrastructure.utils.path_utils import path_to_key
+        from anteumbra.application.path_service import path_to_key
         raw_key = path_to_key(file_path)
         records = get_all()
         for r in records:

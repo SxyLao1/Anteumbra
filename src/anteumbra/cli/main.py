@@ -88,7 +88,7 @@ def _find_project_root() -> Path:
 
     # 3. Global install registry
     try:
-        from anteumbra.cli.install_registry import get_install_info
+        from anteumbra.infrastructure.config.install_registry import get_install_info
         info = get_install_info()
         if info:
             p = Path(info["install_path"])
@@ -1076,7 +1076,10 @@ def install(path, force):
     import secrets as _sec
     import string as _str
     from datetime import datetime
-    from anteumbra.cli.install_registry import get_install_info, register_install
+    from anteumbra.infrastructure.config.install_registry import (
+        get_install_info,
+        register_install,
+    )
 
     target = Path(path).resolve() if path else Path.cwd().resolve()
 

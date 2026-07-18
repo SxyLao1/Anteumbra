@@ -13,7 +13,11 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import (
+    get_config_path,
+    get_runtime_config,
+    reload_config,
+)
 from anteumbra.application.registry_service import (
     get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
 )
@@ -161,7 +165,7 @@ def system_session_panel():
             )
 
         page = max(1, request.args.get('page', 1, type=int))
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
 
         now = datetime.now()
@@ -225,7 +229,7 @@ def system_session_panel():
 def system_config_panel():
     """Config hot-reload monitoring data"""
     try:
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         config_data = json.dumps(config, sort_keys=True)
         config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
@@ -259,7 +263,7 @@ def system_config_panel():
         return render_template(
             'admin/panels/config_panel.html',
             config_signature=config_signature,
-            config_path=str(ConfigRegistry._config_path),
+            config_path=str(get_config_path()),
             history=paginated_history,
             page=page, total_pages=total_pages, total=total,
             rule_stats=rule_stats,
@@ -427,7 +431,7 @@ def system_session_cleanup():
                 all_sessions.sort(key=lambda x: x['mtime'], reverse=True)
 
         page = 1
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
         total = len(all_sessions)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -463,9 +467,9 @@ def system_session_cleanup():
 def system_config_reload():
     """Manual config hot-reload (returns rendered panel HTML)"""
     try:
-        ConfigRegistry.initialize(force=True)
+        reload_config()
 
-        config_data = json.dumps(ConfigRegistry.get_raw_config(), sort_keys=True)
+        config_data = json.dumps(get_runtime_config(), sort_keys=True)
         config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
 
         history_logger = get_config_history_logger()
@@ -489,7 +493,7 @@ def system_config_reload():
         return render_template(
             'admin/panels/config_panel.html',
             config_signature=config_signature,
-            config_path=str(ConfigRegistry._config_path),
+            config_path=str(get_config_path()),
             history=formatted_history,
             rule_stats=rule_stats,
             yara_enabled=len(rule_stats) > 0,

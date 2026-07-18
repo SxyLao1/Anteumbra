@@ -19,9 +19,13 @@ from flask import (
     Response, current_app, stream_with_context
 )
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import (
+    get_enabled_websites,
+    get_runtime_config,
+    resolve_site_identity,
+)
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.blueprints._shared import (
     save_scan_to_disk, load_scans_from_disk,
     _cache_put, _cache_get, _cache_cleanup_stale,
@@ -45,8 +49,8 @@ _SCAN_JOB_TTL = 3600
 def scanner_page():
     """主动扫描器页面"""
     try:
-        config = ConfigRegistry.get_raw_config()
-        websites = ConfigRegistry.get_enabled_websites()
+        config = get_runtime_config()
+        websites = get_enabled_websites()
         default_site = next(iter(websites), None) if len(websites) == 1 else None
         default_dir = str(default_site.path) if default_site else ""
 
@@ -202,7 +206,7 @@ def scanner_run():
         return jsonify({"success": False, "error": "missing target_dir"}), 400
 
     try:
-        identity = ConfigRegistry.resolve_site_identity(
+        identity = resolve_site_identity(
             target_dir, site_id=requested_site_id
         )
     except ValueError as exc:
@@ -341,13 +345,13 @@ def scanner_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
         requested_site_id = request.form.get("site_id") or None
-        identity = ConfigRegistry.resolve_site_identity(
+        identity = resolve_site_identity(
             file_path, site_id=requested_site_id
         )
 
         from anteumbra.application.registry_service import get_all, add as reg_add
         from anteumbra.application.quarantine_service import quarantine_registered_file
-        from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
+        from anteumbra.application.path_service import path_to_key, normalize_path
 
         target = path_to_key(file_path)
         record = None

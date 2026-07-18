@@ -151,23 +151,20 @@ def test_quarantine_filters_records_by_site(tmp_path, monkeypatch):
 
 
 def test_quarantine_batch_alert_carries_one_site_identity(monkeypatch):
-    from types import SimpleNamespace
-
-    from anteumbra.application import plugin_manager
     from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
 
     emitted = []
-    monkeypatch.setattr(
-        plugin_manager,
-        "get_plugin_manager",
-        lambda: SimpleNamespace(
-            is_enabled=True,
-            emit=lambda event_type, source, payload: emitted.append(
-                (event_type, source, payload)
-            ),
-        ),
+
+    class Events:
+        def publish(self, event_type, source, payload):
+            emitted.append((event_type, source, payload))
+
+    plugin = QuarantineHandlerPlugin(
+        quarantine_file=lambda **_kwargs: None,
+        recently_restored=lambda _path: False,
+        events=Events(),
+        runtime_config={},
     )
-    plugin = QuarantineHandlerPlugin()
     plugin.activate({"batch_threshold": 2})
     plugin._batch_state["alpha"] = {
         "count": 2,

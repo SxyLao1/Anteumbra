@@ -126,7 +126,6 @@ def test_baseline_scan_queues_existing_script_files(monkeypatch, tmp_path):
 def _run_suspicious_scan_with_log_attribution(
     monkeypatch, tmp_path, *, log_monitor_enabled, analyzer_factory
 ):
-    from anteumbra.application import plugin_manager
     from anteumbra.infrastructure import quarantine, suspicious_registry
     from anteumbra.infrastructure.monitoring import log_analyzer
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
@@ -150,11 +149,6 @@ def _run_suspicious_scan_with_log_attribution(
         monkeypatch.setattr(monitor_module.ConfigRegistry, "get_raw_config", lambda: {
             "quarantine": {"auto_quarantine_enabled": False}
         })
-        monkeypatch.setattr(
-            plugin_manager,
-            "get_plugin_manager",
-            lambda: SimpleNamespace(is_enabled=False),
-        )
         monkeypatch.setattr(quarantine, "is_recently_restored", lambda _path: False)
         monkeypatch.setattr(
             suspicious_registry,
@@ -209,7 +203,6 @@ def test_file_detection_uses_log_attribution_when_log_monitor_is_enabled(
 def test_recently_restored_file_does_not_emit_a_duplicate_detection(
     monkeypatch, tmp_path
 ):
-    from anteumbra.application import plugin_manager
     from anteumbra.infrastructure import quarantine, suspicious_registry
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
@@ -225,11 +218,6 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(
         website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
     )
     try:
-        monkeypatch.setattr(
-            plugin_manager,
-            "get_plugin_manager",
-            lambda: SimpleNamespace(is_enabled=False),
-        )
         monkeypatch.setattr(quarantine, "is_recently_restored", lambda _path: True)
         monkeypatch.setattr(
             suspicious_registry,

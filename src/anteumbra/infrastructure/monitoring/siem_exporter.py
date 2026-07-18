@@ -167,6 +167,35 @@ class SIEMExporter:
             })
         return self.emit_batch(events)
 
+    def emit_detection(
+        self,
+        record: Dict[str, Any],
+        category: str = "webshell.detected",
+    ) -> Optional[str]:
+        """Export one Registry detection using the standard SIEM schema."""
+        return self.emit({
+            "id": record.get("id", ""),
+            "detected_at": record.get("detected_at", ""),
+            "file_path": record.get("file_path", ""),
+            "display_name": (
+                Path(record.get("file_path", "")).name
+                if record.get("file_path")
+                else "unknown"
+            ),
+            "features": record.get("features", []),
+            "rule_name": (
+                record.get("features", [None])[0]
+                if record.get("features")
+                else "unknown"
+            ),
+            "category": category,
+            "severity": "high",
+            "source_ip": record.get("first_seen_ip", "unknown"),
+            "confidence": 85,
+            "mitre_tid": "T1505.003",
+            "mitre_tactic": "Persistence",
+        })
+
     def close(self) -> None:
         if self._sock:
             try:
@@ -196,17 +225,4 @@ def get_siem_exporter() -> SIEMExporter:
 
 def emit_detection_event(record: Dict[str, Any], category: str = "webshell.detected") -> Optional[str]:
     """Hook: emit SIEM event when a new detection record is added."""
-    return get_siem_exporter().emit({
-        "id": record.get("id", ""),
-        "detected_at": record.get("detected_at", ""),
-        "file_path": record.get("file_path", ""),
-        "display_name": Path(record.get("file_path", "")).name if record.get("file_path") else "unknown",
-        "features": record.get("features", []),
-        "rule_name": record.get("features", [None])[0] if record.get("features") else "unknown",
-        "category": category,
-        "severity": "high",
-        "source_ip": record.get("first_seen_ip", "unknown"),
-        "confidence": 85,
-        "mitre_tid": "T1505.003",
-        "mitre_tactic": "Persistence",
-    })
+    return get_siem_exporter().emit_detection(record, category)

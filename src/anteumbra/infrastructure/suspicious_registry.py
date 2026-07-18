@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
+from anteumbra.domain.runtime import EventPublisherPort
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
@@ -495,6 +496,20 @@ def _matches_site(record: Dict, site_id: Optional[str]) -> bool:
     return record.get("site_id") == str(site_id).strip().lower()
 
 
+def _publish_event(
+    publisher: EventPublisherPort | None,
+    event_type: str,
+    payload: Dict,
+) -> None:
+    """Publish a Registry event only through an explicitly supplied runtime port."""
+    if publisher is None:
+        return
+    try:
+        publisher.publish(event_type, "suspicious_registry", payload)
+    except Exception:
+        _get_logger().debug("Registry event publish failed: %s", event_type, exc_info=True)
+
+
 def migrate_site_metadata() -> int:
     """Persist site ownership for historical Registry records once configuration is ready."""
     _ensure_initialized()
@@ -701,6 +716,7 @@ def add(
     detection_source: str = "passive",
     site_id: str = None,
     site_name: str = None,
+    event_publisher: EventPublisherPort | None = None,
 ):
     """添加可疑文件（线程安全版）。v1.8.4: 支持传入 first_seen_ip，避免本地检测时IP显示None。
        v1.9.0: 支持 detection_source 区分被动/主动检测。"""
@@ -770,21 +786,14 @@ def add(
             except Exception as e:
                 _get_logger().warning(f"[REGISTRY] SSE推送失败: {e}")
 
-            # v2.0: Emit event for PluginManager handlers
-            try:
-                from anteumbra.application.plugin_manager import get_plugin_manager
-                pm = get_plugin_manager()
-                if pm.is_enabled:
-                    pm.emit("record_added", "suspicious_registry", {
-                        "file_path": abs_path,
-                        "detected_at": datetime.now().isoformat(),
-                        "features": features,
-                        "first_seen_ip": first_seen_ip,
-                        "detection_source": detection_source,
-                        **site.as_dict(),
-                    })
-            except Exception:
-                _get_logger().debug("PluginManager emit record_added failed", exc_info=True)
+            _publish_event(event_publisher, "record_added", {
+                "file_path": abs_path,
+                "detected_at": datetime.now().isoformat(),
+                "features": features,
+                "first_seen_ip": first_seen_ip,
+                "detection_source": detection_source,
+                **site.as_dict(),
+            })
 
             log_with_symbol("registry_add", "info", f"{file_path.name} | 特征: {', '.join(features[:3])}")
 
@@ -825,7 +834,11 @@ def get_all(
     filtered.sort(key=lambda x: x.get("detected_at", ""), reverse=True)
     return filtered
 
-def mark_alerted(file_path: Path, site_id: Optional[str] = None):
+def mark_alerted(
+    file_path: Path,
+    site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
+):
     """标记已告警"""
     _ensure_initialized()  # 确保初始化
 
@@ -839,19 +852,12 @@ def mark_alerted(file_path: Path, site_id: Optional[str] = None):
                 _save_registry(registry)
                 log_with_symbol("notice", "debug", f"标记已告警: {file_path.name}")
 
-                # v2.0: Emit event for PluginManager handlers
-                try:
-                    from anteumbra.application.plugin_manager import get_plugin_manager
-                    pm = get_plugin_manager()
-                    if pm.is_enabled:
-                        pm.emit("registry_changed", "suspicious_registry", {
-                            "operation": "mark_alerted",
-                            "file_path": abs_path,
-                            "site_id": item.get("site_id"),
-                            "site_name": item.get("site_name"),
-                        })
-                except Exception:
-                    _get_logger().debug("PluginManager emit registry_changed (mark_alerted) failed", exc_info=True)
+                _publish_event(event_publisher, "registry_changed", {
+                    "operation": "mark_alerted",
+                    "file_path": abs_path,
+                    "site_id": item.get("site_id"),
+                    "site_name": item.get("site_name"),
+                })
                 break
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
@@ -860,6 +866,7 @@ def mark_quarantined(
     file_path: str,
     quarantine_id: str,
     site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
 ) -> bool:
     """v1.7.9: 标记文件已被隔离 — 更新 Registry 条目并设 file_exists=False"""
     _ensure_initialized()
@@ -877,20 +884,13 @@ def mark_quarantined(
                     log_with_symbol("quarantine_add", "info",
                                     f"Registry 已标记隔离: {Path(file_path).name} -> {quarantine_id}")
 
-                    # v2.0: Emit event for PluginManager handlers
-                    try:
-                        from anteumbra.application.plugin_manager import get_plugin_manager
-                        pm = get_plugin_manager()
-                        if pm.is_enabled:
-                            pm.emit("registry_changed", "suspicious_registry", {
-                                "operation": "mark_quarantined",
-                                "file_path": abs_path,
-                                "quarantine_id": quarantine_id,
-                                "site_id": item.get("site_id"),
-                                "site_name": item.get("site_name"),
-                            })
-                    except Exception:
-                        _get_logger().debug("PluginManager emit registry_changed (mark_quarantined) failed", exc_info=True)
+                    _publish_event(event_publisher, "registry_changed", {
+                        "operation": "mark_quarantined",
+                        "file_path": abs_path,
+                        "quarantine_id": quarantine_id,
+                        "site_id": item.get("site_id"),
+                        "site_name": item.get("site_name"),
+                    })
                     return True
             _get_logger().warning("Registry record not found for quarantine: %s", abs_path)
             return False
@@ -899,7 +899,11 @@ def mark_quarantined(
         return False
 
 
-def mark_restored(file_path: str, site_id: Optional[str] = None) -> bool:
+def mark_restored(
+    file_path: str,
+    site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
+) -> bool:
     """Clear quarantine state after a file is restored from quarantine."""
     _ensure_initialized()
     try:
@@ -916,18 +920,12 @@ def mark_restored(file_path: str, site_id: Optional[str] = None) -> bool:
                     log_with_symbol("quarantine_restore", "info",
                                     f"Registry restored: {Path(file_path).name}")
 
-                    try:
-                        from anteumbra.application.plugin_manager import get_plugin_manager
-                        pm = get_plugin_manager()
-                        if pm.is_enabled:
-                            pm.emit("registry_changed", "suspicious_registry", {
-                                "operation": "mark_restored",
-                                "file_path": abs_path,
-                                "site_id": item.get("site_id"),
-                                "site_name": item.get("site_name"),
-                            })
-                    except Exception:
-                        _get_logger().debug("PluginManager emit registry_changed (mark_restored) failed", exc_info=True)
+                    _publish_event(event_publisher, "registry_changed", {
+                        "operation": "mark_restored",
+                        "file_path": abs_path,
+                        "site_id": item.get("site_id"),
+                        "site_name": item.get("site_name"),
+                    })
                     return True
             return False
     except Exception as e:
@@ -939,6 +937,7 @@ def mark_false_positive(
     file_path: Union[Path, str],
     reason: str = "",
     site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
 ) -> bool:
     """v2.0: 标记记录为误报 — 在 Registry 中设置 marked_false_positive=True
 
@@ -970,20 +969,13 @@ def mark_false_positive(
 
         _save_registry(registry)
 
-        # v2.0: Emit event for PluginManager handlers
-        try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("registry_changed", "suspicious_registry", {
-                    "operation": "mark_false_positive",
-                    "file_path": abs_path,
-                    "reason": reason,
-                    "site_id": item.get("site_id"),
-                    "site_name": item.get("site_name"),
-                })
-        except Exception:
-            logger.debug("PluginManager emit registry_changed (mark_false_positive) failed", exc_info=True)
+        _publish_event(event_publisher, "registry_changed", {
+            "operation": "mark_false_positive",
+            "file_path": abs_path,
+            "reason": reason,
+            "site_id": item.get("site_id"),
+            "site_name": item.get("site_name"),
+        })
 
         logger.info(f"[REGISTRY][FALSE_POSITIVE] 已标记误报: {abs_path}")
         return True
@@ -993,7 +985,12 @@ def mark_false_positive(
         return False
 
 
-def increment_access(file_path: Path, ip: str, site_id: Optional[str] = None):
+def increment_access(
+    file_path: Path,
+    ip: str,
+    site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
+):
     """增加访问计数 - v1.7.7-Patch11: 使用防抖SSE推送"""
     _ensure_initialized()
     site = _resolve_site_identity(file_path, site_id)
@@ -1042,24 +1039,21 @@ def increment_access(file_path: Path, ip: str, site_id: Optional[str] = None):
         # - 最后一次更新后2秒，前端最终状态一定正确
         trigger_registry_update_debounced()
 
-        # v2.0: Emit event for PluginManager handlers
-        try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("registry_changed", "suspicious_registry", {
-                    "operation": "increment_access",
-                    "file_path": abs_path,
-                    "ip": ip,
-                    **site.as_dict(),
-                })
-        except Exception:
-            _get_logger().debug("PluginManager emit registry_changed (increment_access) failed", exc_info=True)
+        _publish_event(event_publisher, "registry_changed", {
+            "operation": "increment_access",
+            "file_path": abs_path,
+            "ip": ip,
+            **site.as_dict(),
+        })
 
     except Exception as e:
         log_with_symbol("error_increment", "error", f"异常: {e}", _get_logger())
 
-def remove(file_path: Union[Path, str], site_id: Optional[str] = None) -> bool:
+def remove(
+    file_path: Union[Path, str],
+    site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
+) -> bool:
     """
     v1.7.6-Patch1: 软删除（标记file_exists=False），不是物理删除
     与误报标记区分：此操作由文件删除事件触发
@@ -1110,19 +1104,12 @@ def remove(file_path: Union[Path, str], site_id: Optional[str] = None) -> bool:
         except Exception as e:
             logger.warning(f"[REGISTRY] SSE推送失败: {e}")
 
-        # v2.0: Emit event for PluginManager handlers
-        try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("registry_changed", "suspicious_registry", {
-                    "operation": "remove",
-                    "file_path": abs_path,
-                    "site_id": item.get("site_id"),
-                    "site_name": item.get("site_name"),
-                })
-        except Exception:
-            logger.debug("PluginManager emit registry_changed (remove) failed", exc_info=True)
+        _publish_event(event_publisher, "registry_changed", {
+            "operation": "remove",
+            "file_path": abs_path,
+            "site_id": item.get("site_id"),
+            "site_name": item.get("site_name"),
+        })
 
         return True
 
@@ -1209,7 +1196,9 @@ def compact_registry():
 # ── v1.1.0: Public status getters (replaces direct access to private module globals) ──
 
 def soft_delete_record(
-    file_path: Union[Path, str], site_id: Optional[str] = None
+    file_path: Union[Path, str],
+    site_id: Optional[str] = None,
+    event_publisher: EventPublisherPort | None = None,
 ) -> bool:
     """v1.1.0: 软删除记录 — 标记 file_exists=False 并记录删除时间。
 
@@ -1229,19 +1218,12 @@ def soft_delete_record(
                 item["deleted_at"] = datetime.now().isoformat()
                 _save_registry(registry)
 
-                # v1.1.0: Emit event for PluginManager handlers
-                try:
-                    from anteumbra.application.plugin_manager import get_plugin_manager
-                    pm = get_plugin_manager()
-                    if pm.is_enabled:
-                        pm.emit("registry_changed", "suspicious_registry", {
-                            "operation": "soft_delete",
-                            "file_path": abs_path,
-                            "site_id": item.get("site_id"),
-                            "site_name": item.get("site_name"),
-                        })
-                except Exception:
-                    _get_logger().debug("PluginManager emit registry_changed (soft_delete) failed", exc_info=True)
+                _publish_event(event_publisher, "registry_changed", {
+                    "operation": "soft_delete",
+                    "file_path": abs_path,
+                    "site_id": item.get("site_id"),
+                    "site_name": item.get("site_name"),
+                })
 
                 return True
         return False

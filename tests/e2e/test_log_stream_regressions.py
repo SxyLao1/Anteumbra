@@ -65,7 +65,8 @@ def test_log_history_uses_configured_website_logs_with_default_fallbacks():
         "monitor_bp.py",
     )
 
-    assert "ConfigRegistry.get_enabled_websites()" in monitor_bp
+    assert "get_enabled_websites()" in monitor_bp
+    assert "anteumbra.infrastructure.config.registry" not in monitor_bp
     assert "logs/{website.name}/monitor.log" in monitor_bp
     assert "logs/Default Website/monitor.log" in monitor_bp
     assert "logs/Website-PhpStudy/monitor.log" in monitor_bp

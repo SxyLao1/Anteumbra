@@ -19,13 +19,13 @@ from flask import Blueprint, request, jsonify, render_template, abort, current_a
 from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
 
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import get_runtime_config
 from anteumbra.application.yara_service import (
     get_yara_engine,
     resolve_yara_rules_path,
 )
 from anteumbra.application.logging_service import log_with_symbol
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 
 try:
@@ -42,7 +42,7 @@ _rule_operation_lock = threading.RLock()
 
 def _get_rules_path(config: Optional[Dict] = None) -> Path:
     """Return the rule directory used by the active scanner."""
-    config = config or ConfigRegistry.get_raw_config()
+    config = config or get_runtime_config()
     paths_cfg = config.get("paths", {})
     yara_cfg = config.get("scanner", {}).get("yara", {})
     configured_path = (
@@ -174,7 +174,7 @@ def list_rules():
         page = max(1, int(request.args.get('page', 1)))
 
         # v1.7.5修复：从配置读取YARA分页大小
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         default_per_page = config.get("web_admin", {}).get("yara_items_per_page", 6)
         per_page = max(1, int(request.args.get('per_page', default_per_page)))
 
@@ -370,7 +370,7 @@ def upload_rule():
             }), 400
 
         # 验证2：文件大小限制（从config.toml读取）
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         filesizes_cfg = config.get("filesizes", {})
         max_rule_size_kb = filesizes_cfg.get("max_rule_file_size_kb", 100)
 
@@ -534,7 +534,7 @@ def search_rules():
 
         # 获取分页参数
         page = max(1, int(request.args.get('page', 1)))
-        config = ConfigRegistry.get_raw_config()
+        config = get_runtime_config()
         per_page = config.get("web_admin", {}).get("yara_items_per_page", 6)
 
         total = len(filtered)

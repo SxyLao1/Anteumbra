@@ -14,11 +14,13 @@ embedded in FileMonitorHandler._do_scan().
 """
 import logging
 import time
+from collections.abc import Callable, Mapping
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin
+from anteumbra.domain.runtime import EventPublisherPort
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +44,20 @@ if not logger.handlers:
 class QuarantineHandlerPlugin(Plugin):
     """Bridge plugin: subscribes to file_quarantined and delegates to concrete quarantine."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        quarantine_file: Callable[..., Optional[Dict[str, Any]]],
+        recently_restored: Callable[[str], bool],
+        events: EventPublisherPort,
+        runtime_config: Mapping[str, Any],
+    ) -> None:
         self._batch_threshold = 50
         self._batch_state: Dict[str, Dict[str, Any]] = {}
+        self._quarantine_file = quarantine_file
+        self._recently_restored = recently_restored
+        self._events = events
+        self._runtime_config = runtime_config
 
     @property
     def name(self) -> str:
@@ -87,36 +100,13 @@ class QuarantineHandlerPlugin(Plugin):
         ts = _time.strftime("%Y-%m-%d %H:%M:%S")
 
         # -- Check quarantine config --
-        quarantine_enabled = True
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            quarantine_enabled = ConfigRegistry.get_raw_config().get(
-                "quarantine", {}
-            ).get("auto_quarantine_enabled", True)
-        except Exception as exc:
-            logger.warning(
-                "[QUARANTINE] unable to read auto-quarantine config; skipping %s: %s",
-                file_path,
-                exc,
-                exc_info=True,
-            )
-            self._emit_alert(
-                "quarantine_skipped",
-                ts,
-                file_path,
-                first_seen_ip,
-                features,
-                "WARNING",
-                reason=f"config unavailable: {exc}",
-                site_id=site_id,
-                site_name=site_name,
-            )
-            return None
+        quarantine_enabled = self._runtime_config.get("quarantine", {}).get(
+            "auto_quarantine_enabled", True
+        )
 
         # -- Check recently-restored whitelist --
         try:
-            from anteumbra.infrastructure.quarantine import is_recently_restored
-            if is_recently_restored(file_path):
+            if self._recently_restored(file_path):
                 logger.info("[QUARANTINE] 跳过刚恢复文件: %s", file_path)
                 return None
         except Exception as exc:
@@ -149,8 +139,7 @@ class QuarantineHandlerPlugin(Plugin):
 
         # -- Perform quarantine --
         try:
-            from anteumbra.application.quarantine_service import quarantine_registered_file
-            result = quarantine_registered_file(
+            result = self._quarantine_file(
                 file_path=file_path,
                 rule_name=rule_name,
                 features=features,
@@ -201,23 +190,20 @@ class QuarantineHandlerPlugin(Plugin):
                     site_id: Optional[str] = None,
                     site_name: Optional[str] = None,
                     **extra) -> None:
-        """Emit alert_requested event through PluginManager (best-effort)."""
+        """Emit alert_requested through the injected runtime event port."""
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("alert_requested", self.name, {
-                    "alert_type": alert_type,
-                    "timestamp": timestamp,
-                    "file_path": file_path,
-                    "first_seen_ip": first_seen_ip,
-                    "features": features,
-                    "level": level,
-                    "site_id": site_id,
-                    "site_name": site_name,
-                    "engine": "QuarantineHandler",
-                    **extra,
-                })
+            self._events.publish("alert_requested", self.name, {
+                "alert_type": alert_type,
+                "timestamp": timestamp,
+                "file_path": file_path,
+                "first_seen_ip": first_seen_ip,
+                "features": features,
+                "level": level,
+                "site_id": site_id,
+                "site_name": site_name,
+                "engine": "QuarantineHandler",
+                **extra,
+            })
         except Exception:
             logger.warning(
                 "[QUARANTINE] failed to emit alert type=%s for %s",
@@ -235,17 +221,14 @@ class QuarantineHandlerPlugin(Plugin):
         state["count"] = 0
         state["last_flush"] = time.time()
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("alert_requested", self.name, {
-                    "alert_type": "quarantine_batch",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "batch_count": count,
-                    "level": "INFO",
-                    "site_id": site_id,
-                    "site_name": state["site_name"],
-                })
+            self._events.publish("alert_requested", self.name, {
+                "alert_type": "quarantine_batch",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "batch_count": count,
+                "level": "INFO",
+                "site_id": site_id,
+                "site_name": state["site_name"],
+            })
         except Exception:
             logger.warning(
                 "[QUARANTINE] failed to emit batch alert for %d files at site %s",

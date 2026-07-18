@@ -15,7 +15,7 @@ import time
 from flask import Blueprint, jsonify
 from pathlib import Path
 from typing import Dict, Any, Optional
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.application.path_service import normalize_path
 
 logger = logging.getLogger(__name__)
 

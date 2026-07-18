@@ -14,13 +14,18 @@ import logging
 import time
 from typing import List, Optional, Dict, Any
 
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin
+from anteumbra.domain.runtime import EventPublisherPort
 
 logger = logging.getLogger(__name__)
 
 
 class ThreatGraphHandlerPlugin(Plugin):
     """Bridge plugin: subscribes to registry events and updates ThreatGraph."""
+
+    def __init__(self, graph: object, events: EventPublisherPort) -> None:
+        self._graph = graph
+        self._events = events
 
     @property
     def name(self) -> str:
@@ -59,8 +64,7 @@ class ThreatGraphHandlerPlugin(Plugin):
                 entry[key] = payload[key]
 
         try:
-            from anteumbra.infrastructure.threat_graph import get_threat_graph
-            graph = get_threat_graph()
+            graph = self._graph
             old_count = len(graph.get_active_profiles())
             graph.ingest_registry_entry(entry)
             new_count = len(graph.get_active_profiles())
@@ -76,16 +80,13 @@ class ThreatGraphHandlerPlugin(Plugin):
     # -- Internal --
 
     def _emit_updated(self, graph) -> None:
-        """Emit threat_graph_updated event (best-effort)."""
+        """Emit threat_graph_updated through the injected runtime port."""
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                active = graph.get_active_profiles()
-                pm.emit("threat_graph_updated", self.name, {
-                    "active_profile_count": len(active),
-                    "top_profile_id": active[0].profile_id if active else None,
-                    "top_risk_score": active[0].risk_score if active else 0,
-                })
+            active = graph.get_active_profiles()
+            self._events.publish("threat_graph_updated", self.name, {
+                "active_profile_count": len(active),
+                "top_profile_id": active[0].profile_id if active else None,
+                "top_risk_score": active[0].risk_score if active else 0,
+            })
         except Exception:
             logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)

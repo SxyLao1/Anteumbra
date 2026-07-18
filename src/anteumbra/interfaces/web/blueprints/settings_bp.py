@@ -10,8 +10,12 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.config_service import load_config
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from anteumbra.application.config_service import (
+    get_config_path,
+    get_runtime_config,
+    load_config,
+    reload_config,
+)
 from anteumbra.interfaces.web.auth import require_auth
 
 logger = logging.getLogger(__name__)
@@ -52,7 +56,7 @@ def settings_notifications():
 def settings_config_editor():
     """v1.8.0: Dynamic config.toml editor -- server-side struct parsing, template rendering"""
     try:
-        config_path = ConfigRegistry._config_path
+        config_path = get_config_path()
         sections = {}
         current_section = None
         pending_desc = None
@@ -127,8 +131,8 @@ def settings_config_save():
         changes = data.get('changes', {})
         if not changes:
             return jsonify({'success': False, 'error': 'No changes'}), 400
-        config_path = ConfigRegistry._config_path
-        raw = ConfigRegistry.get_raw_config()
+        config_path = get_config_path()
+        raw = get_runtime_config()
         for full_key, new_val in changes.items():
             parts = full_key.split('.')
             target = raw
@@ -163,9 +167,9 @@ def settings_config_save():
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(tomli_w.dumps(raw))
         try:
-            ConfigRegistry.initialize(force=True)
+            reload_config()
         except Exception:
-            logger.debug("ConfigRegistry re-initialization failed after config save", exc_info=True)
+            logger.debug("Runtime config reload failed after config save", exc_info=True)
         return jsonify({'success': True, 'message': 'Config saved'})
     except Exception as e:
         current_app.logger.error(f'[SETTINGS] config save failed: {e}', exc_info=True)
@@ -177,7 +181,7 @@ def settings_config_save():
 def settings_config_data():
     """v1.8.0: Return config.toml structured data + comment descriptions"""
     try:
-        config_path = ConfigRegistry._config_path
+        config_path = get_config_path()
         sections = {}
         current_section = None
         pending_desc = None
@@ -231,7 +235,7 @@ def settings_env_save():
     try:
         data = request.get_json()
         vars_data = data.get('vars', {})
-        config_path = ConfigRegistry._config_path
+        config_path = get_config_path()
         env_path = os.path.join(os.path.dirname(config_path), '.env')
 
         existing = {}
@@ -256,9 +260,9 @@ def settings_env_save():
             if v:
                 os.environ[k] = v
         try:
-            ConfigRegistry.initialize(force=True)
+            reload_config()
         except Exception:
-            logger.debug("ConfigRegistry re-initialization failed after .env save", exc_info=True)
+            logger.debug("Runtime config reload failed after .env save", exc_info=True)
 
         return jsonify({'success': True, 'message': '.env saved + config reloaded'})
     except Exception as e:
@@ -294,7 +298,7 @@ def settings_notifications_save():
         if section not in ('email', 'wechat', 'webhook') or key not in ('enabled',):
             return jsonify({"error": "Invalid parameters"}), 400
 
-        config_path = ConfigRegistry._config_path
+        config_path = get_config_path()
         with open(config_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
@@ -386,7 +390,7 @@ def settings_siem_status():
 def settings_storage_status():
     """Storage backend status panel for Settings page."""
     try:
-        cfg = ConfigRegistry.get_raw_config().get("storage", {})
+        cfg = get_runtime_config().get("storage", {})
         backend = cfg.get("backend", "json")
         db_path = cfg.get("db_path", "data/anteumbra.db")
         db = Path(db_path)
@@ -410,8 +414,16 @@ def settings_storage_status():
 def settings_plugin_status():
     """Plugin system status panel for Settings page."""
     try:
-        from anteumbra.application.plugin_manager import get_plugin_manager
-        pm = get_plugin_manager()
+        pm = current_app.extensions.get("anteumbra.plugin_manager")
+        if pm is None:
+            return render_template(
+                'admin/panels/plugin_status.html',
+                enabled=False,
+                plugins=[],
+                detector_count=0,
+                notifier_count=0,
+                source_count=0,
+            )
         plugins = pm.list_all()
         detector_count = len(pm.detectors)
         notifier_count = len(pm.notifiers)
