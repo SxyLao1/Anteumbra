@@ -42,7 +42,7 @@ dependencies = [
     "colorama>=0.4.6",
     "urllib3>=2.2.2",
     "python-dotenv>=1.0.0",
-    "gunicorn>=22.0.0",
+    "waitress>=3.0.0,<4.0.0",
     "yara-python>=4.5.0",
 ]
 

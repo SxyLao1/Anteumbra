@@ -766,6 +766,7 @@ class TestCliInstall:
         import anteumbra.cli.main as cli_main
 
         calls = []
+        ready_checks = []
         pid_reads = iter([None, 12345])
 
         def fake_popen(cmd, **kwargs):
@@ -778,7 +779,11 @@ class TestCliInstall:
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
         monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
-        monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
+        monkeypatch.setattr(
+            cli_main,
+            "_service_ready",
+            lambda _host, _port: ready_checks.append(True) or True,
+        )
         monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
         monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
 
@@ -787,6 +792,7 @@ class TestCliInstall:
         assert result.exit_code == 0, result.output
         assert calls, "start should launch a background process"
         cmd = calls[0][0]
+        assert "-u" in cmd
         assert "-m" in cmd
         assert "anteumbra" in cmd
         assert "run" in cmd
@@ -795,7 +801,36 @@ class TestCliInstall:
         assert calls[0][1]["stdout"] is not None
         assert calls[0][1]["stderr"] == cli_main.subprocess.STDOUT
         assert calls[0][1]["env"]["PYTHONIOENCODING"] == "utf-8"
+        assert calls[0][1]["env"]["PYTHONUNBUFFERED"] == "1"
+        assert len(ready_checks) == 2
         assert (tmp_path / "data" / "anteumbra.log").exists()
+
+    def test_start_rejects_a_process_that_exits_after_initial_readiness(
+        self, tmp_path, monkeypatch
+    ):
+        """A transient listener must not be reported as a running service."""
+        import anteumbra.cli.main as cli_main
+
+        pid_reads = iter([None, 12345])
+
+        class FakeProc:
+            def __init__(self):
+                self._poll_results = iter([None, 1])
+
+            def poll(self):
+                return next(self._poll_results, 1)
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
+        monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli_main.subprocess, "Popen", lambda *_args, **_kwargs: FakeProc())
+
+        result = CliRunner().invoke(cli_main.cli, ["start"])
+
+        assert result.exit_code == 1
+        assert "Anteumbra failed to start" in result.output
+        assert "Anteumbra started" not in result.output
 
     def test_start_uses_configured_admin_port_by_default(self, tmp_path, monkeypatch):
         """start should honor web_admin.port when --port is not explicitly passed."""

@@ -37,6 +37,5 @@ wtforms>=3.1.2
 Flask-Session>=0.5.0        # 原2.3.3是Flask版本号，此包正确版本是0.x
 python-dotenv>=1.0.0
 
-# Production WSGI Server (Linux/macOS)
-gunicorn>=22.0.0             # multi-worker production deployment
-# Windows alternative: waitress>=3.0.0
+# Production WSGI Server (Windows/Linux/macOS)
+waitress>=3.0.0,<4.0.0

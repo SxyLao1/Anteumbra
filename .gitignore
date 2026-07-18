@@ -35,6 +35,7 @@ Thumbs.db
 # Runtime data (generated at install time)
 data/
 logs/
+/rules/
 /quarantine/
 /temp/
 /sites/

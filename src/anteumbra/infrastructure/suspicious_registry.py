@@ -702,6 +702,7 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
                 if pm.is_enabled:
                     pm.emit("record_added", "suspicious_registry", {
                         "file_path": abs_path,
+                        "detected_at": datetime.now().isoformat(),
                         "features": features,
                         "first_seen_ip": first_seen_ip,
                         "detection_source": detection_source,

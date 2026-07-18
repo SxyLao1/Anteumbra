@@ -56,6 +56,30 @@ def assess_runtime_capabilities(config: Mapping[str, Any]) -> dict[str, Any]:
             + ", ".join(sorted(incomplete_channels)),
         })
 
+    siem_config = config.get("siem", {})
+    if not isinstance(siem_config, Mapping):
+        siem_config = {}
+    siem_enabled = bool(siem_config.get("enabled", False))
+    plugins_config = config.get("plugins", {})
+    if not isinstance(plugins_config, Mapping):
+        plugins_config = {}
+    builtin_plugins = plugins_config.get("builtin", [])
+    if isinstance(builtin_plugins, str):
+        builtin_plugins = [builtin_plugins]
+    siem_handler_config = plugins_config.get("siem_handler", {})
+    if not isinstance(siem_handler_config, Mapping):
+        siem_handler_config = {}
+    siem_bridge_ready = bool(
+        plugins_config.get("enabled", False)
+        and "siem_handler" in builtin_plugins
+        and siem_handler_config.get("enabled", True)
+    )
+    if siem_enabled and not siem_bridge_ready:
+        warnings.append({
+            "code": "siem_event_bridge_missing",
+            "message": "SIEM export is enabled but the siem_handler event bridge is disabled; file detections will stay local.",
+        })
+
     return {
         "status": "degraded" if warnings else "healthy",
         "detection": {
@@ -68,6 +92,10 @@ def assess_runtime_capabilities(config: Mapping[str, Any]) -> dict[str, Any]:
             "mode": "external" if configured_channels else "local_only",
             "configured_channels": sorted(configured_channels),
             "incomplete_channels": sorted(incomplete_channels),
+        },
+        "siem": {
+            "enabled": siem_enabled,
+            "event_bridge_ready": siem_bridge_ready,
         },
         "warnings": warnings,
     }

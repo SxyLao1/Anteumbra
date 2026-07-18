@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.26
+# Anteumbra User Manual v1.0.27
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -33,6 +33,13 @@ Anteumbra is a **passive Web perimeter security observatory**. It does not block
 - **Quarantines** detected threats (manual or automatic)
 - **Alerts** via email, WeChat, webhook, or syslog
 - **Exports** detection data to SIEM systems
+
+### Operating Boundary
+
+Anteumbra is intended for a single host or a small web workload. It provides
+filesystem integrity monitoring, WebShell detection, local triage/response,
+and standard alert or SIEM output. It is not an inline WAF, EDR, SIEM,
+central-management platform, or distributed HA service.
 
 ### Architecture at a Glance
 
@@ -156,6 +163,18 @@ name = "My Website"
 path = "/var/www/html"     # Web root to monitor
 port = 80
 enabled = true
+```
+
+When placing the dashboard behind Nginx, Caddy, or another reverse proxy,
+trust only that proxy peer. `trusted_proxy_ips` accepts IPs or CIDRs;
+`session_cookie_secure = "auto"` enables secure cookies whenever a trusted
+proxy is configured.
+
+```toml
+[web_admin]
+trusted_proxy_ips = ["127.0.0.1"]
+trusted_proxy_hops = 1
+session_cookie_secure = "auto"
 ```
 
 For multiple sites, replace the single `[website]` table with repeated
@@ -328,8 +347,10 @@ Options:
 ```
 
 Background startup writes to `data/anteumbra.log` and waits up to 15 seconds
-for both the PID file and configured HTTP listener. It exits non-zero and
-points to that log when the process exits or never becomes ready.
+for both the PID file and two consecutive configured HTTP-listener checks. It
+uses unbuffered output so startup progress and failures appear in that log
+immediately. It exits non-zero and points to that log when the process exits
+or never becomes ready.
 
 ### `anteumbra stop`
 Stops the running process. On Windows it uses `taskkill /F`; on Linux it sends
@@ -388,7 +409,7 @@ The main dashboard shows:
 `/admin/quarantine` — Isolated WebShell copies.
 
 **Operations:**
-- **Restore** — Move file back to original location (+30s whitelist to prevent re-quarantine)
+- **Restore** — Move file back to its original location (30-second guard suppresses duplicate scans, alerts, SIEM exports, and re-quarantine)
 - **Delete** — Permanent removal
 - **Batch** — Multi-select across pages, then restore/delete the selected quarantine records
 - **Cross-link** — Navigate from quarantine record back to original detection
@@ -435,7 +456,14 @@ Uses ssdeep/TLSH/SimHash to group files with ≥80% similarity. Helps identify:
 - **Upload** — Add new rule files
 - **Edit** — In-browser editor with live syntax validation
 - **Delete** — Soft-delete to backup directory
-- **Hot-reload** — Rules reload automatically on file change
+- **Reload** — Upload, edit, and delete operations reload rules immediately
+
+The bundled set contains 27 `.yar` files. Anteumbra compiles each file in its
+own namespace and skips only the invalid file if a custom rule has a compiler
+or runtime failure; the last valid ruleset remains active on a failed reload.
+For filesystem edits made outside the UI, use the YARA reload action or restart
+the service. This avoids a background file watcher silently changing active
+detection policy.
 
 ### 5.8 Manual Scanner
 
@@ -698,12 +726,16 @@ Plugin.on_event(event) → Optional[List[DomainEvent]]
 
 ## 11. Deployment
 
-### 11.1 Production with Gunicorn
+### 11.1 Production Runtime (Waitress)
 
 ```bash
-pip install gunicorn
-gunicorn -w 4 -b 127.0.0.1:8080 "anteumbra.interfaces.web.factory:create_app()"
+anteumbra run --host 127.0.0.1 --port 8080
 ```
+
+`anteumbra run` starts the complete runtime, including Waitress, file monitors,
+baseline scanning, plugins, SIEM export, and background workers. Do not launch
+only `create_app()` through a separate WSGI command; that omits the monitoring
+and response subsystems.
 
 ### 11.2 systemd Service
 
@@ -752,7 +784,8 @@ services:
 3. **IP whitelist** (`web_admin.allowed_ips`)
 4. **CSRF protection** (enabled by default)
 5. **HTTPS via reverse proxy** (Nginx/Caddy in front)
-6. **Regular backups** of `data/` and `config.toml`
+6. **Trust forwarded headers only from the proxy peer** (`trusted_proxy_ips`)
+7. **Regular backups** of `data/` and `config.toml`
 
 ### 11.5 Reverse Proxy (Nginx)
 
@@ -764,13 +797,21 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;  # Required for SSE log stream
     }
 }
 ```
+
+Pair this with `web_admin.trusted_proxy_ips = ["127.0.0.1"]` when Nginx is
+local. Do not add broad networks unless every member is a controlled proxy;
+untrusted forwarded headers must not influence client-IP authorization or HTTPS
+cookie behavior.
 
 ---
 
@@ -791,7 +832,9 @@ server {
 → Check `web_admin.sse_log_levels` — DEBUG level is excluded by default. Ensure Nginx has `proxy_buffering off`.
 
 **High memory usage**
-→ Lower `monitor.dir_cache_size` and `filesizes.wal_cleanup_count`. Check `web_admin.sse_max_total_clients`.
+→ Lower `scanner.event_queue_size` or `plugins.event_queue_size` only after
+measuring backpressure. Check `web_admin.sse_max_total_clients` and avoid
+unbounded log-client retention.
 
 **Windows: file changes not detected**
 → Ensure `monitor.windows_verify_delay_ms` is at least 50ms. Check that `paths.monitor_extensions` includes your file types.
@@ -827,5 +870,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.26 — MIT License</sub>
+  <sub>Anteumbra v1.0.27 — MIT License</sub>
 </div>

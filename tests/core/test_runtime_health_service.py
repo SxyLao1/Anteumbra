@@ -1,5 +1,15 @@
 """Runtime capability assessment tests."""
 
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 support
+    import tomli as tomllib
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_missing_yara_and_incomplete_notifications_are_degraded(monkeypatch):
     from anteumbra.application import runtime_health_service
@@ -97,6 +107,72 @@ def test_disabled_notifications_are_an_explicit_local_mode(monkeypatch):
         "configured_channels": [],
         "incomplete_channels": [],
     }
+
+
+def test_enabled_siem_without_event_bridge_is_degraded(monkeypatch):
+    from anteumbra.application import runtime_health_service
+
+    monkeypatch.setattr(
+        runtime_health_service.importlib.util,
+        "find_spec",
+        lambda _name: object(),
+    )
+    result = runtime_health_service.assess_runtime_capabilities({
+        "scanner": {"yara": {"enabled": True}},
+        "notifier": {"enabled": False},
+        "siem": {"enabled": True},
+        "plugins": {"enabled": False, "builtin": []},
+    })
+
+    assert result["status"] == "degraded"
+    assert result["siem"] == {"enabled": True, "event_bridge_ready": False}
+    assert {warning["code"] for warning in result["warnings"]} == {
+        "siem_event_bridge_missing",
+    }
+
+
+def test_enabled_siem_with_handler_is_healthy(monkeypatch):
+    from anteumbra.application import runtime_health_service
+
+    monkeypatch.setattr(
+        runtime_health_service.importlib.util,
+        "find_spec",
+        lambda _name: object(),
+    )
+    result = runtime_health_service.assess_runtime_capabilities({
+        "scanner": {"yara": {"enabled": True}},
+        "notifier": {"enabled": False},
+        "siem": {"enabled": True},
+        "plugins": {
+            "enabled": True,
+            "builtin": ["siem_handler"],
+            "siem_handler": {"enabled": True},
+        },
+    })
+
+    assert result["status"] == "healthy"
+    assert result["siem"] == {"enabled": True, "event_bridge_ready": True}
+
+
+def test_runtime_and_package_config_templates_stay_in_sync(monkeypatch):
+    from anteumbra.application import runtime_health_service
+
+    runtime_template = REPOSITORY_ROOT / "config.toml"
+    package_template = REPOSITORY_ROOT / "src" / "anteumbra" / "config.toml"
+    assert runtime_template.read_text(encoding="utf-8") == package_template.read_text(
+        encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        runtime_health_service.importlib.util,
+        "find_spec",
+        lambda _name: object(),
+    )
+    config = tomllib.loads(package_template.read_text(encoding="utf-8"))
+    result = runtime_health_service.assess_runtime_capabilities(config)
+
+    assert result["status"] == "healthy"
+    assert result["siem"] == {"enabled": True, "event_bridge_ready": True}
 
 
 def test_system_health_keeps_optional_degradation_at_http_200(monkeypatch):

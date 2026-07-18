@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.26-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.27-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -21,6 +21,10 @@ Passive detection, semi-active response, file-level forensics, and attacker prof
 Anteumbra is a web perimeter threat-intelligence and WebShell detection platform for Windows and Linux. It watches website directories, detects suspicious PHP/ASP/JSP/ASPX files with YARA rules, correlates access logs, profiles attacker behavior, and provides a web dashboard for triage, quarantine, restoration, audit, and reporting.
 
 Anteumbra is installed as one product. PyPI users and source-install developers both create runtime instances with the same `anteumbra install` and `anteumbra config` workflow.
+
+## Operational Scope
+
+Anteumbra is designed for one host or a small web workload: filesystem integrity monitoring, WebShell detection, local triage and response, and export to an existing security stack. It is not a replacement for an inline WAF, endpoint detection and response, a SIEM, centralized fleet management, or distributed high availability.
 
 ## Documentation
 
@@ -89,6 +93,7 @@ For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-com
 - Multi-site file monitoring on Windows and Linux
 - Manual scans with scan history and printable reports
 - YARA-based WebShell detection for PHP, ASP, JSP, ASPX, Godzilla, Behinder, and related families
+- 27 packaged YARA files compiled independently, so one invalid custom rule file does not disable the remaining rules
 - Access-log behavior analysis for Nginx, Apache, and Tomcat
 - Attacker profiling, IP reputation, attack chain timelines, and cross-page batch actions
 - Quarantine, restore, false-positive marking, and audit trail workflows
@@ -156,5 +161,5 @@ MIT License. Third-party tools bundled under `tools/` retain their original lice
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.26 · MIT License</sub>
+  <sub>Anteumbra v1.0.27 · MIT License</sub>
 </div>

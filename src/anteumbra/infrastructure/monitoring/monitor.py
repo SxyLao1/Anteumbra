@@ -32,6 +32,16 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_ke
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+
+
+def _runtime_config() -> Dict:
+    """Read runtime configuration without making monitor teardown brittle."""
+    try:
+        return ConfigRegistry.get_raw_config()
+    except RuntimeError:
+        return {}
+
+
 class FileMonitorHandler(FileSystemEventHandler):
     """
     v1.8.1-Release: 跨平台文件监控处理器
@@ -66,8 +76,21 @@ class FileMonitorHandler(FileSystemEventHandler):
         # 平台自适应配置初始化
         self._init_platform_config()
 
-        # v1.7.9: 扫描队列（异步消费，避免高并发阻塞watchdog主线程）
-        self._scan_queue = queue.Queue(maxsize=500)
+        # Bounded queue: overload falls back to synchronous processing instead
+        # of silently dropping a file-system event.
+        scanner_cfg = _runtime_config().get("scanner", {})
+        try:
+            queue_size = max(1, int(scanner_cfg.get("event_queue_size", 500)))
+        except (TypeError, ValueError):
+            queue_size = 500
+        try:
+            self._scan_queue_put_timeout = max(
+                0.01,
+                float(scanner_cfg.get("event_queue_put_timeout_seconds", 0.25)),
+            )
+        except (TypeError, ValueError):
+            self._scan_queue_put_timeout = 0.25
+        self._scan_queue = queue.Queue(maxsize=queue_size)
         self._scan_worker_thread = None
         self._scan_worker_shutdown = threading.Event()
         self._start_scan_worker()
@@ -104,7 +127,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         v1.8.1: 初始化平台自适应配置
         对应论文6.3.2节T-01-B实验发现的二元阈值特性
         """
-        config = ConfigRegistry.get_raw_config()
+        config = _runtime_config()
         monitor_cfg = config.get("monitor", {})
 
         # 检测平台
@@ -279,6 +302,8 @@ class FileMonitorHandler(FileSystemEventHandler):
     def _should_monitor(self, event_path: Path) -> bool:
         """v1.7.5-Patch5: 监控决策 (保持原有逻辑)"""
         try:
+            if event_path.suffix.lower() not in self.monitor_extensions:
+                return False
             rel_path = event_path.relative_to(self.base_path)
             if any(part.lower() in self.exclude_dirs for part in rel_path.parts):
                 log_with_symbol("skip_exclude", "info", f"排除目录: {event_path}", self.logger)
@@ -293,7 +318,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         except Exception:
             self.logger.debug("Failed to check file size for monitoring decision", exc_info=True)
 
-        config = ConfigRegistry.get_raw_config()
+        config = _runtime_config()
         website_cfg = config.get("website", {})
         scan_options_cfg = website_cfg.get("scan_options", {})
         exclude_files = scan_options_cfg.get("exclude_files", ["*.log", "*.cache"])
@@ -514,16 +539,37 @@ class FileMonitorHandler(FileSystemEventHandler):
         while not self._scan_worker_shutdown.is_set():
             try:
                 event_path, event_type = self._scan_queue.get(timeout=1)
+            except queue.Empty:
+                continue
+            try:
                 if event_path is None:
                     break
                 self._do_scan(event_path, event_type)
-            except queue.Empty:
-                continue
             except Exception as e:
                 self.logger.error(f"[SCAN][WORKER] 消费异常: {e}", exc_info=True)
+            finally:
+                self._scan_queue.task_done()
 
     def _do_scan(self, event_path, event_type):
         """实际执行扫描（从 _handle_event 抽离）"""
+        # A restored file generates a fresh filesystem event. Skip before the
+        # scanner so an intentional restore produces neither a new finding nor
+        # scan-log noise during its short guard window.
+        try:
+            from anteumbra.infrastructure.quarantine import is_recently_restored
+
+            if is_recently_restored(str(event_path)):
+                self.logger.info(
+                    "[RESTORE][SKIP] Recently restored file: %s",
+                    event_path.name,
+                )
+                return
+        except Exception:
+            self.logger.debug(
+                "Failed to check restored-file guard before scanning",
+                exc_info=True,
+            )
+
         try:
             if isinstance(self.scan_callback, str):
                 module_path, func_name = self.scan_callback.rsplit('.', 1)
@@ -598,7 +644,13 @@ class FileMonitorHandler(FileSystemEventHandler):
                         self.logger.debug("Failed to parse WAF event log for IP resolution", exc_info=True)
 
                     # Source 2: LogAnalyzer — Apache/Nginx access log (正则解析)
-                    if first_seen_ip == "127.0.0.1":
+                    # Access-log attribution is opt-in.  Otherwise a default
+                    # placeholder path creates a warning for every detection.
+                    log_config = getattr(self.website, "log_config", {}) or {}
+                    if (
+                        first_seen_ip == "127.0.0.1"
+                        and log_config.get("log_monitor_enabled", False)
+                    ):
                         try:
                             from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
                             analyzer = LogAnalyzer(self.website, self.logger)
@@ -659,8 +711,40 @@ class FileMonitorHandler(FileSystemEventHandler):
         """停止扫描工作线程"""
         self._scan_worker_shutdown.set()
         if self._scan_worker_thread and self._scan_worker_thread.is_alive():
-            self._scan_queue.put_nowait((None, None))
+            try:
+                self._scan_queue.put_nowait((None, None))
+            except queue.Full:
+                # The worker observes the shutdown flag after the current item.
+                pass
             self._scan_worker_thread.join(timeout=3)
+
+    def shutdown(self):
+        """Release worker resources when the owning WebsiteMonitor stops."""
+        self._stop_scan_worker()
+
+    def enqueue_scan(self, event_path: Path, event_type: str) -> None:
+        """Queue a scan or apply backpressure without losing the event."""
+        if self._scan_worker_shutdown.is_set():
+            return
+        try:
+            self._scan_queue.put(
+                (event_path, event_type),
+                timeout=self._scan_queue_put_timeout,
+            )
+        except queue.Full:
+            try:
+                from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
+                get_metrics().increment("scan_queue_overflow")
+            except Exception:
+                self.logger.debug("Failed to record scan queue overflow", exc_info=True)
+            log_with_symbol(
+                "scan_queue_full",
+                "warning",
+                f"扫描队列已满，同步处理: {event_path.name}",
+                self.logger,
+            )
+            self._do_scan(event_path, event_type)
 
     def _handle_event(self, event, event_type: str, override_path: Path = None):
         """v1.7.9: 统一事件处理 → 异步入队，不阻塞watchdog主线程"""
@@ -678,12 +762,8 @@ class FileMonitorHandler(FileSystemEventHandler):
                             f"重复事件已过滤: {event_path.name} ({event_type})", self.logger)
             return
 
-        # v1.7.9: 扫描事件入队，后台线程消费
         try:
-            self._scan_queue.put_nowait((event_path, event_type))
-        except queue.Full:
-            log_with_symbol("scan_queue_full", "warning",
-                            f"扫描队列已满，丢弃: {event_path.name}", self.logger)
+            self.enqueue_scan(event_path, event_type)
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
 
@@ -815,6 +895,20 @@ class FileMonitorHandler(FileSystemEventHandler):
             if dest_path.suffix.lower() in self.monitor_extensions:
                 if self._should_monitor(dest_path):
                     try:
+                        from anteumbra.infrastructure.quarantine import is_recently_restored
+
+                        if is_recently_restored(str(dest_path)):
+                            self.logger.info(
+                                "[RESTORE][SKIP] Recently restored file: %s",
+                                dest_path.name,
+                            )
+                            return
+                    except Exception:
+                        self.logger.debug(
+                            "Failed to check restored-file guard before moved-file scanning",
+                            exc_info=True,
+                        )
+                    try:
                         from anteumbra.infrastructure.suspicious_registry import add
                         result = self.scan_callback(dest_path, self.scan_options, self.logger)
                         if result and result.is_suspicious:
@@ -912,6 +1006,8 @@ class WebsiteMonitor:
         self.scan_callback = scan_callback
         self.logger = logger
         self._is_running = False
+        self._baseline_stop = threading.Event()
+        self._baseline_thread = None
 
         self.logger.debug(f"[DEBUG][CONFIG] Website配置: {website.name}")
 
@@ -953,9 +1049,60 @@ class WebsiteMonitor:
 
         if hasattr(self.observer, 'is_alive') and not self.observer.is_alive():
             log_with_symbol("error", "error", "Observer start failed", self.logger)
+            self._is_running = False
+            self.handler.shutdown()
             return
 
         log_with_symbol("success", "info", "Monitor started successfully", self.logger)
+        self._start_baseline_scan()
+
+    def _start_baseline_scan(self):
+        config = _runtime_config()
+        if not config.get("scanner", {}).get("scan_existing_on_start", True):
+            return
+        if self._baseline_thread and self._baseline_thread.is_alive():
+            return
+
+        self._baseline_stop.clear()
+        self._baseline_thread = threading.Thread(
+            target=self._run_baseline_scan,
+            daemon=True,
+            name=f"BaselineScan-{self.website.name}",
+        )
+        self._baseline_thread.start()
+
+    def _run_baseline_scan(self):
+        queued = 0
+        try:
+            for root, dirs, files in os.walk(self.website.path):
+                if self._baseline_stop.is_set():
+                    break
+                dirs[:] = [
+                    name for name in dirs
+                    if name.lower() not in self.handler.exclude_dirs
+                ]
+                for filename in files:
+                    if self._baseline_stop.is_set():
+                        break
+                    file_path = Path(root) / filename
+                    if self.handler._should_monitor(file_path):
+                        self.handler.enqueue_scan(file_path, "BASELINE")
+                        queued += 1
+            try:
+                from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
+                metrics = get_metrics()
+                metrics.increment("baseline_runs")
+                metrics.increment("baseline_files_queued", queued)
+            except Exception:
+                self.logger.debug("Failed to record baseline metrics", exc_info=True)
+            self.logger.info(
+                "[SCAN][BASELINE] %s queued %d existing files",
+                self.website.name,
+                queued,
+            )
+        except Exception:
+            self.logger.exception("[SCAN][BASELINE] Failed for %s", self.website.name)
 
     def stop(self):
         """停止监控"""
@@ -968,6 +1115,10 @@ class WebsiteMonitor:
         self.observer.stop()
         self.observer.join(timeout=10.0)
 
+        self._baseline_stop.set()
+        if self._baseline_thread and self._baseline_thread.is_alive():
+            self._baseline_thread.join(timeout=3.0)
+
         if hasattr(self.observer, 'is_alive') and self.observer.is_alive():
             log_with_symbol("warning", "warning",
                             "Observer未能在10秒内停止，可能资源泄漏", self.logger)
@@ -976,6 +1127,7 @@ class WebsiteMonitor:
         log_with_symbol("info", "info", "Monitor stopped", self.logger)
 
         if hasattr(self, 'handler'):
+            self.handler.shutdown()
             del self.handler
 
     @property

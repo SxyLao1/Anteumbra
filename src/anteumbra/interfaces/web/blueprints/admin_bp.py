@@ -39,7 +39,11 @@ from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.application.sse_service import register_sse_client, unregister_sse_client, \
     trigger_registry_update
 from anteumbra.application.password_service import check_password_strength, update_password_hash_in_config
-from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
+from anteumbra.interfaces.web.auth import (
+    get_admin_credentials,
+    is_ip_allowed,
+    require_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +331,7 @@ def login():
         log_with_symbol("critical_permission", "critical", f"登录频率限制触发: {client_ip}")
         return render_template('admin/login.html', error=rate_msg), 429
 
-    if client_ip not in allowed_ips:
+    if not is_ip_allowed(client_ip, allowed_ips):
         log_with_symbol("critical_permission", "critical", f"登录IP被拒绝: {client_ip}")
         return render_template('admin/login.html', error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):

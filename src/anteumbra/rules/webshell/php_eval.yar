@@ -1,13 +1,13 @@
-rule Custom_WebShell_PhpEval {
+rule PHP_Direct_Superglobal_Eval {
   meta:
-    description = "Custom rule for php_eval (extracted from samples)"
-    author = "AutoGenerator"
-    date = "1767711105"
-    severity = "high"
+    description = "PHP eval or assert directly consumes request data"
+    author = "Anteumbra"
+    severity = "critical"
 
   strings:
-    $1 = "eval\\s*\\("
+    $php = "<?php" nocase ascii
+    $direct = /(eval|assert)\s*\(\s*@?\s*\$_(POST|GET|REQUEST|COOKIE)\s*\[/ nocase ascii
 
   condition:
-    any of them
+    filesize < 2MB and all of them
 }

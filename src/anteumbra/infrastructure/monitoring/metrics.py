@@ -38,6 +38,12 @@ class MetricsCollector:
             "last_notification_at": "",
             "registry_size": 0,
             "log_lines_processed": 0,
+            "scan_queue_overflow": 0,
+            "baseline_runs": 0,
+            "baseline_files_queued": 0,
+            "plugin_queue_overflow": 0,
+            "plugin_handler_timeout": 0,
+            "plugin_handler_skipped": 0,
             "uptime_seconds": 0
         }
         self._start_time = time.time()
@@ -108,6 +114,12 @@ class MetricsCollector:
             self._stats.setdefault("uptime_seconds", 0)
             self._stats.setdefault("registry_qsize", 0)
             self._stats.setdefault("alert_qsize", 0)
+            self._stats.setdefault("scan_queue_overflow", 0)
+            self._stats.setdefault("baseline_runs", 0)
+            self._stats.setdefault("baseline_files_queued", 0)
+            self._stats.setdefault("plugin_queue_overflow", 0)
+            self._stats.setdefault("plugin_handler_timeout", 0)
+            self._stats.setdefault("plugin_handler_skipped", 0)
             return dict(self._stats)
 
     def persist(self):

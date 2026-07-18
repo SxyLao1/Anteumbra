@@ -425,13 +425,31 @@ def quick_scan_yara(file_path: Path, scan_options: ScanOptions, logger: logging.
                 content = raw_data.decode('utf-8', errors='replace') + '\n' + decoded
                 yara_engine = get_yara_engine(logger)
                 if yara_engine.compiled_rules:
-                    matches = yara_engine.compiled_rules.match(data=content)
+                    matches = yara_engine.scan_data(
+                        content,
+                        source_name=f"{file_path}#decoded",
+                    )
                     if matches:
-                        features = [f"DECODED:{m.rule}" for m in matches]
+                        features = [f"DECODED:{m.rule_name}" for m in matches]
+                        score_map = {
+                            'critical': 0.95,
+                            'high': 0.85,
+                            'medium': 0.7,
+                            'low': 0.5,
+                        }
+                        worst_match = matches[0]
                         result = ScanResult(
                             file_path=file_path, is_suspicious=True,
-                            features=features, score=0.85,
-                            engine="decoder+yara")
+                            features=features,
+                            score=score_map.get(worst_match.severity, 0.6),
+                            engine="decoder+yara",
+                            analysis_data={
+                                "yara_matches": len(matches),
+                                "top_rule": worst_match.rule_name,
+                                "severity": worst_match.severity,
+                                "rule_namespace": worst_match.namespace,
+                            },
+                        )
                         logger.info(f"[DECODER] Hit after decode: {file_path.name} -> {', '.join(features[:3])}")
         except Exception:
             logger.debug("Decoder pass failed in quick_scan_yara, using original scan result", exc_info=True)

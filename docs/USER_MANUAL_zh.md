@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.26
+# Anteumbra 用户手册 v1.0.27
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -33,6 +33,10 @@ Anteumbra 是一个**被动的 Web 边界安全观测平台**。它不会内联�
 - **隔离**检测到的威胁（手动或自动）
 - **告警**通过邮件、微信、Webhook 或 Syslog
 - **导出**检测数据到 SIEM 系统
+
+### 适用边界
+
+Anteumbra 适合单机或小规模 Web 负载，提供文件完整性监控、WebShell 检测、本地研判/响应以及标准告警或 SIEM 输出。它不是内联 WAF、EDR、SIEM、集中化管理平台或分布式高可用服务。
 
 ### 架构一览
 
@@ -150,6 +154,15 @@ name = "My Website"
 path = "/var/www/html"     # 要监控的 Web 根目录
 port = 80
 enabled = true
+```
+
+管理后台位于 Nginx、Caddy 或其他反向代理之后时，只信任该代理对端。`trusted_proxy_ips` 接受 IP 或 CIDR；当配置了可信代理时，`session_cookie_secure = "auto"` 会自动启用安全 Cookie。
+
+```toml
+[web_admin]
+trusted_proxy_ips = ["127.0.0.1"]
+trusted_proxy_hops = 1
+session_cookie_secure = "auto"
 ```
 
 多站点配置时，将单个 `[website]` 表替换为多个 `[[website]]` 表。每个启用项
@@ -319,8 +332,8 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
   --port INTEGER   绑定端口（默认读取 config web_admin.port）
 ```
 
-后台启动统一写入 `data/anteumbra.log`，并在 15 秒内同时等待 PID 文件和配置的
-HTTP 监听端口就绪。进程提前退出或未能就绪时，命令返回非零并提示检查该日志。
+后台启动统一写入 `data/anteumbra.log`，并在 15 秒内同时等待 PID 文件和连续两次配置的
+HTTP 监听端口检查成功。它使用无缓冲输出，启动进度和失败信息会立即写入该日志。进程提前退出或未能就绪时，命令返回非零并提示检查该日志。
 
 ### `anteumbra stop`
 停止正在运行的进程。Windows 上使用 `taskkill /F`；Linux 上先发送 `SIGTERM`，
@@ -376,7 +389,7 @@ HTTP 监听端口就绪。进程提前退出或未能就绪时，命令返回非
 `/admin/quarantine` — 隔离的 WebShell 副本。
 
 **操作：**
-- **恢复** — 将文件移回原始位置（+30 秒白名单，防止重新隔离）
+- **恢复** — 将文件移回原始位置（30 秒保护窗口会抑制重复扫描、告警、SIEM 导出和重新隔离）
 - **删除** — 永久删除
 - **批量** — 支持跨页多选后批量恢复/删除隔离记录
 - **交叉链接** — 从隔离记录导航回原始检测记录
@@ -423,7 +436,9 @@ HTTP 监听端口就绪。进程提前退出或未能就绪时，命令返回非
 - **上传** — 添加新规则文件
 - **编辑** — 浏览器内编辑器，支持实时语法验证
 - **删除** — 软删除到备份目录
-- **热加载** — 文件变更时规则自动重新加载
+- **重载** — 上传、编辑、删除操作会立即重载规则
+
+内置规则集包含 27 个 `.yar` 文件。Anteumbra 按文件、按命名空间独立编译；自定义规则出现编译或运行时错误时只跳过该文件，失败重载会保留上一份有效规则集。直接在文件系统中修改规则后，请使用 YARA 重载操作或重启服务；不采用后台文件监听器静默改变正在使用的检测策略。
 
 ### 5.8 手动扫描器
 
@@ -682,12 +697,13 @@ Plugin.on_event(event) → Optional[List[DomainEvent]]
 
 ## 11. 部署
 
-### 11.1 使用 Gunicorn 生产部署
+### 11.1 使用 Waitress 运行时生产部署
 
 ```bash
-pip install gunicorn
-gunicorn -w 4 -b 127.0.0.1:8080 "anteumbra.interfaces.web.factory:create_app()"
+anteumbra run --host 127.0.0.1 --port 8080
 ```
+
+`anteumbra run` 会启动完整运行时，包括 Waitress、文件监控、启动基线扫描、插件、SIEM 导出和后台工作线程。不要只通过其他 WSGI 命令启动 `create_app()`，那会遗漏监控和响应子系统。
 
 ### 11.2 systemd 服务
 
@@ -736,7 +752,8 @@ services:
 3. **IP 白名单**（`web_admin.allowed_ips`）
 4. **CSRF 保护**（默认启用）
 5. **通过反向代理启用 HTTPS**（前方放置 Nginx/Caddy）
-6. **定期备份** `data/` 和 `config.toml`
+6. **只信任代理对端的转发头**（`trusted_proxy_ips`）
+7. **定期备份** `data/` 和 `config.toml`
 
 ### 11.5 反向代理（Nginx）
 
@@ -748,13 +765,18 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;  # SSE 日志流必需
     }
 }
 ```
+
+本机 Nginx 对应 `web_admin.trusted_proxy_ips = ["127.0.0.1"]`。不要加入宽泛网段，除非其中每个成员都是受控代理；不可信的转发头不能影响客户端 IP 授权或 HTTPS Cookie 行为。
 
 ---
 
@@ -775,7 +797,7 @@ server {
 → 检查 `web_admin.sse_log_levels` — DEBUG 级别默认被排除。确保 Nginx 设置了 `proxy_buffering off`。
 
 **内存占用过高**
-→ 降低 `monitor.dir_cache_size` 和 `filesizes.wal_cleanup_count`。检查 `web_admin.sse_max_total_clients`。
+→ 在观测到背压后再降低 `scanner.event_queue_size` 或 `plugins.event_queue_size`。检查 `web_admin.sse_max_total_clients`，避免无限保留日志客户端。
 
 **Windows：文件变更未被检测**
 → 确保 `monitor.windows_verify_delay_ms` 至少为 50ms。检查 `paths.monitor_extensions` 是否包含你的文件类型。
@@ -810,5 +832,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.26 — MIT License</sub>
+  <sub>Anteumbra v1.0.27 — MIT License</sub>
 </div>

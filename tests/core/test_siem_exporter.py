@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter, format_event
 from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
+from anteumbra.domain import DomainEvent
 
 
 class TestSIEMFormatter:
@@ -109,3 +110,24 @@ class TestSIEMExporter:
         count = exporter.export_existing(records)
         assert count == 1
         assert p.exists()
+
+
+def test_siem_handler_exports_registry_events(monkeypatch):
+    from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
+
+    emitted = []
+    monkeypatch.setattr(
+        "anteumbra.infrastructure.monitoring.siem_exporter.emit_detection_event",
+        lambda payload: emitted.append(payload),
+    )
+    plugin = SIEMHandlerPlugin()
+    plugin.activate({"enabled": True})
+
+    plugin.on_event(DomainEvent(
+        "record_added",
+        0,
+        "registry",
+        {"file_path": "/tmp/shell.php", "features": ["YARA:test"]},
+    ))
+
+    assert emitted == [{"file_path": "/tmp/shell.php", "features": ["YARA:test"]}]

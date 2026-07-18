@@ -59,12 +59,12 @@ def _ensure_default_site_dir(root: Path) -> Path:
 
 
 def _find_project_root() -> Path:
-    """Walk up from cwd / install registry to find project root.
+    """Resolve a runtime root without crossing into another installation.
 
     Priority:
     1. ANTEUMBRA_HOME environment variable
-    2. Global install registry (~/.anteumbra/installs.json)
-    3. CWD upward walk (config.toml / pyproject.toml / PID file)
+    2. CWD upward walk (config.toml / pyproject.toml / PID file)
+    3. Global install registry (~/.anteumbra/installs.json)
     """
     # 1. 环境变量
     env_home = os.environ.get("ANTEUMBRA_HOME")
@@ -73,7 +73,19 @@ def _find_project_root() -> Path:
         if p.exists():
             return p
 
-    # 2. 全局安装注册表
+    # 2. CWD 向上遍历. A local config always owns its runtime even when a
+    # machine-wide PyPI installation is registered elsewhere.
+    d = Path.cwd().resolve()
+    for _ in range(6):
+        if ((d / "config.toml").exists()
+            or (d / "pyproject.toml").exists()
+            or (d / "data" / "anteumbra.pid").exists()):
+            return d
+        if d.parent == d:
+            break
+        d = d.parent
+
+    # 3. Global install registry
     try:
         from anteumbra.cli.install_registry import get_install_info
         info = get_install_info()
@@ -87,16 +99,6 @@ def _find_project_root() -> Path:
             exc_info=True,
         )
 
-    # 3. CWD 向上遍历
-    d = Path.cwd().resolve()
-    for _ in range(6):
-        if ((d / "config.toml").exists()
-            or (d / "pyproject.toml").exists()
-            or (d / "data" / "anteumbra.pid").exists()):
-            return d
-        if d.parent == d:
-            break
-        d = d.parent
     return Path.cwd().resolve()
 
 
@@ -253,6 +255,7 @@ def start(host, port):
     log_file.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         str(_get_python()),
+        "-u",
         "-m",
         "anteumbra",
         "run",
@@ -265,7 +268,13 @@ def start(host, port):
     popen_kwargs = {
         "cwd": str(root),
         "stderr": subprocess.STDOUT,
-        "env": {**os.environ, "PYTHONIOENCODING": "utf-8"},
+        # Keep startup failures and runtime progress visible in anteumbra.log.
+        # Redirected stdout is block-buffered by default on Windows.
+        "env": {
+            **os.environ,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUNBUFFERED": "1",
+        },
     }
     if sys.platform == "win32":
         pythonw = Path(sys.exec_prefix) / "pythonw.exe"
@@ -286,6 +295,7 @@ def start(host, port):
 
     # A PID file alone is not readiness.  Wait for both process startup and
     # the configured HTTP listener so configuration/bind failures are visible.
+    ready_checks = 0
     for _ in range(60):
         time.sleep(0.25)
         poll = getattr(process, "poll", None)
@@ -294,10 +304,14 @@ def start(host, port):
             raise SystemExit(1)
         pid = _read_pid()
         if pid and _service_ready(host, port):
+            ready_checks += 1
+            if ready_checks < 2:
+                continue
             click.echo(f"Anteumbra started (PID {pid}).")
             click.echo(f"  Admin: http://{host}:{port}/admin")
             click.echo(f"  Log:   {log_file}")
             return
+        ready_checks = 0
 
     click.echo(
         f"Anteumbra did not become ready within 15 seconds. Check {log_file}",
@@ -775,6 +789,31 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
 
     if not str(web_admin.get("password_hash", "")).strip():
         warnings.append("Admin password hash is empty. Set ANTEUMBRA_PASSWORD_HASH in .env.")
+
+    from ipaddress import ip_network
+
+    for key in ("allowed_ips", "trusted_proxy_ips"):
+        values = web_admin.get(key, [] if key == "trusted_proxy_ips" else ["127.0.0.1"])
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, list):
+            errors.append(f"[web_admin].{key} must be an array of IP addresses or CIDR ranges.")
+            continue
+        for value in values:
+            try:
+                ip_network(str(value).strip(), strict=False)
+            except ValueError:
+                errors.append(f"[web_admin].{key} contains an invalid IP/CIDR: {value!r}")
+
+    secure_cookie = web_admin.get("session_cookie_secure", "auto")
+    if isinstance(secure_cookie, str) and secure_cookie.strip().lower() not in {
+        "auto", "true", "false", "yes", "no", "on", "off", "1", "0",
+    }:
+        errors.append("[web_admin].session_cookie_secure must be true, false, or 'auto'.")
+    if web_admin.get("trusted_proxy_ips") and secure_cookie is False:
+        warnings.append(
+            "Trusted proxy is configured while session_cookie_secure=false; HTTPS session cookies are not protected."
+        )
 
     security = cfg.get("security", {})
     secret = security.get("secret_key", "") if isinstance(security, dict) else ""

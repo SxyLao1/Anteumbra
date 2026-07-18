@@ -5,7 +5,7 @@ project_root = "."
 
 [website]
 name = "Default Website"
-path = "/var/www/html"
+path = "sites/default"
 port = 80
 enabled = true
 
@@ -17,6 +17,12 @@ username = "admin"
 # 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
 password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"
 allowed_ips = ["127.0.0.1"]
+# Only accept X-Forwarded-* headers from these proxy IPs/CIDRs. Leave empty
+# for direct local access. Configure the Nginx/Caddy peer before exposing UI.
+trusted_proxy_ips = []
+trusted_proxy_hops = 1
+# "auto" enables Secure cookies when trusted_proxy_ips is configured.
+session_cookie_secure = "auto"
 sse_log_levels = ["INFO", "ERROR", "CRITICAL"]
 items_per_page = 6
 yara_items_per_page = 10
@@ -34,7 +40,7 @@ sse_max_total_clients = 20
 # v1.8.1: WAF 事件源配置（画像引擎数据来源）
 # ============================================================================
 [waf_source]
-enabled = true
+enabled = false
 type = "mock"
 url = "http://127.0.0.1:8081"
 poll_interval = 10
@@ -430,7 +436,7 @@ scan_timeout = 30
 # 原有配置（保持不变）
 # ============================================================================
 [website.log_config]
-access_log_path = "logs/access.log"
+access_log_path = "/var/log/nginx/access.log"
 filter_internal_ip = false
 log_monitor_enabled = false
 
@@ -508,6 +514,7 @@ enabled = true
 
 # 内置插件列表（PluginManager 启动时自动加载）
 # 可用: stdout_logger, quarantine_handler, notifier_handler,
+#       threat_graph_handler, siem_handler,
 #       waf_adapters.modsecurity, waf_adapters.cloudflare,
 #       waf_adapters.aws_waf, waf_adapters.syslog_waf
 builtin = [
@@ -515,12 +522,22 @@ builtin = [
     "quarantine_handler",
     "notifier_handler",
     "threat_graph_handler",
+    "siem_handler",
 ]
+
+# 事件处理采用有界队列。满载时事件会同步处理而非丢失。
+event_queue_size = 1000
+event_enqueue_timeout_seconds = 0.25
+dispatch_timeout_seconds = 30
+max_abandoned_handlers = 8
 
 # 单插件配置
 [plugins.stdout_logger]
 color = true
 verbose = false
+
+[plugins.siem_handler]
+enabled = true
 
 # WAF 适配器 — ModSecurity JSON 审计日志
 [plugins.modsecurity]
@@ -571,6 +588,13 @@ syslog_port = 514
 syslog_protocol = "udp"
 # 是否在 SIEM 事件中包含文件样本的前 256 字节 (默认关闭)
 include_raw_sample = false
+
+[scanner]
+# Queue overload uses synchronous fallback instead of dropping file events.
+event_queue_size = 500
+event_queue_put_timeout_seconds = 0.25
+# Scan existing monitored script files after startup in a background worker.
+scan_existing_on_start = true
 
 [scanner.yara]
 enabled = true

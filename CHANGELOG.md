@@ -4,6 +4,31 @@
 
 ---
 
+## [1.0.27] - 2026-07-17
+
+### Fixed
+- Made Docker consume the bundled `src/anteumbra/config.toml` template and added a regression guard that keeps the source-runtime and packaged templates identical. Default Docker instances now load the SIEM event bridge instead of reporting SIEM enabled while keeping detection events local.
+- Made Windows background startup use unbuffered daemon output and require two consecutive listener checks before reporting success, so `data/anteumbra.log` is useful during real startup failures.
+- Resolved runtime-root precedence so a local `config.toml` owns its instance before any registered global installation can be selected.
+- Made file-monitor and plugin queues bounded with synchronous backpressure fallbacks; timed-out plugin handlers are capped and skipped while unhealthy instead of accumulating daemon threads.
+- Added startup baseline scanning for existing monitored scripts and explicit monitor-worker shutdown.
+- Prevented a site with disabled access-log monitoring from generating a missing-default-Nginx-log warning for every file detection.
+- Prevented an operator-restored file from being scanned, alerted, exported to SIEM, registered, or re-quarantined again during the 30-second restore guard window.
+- Restricted forwarded-header trust to configured proxy peers/CIDRs and made allowed-IP checks CIDR-aware.
+
+### Changed
+- Replaced the obsolete Gunicorn runtime path with Waitress in package metadata, Docker, CLI deployment guidance, and user manuals.
+- Added `siem_handler`, which bridges `record_added` events to the configured SIEM exporter and reports a degraded runtime capability if that bridge is disabled.
+- Reworked YARA loading to compile every `.yar` file independently, retain the last valid ruleset on failed reload, and isolate per-file runtime failures. The large THOR ruleset is split into nine verified shards; the bundled set now contains 27 rule files.
+- Added generic PHP, ASP, ASPX, and JSP behavior rules while narrowing the generic `eval` rule to avoid normal JSP false positives.
+- Updated deployment, architecture, and configuration guidance for bounded queues, baseline scans, trusted proxies, Waitress, and explicit YARA reload behavior.
+
+### Tests
+- Added regression coverage for daemon readiness, local-runtime root resolution, proxy validation, Waitress lifecycle, YARA fault isolation, monitor queue backpressure, disabled-log-monitor attribution, restored-file de-duplication, SIEM bridging, and runtime health.
+- Validated a real Windows clean runtime: background start/health/stop, PHP YARA detection, Registry record, local alert path, JSON Lines SIEM export, automatic quarantine, CSRF-protected restore, and restore de-duplication.
+- Rebuilt and ran the Docker image after the template fix: default health is healthy, the SIEM bridge is ready, and a PHP test sample produced a YARA hit, Registry record, and JSON Lines SIEM event without executing the sample.
+- Validated a fresh editable source install with a new venv and runtime instance, including force-migration, rule copying, background start, health, and stop. Passed `464` non-UI tests with one explicit skip and `5` current Playwright UI smoke tests.
+
 ## [1.0.26] - 2026-07-17
 
 ### Fixed

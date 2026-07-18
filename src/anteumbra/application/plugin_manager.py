@@ -43,10 +43,12 @@ class PluginManager:
         self._enabled: bool = False
         self._config: Dict[str, Any] = {}
         self._dispatch_timeout = 30.0  # Max seconds per plugin on_event
-        self._event_queue: queue.Queue = queue.Queue()  # Fire-and-Forget event queue
+        self._event_queue: queue.Queue = queue.Queue(maxsize=1000)
+        self._event_enqueue_timeout = 0.25
+        self._max_abandoned_threads = 8
         self._worker_running: bool = False
         self._worker_thread: Optional[threading.Thread] = None
-        self._abandoned_threads: List[threading.Thread] = []  # Track timed-out handler threads
+        self._abandoned_threads: List[tuple[str, threading.Thread]] = []
 
     @classmethod
     def get_instance(cls) -> "PluginManager":
@@ -64,6 +66,24 @@ class PluginManager:
         plugin_cfg = config.get("plugins", {})
         self._enabled = plugin_cfg.get("enabled", False)
         self._config = plugin_cfg
+        self._dispatch_timeout = _positive_float(
+            plugin_cfg.get("dispatch_timeout_seconds", 30),
+            default=30.0,
+        )
+        self._event_enqueue_timeout = _positive_float(
+            plugin_cfg.get("event_enqueue_timeout_seconds", 0.25),
+            default=0.25,
+        )
+        self._max_abandoned_threads = _positive_int(
+            plugin_cfg.get("max_abandoned_handlers", 8),
+            default=8,
+        )
+        queue_size = _positive_int(
+            plugin_cfg.get("event_queue_size", 1000),
+            default=1000,
+        )
+        if not self._worker_running:
+            self._event_queue = queue.Queue(maxsize=queue_size)
 
         if not self._enabled:
             logger.info("PluginManager: 插件系统已关闭（设置 [plugins] enabled = true 启用）")
@@ -105,12 +125,14 @@ class PluginManager:
                 event = self._event_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
-            if event is None:
-                break  # Shutdown signal
             try:
+                if event is None:
+                    break
                 self.dispatch(event)
             except Exception as e:
                 logger.error("PluginManager: emit worker dispatch error: %s", e, exc_info=True)
+            finally:
+                self._event_queue.task_done()
 
     # ── 注册 / 卸载 ────────────────────────────────────
 
@@ -182,6 +204,21 @@ class PluginManager:
         with self._rwlock:
             handlers = list(self._event_handlers.get(event.event_type, []))
         for plugin in handlers:
+            if self._has_abandoned_handler(plugin.name):
+                logger.error(
+                    "PluginManager: plugin '%s' remains unhealthy; skipping event '%s'",
+                    plugin.name,
+                    event.event_type,
+                )
+                _record_metric("plugin_handler_skipped")
+                continue
+            if len(self._abandoned_threads) >= self._max_abandoned_threads:
+                logger.error(
+                    "PluginManager: abandoned handler limit reached; skipping plugin '%s'",
+                    plugin.name,
+                )
+                _record_metric("plugin_handler_skipped")
+                continue
             result_container = []
             exc_container = []
 
@@ -199,7 +236,8 @@ class PluginManager:
                     "PluginManager: 插件 '%s' 处理事件 '%s' 超时 (%ss)，跳过",
                     plugin.name, event.event_type, self._dispatch_timeout,
                 )
-                self._abandoned_threads.append(t)
+                self._abandoned_threads.append((plugin.name, t))
+                _record_metric("plugin_handler_timeout")
                 continue
             if exc_container:
                 logger.error(
@@ -212,7 +250,11 @@ class PluginManager:
 
     def _reap_abandoned(self):
         """清理已完成的被遗弃线程（防止僵尸线程累积）"""
-        self._abandoned_threads = [t for t in self._abandoned_threads if t.is_alive()]
+        self._abandoned_threads = [
+            (name, thread)
+            for name, thread in self._abandoned_threads
+            if thread.is_alive()
+        ]
         if self._abandoned_threads:
             logger.warning(
                 "PluginManager: %d abandoned plugin threads still alive",
@@ -220,7 +262,7 @@ class PluginManager:
             )
 
     def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> None:
-        """Fire-and-Forget: 创建事件并入队（异步），立即返回 None"""
+        """Queue an event; use bounded synchronous fallback under overload."""
         import time
         event = DomainEvent(
             event_type=event_type,
@@ -228,8 +270,21 @@ class PluginManager:
             source=source,
             payload=payload,
         )
-        self._event_queue.put(event)
+        if not self._enabled:
+            return None
+        try:
+            self._event_queue.put(event, timeout=self._event_enqueue_timeout)
+        except queue.Full:
+            logger.error(
+                "PluginManager: event queue full; dispatching '%s' synchronously",
+                event_type,
+            )
+            _record_metric("plugin_queue_overflow")
+            self.dispatch(event)
         return None
+
+    def _has_abandoned_handler(self, plugin_name: str) -> bool:
+        return any(name == plugin_name for name, _ in self._abandoned_threads)
 
     # ── 查询 ────────────────────────────────────────────
 
@@ -270,7 +325,11 @@ class PluginManager:
         # Stop the emit worker thread first
         if self._worker_running:
             self._worker_running = False
-            self._event_queue.put(None)  # Wake up worker
+            try:
+                self._event_queue.put_nowait(None)
+            except queue.Full:
+                # The worker observes _worker_running after its current event.
+                pass
             if self._worker_thread and self._worker_thread.is_alive():
                 self._worker_thread.join(timeout=3.0)
             logger.info("PluginManager: emit worker thread stopped")
@@ -322,3 +381,26 @@ def init_plugins(config: Dict[str, Any]) -> PluginManager:
     pm = get_plugin_manager()
     pm.init_from_config(config)
     return pm
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _positive_float(value: Any, *, default: float) -> float:
+    try:
+        return max(0.01, float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _record_metric(name: str) -> None:
+    try:
+        from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
+        get_metrics().increment(name)
+    except Exception:
+        logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)

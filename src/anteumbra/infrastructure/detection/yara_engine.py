@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
-"""
-@Time: 1/6/2026 1:44 PM
-@Auth: SxyLao1
-@File: yara_engine.py
-@IDE: PyCharm
-@Motto: HACK THE REAL
-v1.7.0重构：清理遗漏的硬编码
-"""
-import os
-from datetime import datetime
+"""Fault-isolated YARA rule loading and scanning."""
+
+from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import List, Dict, Optional, Any, Tuple
+import math
+import threading
+import time
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
@@ -29,246 +26,402 @@ except ImportError:
 class YaraMatch:
     rule_name: str
     namespace: str
-    meta: Dict[str, str]
-    strings: List[Dict]
-    severity: str  # low/medium/high/critical
+    meta: Dict[str, Any]
+    strings: List[Dict[str, Any]]
+    severity: str
+
+
+@dataclass(frozen=True)
+class _CompiledRuleFile:
+    filename: str
+    namespace: str
+    rules: Any
+    rule_count: int
+
+
+class CompositeYaraRules:
+    """Compatibility adapter around independently compiled YARA files."""
+
+    def __init__(
+        self,
+        bundles: List[_CompiledRuleFile],
+        logger: logging.Logger,
+    ) -> None:
+        self._bundles = tuple(bundles)
+        self._logger = logger
+        self._rule_count = sum(bundle.rule_count for bundle in bundles)
+        self.last_match_errors: Dict[str, str] = {}
+
+    def __bool__(self) -> bool:
+        return bool(self._bundles)
+
+    def __len__(self) -> int:
+        return self._rule_count
+
+    def __iter__(self) -> Iterator[Any]:
+        for bundle in self._bundles:
+            yield from bundle.rules
+
+    def match(
+        self,
+        *,
+        data: bytes | str | None = None,
+        filepath: str | None = None,
+        timeout: int | None = None,
+    ) -> List[Any]:
+        """Match every valid file while containing per-file runtime failures."""
+        if data is None and filepath is None:
+            raise ValueError("data or filepath is required")
+
+        deadline = time.monotonic() + timeout if timeout and timeout > 0 else None
+        matches: List[Any] = []
+        errors: Dict[str, str] = {}
+
+        for bundle in self._bundles:
+            match_kwargs: Dict[str, Any] = {}
+            if data is not None:
+                match_kwargs["data"] = data
+            else:
+                match_kwargs["filepath"] = filepath
+
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    errors[bundle.filename] = "global scan timeout exhausted"
+                    self._logger.warning(
+                        "[YARA][TIMEOUT] Global scan timeout exhausted before %s",
+                        bundle.filename,
+                    )
+                    break
+                match_kwargs["timeout"] = max(1, math.ceil(remaining))
+
+            try:
+                matches.extend(bundle.rules.match(**match_kwargs))
+            except Exception as exc:
+                errors[bundle.filename] = str(exc)
+                self._logger.warning(
+                    "[YARA][SKIP] Runtime failure in %s: %s",
+                    bundle.filename,
+                    exc,
+                )
+
+        self.last_match_errors = errors
+        return matches
+
+
+def get_bundled_rules_path() -> Path:
+    """Return the package-owned YARA directory."""
+    import anteumbra
+
+    return Path(anteumbra.__file__).resolve().parent / "rules" / "webshell"
+
+
+def _contains_yara_rules(path: Path) -> bool:
+    try:
+        return path.is_dir() and next(path.glob("*.yar"), None) is not None
+    except OSError:
+        return False
+
+
+def resolve_yara_rules_path(
+    configured_path: str | Path,
+    logger: logging.Logger | None = None,
+) -> Path:
+    """Use bundled rules when the configured runtime directory is absent or empty."""
+    configured = normalize_path(configured_path).resolve()
+    if _contains_yara_rules(configured):
+        return configured
+
+    bundled = get_bundled_rules_path().resolve()
+    if configured != bundled and _contains_yara_rules(bundled):
+        if logger is not None:
+            reason = "empty" if configured.is_dir() else "missing"
+            logger.warning(
+                "[YARA] Configured rules directory is %s (%s); using bundled rules: %s",
+                reason,
+                configured,
+                bundled,
+            )
+        return bundled
+    return configured
 
 
 class YaraEngine:
-    """YARA规则引擎封装"""
+    """YARA engine with file-level compile and scan isolation."""
 
-    def __init__(self, rules_path: Path, logger: logging.Logger):
+    def __init__(self, rules_path: str | Path, logger: logging.Logger):
         self.rules_path = normalize_path(rules_path).resolve()
         self.logger = logger
-        self.compiled_rules: Optional[Any] = None
+        self.compiled_rules: Optional[CompositeYaraRules] = None
+        self.loaded_rule_files: Tuple[str, ...] = ()
+        self.load_errors: Dict[str, str] = {}
+        self.last_reload_at: Optional[datetime] = None
+        self._reload_lock = threading.RLock()
         self._load_rules()
 
-    def _load_rules(self):
-        """加载并编译YARA规则（精简日志）"""
+    def _load_rules(self) -> bool:
+        """Compile each rule file independently and atomically publish the result."""
+        if yara is None:
+            self.logger.warning("yara-python is not installed; YARA engine disabled")
+            with self._reload_lock:
+                self.compiled_rules = None
+                self.loaded_rule_files = ()
+                self.load_errors = {"<engine>": "yara-python is not installed"}
+            return False
+
+        rule_files = sorted(
+            self.rules_path.glob("*.yar"),
+            key=lambda path: path.name.lower(),
+        ) if self.rules_path.is_dir() else []
+        bundles: List[_CompiledRuleFile] = []
+        errors: Dict[str, str] = {}
+
+        for yar_file in rule_files:
+            try:
+                compiled = yara.compile(filepaths={yar_file.stem: str(yar_file)})
+                bundles.append(_CompiledRuleFile(
+                    filename=yar_file.name,
+                    namespace=yar_file.stem,
+                    rules=compiled,
+                    rule_count=sum(1 for _ in compiled),
+                ))
+            except Exception as exc:
+                errors[yar_file.name] = str(exc)
+                self.logger.warning(
+                    "[YARA][SKIP] Invalid rule file %s: %s",
+                    yar_file.name,
+                    exc,
+                )
+
+        if not bundles:
+            with self._reload_lock:
+                self.load_errors = errors or {"<rules>": "no .yar files found"}
+                self.last_reload_at = datetime.now()
+                if self.compiled_rules:
+                    self.logger.error(
+                        "[YARA] Reload produced no valid rules; retaining the previous ruleset"
+                    )
+                else:
+                    self.compiled_rules = None
+                    self.loaded_rule_files = ()
+                    self.logger.warning(
+                        "[YARA] No valid rules found in %s (files=%d)",
+                        self.rules_path,
+                        len(rule_files),
+                    )
+            return False
+
+        composite = CompositeYaraRules(bundles, self.logger)
+        with self._reload_lock:
+            self.compiled_rules = composite
+            self.loaded_rule_files = tuple(bundle.filename for bundle in bundles)
+            self.load_errors = errors
+            self.last_reload_at = datetime.now()
+
+        log_with_symbol(
+            "yara_list",
+            "debug",
+            (
+                f"Loaded {len(composite)} rules from {len(bundles)}/{len(rule_files)} "
+                f"files; skipped {len(errors)} invalid files"
+            ),
+            self.logger,
+        )
+        return True
+
+    def reload(self) -> bool:
+        """Reload rule files without exposing a partially compiled ruleset."""
+        return self._load_rules()
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
         try:
-            if yara is None:
-                self.logger.warning("yara-python is not installed; YARA engine disabled")
-                self.compiled_rules = None
-                return
+            return ConfigRegistry.get_raw_config()
+        except RuntimeError:
+            try:
+                ConfigRegistry.initialize()
+                return ConfigRegistry.get_raw_config()
+            except (FileNotFoundError, RuntimeError):
+                return {}
 
-            # 释放旧规则对象（防止内存泄漏）
-            if self.compiled_rules is not None:
-                old_rules = self.compiled_rules
-                self.compiled_rules = None
-                del old_rules  # 删除Python引用
+    def _scan_timeout(self) -> int | None:
+        config = self._config()
+        value = config.get("timeouts", {}).get("scan_timeout", 30)
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = 30
+        return parsed if parsed > 0 else None
 
-                # 强制GC回收（关键：触发C层内存释放）
-                import gc
-                gc.collect()
-                self.logger.debug("[YARA][GC] 已触发垃圾回收")
+    def scan_data(
+        self,
+        data: bytes | str,
+        source_name: str = "<memory>",
+    ) -> List[YaraMatch]:
+        """Scan bytes or decoded text using the same timeout and result mapping."""
+        compiled = self.compiled_rules
+        if not compiled:
+            self.logger.warning("[YARA] Rules are not loaded; skipping %s", source_name)
+            return []
 
-            # 单个文件预编译（不输出详细日志）
-            valid_rule_files = {}
-            total_files = 0
+        try:
+            raw_matches = compiled.match(data=data, timeout=self._scan_timeout())
+        except Exception as exc:
+            self.logger.error(
+                "[YARA][SCAN] Scan failed for %s: %s",
+                source_name,
+                exc,
+                exc_info=True,
+            )
+            return []
 
-            for yar_file in self.rules_path.glob("*.yar"):
-                total_files += 1
-                try:
-                    yara.compile(filepath=str(yar_file))
-                    valid_rule_files[yar_file.stem] = str(yar_file)
-                except Exception as e:
-                    self.logger.warning(f"[YARA][SKIP] 规则文件损坏: {yar_file.name} - {e}")
-                    continue
+        results = []
+        for match in raw_matches:
+            meta = match.meta if hasattr(match, "meta") else {}
+            severity = str(meta.get("severity", "medium")).lower()
+            results.append(YaraMatch(
+                rule_name=match.rule,
+                namespace=match.namespace,
+                meta=meta,
+                strings=[],
+                severity=severity,
+            ))
 
-            if not valid_rule_files:
-
-                self.logger.warning(f"[YARA] 未找到有效规则文件（共扫描 {total_files} 个）")
-                self.compiled_rules = None
-                return
-
-            # 编译所有有效规则（只输出汇总）
-            log_with_symbol("yara_list", "debug", f"正在编译 {len(valid_rule_files)}/{total_files} 个规则文件...", self.logger)
-            self.compiled_rules = yara.compile(filepaths=valid_rule_files)
-
-            # 统计规则数
-            rule_count = sum(1 for _ in self.compiled_rules)
-            log_with_symbol("yara_list", "debug", f"加载成功！规则总数: {rule_count} | 跳过: {total_files - len(valid_rule_files)} 个损坏文件", self.logger)
-
-        except Exception as e:
-            log_with_symbol("yara_error", "error", f"编译失败: {e}", self.logger)
-            self.compiled_rules = None
+        severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+        results.sort(
+            key=lambda item: severity_order.get(item.severity, 0),
+            reverse=True,
+        )
+        if results:
+            self.logger.info(
+                "[YARA][MATCH] %s matched %d rules",
+                source_name,
+                len(results),
+            )
+        else:
+            self.logger.debug("[YARA][SAFE] %s", source_name)
+        return results
 
     def scan(self, file_path: Path) -> List[YaraMatch]:
-        """
-        扫描文件并返回匹配结果
-        v1.7.9-fix: 改用内存扫描(data=)替代filepath=，解决Windows中文路径YARA C库无法打开的问题
-        """
-        if self.compiled_rules is None:
-            self.logger.warning(f"[YARA] 规则未加载，跳过扫描: {file_path.name}")
-            return []
-
+        """Scan a file from memory so Windows Unicode paths remain supported."""
         if not file_path.exists():
-            self.logger.warning(f"[YARA] 文件不存在: {file_path}")
+            self.logger.warning("[YARA] File does not exist: %s", file_path)
             return []
 
-        # v1.7.0重构：从配置读取大小限制
-        config = ConfigRegistry.get_raw_config()
-        filesizes_cfg = config.get("filesizes", {})
-        max_size_mb = filesizes_cfg.get("max_scan_file_size_mb", 10)
-
-        file_size = file_path.stat().st_size
-        if file_size > max_size_mb * 1024 * 1024:
-            self.logger.warning(f"[YARA] 文件过大，跳过: {file_path.name}")
+        config = self._config()
+        max_size_mb = config.get("filesizes", {}).get("max_scan_file_size_mb", 10)
+        if file_path.stat().st_size > max_size_mb * 1024 * 1024:
+            self.logger.warning("[YARA] File is too large; skipping %s", file_path.name)
             return []
 
         try:
-            # v1.7.9-fix: 读取文件内容到内存，避免中文/特殊字符路径导致YARA C库报错
-            # 参考: https://github.com/VirusTotal/yara-python/issues/48
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
-            matches = self.compiled_rules.match(data=file_data)
-
-            if not matches:
-                self.logger.debug(f"[YARA][SAFE] {file_path.name}")
-                return []
-
-            self.logger.info(f"[YARA][MATCH] {file_path.name} 命中 {len(matches)} 条规则")
-
-            results = []
-            for match in matches:
-                # 提取元数据（保持不变）
-                meta = match.meta if hasattr(match, 'meta') else {}
-                severity = meta.get('severity', 'medium')
-
-                results.append(YaraMatch(
-                    rule_name=match.rule,
-                    namespace=match.namespace,
-                    meta=meta,
-                    strings=[],  # 简化处理
-                    severity=severity
-                ))
-
-            # 按严重程度排序（保持不变）
-            severity_order = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1}
-            results.sort(key=lambda x: severity_order.get(x.severity, 0), reverse=True)
-
-            return results
-
-        except Exception as e:
-            self.logger.error(f"[YARA][SCAN] 扫描失败 {file_path}: {e}", exc_info=True)
+            file_data = file_path.read_bytes()
+        except OSError as exc:
+            self.logger.error("[YARA][SCAN] Cannot read %s: %s", file_path, exc)
             return []
+        return self.scan_data(file_data, str(file_path))
 
     def get_rule_stats(self) -> Dict[str, int]:
-        """统计各语言规则数量"""
+        """Count loaded rules by their common language naming conventions."""
         if not self.compiled_rules:
             return {}
 
-        stats = {}
-        # 遍历规则对象并手动分类
-        try:
-            for rule in self.compiled_rules:
-                rule_name = rule.identifier if hasattr(rule, 'identifier') else str(rule)
-
-                # 根据规则名前缀分类（匹配常见命名约定）
-                if rule_name.startswith('PHP') or 'php' in rule_name.lower():
-                    stats['php'] = stats.get('php', 0) + 1
-                elif rule_name.startswith('ASP') or 'asp' in rule_name.lower():
-                    stats['asp'] = stats.get('asp', 0) + 1
-                elif rule_name.startswith('JSP') or 'jsp' in rule_name.lower():
-                    stats['jsp'] = stats.get('jsp', 0) + 1
-                elif rule_name.startswith('Custom_'):
-                    stats['custom'] = stats.get('custom', 0) + 1
-                else:
-                    stats['other'] = stats.get('other', 0) + 1
-        except Exception as e:
-            self.logger.warning(f"[YARA] 统计规则时出错: {e}")
-            return {"unknown": len(list(self.compiled_rules))}
-
+        stats: Dict[str, int] = {}
+        for rule in self.compiled_rules:
+            rule_name = rule.identifier if hasattr(rule, "identifier") else str(rule)
+            lowered = rule_name.lower()
+            if rule_name.startswith("PHP") or "php" in lowered:
+                category = "php"
+            elif rule_name.startswith("ASP") or "asp" in lowered:
+                category = "asp"
+            elif rule_name.startswith("JSP") or "jsp" in lowered:
+                category = "jsp"
+            elif rule_name.startswith("Custom_"):
+                category = "custom"
+            else:
+                category = "other"
+            stats[category] = stats.get(category, 0) + 1
         return stats
 
     def get_rule_files(self) -> List[Dict[str, Any]]:
-        """获取规则文件列表（供蓝图调用）"""
-        if not self.rules_path.exists():
-            return []
-
+        """Return rule file metadata for application-facing diagnostics."""
         files = []
-        for yar_file in self.rules_path.glob("*.yar"):
+        for yar_file in sorted(self.rules_path.glob("*.yar"), key=lambda p: p.name.lower()):
             try:
                 stats = yar_file.stat()
-                files.append({
-                    "filename": yar_file.name,
-                    "size": stats.st_size,
-                    "modified": datetime.fromtimestamp(stats.st_mtime).isoformat()
-                })
             except OSError:
-                self.logger.debug(
-                    "[YARA] Failed to stat rule file: %s",
-                    yar_file,
-                    exc_info=True,
-                )
+                self.logger.debug("[YARA] Failed to stat %s", yar_file, exc_info=True)
                 continue
+            files.append({
+                "filename": yar_file.name,
+                "size": stats.st_size,
+                "modified": datetime.fromtimestamp(stats.st_mtime).isoformat(),
+                "loaded": yar_file.name in self.loaded_rule_files,
+                "error": self.load_errors.get(yar_file.name),
+            })
         return files
 
     def validate_rule_string(self, rule_content: str) -> Tuple[bool, Optional[str]]:
-        """验证规则字符串语法"""
+        """Validate YARA source without changing the active ruleset."""
+        if yara is None:
+            return False, "yara-python is not installed"
         try:
-            if yara is None:
-                return False, "yara-python is not installed. Install anteumbra[yara] or anteumbra[full]."
             yara.compile(source=rule_content)
             return True, None
-        except Exception as e:
-            return False, str(e)
+        except Exception as exc:
+            return False, str(exc)
 
 
-# 全局YARA引擎实例
 _yara_engine: Optional[YaraEngine] = None
 
+
 def get_yara_engine(logger: logging.Logger = None) -> YaraEngine:
-    """获取YARA引擎单例（延迟初始化）"""
+    """Return the lazily initialized process-wide YARA engine."""
     global _yara_engine
     if logger is None:
         logger = logging.getLogger("anteumbra.yara_engine")
         if not logger.handlers:
             logger.setLevel(logging.INFO)
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter('[%(asctime)s] [YARA] %(message)s'))
+            handler.setFormatter(logging.Formatter("[%(asctime)s] [YARA] %(message)s"))
             logger.addHandler(handler)
+
     if _yara_engine is None:
-        # v1.7.0修复：确保ConfigRegistry已导入并初始化
         try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
             ConfigRegistry.initialize()
         except RuntimeError:
             pass
 
         config = ConfigRegistry.get_raw_config()
         yara_cfg = config.get("scanner", {}).get("yara", {})
-
         if yara_cfg.get("enabled", False):
-            # v1.7.0重构：从配置读取规则路径
             paths_cfg = config.get("paths", {})
-            rules_path = normalize_path(
-                yara_cfg.get("rules_path") or
-                paths_cfg.get("yara_rules_path", "rules/webshell")
+            configured_path = (
+                yara_cfg.get("rules_path")
+                or paths_cfg.get("yara_rules_path", "rules/webshell")
             )
-            # v1.0.9: 配置路径不存在时 fallback 到包内置规则目录
-            if not rules_path.exists():
-                from pathlib import Path as _YPath
-                import anteumbra as _anteumbra_pkg
-                pkg_rules = _YPath(_anteumbra_pkg.__file__).parent / "rules" / "webshell"
-                if pkg_rules.exists():
-                    logger.info("Configured rules path %s not found, using bundled rules: %s",
-                                rules_path, pkg_rules)
-                    rules_path = pkg_rules
+            rules_path = resolve_yara_rules_path(configured_path, logger)
             _yara_engine = YaraEngine(rules_path, logger)
         else:
-            # 返回空引擎（避免None检查）
             class DummyEngine:
-                """v1.0.5: Explicit methods replace __getattr__ (Kimi P2-5)."""
                 compiled_rules = None
+                rules_path = normalize_path("rules/webshell").resolve()
+                loaded_rule_files: Tuple[str, ...] = ()
+                load_errors: Dict[str, str] = {}
 
-                def scan(self, path): return []
+                def scan(self, path):
+                    return []
 
-                def get_rule_stats(self): return {}
+                def scan_data(self, data, source_name="<memory>"):
+                    return []
 
-                def match(self, data=None, filepath=None): return []
+                def get_rule_stats(self):
+                    return {}
+
+                def reload(self):
+                    return False
 
             _yara_engine = DummyEngine()
-            logger.warning("[YARA] 引擎未启用，返回空引擎")
+            logger.warning("[YARA] Engine is disabled")
 
     return _yara_engine

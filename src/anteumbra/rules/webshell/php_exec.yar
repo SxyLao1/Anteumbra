@@ -1,13 +1,14 @@
-rule Custom_WebShell_PhpExec {
+rule PHP_User_Input_Command_Execution {
   meta:
-    description = "Custom rule for php_exec (extracted from samples)"
-    author = "AutoGenerator"
-    date = "1767711105"
+    description = "PHP command execution combines a process sink with request data"
+    author = "Anteumbra"
     severity = "high"
 
   strings:
-    $1 = "exec\\s*\\("
+    $php = "<?php" nocase ascii
+    $sink = /(system|exec|shell_exec|passthru|popen|proc_open)\s*\(/ nocase ascii
+    $user_input = /\$_(POST|GET|REQUEST|COOKIE)\s*\[/ nocase ascii
 
   condition:
-    any of them
+    filesize < 2MB and all of them
 }

@@ -33,6 +33,28 @@ def test_live_log_sse_control_messages_are_not_emitted_or_rendered():
     assert "if (rawData.indexOf('[SSE]') === 0) {" in sse_manager
 
 
+def test_sse_responses_do_not_set_wsgi_hop_by_hop_connection_headers():
+    monitor_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "monitor_bp.py",
+    )
+    scanner_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "scanner_bp.py",
+    )
+
+    assert "'Connection': 'keep-alive'" not in monitor_bp
+    assert "'Connection': 'keep-alive'" not in scanner_bp
+
+
 def test_log_history_uses_configured_website_logs_with_default_fallbacks():
     monitor_bp = read_source(
         "src",

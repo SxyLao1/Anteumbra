@@ -1,5 +1,6 @@
 """Tests for core/plugin_manager.py"""
 import pytest
+import queue
 from anteumbra.domain.plugin import Plugin, DomainEvent
 from anteumbra.domain.notifier import Notifier, AlertMessage, AlertLevel
 from anteumbra.application.plugin_manager import PluginManager, get_plugin_manager
@@ -95,6 +96,19 @@ class TestPluginManager:
         assert pm.emit("test.event", "unit_test", {"data": 42}) is None
         # Event should be in the queue
         assert pm._event_queue.qsize() == 1
+
+    def test_full_event_queue_uses_synchronous_fallback(self, monkeypatch):
+        pm = PluginManager()
+        pm._enabled = True
+        pm._event_queue = queue.Queue(maxsize=1)
+        pm._event_queue.put(object())
+        dispatched = []
+        monkeypatch.setattr(pm, "dispatch", lambda event: dispatched.append(event))
+
+        assert pm.emit("test.event", "unit_test", {"data": 42}) is None
+
+        assert len(dispatched) == 1
+        assert dispatched[0].event_type == "test.event"
 
     def test_disabled_manager(self):
         pm = PluginManager()

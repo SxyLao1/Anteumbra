@@ -1,4 +1,4 @@
-# Anteumbra v1.0.26 - Web Perimeter Threat Intelligence
+# Anteumbra v1.0.27 - Web Perimeter Threat Intelligence
 # Multi-stage build with a dedicated runtime virtualenv.
 
 FROM python:3.12-slim AS builder
@@ -40,13 +40,13 @@ RUN python -m venv "$VIRTUAL_ENV" \
     'colorama>=0.4.6' \
     'urllib3>=2.2.2' \
     'python-dotenv>=1.0.0' \
-    'gunicorn>=22.0.0'
+    'waitress>=3.0.0,<4.0.0'
 
 FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.26"
+LABEL org.opencontainers.image.version="1.0.27"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence - passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 
@@ -67,7 +67,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 COPY README.md .
 COPY pyproject.toml .
-COPY config.toml .
+COPY src/anteumbra/config.toml ./config.toml
 COPY src/ ./src/
 COPY scripts/docker-entrypoint.sh /usr/local/bin/anteumbra-docker-entrypoint
 

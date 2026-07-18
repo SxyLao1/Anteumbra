@@ -26,6 +26,23 @@ logger = logging.getLogger(__name__)
 _app_instance: Optional[Flask] = None
 
 
+def _session_cookie_secure(web_admin_config: dict) -> bool:
+    """Use secure sessions automatically when an HTTPS proxy is configured."""
+    value = web_admin_config.get("session_cookie_secure", "auto")
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        return bool(web_admin_config.get("trusted_proxy_ips", []))
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _trusted_proxy_hops(web_admin_config: dict) -> int:
+    try:
+        return max(1, min(10, int(web_admin_config.get("trusted_proxy_hops", 1))))
+    except (TypeError, ValueError):
+        return 1
+
+
 def _ensure_password_configured():
     """Ensure first-run admin and session secrets exist in the deployment .env."""
     from pathlib import Path as _Path
@@ -114,6 +131,14 @@ def create_app(config_path: str = None) -> Flask:
 
     # 创建主应用
     app = Flask(__name__)
+    web_admin_config = ConfigRegistry.get_raw_config().get("web_admin", {})
+    from anteumbra.interfaces.web.proxy import TrustedProxyFix
+
+    app.wsgi_app = TrustedProxyFix(
+        app.wsgi_app,
+        web_admin_config.get("trusted_proxy_ips", []),
+        _trusted_proxy_hops(web_admin_config),
+    )
 
     # v2.0: Flask-Babel i18n (language from ?lang= or cookie or Accept-Language)
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
@@ -173,7 +198,6 @@ def create_app(config_path: str = None) -> Flask:
     app.config['TEMPLATES_AUTO_RELOAD'] = True
 
     # === 新增Session配置 ===
-    web_admin_config = ConfigRegistry.get_raw_config().get("web_admin", {})
     session_type = web_admin_config.get("session_type", "filesystem")
     session_dir = normalize_path(
         web_admin_config.get("session_dir", "data/sessions")
@@ -193,8 +217,7 @@ def create_app(config_path: str = None) -> Flask:
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
         seconds=web_admin_config.get("session_lifetime", 3600)
     )
-    # v1.9.6: 开发环境 HTTP 下不使用 Secure cookie，否则浏览器不发送 cookie
-    app.config['SESSION_COOKIE_SECURE'] = web_admin_config.get("session_cookie_secure", False)
+    app.config['SESSION_COOKIE_SECURE'] = _session_cookie_secure(web_admin_config)
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -271,21 +294,43 @@ def get_app() -> Flask:
     return _app_instance
 
 
+class WaitressRuntimeServer:
+    """Small lifecycle adapter around Waitress' production WSGI server."""
+
+    def __init__(self, app: Flask, host: str, port: int, threads: int) -> None:
+        try:
+            from waitress import create_server
+        except ImportError as exc:
+            raise RuntimeError(
+                "waitress is required to run Anteumbra. Reinstall the package "
+                "or install the source dependencies."
+            ) from exc
+        self._server = create_server(
+            app,
+            host=host,
+            port=port,
+            threads=threads,
+            ident="Anteumbra",
+        )
+        self._closed = False
+
+    def serve_forever(self) -> None:
+        self._server.run()
+
+    def shutdown(self) -> None:
+        if self._closed:
+            return
+        self._server.close()
+        self._closed = True
+
+    def server_close(self) -> None:
+        """Compatibility alias for stdlib WSGI server lifecycle callers."""
+        self.shutdown()
+
+
 def create_runtime_server(app: Flask, host: str, port: int, threaded: bool = True):
-    """Bind the runtime HTTP server synchronously so startup failures are visible."""
-    from werkzeug.serving import WSGIRequestHandler, make_server
-
-    class QuietRequestHandler(WSGIRequestHandler):
-        server_version = ""
-        sys_version = ""
-
-    return make_server(
-        host,
-        port,
-        app,
-        threaded=threaded,
-        request_handler=QuietRequestHandler,
-    )
+    """Bind Waitress synchronously so startup failures are visible."""
+    return WaitressRuntimeServer(app, host, port, threads=8 if threaded else 1)
 
 
 def run_app(host: str = "127.0.0.1", port: int = 8080, threaded: bool = True):

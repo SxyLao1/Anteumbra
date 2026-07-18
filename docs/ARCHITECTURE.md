@@ -1,4 +1,4 @@
-# Anteumbra Technical White Paper v1.0.26
+# Anteumbra Technical White Paper v1.0.27
 
 > **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
 
@@ -229,6 +229,7 @@ pm.emit("file_quarantined", ...) ──→  stdout_logger.on_event()
                                    ├─→  quarantine_handler.on_event()
 
 pm.emit("record_added", ...)     ──→  threat_graph_handler.on_event()
+                                   └─→  siem_handler.on_event()
 
 pm.emit("registry_changed", ...) ──→  threat_graph_handler.on_event()
 
@@ -245,7 +246,7 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 | Semantics | Fire-and-Forget | Synchronous request-response |
 | Returns | `None` (immediately) | `List[DomainEvent]` (waits for completion) |
 | Execution | Async (queue → worker thread) | Sync (calling thread) |
-| Timeout | None (unbounded queue) | 30s per handler |
+| Timeout | Bounded queue; synchronous fallback on overflow | Configured timeout per handler |
 | Use case | Notifications, state changes | Queries, chained events |
 
 ### 3.3 Event Flow
@@ -261,7 +262,8 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
    pm.emit("alert_requested", "monitor", {...})
         │
 4. Event enqueued
-   DomainEvent → _event_queue (queue.Queue)
+   DomainEvent → bounded `_event_queue`
+   Queue full → synchronous dispatch with an overload metric
         │
 5. Worker thread picks up event
    _event_worker(): event = _event_queue.get()
@@ -269,9 +271,11 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 6. Dispatch to registered handlers
    dispatch(event):
      for plugin in _event_handlers[event.event_type]:
-         t = Thread(plugin.on_event, event)
-         t.start()
-         t.join(timeout=30.0)
+       skip known-unhealthy handlers
+     t = Thread(plugin.on_event, event)
+     t.start()
+     t.join(timeout=configured timeout)
+     cap abandoned handler threads
         │
 7. Handle
    plugin.on_event(event) → Optional[List[DomainEvent]]
@@ -285,7 +289,7 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 | `file_quarantined` | monitor.py | stdout_logger, quarantine_handler |
 | `file_scanned` | monitor.py | stdout_logger |
 | `block_executed` | block_ledger.py | stdout_logger |
-| `record_added` | suspicious_registry.py | threat_graph_handler |
+| `record_added` | suspicious_registry.py | threat_graph_handler, siem_handler |
 | `registry_changed` | suspicious_registry.py (6 sites) | threat_graph_handler |
 | `threat_graph_updated` | threat_graph_handler | stdout_logger |
 | `wal_archived` | wal_manager.py | stdout_logger |
@@ -423,9 +427,11 @@ Web Server (Nginx/Apache/IIS)
 │ Linux:   InotifyObserver (kernel-level, 0 delay)
 └───────────┬─────────────┘
             │
-            │ Event deduplication (LRU dir_cache 100 items, 60s TTL)
+            │ TTL directory-cache deduplication (60s, no fixed LRU cap)
             │ Extension filtering (.php, .asp, .jsp, etc.)
             │ Exclusion directory filtering (cache, logs, temp, data)
+            │ Bounded scan queue; synchronous fallback under overload
+            │ Startup baseline scan queues existing monitored script files
             ▼
 ┌─────────────────────────┐
 │ Magic Byte Detection    │  infrastructure/monitoring/monitor.py
@@ -441,7 +447,8 @@ Web Server (Nginx/Apache/IIS)
 ┌─────────────────────────┐
 │ Detection Chain         │  infrastructure/detection/scanner.py
 │                         │
-│ 1. YARA Scan (18+ rules)│
+│ 1. YARA Scan (27 isolated│
+│    rule files)           │
 │ 2. Hash Engine          │
 │ 3. Decoder              │
 │                         │
@@ -467,6 +474,7 @@ Web Server (Nginx/Apache/IIS)
        │   → Save to JSON / SQLite
        │   → Write to WAL
        │   → emit("record_added", ...)
+       │   → threat_graph_handler + siem_handler
        │
        ├── If quarantine.auto_quarantine_enabled:
        │   → emit("file_quarantined", ...)
@@ -476,6 +484,10 @@ Web Server (Nginx/Apache/IIS)
        └── emit("alert_requested", ...)
             → notifier_handler → email/WeChat/webhook
 ```
+
+A recently restored file is checked before both create/modify and moved-file
+scan paths. During its 30-second guard it does not create a duplicate Registry
+event, alert, SIEM export, or quarantine operation.
 
 ### 5.2 Threat Profiling Data Flow
 
@@ -613,6 +625,19 @@ shutdown():
     ├── stop worker thread
     └── plugin.deactivate() + unregister() for each plugin
 ```
+
+### Delivery Reliability
+
+`PluginManager.emit()` uses a bounded queue (`plugins.event_queue_size`). If
+the queue cannot accept an event within `event_enqueue_timeout_seconds`, the
+event is dispatched synchronously and `plugin_queue_overflow` is recorded.
+Each handler is bounded by `dispatch_timeout_seconds`; a timed-out handler is
+tracked, capped by `max_abandoned_handlers`, and skipped until it exits. This
+contains a failed integration rather than creating unbounded timeout threads.
+
+`siem_handler` subscribes to `record_added` and calls the SIEM exporter. The
+Registry event is therefore the single bridge from local file detection to
+JSON Lines, CEF, or Syslog output.
 
 ### 6.3 Writing a New Plugin
 
@@ -794,7 +819,7 @@ Merge conditions:
 |-------------|:------------:|---------|
 | New milestone or incompatible product architecture | MILESTONE | 2.0.0 |
 | User-facing feature line | FEATURE | 1.1.0 |
-| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.26 |
+| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.27 |
 
 ---
 
@@ -832,5 +857,5 @@ Merge conditions:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.26 — Evolving alongside the code</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.27 — Evolving alongside the code</sub>
 </div>

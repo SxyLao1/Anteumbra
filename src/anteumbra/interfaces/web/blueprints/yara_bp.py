@@ -20,7 +20,10 @@ from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.application.yara_service import YaraEngine, get_yara_engine
+from anteumbra.application.yara_service import (
+    get_yara_engine,
+    resolve_yara_rules_path,
+)
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
@@ -35,6 +38,30 @@ yara_bp = Blueprint('yara', __name__, url_prefix='/admin/yara')
 
 # 线程锁（防止并发修改规则文件）
 _rule_operation_lock = threading.RLock()
+
+
+def _get_rules_path(config: Optional[Dict] = None) -> Path:
+    """Return the rule directory used by the active scanner."""
+    config = config or ConfigRegistry.get_raw_config()
+    paths_cfg = config.get("paths", {})
+    yara_cfg = config.get("scanner", {}).get("yara", {})
+    configured_path = (
+        yara_cfg.get("rules_path")
+        or paths_cfg.get("yara_rules_path", "rules/webshell")
+    )
+    return resolve_yara_rules_path(configured_path, current_app.logger)
+
+
+def _reload_rules(expected_filename: Optional[str] = None) -> Tuple[bool, str]:
+    """Reload the scanner and verify that a changed file joined the active set."""
+    engine = get_yara_engine(current_app.logger)
+    if Path(engine.rules_path).resolve() != _get_rules_path().resolve():
+        return False, "活动规则目录与当前配置不一致，请重启 Anteumbra"
+    if not engine.reload():
+        return False, "规则重载后没有可用规则"
+    if expected_filename and expected_filename in engine.load_errors:
+        return False, engine.load_errors[expected_filename]
+    return True, ""
 
 
 def _sanitize_rule_upload_filename(filename: str) -> str:
@@ -80,11 +107,7 @@ def _validate_rule_path(filename: str, rules_path) -> Path:
 def get_rule_files() -> List[Dict[str, str]]:
     """扫描rules/webshell目录，返回规则文件列表"""
     try:
-        config = ConfigRegistry.get_raw_config()
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(
-            paths_cfg.get("yara_rules_path", "rules/webshell")
-        )
+        rules_path = _get_rules_path()
 
         if not rules_path.exists():
             log_with_symbol("warning_config_reload", "warning", f"规则目录不存在: {rules_path}")
@@ -191,11 +214,7 @@ def get_rule_content(filename):
     try:
         logger = current_app.logger
 
-        config = ConfigRegistry.get_raw_config()
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(
-            paths_cfg.get("yara_rules_path", "rules/webshell")
-        )
+        rules_path = _get_rules_path()
 
         target_file = _validate_rule_path(filename, rules_path)
 
@@ -222,18 +241,14 @@ def update_rule(filename):
     try:
         logger = current_app.logger
 
-        config = ConfigRegistry.get_raw_config()
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(
-            paths_cfg.get("yara_rules_path", "rules/webshell")
-        )
+        rules_path = _get_rules_path()
 
         target_file = _validate_rule_path(filename, rules_path)
 
         if not target_file.exists():
             abort(404)
 
-        rule_content = request.json.get('content', '')
+        rule_content = (request.get_json(silent=True) or {}).get('content', '')
         if not rule_content.strip():
             return jsonify({"error": "规则内容不能为空"}), 400
 
@@ -245,31 +260,30 @@ def update_rule(filename):
                 "details": error_msg
             }), 400
 
-        # 创建备份（.bak）
         backup_path = target_file.with_suffix('.bak')
+        temp_path = target_file.with_suffix(target_file.suffix + '.tmp')
         try:
             with _rule_operation_lock:
-                # 备份原文件
+                temp_path.write_text(rule_content, encoding='utf-8')
                 target_file.replace(backup_path)
-
-                # 写入新内容（原子操作）
-                target_file.write_text(rule_content, encoding='utf-8', errors='ignore')
-
-                # 标记成功，删除备份
+                temp_path.replace(target_file)
+                reloaded, reload_error = _reload_rules(filename)
+                if not reloaded:
+                    raise RuntimeError(f"规则重载失败: {reload_error}")
                 backup_path.unlink()
 
             logger.info(f"[YARA][UPDATE] 规则更新成功: {filename}")
-
-            # 触发规则热重载（通过文件监控）
             return jsonify({
                 "success": True,
-                "message": "规则更新成功并触发热重载"
+                "message": "规则更新成功并已热重载"
             })
 
         except Exception as e:
-            # 失败：恢复备份
+            temp_path.unlink(missing_ok=True)
             if backup_path.exists():
+                target_file.unlink(missing_ok=True)
                 backup_path.replace(target_file)
+                _reload_rules()
             logger.error(f"[YARA][UPDATE] 规则更新失败 {filename}: {e}")
             return jsonify({"error": f"更新失败: {e}"}), 500
 
@@ -285,11 +299,7 @@ def delete_rule(filename):
     try:
         logger = current_app.logger
 
-        config = ConfigRegistry.get_raw_config()
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(
-            paths_cfg.get("yara_rules_path", "rules/webshell")
-        )
+        rules_path = _get_rules_path()
 
         target_file = _validate_rule_path(filename, rules_path)
 
@@ -309,8 +319,15 @@ def delete_rule(filename):
         backup_filename = f"{filename}.{timestamp}.bak"
         backup_path = backup_dir / backup_filename
 
-        # 移动文件到备份目录
-        shutil.move(str(target_file), str(backup_path))
+        with _rule_operation_lock:
+            shutil.move(str(target_file), str(backup_path))
+            reloaded, reload_error = _reload_rules()
+            if not reloaded:
+                shutil.move(str(backup_path), str(target_file))
+                _reload_rules()
+                return jsonify({
+                    "error": f"删除后规则重载失败，已恢复: {reload_error}"
+                }), 500
 
         logger.info(f"[YARA][DELETE] 规则文件已备份到: {backup_path}")
 
@@ -373,14 +390,8 @@ def upload_rule():
                 "details": error_msg
             }), 400
 
-        # 重置文件指针
-        file.seek(0)
-
         # 保存文件
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(
-            paths_cfg.get("yara_rules_path", "rules/webshell")
-        )
+        rules_path = _get_rules_path(config)
 
         save_path = _validate_rule_path(safe_filename, rules_path)
         if save_path.exists():
@@ -389,12 +400,20 @@ def upload_rule():
             }), 409
 
         with _rule_operation_lock:
-            file.save(save_path)
+            save_path.write_text(content, encoding='utf-8')
+            reloaded, reload_error = _reload_rules(safe_filename)
+            if not reloaded:
+                save_path.unlink(missing_ok=True)
+                _reload_rules()
+                return jsonify({
+                    "error": "规则已通过语法检查，但未能加入活动规则集",
+                    "details": reload_error,
+                }), 500
 
         logger.info(f"[YARA][UPLOAD] 新规则上传成功: {file.filename}")
         return jsonify({
             "success": True,
-            "message": f"规则上传成功并触发热重载",
+            "message": "规则上传成功并已热重载",
             "filename": safe_filename
         })
 
@@ -407,9 +426,7 @@ def upload_rule():
 def edit_rule_modal(filename):
     """返回YARA规则编辑模态框（v1.7.9: 路径加固）"""
     try:
-        config = ConfigRegistry.get_raw_config()
-        paths_cfg = config.get("paths", {})
-        rules_path = normalize_path(paths_cfg.get("yara_rules_path", "rules/webshell"))
+        rules_path = _get_rules_path()
 
         target_file = _validate_rule_path(filename, rules_path)
 

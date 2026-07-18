@@ -286,7 +286,6 @@ def scanner_stream_sse():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no',
         }
     )

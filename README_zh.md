@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.26-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.27-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -21,6 +21,10 @@
 Anteumbra 是面向 Windows 与 Linux 的 Web 边界威胁情报和 WebShell 检测平台。它监控站点目录，使用 YARA 规则检测可疑 PHP/ASP/JSP/ASPX 文件，关联访问日志，建立攻击者画像，并提供 Web 面板完成研判、隔离、还原、误报标记、审计和报告。
 
 Anteumbra 按一个产品交付。PyPI 用户和源码安装开发者都使用同一套 `anteumbra install` 与 `anteumbra config` 流程创建运行实例。
+
+## 使用边界
+
+Anteumbra 面向单机或小规模 Web 负载：提供文件完整性监控、WebShell 检测、本地研判与响应，并向既有安全体系输出标准告警或 SIEM 事件。它不替代内联 WAF、EDR、SIEM、集中化主机管理或分布式高可用平台。
 
 ## 文档导航
 
@@ -87,6 +91,7 @@ anteumbra config reload
 - Windows / Linux 多站点文件监控
 - 手动扫描、扫描历史和可打印报告
 - 基于 YARA 的 PHP、ASP、JSP、ASPX、哥斯拉、冰蝎等 WebShell 检测
+- 内置 27 个独立编译的 YARA 规则文件；单个自定义规则文件错误不会禁用其他规则
 - Nginx、Apache、Tomcat 访问日志行为分析
 - 攻击者画像、IP 信誉、攻击链时间线和跨页批量操作
 - 隔离、还原、误报标记和审计流
@@ -154,5 +159,5 @@ MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.26 · MIT License</sub>
+  <sub>Anteumbra v1.0.27 · MIT License</sub>
 </div>

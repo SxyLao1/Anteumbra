@@ -1,19 +1,19 @@
 rule Custom_Eval_Generic {
   meta:
-    description = "Generic PHP eval detection - matches any eval( call"
-    author = "EmergencyRule"
-    severity = "critical"
+    description = "PHP eval with user input or obfuscation context"
+    author = "Anteumbra"
+    severity = "high"
 
   strings:
-    $eval1 = "eval($_POST[" ascii wide
-    $eval2 = "eval($_GET[" ascii wide
-    $eval3 = "eval($_REQUEST[" ascii wide
-    $eval4 = "eval($" ascii wide  // 匹配 eval($var)
-    $eval5 = "eval(" ascii wide   // 匹配所有 eval(
-    
-    // 排除合法用途（减少误报）
-    $exclude_eval_function = "function eval(" ascii wide
-    
+    $php = "<?php" nocase ascii
+    $eval_call = /eval\s*\(/ nocase ascii
+    $eval_variable = /eval\s*\(\s*\$[A-Za-z_][A-Za-z0-9_]*/ nocase ascii
+    $user_input = /\$_(POST|GET|REQUEST|COOKIE)\s*\[/ nocase ascii
+    $obfuscation = /(base64_decode|gzinflate|gzuncompress|str_rot13)\s*\(/ nocase ascii
+
   condition:
-    any of ($eval*) and not $exclude_eval_function
+    filesize < 2MB and $php and (
+      ($eval_variable and $user_input) or
+      ($eval_call and $obfuscation)
+    )
 }

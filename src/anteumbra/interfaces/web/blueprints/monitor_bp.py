@@ -32,7 +32,11 @@ from anteumbra.application.sse_service import (
     register_sse_client, unregister_sse_client, get_connected_client_count,
     get_ip_client_count, get_ip_clients, persist_log_line,
 )
-from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
+from anteumbra.interfaces.web.auth import (
+    get_admin_credentials,
+    is_ip_allowed,
+    require_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +90,7 @@ def stream_logs():
         decoded = base64.b64decode(token).decode('utf-8')
         username, random_part = decoded.split(':', 1)
         expected_username, password_hash, allowed_ips = get_admin_credentials()
-        if username != expected_username or client_ip not in allowed_ips:
+        if username != expected_username or not is_ip_allowed(client_ip, allowed_ips):
             abort(403)
     except Exception as e:
         abort(403)
@@ -200,7 +204,6 @@ def stream_logs():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no',
         }
     )

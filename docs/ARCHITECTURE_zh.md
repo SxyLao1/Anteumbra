@@ -1,4 +1,4 @@
-# Anteumbra 技术白皮书 v1.0.26
+# Anteumbra 技术白皮书 v1.0.27
 
 > **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
@@ -224,6 +224,7 @@ pm.emit("file_quarantined", ...) ──→  stdout_logger.on_event()
                                    ├─→  quarantine_handler.on_event()
 
 pm.emit("record_added", ...)     ──→  threat_graph_handler.on_event()
+                                   └─→  siem_handler.on_event()
 
 pm.emit("registry_changed", ...) ──→  threat_graph_handler.on_event()
 
@@ -240,7 +241,7 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 | 语义 | Fire-and-Forget | 同步请求-响应 |
 | 返回 | `None`（立即） | `List[DomainEvent]`（等待完成） |
 | 执行 | 异步（队列 → 工作线程） | 同步（调用线程） |
-| 超时 | 无（队列无界） | 每 handler 30s |
+| 超时 | 有界队列；溢出时同步回退 | 每 handler 使用配置超时 |
 | 用途 | 通知、状态变更 | 查询、需要链式事件 |
 
 ### 3.3 事件流
@@ -256,7 +257,8 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
    pm.emit("alert_requested", "monitor", {...})
         │
 4. 事件入队
-   DomainEvent → _event_queue (queue.Queue)
+   DomainEvent → 有界 `_event_queue`
+   队列满 → 同步分发并记录过载指标
         │
 5. 工作线程取事件
    _event_worker(): event = _event_queue.get()
@@ -264,9 +266,11 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 6. 分发到注册的 handlers
    dispatch(event):
      for plugin in _event_handlers[event.event_type]:
-         t = Thread(plugin.on_event, event)
-         t.start()
-         t.join(timeout=30.0)
+       跳过已知不健康的 handler
+     t = Thread(plugin.on_event, event)
+     t.start()
+     t.join(timeout=配置超时)
+     限制遗留 handler 线程数量
         │
 7. 处理
    plugin.on_event(event) → Optional[List[DomainEvent]]
@@ -280,7 +284,7 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 | `file_quarantined` | monitor.py | stdout_logger, quarantine_handler |
 | `file_scanned` | monitor.py | stdout_logger |
 | `block_executed` | block_ledger.py | stdout_logger |
-| `record_added` | suspicious_registry.py | threat_graph_handler |
+| `record_added` | suspicious_registry.py | threat_graph_handler, siem_handler |
 | `registry_changed` | suspicious_registry.py (6 sites) | threat_graph_handler |
 | `threat_graph_updated` | threat_graph_handler | stdout_logger |
 | `wal_archived` | wal_manager.py | stdout_logger |
@@ -418,9 +422,11 @@ Web Server (Nginx/Apache/IIS)
 │ Linux:   InotifyObserver (kernel-level, 0 delay)
 └───────────┬─────────────┘
             │
-            │ 事件去重 (LRU dir_cache 100 items, 60s TTL)
+            │ TTL 目录缓存去重（60s，无固定 LRU 上限）
             │ 扩展名过滤 (.php, .asp, .jsp, etc.)
             │ 排除目录过滤 (cache, logs, temp, data)
+            │ 有界扫描队列；过载时同步回退
+            │ 启动基线扫描会将已有脚本文件加入扫描队列
             ▼
 ┌─────────────────────────┐
 │ Magic Byte Detection    │  infrastructure/monitoring/monitor.py
@@ -434,7 +440,8 @@ Web Server (Nginx/Apache/IIS)
 ┌─────────────────────────┐
 │ Detection Chain         │  infrastructure/detection/scanner.py
 │                         │
-│ 1. YARA Scan (18+ rules)│
+│ 1. YARA Scan (27 个隔离│
+│    规则文件)            │
 │ 2. Hash Engine          │
 │ 3. Decoder (编码检测)    │
 │                         │
@@ -458,6 +465,7 @@ Web Server (Nginx/Apache/IIS)
        │   → 保存到 JSON / SQLite
        │   → 写入 WAL
        │   → emit("record_added", ...)
+       │   → threat_graph_handler + siem_handler
        │
        ├── 如果 quarantine.auto_quarantine_enabled:
        │   → emit("file_quarantined", ...)
@@ -467,6 +475,8 @@ Web Server (Nginx/Apache/IIS)
        └── emit("alert_requested", ...)
             → notifier_handler → email/WeChat/webhook
 ```
+
+刚恢复的文件会在创建/修改和移动两条扫描路径之前接受检查。在 30 秒保护窗口内，它不会生成重复的 Registry 事件、告警、SIEM 导出或隔离操作。
 
 ### 5.2 威胁画像数据流
 
@@ -599,6 +609,17 @@ shutdown():
     ├── 停止 worker thread
     └── 逐个 plugin.deactivate() + unregister()
 ```
+
+### 投递可靠性
+
+`PluginManager.emit()` 使用有界队列（`plugins.event_queue_size`）。事件在
+`event_enqueue_timeout_seconds` 内无法入队时会同步分发，并记录
+`plugin_queue_overflow`。每个 handler 受 `dispatch_timeout_seconds` 约束；超时
+handler 会被跟踪，受 `max_abandoned_handlers` 上限约束，并在其退出前跳过后续
+事件。这样可以隔离失败集成，避免无限增长的超时线程。
+
+`siem_handler` 订阅 `record_added` 并调用 SIEM 导出器，因此 Registry 事件是本地
+文件检测到 JSON Lines、CEF 或 Syslog 输出的唯一桥梁。
 
 ### 6.3 编写新插件
 
@@ -780,7 +801,7 @@ decay_factor:
 |---------|:------:|------|
 | 新里程碑或不兼容产品架构 | 里程碑 | 2.0.0 |
 | 面向用户的新功能线 | 功能 | 1.1.0 |
-| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.26 |
+| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.27 |
 
 ---
 
@@ -818,5 +839,5 @@ decay_factor:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.26 — 随代码一起演进</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.27 — 随代码一起演进</sub>
 </div>

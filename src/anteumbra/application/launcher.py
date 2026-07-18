@@ -74,9 +74,6 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
         app = create_app()
-        app.config.setdefault("SESSION_COOKIE_SECURE", False)
-        app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
-        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
         web_server = create_runtime_server(app, host, port)
         _launcher_state["web_server"] = web_server
 
