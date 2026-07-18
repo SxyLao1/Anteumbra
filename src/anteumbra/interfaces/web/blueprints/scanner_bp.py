@@ -46,24 +46,26 @@ def scanner_page():
     """主动扫描器页面"""
     try:
         config = ConfigRegistry.get_raw_config()
-        websites = config.get("website", {})
-        if isinstance(websites, dict):
-            default_dir = websites.get("path", "")
-        elif isinstance(websites, list) and len(websites) > 0:
-            default_dir = websites[0].get("path", "") if isinstance(websites[0], dict) else ""
-        else:
-            default_dir = ""
+        websites = ConfigRegistry.get_enabled_websites()
+        default_site = next(iter(websites), None) if len(websites) == 1 else None
+        default_dir = str(default_site.path) if default_site else ""
 
         default_extensions = config.get("paths", {}).get(
             "monitor_extensions", [".php", ".asp", ".aspx", ".jsp", ".jspx"]
         )
-        exclude_dirs = config.get("website", {}).get("scan_options", {}).get(
-            "exclude_dirs", ["cache", "logs", "temp", "data"]
+        exclude_dirs = (
+            default_site.scan_options.exclude_dirs
+            if default_site
+            else ["cache", "logs", "temp", "data"]
         )
         return render_template('admin/scanner.html',
             default_dir=default_dir,
             default_extensions=default_extensions,
             exclude_dirs=exclude_dirs,
+            sites=[
+                {"site_id": site.site_id, "name": site.name, "path": str(site.path)}
+                for site in websites
+            ],
         )
     except Exception as e:
         current_app.logger.error(f"[SCANNER] page error: {e}", exc_info=True)
@@ -97,6 +99,8 @@ def _complete_payload(result) -> dict:
     return {
         "event": "complete",
         "scan_id": result.scan_id,
+        "site_id": getattr(result, "site_id", ""),
+        "site_name": getattr(result, "site_name", ""),
         "total_files": result.total_files,
         "scanned_files": result.scanned_files,
         "new_findings": result.new_findings,
@@ -131,13 +135,17 @@ def _run_scan_job(scan_id: str) -> None:
     target_dir = job["target_dir"]
     recursive = job["recursive"]
     extensions = job["extensions"]
+    site_id = job["site_id"]
+    site_name = job["site_name"]
     progress_queue = job["queue"]
     cancel_flag = job["cancel_flag"]
 
     from anteumbra.application.scanner_service import ManualScanner
 
     try:
-        scanner = ManualScanner(_scan_logger)
+        scanner = ManualScanner(
+            _scan_logger, site_id=site_id, site_name=site_name
+        )
         target = normalize_path(Path(target_dir))
 
         def progress_cb(result):
@@ -162,6 +170,8 @@ def _run_scan_job(scan_id: str) -> None:
             extensions=extensions,
             progress_callback=progress_cb,
             cancelled_check=cancelled,
+            site_id=site_id,
+            site_name=site_name,
         )
         with _scan_jobs_lock:
             job["result"] = result
@@ -186,9 +196,17 @@ def scanner_run():
     target_dir = str(data.get('target_dir', '')).strip()
     recursive = _is_true(data.get('recursive', '1'))
     extensions = _parse_extensions(data.get('extensions'))
+    requested_site_id = str(data.get('site_id', '')).strip() or None
 
     if not target_dir:
         return jsonify({"success": False, "error": "missing target_dir"}), 400
+
+    try:
+        identity = ConfigRegistry.resolve_site_identity(
+            target_dir, site_id=requested_site_id
+        )
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
     _cleanup_scan_jobs()
     scan_id = uuid.uuid4().hex
@@ -197,6 +215,8 @@ def scanner_run():
         "target_dir": target_dir,
         "recursive": recursive,
         "extensions": extensions,
+        "site_id": identity.site_id,
+        "site_name": identity.site_name,
         "queue": queue.Queue(),
         "cancel_flag": {"cancelled": False},
         "created_at": time.time(),
@@ -213,6 +233,7 @@ def scanner_run():
     return jsonify({
         "success": True,
         "scan_id": scan_id,
+        "site_id": identity.site_id,
         "stream_url": f"/admin/scanner/stream?scan_id={scan_id}",
     })
 
@@ -319,6 +340,10 @@ def scanner_quarantine():
         file_path = request.form.get('file_path', '')
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
+        requested_site_id = request.form.get("site_id") or None
+        identity = ConfigRegistry.resolve_site_identity(
+            file_path, site_id=requested_site_id
+        )
 
         from anteumbra.application.registry_service import get_all, add as reg_add
         from anteumbra.application.quarantine_service import quarantine_registered_file
@@ -326,7 +351,7 @@ def scanner_quarantine():
 
         target = path_to_key(file_path)
         record = None
-        for r in get_all(include_deleted=True):
+        for r in get_all(include_deleted=True, site_id=identity.site_id):
             if r.get("file_path") == target:
                 record = r
                 break
@@ -337,11 +362,16 @@ def scanner_quarantine():
             if actual_path.exists():
                 try:
                     reg_add(actual_path, ["scanner_manual_quarantine"],
-                            first_seen_ip="127.0.0.1", detection_source="active")
+                            first_seen_ip="127.0.0.1",
+                            detection_source="active",
+                            site_id=identity.site_id,
+                            site_name=identity.site_name)
                     current_app.logger.info(
                         f"[SCANNER] 自动注册后隔离: {file_path}")
                     # Re-read registry to get the new record
-                    for r in get_all(include_deleted=True):
+                    for r in get_all(
+                        include_deleted=True, site_id=identity.site_id
+                    ):
                         if r.get("file_path") == target:
                             record = r
                             break
@@ -360,7 +390,9 @@ def scanner_quarantine():
             file_path=str(file_path),
             rule_name=rule_name,
             features=features,
-            original_path=str(file_path)
+            original_path=str(file_path),
+            site_id=record.get("site_id", identity.site_id),
+            site_name=record.get("site_name", identity.site_name),
         )
 
         if result is None:
@@ -374,6 +406,8 @@ def scanner_quarantine():
             "message": f"已隔离: {result['quarantine_id']}"
         })
 
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"[SCANNER] 隔离失败: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -389,6 +423,8 @@ def scanner_history():
         summaries.append({
             "scan_id": s.get("scan_id", ""),
             "target_dir": s.get("target_dir", ""),
+            "site_id": s.get("site_id", ""),
+            "site_name": s.get("site_name", ""),
             "start_time": s.get("start_time", 0),
             "end_time": s.get("end_time", 0),
             "status": s.get("status", "unknown"),
@@ -448,6 +484,8 @@ def scanner_report():
                     clean=raw.get("clean", 0),
                     errors=raw.get("errors", 0),
                     findings=raw.get("findings", []),
+                    site_id=raw.get("site_id", ""),
+                    site_name=raw.get("site_name", ""),
                 )
             except Exception:
                 return render_template('admin/error.html',

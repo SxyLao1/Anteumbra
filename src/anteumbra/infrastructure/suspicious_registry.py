@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import path_to_key, normalize_path
 # v1.7.3：导入统一日志接口
@@ -400,13 +401,15 @@ def _repo_load_registry() -> Optional[List[Dict]]:
     configured for SQLite, or loading fails.
     """
     try:
-        from anteumbra.infrastructure.persistence import get_repository
+        from anteumbra.infrastructure.persistence import get_shadow_repository
         from anteumbra.infrastructure.config.registry import ConfigRegistry
         config = ConfigRegistry.get_raw_config()
         backend = config.get("storage", {}).get("backend", "json")
         if backend == "json":
             return None  # JSON-only mode, don't read from Repository
-        repo = get_repository("registry")
+        repo = get_shadow_repository("registry")
+        if repo is None:
+            return None
         records = repo.list_all(limit=999999)
         if records:
             # v2.0 fix: SQLite stores list/dict fields as JSON strings.
@@ -452,12 +455,62 @@ def _normalize_registry_format(data) -> List[Dict]:
     return []
 
 
+def _resolve_site_identity(
+    file_path: Union[str, Path],
+    site_id: Optional[str] = None,
+    site_name: Optional[str] = None,
+) -> SiteIdentity:
+    """Resolve explicit or legacy record ownership without guessing a first site."""
+    try:
+        return ConfigRegistry.resolve_site_identity(
+            str(file_path), site_id=site_id, site_name=site_name
+        )
+    except Exception:
+        if site_id:
+            return SiteIdentity.from_values(site_id, site_name or site_id)
+        return SiteIdentity.legacy()
+
+
+def _ensure_site_metadata(record: Dict) -> bool:
+    """Populate missing site fields in a historical record in memory."""
+    identity = _resolve_site_identity(
+        record.get("file_path", ""),
+        record.get("site_id"),
+        record.get("site_name"),
+    )
+    changed = (
+        record.get("site_id") != identity.site_id
+        or record.get("site_name") != identity.site_name
+    )
+    if changed:
+        record.update(identity.as_dict())
+    return changed
+
+
+def _matches_site(record: Dict, site_id: Optional[str]) -> bool:
+    """Match a record against an optional site filter after legacy enrichment."""
+    if site_id is None:
+        return True
+    _ensure_site_metadata(record)
+    return record.get("site_id") == str(site_id).strip().lower()
+
+
+def migrate_site_metadata() -> int:
+    """Persist site ownership for historical Registry records once configuration is ready."""
+    _ensure_initialized()
+    with _async_lock:
+        registry = _load_registry()
+        changed = sum(1 for record in registry if _ensure_site_metadata(record))
+        if changed:
+            _save_registry_sync(registry)
+        return changed
+
+
 def _load_registry() -> List[Dict]:
     """加载注册表（确保路径已初始化）。
 
-    v2.0: Repository-first loading. When storage.backend is sqlite or both,
-    reads from SQLite via Repository. Falls back to JSON if Repository is
-    unavailable. When backend is json, reads from JSON directly (unchanged).
+    JSON is the authoritative store. Repository backends are best-effort
+    shadow copies and are consulted only when both JSON files are unavailable.
 
     v2.0 fix: Always returns a list of dicts, normalizing dict-format JSON files.
     """
@@ -468,11 +521,6 @@ def _load_registry() -> List[Dict]:
     with _snapshot_lock:
         if _last_registry_snapshot is not None:
             return _normalize_registry_format(_last_registry_snapshot)
-
-    # v2.0: Try Repository first (SQLite primary)
-    repo_data = _repo_load_registry()
-    if repo_data is not None:
-        return _normalize_registry_format(repo_data)
 
     if _REGISTRY_PATH and _REGISTRY_PATH.exists():
         try:
@@ -502,7 +550,19 @@ def _load_registry() -> List[Dict]:
         except (json.JSONDecodeError, OSError):
             _logger_warning("[REGISTRY] 备份文件也损坏")
 
+    repo_data = _repo_load_registry()
+    if repo_data is not None:
+        return _normalize_registry_format(repo_data)
     return []
+
+
+def _repository_record_id(item: Dict) -> str:
+    """Build a site-qualified shadow-store key for one Registry record."""
+    file_path = str(item.get("file_path") or "")
+    if not file_path:
+        return ""
+    site_id = str(item.get("site_id") or "legacy").strip().lower() or "legacy"
+    return f"{site_id}:{file_path}"
 
 
 def _repo_shadow_save(data: List[Dict]):
@@ -514,10 +574,13 @@ def _repo_shadow_save(data: List[Dict]):
     flows to SQLite without changing the module's public API.
     """
     try:
-        from anteumbra.infrastructure.persistence import get_repository
-        repo = get_repository("registry")
+        from anteumbra.infrastructure.persistence import get_shadow_repository
+        repo = get_shadow_repository("registry")
+        if repo is None:
+            return None
         for item in data:
-            key = item.get("file_path", "")
+            _ensure_site_metadata(item)
+            key = _repository_record_id(item)
             if key:
                 try:
                     repo.save(key, dict(item))
@@ -631,10 +694,18 @@ def _save_registry(data: List[Dict]):
 
 
 
-def add(file_path: Path, features: List[str], first_seen_ip: str = None, detection_source: str = "passive"):
+def add(
+    file_path: Path,
+    features: List[str],
+    first_seen_ip: str = None,
+    detection_source: str = "passive",
+    site_id: str = None,
+    site_name: str = None,
+):
     """添加可疑文件（线程安全版）。v1.8.4: 支持传入 first_seen_ip，避免本地检测时IP显示None。
        v1.9.0: 支持 detection_source 区分被动/主动检测。"""
     _ensure_initialized()
+    site = _resolve_site_identity(file_path, site_id, site_name)
 
     try:
         with _async_lock:
@@ -652,7 +723,9 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
             # 查找或更新记录
             updated = False
             for item in registry:
-                if item["file_path"] == abs_path:
+                if item["file_path"] == abs_path and _matches_site(
+                    item, site.site_id
+                ):
                     # 更新现有记录：保留已有的 first_seen_ip（除非新的有效IP）
                     existing_ip = item.get("first_seen_ip")
                     new_ip = first_seen_ip if first_seen_ip else existing_ip
@@ -668,6 +741,7 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
                         "detected_at": datetime.now().isoformat(),
                         "features": features,
                         "detection_source": new_src,
+                        **site.as_dict(),
                     })
                     updated = True
                     break
@@ -684,6 +758,7 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
                     "communication_count": 0,
                     "deleted_at": None,
                     "detection_source": detection_source,
+                    **site.as_dict(),
                 })
 
             _last_registry_snapshot = registry
@@ -706,6 +781,7 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
                         "features": features,
                         "first_seen_ip": first_seen_ip,
                         "detection_source": detection_source,
+                        **site.as_dict(),
                     })
             except Exception:
                 _get_logger().debug("PluginManager emit record_added failed", exc_info=True)
@@ -715,7 +791,11 @@ def add(file_path: Path, features: List[str], first_seen_ip: str = None, detecti
     except Exception as e:
         log_with_symbol("error_registry_add", "error", f"异常: {e}")
 
-def get_all(include_deleted: bool = False, include_false_positive: bool = False) -> List[Dict]:
+def get_all(
+    include_deleted: bool = False,
+    include_false_positive: bool = False,
+    site_id: Optional[str] = None,
+) -> List[Dict]:
     """
     v1.7.7: 默认不显示已删除文件，保持清单整洁
     include_deleted: 审计视图专用参数
@@ -723,6 +803,8 @@ def get_all(include_deleted: bool = False, include_false_positive: bool = False)
     _ensure_initialized()
 
     registry = _load_registry()
+    for record in registry:
+        _ensure_site_metadata(record)
 
     # 第一层过滤：删除状态（默认False）
     if include_deleted:
@@ -736,10 +818,14 @@ def get_all(include_deleted: bool = False, include_false_positive: bool = False)
     else:
         filtered = [item for item in base_filtered if not item.get("marked_false_positive", False)]
 
+    if site_id is not None:
+        normalized_id = str(site_id).strip().lower()
+        filtered = [item for item in filtered if item.get("site_id") == normalized_id]
+
     filtered.sort(key=lambda x: x.get("detected_at", ""), reverse=True)
     return filtered
 
-def mark_alerted(file_path: Path):
+def mark_alerted(file_path: Path, site_id: Optional[str] = None):
     """标记已告警"""
     _ensure_initialized()  # 确保初始化
 
@@ -748,7 +834,7 @@ def mark_alerted(file_path: Path):
         abs_path = path_to_key(file_path)
 
         for item in registry:
-            if item["file_path"] == abs_path:
+            if item["file_path"] == abs_path and _matches_site(item, site_id):
                 item["alerted"] = True
                 _save_registry(registry)
                 log_with_symbol("notice", "debug", f"标记已告警: {file_path.name}")
@@ -761,6 +847,8 @@ def mark_alerted(file_path: Path):
                         pm.emit("registry_changed", "suspicious_registry", {
                             "operation": "mark_alerted",
                             "file_path": abs_path,
+                            "site_id": item.get("site_id"),
+                            "site_name": item.get("site_name"),
                         })
                 except Exception:
                     _get_logger().debug("PluginManager emit registry_changed (mark_alerted) failed", exc_info=True)
@@ -768,7 +856,11 @@ def mark_alerted(file_path: Path):
     except Exception as e:
         log_with_symbol("error_mark_alerted", "error", f"异常: {e}")
 
-def mark_quarantined(file_path: str, quarantine_id: str) -> bool:
+def mark_quarantined(
+    file_path: str,
+    quarantine_id: str,
+    site_id: Optional[str] = None,
+) -> bool:
     """v1.7.9: 标记文件已被隔离 — 更新 Registry 条目并设 file_exists=False"""
     _ensure_initialized()
     try:
@@ -776,7 +868,7 @@ def mark_quarantined(file_path: str, quarantine_id: str) -> bool:
             registry = _load_registry()
             abs_path = path_to_key(file_path)
             for item in registry:
-                if item["file_path"] == abs_path:
+                if item["file_path"] == abs_path and _matches_site(item, site_id):
                     item["file_exists"] = False
                     item["quarantine_id"] = quarantine_id
                     item["quarantined_at"] = datetime.now().isoformat()
@@ -794,6 +886,8 @@ def mark_quarantined(file_path: str, quarantine_id: str) -> bool:
                                 "operation": "mark_quarantined",
                                 "file_path": abs_path,
                                 "quarantine_id": quarantine_id,
+                                "site_id": item.get("site_id"),
+                                "site_name": item.get("site_name"),
                             })
                     except Exception:
                         _get_logger().debug("PluginManager emit registry_changed (mark_quarantined) failed", exc_info=True)
@@ -805,7 +899,7 @@ def mark_quarantined(file_path: str, quarantine_id: str) -> bool:
         return False
 
 
-def mark_restored(file_path: str) -> bool:
+def mark_restored(file_path: str, site_id: Optional[str] = None) -> bool:
     """Clear quarantine state after a file is restored from quarantine."""
     _ensure_initialized()
     try:
@@ -813,7 +907,7 @@ def mark_restored(file_path: str) -> bool:
             registry = _load_registry()
             abs_path = path_to_key(file_path)
             for item in registry:
-                if item["file_path"] == abs_path:
+                if item["file_path"] == abs_path and _matches_site(item, site_id):
                     item["file_exists"] = True
                     item["quarantine_id"] = None
                     item["restored_at"] = datetime.now().isoformat()
@@ -829,6 +923,8 @@ def mark_restored(file_path: str) -> bool:
                             pm.emit("registry_changed", "suspicious_registry", {
                                 "operation": "mark_restored",
                                 "file_path": abs_path,
+                                "site_id": item.get("site_id"),
+                                "site_name": item.get("site_name"),
                             })
                     except Exception:
                         _get_logger().debug("PluginManager emit registry_changed (mark_restored) failed", exc_info=True)
@@ -839,7 +935,11 @@ def mark_restored(file_path: str) -> bool:
         return False
 
 
-def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
+def mark_false_positive(
+    file_path: Union[Path, str],
+    reason: str = "",
+    site_id: Optional[str] = None,
+) -> bool:
     """v2.0: 标记记录为误报 — 在 Registry 中设置 marked_false_positive=True
 
     与 remove() 区分：此操作由用户手动触发（前端按钮），不是文件删除事件。
@@ -857,7 +957,7 @@ def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
         registry = _load_registry()
         found = False
         for item in registry:
-            if item.get("file_path") == abs_path:
+            if item.get("file_path") == abs_path and _matches_site(item, site_id):
                 item["marked_false_positive"] = True
                 item["false_positive_at"] = datetime.now().isoformat()
                 item["false_positive_reason"] = reason
@@ -879,6 +979,8 @@ def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
                     "operation": "mark_false_positive",
                     "file_path": abs_path,
                     "reason": reason,
+                    "site_id": item.get("site_id"),
+                    "site_name": item.get("site_name"),
                 })
         except Exception:
             logger.debug("PluginManager emit registry_changed (mark_false_positive) failed", exc_info=True)
@@ -891,9 +993,10 @@ def mark_false_positive(file_path: Union[Path, str], reason: str = "") -> bool:
         return False
 
 
-def increment_access(file_path: Path, ip: str):
+def increment_access(file_path: Path, ip: str, site_id: Optional[str] = None):
     """增加访问计数 - v1.7.7-Patch11: 使用防抖SSE推送"""
     _ensure_initialized()
+    site = _resolve_site_identity(file_path, site_id)
 
     try:
         registry = _load_registry()
@@ -901,7 +1004,7 @@ def increment_access(file_path: Path, ip: str):
 
         # 查找记录
         for item in registry:
-            if item["file_path"] == abs_path:
+            if item["file_path"] == abs_path and _matches_site(item, site_id):
                 old = item.get("communication_count", 0)
                 new_count = old + 1
                 item["communication_count"] = new_count
@@ -926,7 +1029,8 @@ def increment_access(file_path: Path, ip: str):
                 "file_exists": True,
                 "first_seen_ip": ip,
                 "communication_count": 1,
-                "deleted_at": None
+                "deleted_at": None,
+                **site.as_dict(),
             })
             log_with_symbol("warning", "warning", f"记录不存在，自动创建: {file_path.name}", _get_logger())
 
@@ -947,6 +1051,7 @@ def increment_access(file_path: Path, ip: str):
                     "operation": "increment_access",
                     "file_path": abs_path,
                     "ip": ip,
+                    **site.as_dict(),
                 })
         except Exception:
             _get_logger().debug("PluginManager emit registry_changed (increment_access) failed", exc_info=True)
@@ -954,7 +1059,7 @@ def increment_access(file_path: Path, ip: str):
     except Exception as e:
         log_with_symbol("error_increment", "error", f"异常: {e}", _get_logger())
 
-def remove(file_path: Union[Path, str]) -> bool:
+def remove(file_path: Union[Path, str], site_id: Optional[str] = None) -> bool:
     """
     v1.7.6-Patch1: 软删除（标记file_exists=False），不是物理删除
     与误报标记区分：此操作由文件删除事件触发
@@ -977,7 +1082,7 @@ def remove(file_path: Union[Path, str]) -> bool:
             found = False
 
             for item in registry:
-                if item["file_path"] == abs_path:
+                if item["file_path"] == abs_path and _matches_site(item, site_id):
                     # v1.7.9: 如果已被隔离（有quarantine_id），只标记file_exists=False，保留隔离信息
                     if item.get("quarantine_id"):
                         item["file_exists"] = False
@@ -1013,6 +1118,8 @@ def remove(file_path: Union[Path, str]) -> bool:
                 pm.emit("registry_changed", "suspicious_registry", {
                     "operation": "remove",
                     "file_path": abs_path,
+                    "site_id": item.get("site_id"),
+                    "site_name": item.get("site_name"),
                 })
         except Exception:
             logger.debug("PluginManager emit registry_changed (remove) failed", exc_info=True)
@@ -1034,7 +1141,7 @@ def _trigger_registry_update_event():
     except Exception:
         _get_logger().debug("Registry update marker write failed", exc_info=True)
 
-def get(path: Path) -> Optional[Dict]:
+def get(path: Path, site_id: Optional[str] = None) -> Optional[Dict]:
     """获取单条记录"""
     _ensure_initialized()  # 确保初始化
 
@@ -1044,7 +1151,11 @@ def get(path: Path) -> Optional[Dict]:
         # 而 add() 使用 path_to_key() 进行小写规范化，导致查找失败。
         abs_path = path_to_key(path)
         # v1.1.0 fix: include false positives so marked records are still findable
-        for item in get_all(include_deleted=True, include_false_positive=True):
+        for item in get_all(
+            include_deleted=True,
+            include_false_positive=True,
+            site_id=site_id,
+        ):
             if item.get("file_path") == abs_path:
                 return item
     except Exception as e:
@@ -1052,9 +1163,9 @@ def get(path: Path) -> Optional[Dict]:
     return None
 
 
-def is_suspicious(path: Path) -> bool:
+def is_suspicious(path: Path, site_id: Optional[str] = None) -> bool:
     """检查是否在清单中"""
-    return get(path) is not None
+    return get(path, site_id=site_id) is not None
 
 def compact_registry():
     """压缩注册表"""
@@ -1097,7 +1208,9 @@ def compact_registry():
 
 # ── v1.1.0: Public status getters (replaces direct access to private module globals) ──
 
-def soft_delete_record(file_path: Union[Path, str]) -> bool:
+def soft_delete_record(
+    file_path: Union[Path, str], site_id: Optional[str] = None
+) -> bool:
     """v1.1.0: 软删除记录 — 标记 file_exists=False 并记录删除时间。
 
     Blueprint 层应使用此函数，而非直接操作 _load_registry()/_save_registry()。
@@ -1111,7 +1224,7 @@ def soft_delete_record(file_path: Union[Path, str]) -> bool:
     try:
         registry = _load_registry()
         for item in registry:
-            if item.get("file_path") == abs_path:
+            if item.get("file_path") == abs_path and _matches_site(item, site_id):
                 item["file_exists"] = False
                 item["deleted_at"] = datetime.now().isoformat()
                 _save_registry(registry)
@@ -1124,6 +1237,8 @@ def soft_delete_record(file_path: Union[Path, str]) -> bool:
                         pm.emit("registry_changed", "suspicious_registry", {
                             "operation": "soft_delete",
                             "file_path": abs_path,
+                            "site_id": item.get("site_id"),
+                            "site_name": item.get("site_name"),
                         })
                 except Exception:
                     _get_logger().debug("PluginManager emit registry_changed (soft_delete) failed", exc_info=True)

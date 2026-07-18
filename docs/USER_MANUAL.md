@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.27
+# Anteumbra User Manual v1.0.28
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -271,9 +271,16 @@ backend = "both"            # "json" | "sqlite" | "both"
 db_path = "data/anteumbra.db"
 ```
 
-- `json` — Simple, human-readable, no dependencies
-- `sqlite` — High performance, WAL mode, FK constraints, 13 indexed columns
-- `both` — Dual-write with SQLite-primary reads (recommended for production)
+- `json` — JSON-only storage, simple and human-readable
+- `sqlite` — Enables SQLite-backed repository consumers; core state still
+  keeps JSON as its authoritative source
+- `both` — Writes core state to JSON and a SQLite shadow. JSON remains
+  authoritative; SQLite provides indexed inspection and recovery when JSON is
+  unavailable (recommended)
+
+Back up `data/` as a unit. Do not edit the SQLite database to repair a
+Registry, quarantine, block-ledger, or threat-graph record while its JSON file
+is healthy; the next authoritative JSON write can replace that shadow value.
 
 ### 3.7 IP Blocking
 
@@ -870,5 +877,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.27 — MIT License</sub>
+  <sub>Anteumbra v1.0.28 — MIT License</sub>
 </div>

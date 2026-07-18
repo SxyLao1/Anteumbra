@@ -19,6 +19,7 @@ from anteumbra.infrastructure.quarantine import (
     get_quarantine_list,
     get_quarantine_detail,
     get_quarantine_stats,
+    migrate_site_metadata,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,8 @@ def quarantine_registered_file(
     rule_name: str,
     features: List[str],
     original_path: Optional[str] = None,
+    site_id: Optional[str] = None,
+    site_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Quarantine a detected file and commit its Registry state.
 
@@ -40,13 +43,26 @@ def quarantine_registered_file(
     file and quarantine metadata.  This application operation extends that
     guarantee to the suspicious-file Registry.
     """
-    record = quarantine_file(file_path, rule_name, features, original_path)
+    record = quarantine_file(
+        file_path,
+        rule_name,
+        features,
+        original_path,
+        site_id,
+        site_name,
+    )
     if record is None:
         return None
 
     from anteumbra.application.registry_service import mark_quarantined
 
-    if mark_quarantined(file_path, record["quarantine_id"]):
+    registry_site_id = record.get("site_id")
+    marked = (
+        mark_quarantined(file_path, record["quarantine_id"], registry_site_id)
+        if registry_site_id
+        else mark_quarantined(file_path, record["quarantine_id"])
+    )
+    if marked:
         return record
 
     try:
@@ -78,13 +94,26 @@ def restore_file(quarantine_id: str) -> Dict[str, Any]:
 
     original_path = record_before.get("original_path", "")
     registry_key = path_to_key(original_path)
+    registry_site_id = record_before.get("site_id")
     has_registry_record = any(
         item.get("file_path") == registry_key
-        for item in get_all(include_deleted=True, include_false_positive=True)
+        for item in get_all(
+            include_deleted=True,
+            include_false_positive=True,
+            site_id=registry_site_id,
+        )
     )
 
     restored = _restore_file(quarantine_id)
-    if not has_registry_record or mark_restored(original_path):
+    if not has_registry_record:
+        return restored
+
+    marked = (
+        mark_restored(original_path, registry_site_id)
+        if registry_site_id
+        else mark_restored(original_path)
+    )
+    if marked:
         return restored
 
     try:
@@ -114,4 +143,5 @@ __all__ = [
     "get_quarantine_list",
     "get_quarantine_detail",
     "get_quarantine_stats",
+    "migrate_site_metadata",
 ]

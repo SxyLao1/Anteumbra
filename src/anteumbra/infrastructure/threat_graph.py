@@ -440,8 +440,11 @@ class ThreatGraph:
         Best-effort — failures are silently ignored.
         """
         try:
-            from anteumbra.infrastructure.persistence import get_repository
-            repo = get_repository("threat_profiles")
+            from anteumbra.infrastructure.persistence import get_shadow_repository
+
+            repo = get_shadow_repository("threat_profiles")
+            if repo is None:
+                return
             for pid, pd in data.get("profiles", {}).items():
                 try:
                     repo.save(pid, dict(pd))
@@ -451,47 +454,41 @@ class ThreatGraph:
             logger.debug("Repository shadow persist unavailable", exc_info=True)
 
     def load(self):
-        """从持久化文件加载。
-
-        v2.0: Repository-first loading. When storage.backend is sqlite or both,
-        reads profiles from SQLite via Repository. Falls back to JSON when
-        backend is json or Repository is unavailable.
-        """
-        # v2.0: Try Repository first (SQLite primary)
+        """Load the JSON source of truth, with SQLite profile recovery."""
         data = None
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            config = ConfigRegistry.get_raw_config()
-            backend = config.get("storage", {}).get("backend", "json")
-            if backend != "json":
-                from anteumbra.infrastructure.persistence import get_repository
-                repo = get_repository("threat_profiles")
-                profiles_list = repo.list_all(limit=999999)
-                if profiles_list:
-                    # Reconstruct profiles from flat dicts
-                    profiles_dict = {}
-                    for pd in profiles_list:
-                        pid = pd.get("profile_id", "")
-                        if pid:
-                            profiles_dict[pid] = pd
-                    data = {"profiles": profiles_dict, "ip_table": {}}
-        except Exception:
-            logger.debug("Repository load failed, falling back to JSON", exc_info=True)
-
-        # Fallback: load from JSON file
-        if data is None:
-            if not self._persist_path or not self._persist_path.exists():
-                return
+        if self._persist_path and self._persist_path.exists():
             try:
-                with open(self._persist_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                with open(self._persist_path, "r", encoding="utf-8") as handle:
+                    data = json.load(handle)
             except Exception:
                 logger.warning(
                     "[THREAT_GRAPH] Failed to load persisted JSON from %s",
                     self._persist_path,
                     exc_info=True,
                 )
-                return
+
+        if data is None:
+            try:
+                from anteumbra.infrastructure.persistence import get_shadow_repository
+
+                repo = get_shadow_repository("threat_profiles")
+                profiles_list = repo.list_all(limit=999999) if repo else []
+                if profiles_list:
+                    profiles_dict = {}
+                    for profile_data in profiles_list:
+                        profile_id = profile_data.get("profile_id", "")
+                        if profile_id:
+                            profiles_dict[profile_id] = profile_data
+                    data = {"profiles": profiles_dict, "ip_table": {}}
+                    logger.warning(
+                        "[THREAT_GRAPH] Recovered profiles from SQLite shadow; "
+                        "IP reputation data requires the JSON backup"
+                    )
+            except Exception:
+                logger.debug("SQLite shadow load failed", exc_info=True)
+
+        if data is None:
+            return
 
         # Reconstruct domain objects from data dict (shared logic)
         try:

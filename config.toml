@@ -4,6 +4,7 @@ release_date = "2026-07-17"
 project_root = "."
 
 [website]
+id = "default"
 name = "Default Website"
 path = "sites/default"
 port = 80
@@ -500,7 +501,8 @@ flask_log_backup_count = 5
 # v1.9.2: 存储后端配置
 # ============================================================================
 [storage]
-# 存储后端: "json" (默认) | "sqlite" (WAL模式高性能) | "both" (双写: JSON兜底 + SQLite优先读)
+# Storage backend: "json" | "sqlite" | "both". JSON remains authoritative;
+# SQLite is a best-effort shadow copy for inspection and future migration.
 backend = "both"
 # SQLite 数据库文件路径 (backend = "sqlite" 或 "both" 时生效)
 db_path = "data/anteumbra.db"

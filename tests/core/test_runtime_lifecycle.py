@@ -25,6 +25,17 @@ def test_sse_worker_start_is_idempotent_and_stop_disconnects_clients():
         sse_manager.stop_sse_worker()
 
 
+def test_sse_cleanup_leaves_a_disconnect_signal_for_the_generator():
+    from anteumbra.infrastructure.utils import sse_manager
+
+    sse_manager.stop_sse_worker()
+    client_queue = sse_manager.register_sse_client()
+
+    assert sse_manager.cleanup_sse_connections() == 1
+    assert sse_manager.get_connected_client_count() == 0
+    assert client_queue.get_nowait() is None
+
+
 def test_metrics_worker_start_is_idempotent_and_stops(tmp_path, monkeypatch):
     from anteumbra.infrastructure.monitoring import metrics
 

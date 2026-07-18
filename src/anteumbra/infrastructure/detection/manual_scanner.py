@@ -15,12 +15,14 @@ v1.9.0: 主动手动扫描引擎
 """
 import hashlib
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.detection.scanner import quick_scan_yara
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 
@@ -43,15 +45,24 @@ class ManualScanResult:
     errors: int = 0
     findings: List[Dict] = field(default_factory=list)
     error_message: str = ""
+    site_id: str = ""
+    site_name: str = ""
 
 
 class ManualScanner:
     """主动扫描器 — 遍历目录，对每个文件运行扫描链，与 Registry 去重"""
 
-    def __init__(self, app_logger=None):
+    def __init__(
+        self,
+        app_logger=None,
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
+    ):
         self.logger = app_logger or logger
         self._known_paths: Set[str] = set()
         self._registry_records: Dict[str, Dict] = {}
+        self._site_id = site_id
+        self._site_name = site_name
 
     def _build_known_index(self):
         """预加载 Registry 全部记录到内存索引，O(1) 去重查找"""
@@ -61,7 +72,7 @@ class ManualScanner:
             self.logger.warning("[MANUAL_SCANNER] 无法导入 suspicious_registry，去重功能不可用")
             return
 
-        records = get_all(include_deleted=True)
+        records = get_all(include_deleted=True, site_id=self._site_id)
         self._known_paths.clear()
         self._registry_records.clear()
         for r in records:
@@ -78,6 +89,8 @@ class ManualScanner:
         extensions: Optional[List[str]] = None,
         progress_callback: Optional[Callable[["ManualScanResult"], None]] = None,
         cancelled_check: Optional[Callable[[], bool]] = None,
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
     ) -> ManualScanResult:
         """
         遍历目录扫描所有文件。
@@ -122,6 +135,31 @@ class ManualScanner:
             return result
 
         # ── 默认扩展名 ──
+        website = None
+        try:
+            from anteumbra.infrastructure.config.registry import ConfigRegistry
+
+            identity = ConfigRegistry.resolve_site_identity(
+                str(target),
+                site_id=site_id or self._site_id,
+                site_name=site_name or self._site_name,
+            )
+            website = ConfigRegistry.get_website(identity.site_id)
+        except Exception:
+            identity = SiteIdentity.from_values(
+                site_id or self._site_id,
+                site_name or self._site_name or "Legacy / unassigned",
+            )
+        self._site_id = identity.site_id
+        self._site_name = identity.site_name
+        result.site_id = identity.site_id
+        result.site_name = identity.site_name
+
+        if extensions is None:
+            if website is not None:
+                extensions = list(website.scan_options.monitor_extensions)
+            else:
+                extensions = None
         if extensions is None:
             try:
                 from anteumbra.infrastructure.config.registry import ConfigRegistry
@@ -133,13 +171,15 @@ class ManualScanner:
                 extensions = [".php", ".asp", ".aspx", ".jsp", ".jspx"]
 
         # ── 排除目录 ──
-        exclude_dirs: Set[str] = set()
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            cfg = ConfigRegistry.get_raw_config()
-            scan_opts = cfg.get("website", {}).get("scan_options", {})
-            exclude_dirs = set(scan_opts.get("exclude_dirs", ["cache", "logs", "temp", "data", ".git"]))
-        except Exception:
+        # A manual scan uses the selected site's policy. An unassigned path
+        # intentionally receives only conservative defaults, never another
+        # site's [website] table.
+        if website is not None:
+            exclude_dirs = {
+                str(directory).lower()
+                for directory in website.scan_options.exclude_dirs
+            }
+        else:
             exclude_dirs = {"cache", "logs", "temp", "data", ".git"}
 
         # ── 构建已知索引 ──
@@ -150,11 +190,16 @@ class ManualScanner:
         file_list: List[Path] = []
 
         if recursive:
-            for root, dirs, files in target.walk():
+            for root, dirs, files in os.walk(target):
                 # 过滤排除目录
-                dirs[:] = [d for d in dirs if d not in exclude_dirs and not d.startswith(".")]
+                dirs[:] = [
+                    directory
+                    for directory in dirs
+                    if directory.lower() not in exclude_dirs
+                    and not directory.startswith(".")
+                ]
                 for f in files:
-                    fp = root / f
+                    fp = Path(root) / f
                     if fp.suffix.lower() in ext_set:
                         file_list.append(fp)
         else:
@@ -170,16 +215,15 @@ class ManualScanner:
 
         # ── 逐文件扫描 ──
         progress_interval = max(1, result.total_files // 50)  # 每 2% 回调一次
-        scan_options = None
-        try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
+        if website is not None:
+            scan_options = website.scan_options
+        else:
             from anteumbra.infrastructure.models import ScanOptions
-            cfg = ConfigRegistry.get_raw_config()
-            so = cfg.get("website", {}).get("scan_options", {})
-            scan_options = ScanOptions(**so) if so else ScanOptions()
-        except Exception:
-            from anteumbra.infrastructure.models import ScanOptions
-            scan_options = ScanOptions()
+
+            scan_options = ScanOptions(
+                monitor_extensions=list(extensions),
+                exclude_dirs=sorted(exclude_dirs),
+            )
 
         for idx, file_path in enumerate(file_list):
             # 检查取消
@@ -198,6 +242,12 @@ class ManualScanner:
 
                 # ── 扫描 ──
                 scan_result = quick_scan_yara(file_path, scan_options, self.logger)
+                try:
+                    from anteumbra.infrastructure.monitoring.metrics import get_metrics
+
+                    get_metrics().increment_site("scan_total", self._site_id)
+                except Exception:
+                    self.logger.debug("Failed to record manual scan site metric", exc_info=True)
 
                 if scan_result and scan_result.is_suspicious:
                     scan_result.detection_source = "active"
@@ -216,6 +266,8 @@ class ManualScanner:
                             "detected_at": existing.get("detected_at", "N/A"),
                             "quarantine_id": existing.get("quarantine_id", ""),
                             "detection_source": existing.get("detection_source", "passive"),
+                            "site_id": self._site_id,
+                            "site_name": self._site_name,
                         })
                     else:
                         # 不在 Registry → 新发现！自动注册
@@ -224,7 +276,9 @@ class ManualScanner:
                             from anteumbra.infrastructure.suspicious_registry import add
                             add(file_path, scan_result.features,
                                 first_seen_ip="127.0.0.1",
-                                detection_source="active")
+                                detection_source="active",
+                                site_id=self._site_id,
+                                site_name=self._site_name)
                             # 立即更新索引，避免同次扫描重复记录
                             self._known_paths.add(norm_key)
                             self._registry_records[norm_key] = {
@@ -233,6 +287,8 @@ class ManualScanner:
                                 "features": scan_result.features,
                                 "quarantine_id": "",
                                 "detection_source": "active",
+                                "site_id": self._site_id,
+                                "site_name": self._site_name,
                             }
                         except Exception as add_err:
                             self.logger.warning(
@@ -249,6 +305,8 @@ class ManualScanner:
                             "detected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                             "quarantine_id": "",
                             "detection_source": "active",
+                            "site_id": self._site_id,
+                            "site_name": self._site_name,
                         })
 
                     self.logger.debug(

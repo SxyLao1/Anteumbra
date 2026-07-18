@@ -22,6 +22,7 @@ except ImportError:
     pass  # 生产环境未安装 python-dotenv 时跳过
 from typing import Dict, List, Optional, Any
 
+from anteumbra.domain.site import SiteIdentity, SiteResolver
 from anteumbra.infrastructure.config.loader import load_toml_config
 from anteumbra.infrastructure.models import Website, ScanOptions
 from anteumbra.infrastructure.utils.path_utils import normalize_path
@@ -277,6 +278,31 @@ class ConfigRegistry:
     def get_enabled_websites(cls) -> List[Website]:
         return [w for w in cls.get_websites() if w.enabled]
 
+    @classmethod
+    def get_website(cls, site_id: str) -> Optional[Website]:
+        """Return a configured website by its stable site ID."""
+        normalized_id = str(site_id).strip().lower()
+        for website in cls.get_websites():
+            if website.site_id == normalized_id:
+                return website
+        return None
+
+    @classmethod
+    def resolve_site_identity(
+        cls,
+        file_path: str,
+        site_id: Optional[str] = None,
+        site_name: Optional[str] = None,
+    ) -> SiteIdentity:
+        """Resolve explicit or path-derived ownership without selecting a first site."""
+        if site_id:
+            website = cls.get_website(site_id)
+            return SiteIdentity.from_values(
+                site_id,
+                site_name or (website.name if website else str(site_id)),
+            )
+        return SiteResolver.from_websites(cls.get_enabled_websites()).resolve(file_path)
+
     @staticmethod
     def safe_int(value, default=0):
         """Safely convert config value to int, stripping comments if needed."""
@@ -292,18 +318,25 @@ class ConfigRegistry:
         """解析网站配置"""
         logger = cls._get_logger()
         websites = []
+        site_ids = set()
 
         # 支持多种配置格式（向后兼容）
         site_data = config.get("website")
         if isinstance(site_data, dict):
             if site_data.get("enabled", True):
-                websites.append(cls._create_website(site_data))
+                site = cls._create_website(site_data)
+                site_ids.add(site.site_id)
+                websites.append(site)
         elif isinstance(site_data, list):
             for data in site_data:
                 if not isinstance(data, dict):
                     raise ValueError("Every [[website]] entry must be a table")
                 if data.get("enabled", True):
-                    websites.append(cls._create_website(data))
+                    site = cls._create_website(data)
+                    if site.site_id in site_ids:
+                        raise ValueError(f"Duplicate website.id: {site.site_id}")
+                    site_ids.add(site.site_id)
+                    websites.append(site)
         else:
             raise ValueError("[website] must be a table or an array of tables")
 
@@ -331,6 +364,7 @@ class ConfigRegistry:
                 name=name,
                 path=path,
                 port=data["port"],
+                site_id=data.get("id", data.get("site_id", "")),
                 enabled=data.get("enabled", True),
                 scan_options=scan_options,
                 log_config=log_config,

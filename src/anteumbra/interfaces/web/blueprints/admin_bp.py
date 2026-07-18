@@ -18,7 +18,6 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote
 from anteumbra.application.sse_service import persist_log_line
@@ -32,7 +31,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
 from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.application.registry_service import get_all, remove
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.application.platform_service import check_port_reachable
@@ -64,6 +62,65 @@ def generate_secure_sse_token(username: str) -> str:
     return base64.b64encode(token_str.encode()).decode()
 
 
+def _website_info(websites):
+    """Build an aggregate website status model without privileging a first site."""
+    if not websites:
+        return None
+
+    sites = []
+    for website in websites:
+        reachable = check_port_reachable("127.0.0.1", website.port)
+        sites.append(
+            {
+                "site_id": website.site_id,
+                "name": website.name,
+                "port": website.port,
+                "path": str(website.path),
+                "reachable": reachable,
+            }
+        )
+
+    if len(sites) == 1:
+        return {
+            **sites[0],
+            "port_status": "listening" if sites[0]["reachable"] else "unreachable",
+            "site_count": 1,
+            "sites": sites,
+        }
+
+    all_reachable = all(site["reachable"] for site in sites)
+    return {
+        "name": f"{len(sites)} monitored sites",
+        "port": "multiple",
+        "path": "multiple roots",
+        "reachable": all_reachable,
+        "port_status": "all reachable" if all_reachable else "degraded",
+        "site_count": len(sites),
+        "sites": sites,
+    }
+
+
+def _monitor_log_history(websites, limit: int = 500) -> str:
+    """Read recent monitor logs from every enabled site for aggregate views."""
+    lines = []
+    for website in websites:
+        log_file = normalize_path(f"logs/{website.name}/monitor.log")
+        if not log_file.exists():
+            continue
+        try:
+            lines.extend(log_file.read_text(encoding="utf-8", errors="ignore").splitlines())
+        except OSError:
+            logger.debug("Failed to read site monitor log %s", log_file, exc_info=True)
+    html_parts = []
+    for line in lines[-limit:]:
+        line = line.strip()
+        if not line or "[SSE]" in line:
+            continue
+        safe_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        html_parts.append(f'<div class="log-line">{safe_line}</div>')
+    return "".join(html_parts)
+
+
 @admin_bp.route('/')
 @require_auth
 def dashboard_index():
@@ -78,19 +135,7 @@ def dashboard_index():
             session['sse_token'] = auth_header
         client_ip = request.remote_addr
         websites = ConfigRegistry.get_enabled_websites()
-        website = websites[0] if websites else None
-        website_reachable = False
-        website_info = None
-        if website:
-            website_reachable = check_port_reachable("127.0.0.1", website.port)
-            website._reachable = website_reachable
-            website_info = {
-                'name': website.name,
-                'port': website.port,
-                'path': str(website.path),
-                'reachable': website_reachable,
-                'port_status': '已监听' if website_reachable else '未监听'
-            }
+        website_info = _website_info(websites)
         return render_template(
             'admin/dashboard.html',
             auth_header=auth_header,
@@ -114,27 +159,7 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        # v1.8.0: 历史日志始终从 monitor.log 读取（buffer 仅用于 SSE 实时推送）
-        import json
-        log_history_html = ""
-        try:
-            websites = ConfigRegistry.get_enabled_websites()
-            site_name = websites[0].name if websites else "Default Website"
-            log_file = normalize_path(f"logs/{site_name}/monitor.log")
-            if log_file.exists():
-                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    all_lines = f.readlines()
-                    lines = all_lines[-500:]
-                    html_parts = []
-                    for line in lines:
-                        line = line.strip()
-                        if not line or '[SSE]' in line:
-                            continue
-                        safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                        html_parts.append(f'<div class="log-line">{safe_line}</div>')
-                    log_history_html = ''.join(html_parts)
-        except Exception:
-            logger.debug("Failed to read monitor.log for overview log history", exc_info=True)
+        log_history_html = _monitor_log_history(ConfigRegistry.get_enabled_websites())
 
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
@@ -167,44 +192,17 @@ def threats():
 def dashboard_content():
     """v1.7.9: 安全报告 Dashboard"""
     try:
-        from anteumbra.application.registry_service import get_all
-        from anteumbra.application.quarantine_service import get_quarantine_stats
+        from anteumbra.application.dashboard_service import build_dashboard_summary
 
-        all_records = get_all(include_deleted=True)
-        quarantine_stats = get_quarantine_stats()
-
-        total = len(all_records)
-        quarantined = quarantine_stats.get("quarantined", 0)
-        false_positives = sum(1 for r in all_records if r.get("marked_false_positive", False))
-        # v1.8.2: quarantine stats 含历史数据可能 > registry total，cap at 100%
-        protection_rate = round((min(quarantined, total) / total * 100), 1) if total > 0 else 0.0
-
-        # 最近5条检测事件
-        recent = []
-        for r in all_records[:5]:
-            try:
-                file_name = Path(r.get("file_path", "")).name
-            except Exception:
-                file_name = "unknown"
-            recent.append({
-                "time": r.get("detected_at", "N/A")[:16],
-                "file": file_name,
-                "rule": r.get("features", ["Unknown"])[0] if r.get("features") else "Unknown",
-                "quarantined": False,
-                "false_positive": r.get("marked_false_positive", False)
-            })
-
-        stats = {
-            "total_detections": total,
-            "quarantined": quarantined,
-            "false_positives": false_positives,
-            "protection_rate": protection_rate
-        }
+        summary = build_dashboard_summary(request.args.get("site_id") or None)
+        stats = summary["aggregate"]
+        recent = summary["recent_events"]
 
         return render_template(
             'admin/dashboard_content.html',
             stats=stats,
             recent_events=recent,
+            site_summaries=summary["sites"],
             compact=request.args.get('compact') == '1'
         )
     except Exception as e:
@@ -223,17 +221,6 @@ def monitor_content():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
         websites = ConfigRegistry.get_enabled_websites()
-        website = websites[0] if websites else None
-        website_reachable = False
-        if website:
-            website_reachable = check_port_reachable("127.0.0.1", website.port)
-        website_info = {
-            'name': website.name if website else 'Unknown',
-            'port': website.port if website else 80,
-            'path': str(website.path) if website else '/unknown',
-            'reachable': website_reachable,
-            'port_status': '已监听' if website_reachable else '未监听'
-        } if website else None
 
         log_history_html = ""
         try:
@@ -266,6 +253,7 @@ def monitor_content():
         except Exception as e:
             current_app.logger.warning(f"[MONITOR_CONTENT] 历史日志加载失败: {e}")
 
+        website_info = _website_info(websites)
         return render_template(
             'admin/monitor_content.html',
             auth_header=auth_header,
@@ -372,17 +360,7 @@ def dashboard():
         auth_header = base64.b64encode(auth_bytes).decode('utf-8')
         session['sse_token'] = auth_header
     websites = ConfigRegistry.get_enabled_websites()
-    website = websites[0] if websites else None
-    website_reachable = False
-    if website:
-        website_reachable = check_port_reachable("127.0.0.1", website.port)
-    website_info = {
-        'name': website.name if website else 'Unknown',
-        'port': website.port if website else 80,
-        'path': str(website.path) if website else '/unknown',
-        'reachable': website_reachable,
-        'port_status': '已监听' if website_reachable else '未监听'
-    } if website else None
+    website_info = _website_info(websites)
     return render_template(
         'admin/dashboard.html',
         auth_header=auth_header,

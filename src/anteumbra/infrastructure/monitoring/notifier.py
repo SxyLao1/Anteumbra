@@ -121,6 +121,7 @@ class Notifier:
                 try:
                     # v1.7.9: 批量取件，每次最多10条或等待1秒
                     batch = []
+                    stop_after_batch = False
                     try:
                         first = self._alert_queue.get(timeout=1)
                         if first[0] is None:  # 退出信号
@@ -134,45 +135,15 @@ class Notifier:
                         try:
                             item = self._alert_queue.get_nowait()
                             if item[0] is None:
+                                stop_after_batch = True
                                 break
                             batch.append(item)
                         except queue.Empty:
                             break
 
-                    # 批量处理：相同级别合并为一条消息
-                    self.logger.info(f"[ALERT][WORKER] 批量处理 {len(batch)} 条告警")
-                    if len(batch) == 1:
-                        message, level = batch[0]
-                        try:
-                            self.send_alert(message, level=level, _already_counted=True)
-                        except Exception as e:
-                            self.logger.error(f"[ALERT][WORKER] 发送失败: {e}", exc_info=True)
-                    else:
-                        # 合并发送：减少网络请求次数
-                        levels = set(l for _, l in batch)
-                        if len(levels) == 1:
-                            combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, (msg, _) in enumerate(batch)])
-                            try:
-                                self.send_alert(
-                                    f"批量告警 ({len(batch)}条)\n{combined}",
-                                    level=list(levels)[0],
-                                    _already_counted=True,
-                                )
-                            except Exception as e:
-                                self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
-                        else:
-                            # 不同级别分别发送（只发最高级别）
-                            max_level = max(levels, key=lambda x: {"INFO":0, "WARNING":1, "CRITICAL":2}.get(x, 0))
-                            critical_msgs = [msg for msg, lvl in batch if lvl == max_level]
-                            combined = "\n".join([f"[{i+1}] {msg[:200]}" for i, msg in enumerate(critical_msgs)])
-                            try:
-                                self.send_alert(
-                                    f"批量告警 ({len(batch)}条, 最高级别{max_level})\n{combined}",
-                                    level=max_level,
-                                    _already_counted=True,
-                                )
-                            except Exception as e:
-                                self.logger.error(f"[ALERT][WORKER] 批量发送失败: {e}", exc_info=True)
+                    self._dispatch_batch(batch)
+                    if stop_after_batch:
+                        break
 
                 except Exception as e:
                     self.logger.critical(f"[ALERT][WORKER] 致命错误: {e}", exc_info=True)
@@ -182,14 +153,81 @@ class Notifier:
         self._alert_thread.start()
         self.logger.info("[ALERT] 告警工作线程已启动（批量模式）")
 
+    def _dispatch_batch(self, batch: list[tuple[str, str, str | None]]) -> None:
+        """Dispatch queued notifications without mixing site ownership."""
+        by_site: Dict[str | None, list[tuple[str, str, str | None]]] = {}
+        for item in batch:
+            by_site.setdefault(item[2], []).append(item)
+
+        for site_id, site_batch in by_site.items():
+            self.logger.info(
+                "[ALERT][WORKER] processing %d alerts for site=%s",
+                len(site_batch),
+                site_id or "legacy",
+            )
+            try:
+                if len(site_batch) == 1:
+                    message, level, _ = site_batch[0]
+                    self.send_alert(
+                        message,
+                        level=level,
+                        site_id=site_id,
+                        _already_counted=True,
+                    )
+                    continue
+
+                levels = {level for _, level, _ in site_batch}
+                if len(levels) == 1:
+                    level = next(iter(levels))
+                    combined = "\n".join(
+                        f"[{index + 1}] {message[:200]}"
+                        for index, (message, _, _) in enumerate(site_batch)
+                    )
+                    self.send_alert(
+                        f"Batch alerts ({len(site_batch)})\n{combined}",
+                        level=level,
+                        site_id=site_id,
+                        _already_counted=True,
+                    )
+                    continue
+
+                max_level = max(
+                    levels,
+                    key=lambda value: {"INFO": 0, "WARNING": 1, "CRITICAL": 2}.get(
+                        value, 0
+                    ),
+                )
+                messages = [
+                    message
+                    for message, level, _ in site_batch
+                    if level == max_level
+                ]
+                combined = "\n".join(
+                    f"[{index + 1}] {message[:200]}"
+                    for index, message in enumerate(messages)
+                )
+                self.send_alert(
+                    f"Batch alerts ({len(site_batch)}, highest={max_level})\n{combined}",
+                    level=max_level,
+                    site_id=site_id,
+                    _already_counted=True,
+                )
+            except Exception as exc:
+                self.logger.error(
+                    "[ALERT][WORKER] batch send failed for site=%s: %s",
+                    site_id or "legacy",
+                    exc,
+                    exc_info=True,
+                )
+
     def drain(self):
         """v1.7.9: 主动疏通告警队列——清空队列并全部持久化到磁盘"""
         drained = []
         while True:
             try:
-                msg, lvl = self._alert_queue.get_nowait()
-                if msg is not None:
-                    drained.append((msg, lvl))
+                message, level, site_id = self._alert_queue.get_nowait()
+                if message is not None:
+                    drained.append((message, level, site_id))
             except queue.Empty:
                 break
         if drained:
@@ -197,7 +235,13 @@ class Notifier:
             self.logger.info(f"[ALERT][DRAIN] 主动疏通完成，{len(drained)}条告警已持久化")
         return len(drained)
 
-    def _safe_notify(self, message: str, level: str = "CRITICAL"):
+    def _safe_notify(
+        self,
+        message: str,
+        level: str = "CRITICAL",
+        *,
+        site_id: str | None = None,
+    ):
         """
         v1.7.9: 异步通知（唯一入口）
         - 正常：写入队列
@@ -206,9 +250,13 @@ class Notifier:
         - 异常：双保险持久化
         """
         metrics = get_metrics()
-        metrics.increment("alert_total")
+        metrics.increment("alert_total", site_id=site_id)
         if not self.enabled:
-            metrics.record_notification("skipped", "no external channel is configured")
+            metrics.record_notification(
+                "skipped",
+                "no external channel is configured",
+                site_id=site_id,
+            )
             self.logger.warning(
                 "[NOTIFIER][LOCAL_ONLY][%s] %s",
                 level,
@@ -224,7 +272,7 @@ class Notifier:
                 self.logger.warning(f"[ALERT][DRAIN] 队列积压{qsize}条，已丢弃旧告警")
 
             # 尝试入队（非阻塞）
-            self._alert_queue.put_nowait((message, level))
+            self._alert_queue.put_nowait((message, level, site_id))
             self.logger.info(
                 "[NOTIFIER][QUEUE] queued alert level=%s size=%s",
                 level,
@@ -233,7 +281,7 @@ class Notifier:
             return True
         except queue.Full:
             # 队列满：立即持久化
-            self._persist_overflow(message, level)
+            self._persist_overflow(message, level, site_id=site_id)
             self._overflow_count += 1
             self.logger.critical(
                 f"[ALERT][OVERFLOW] 队列已满({self._alert_queue.qsize()}), "
@@ -243,7 +291,7 @@ class Notifier:
         except Exception as e:
             # 任何异常都触发持久化（最后防线）
             self.logger.error(f"[ALERT][QUEUE] 入队失败: {e}", exc_info=True)
-            self._persist_overflow(message, level)
+            self._persist_overflow(message, level, site_id=site_id)
             return False
 
     def _drain_old_alerts(self, count: int):
@@ -251,8 +299,9 @@ class Notifier:
         drained = []
         for _ in range(min(count, self._alert_queue.qsize())):
             try:
-                msg, lvl = self._alert_queue.get_nowait()
-                drained.append((msg, lvl))
+                message, level, site_id = self._alert_queue.get_nowait()
+                if message is not None:
+                    drained.append((message, level, site_id))
             except queue.Empty:
                 break
         # 被丢弃的告警批量持久化（不丢失）
@@ -265,11 +314,12 @@ class Notifier:
         overflow_file.parent.mkdir(parents=True, exist_ok=True)
         try:
             with open(overflow_file, "a", encoding='utf-8', buffering=1) as f:
-                for message, level in items:
+                for message, level, site_id in items:
                     f.write(json.dumps({
                         "timestamp": datetime.now().isoformat(),
                         "level": level,
                         "message": message,
+                        "site_id": site_id,
                         "dropped": True
                     }) + "\n")
                 f.flush()
@@ -277,7 +327,13 @@ class Notifier:
         except Exception as e:
             _notifier_logger.critical(f"[ALERT][FATAL] Batch disk write failed: {e}")
 
-    def _persist_overflow(self, message: str, level: str):
+    def _persist_overflow(
+        self,
+        message: str,
+        level: str,
+        *,
+        site_id: str | None = None,
+    ):
         """溢出持久化（内联简化版）"""
         overflow_file = normalize_path("data/alert_overflow.json")
         overflow_file.parent.mkdir(parents=True, exist_ok=True)
@@ -287,7 +343,8 @@ class Notifier:
                 f.write(json.dumps({
                     "timestamp": datetime.now().isoformat(),
                     "level": level,
-                    "message": message
+                    "message": message,
+                    "site_id": site_id,
                 }) + "\n")
                 f.flush()
                 os.fsync(f.fileno())
@@ -381,6 +438,7 @@ class Notifier:
         analysis: Optional[Dict[str, Any]] = None,
         *,
         _already_counted: bool = False,
+        site_id: str | None = None,
     ) -> bool:
         """
         发送告警（主入口）
@@ -392,9 +450,13 @@ class Notifier:
         """
         metrics = get_metrics()
         if not _already_counted:
-            metrics.increment("alert_total")
+            metrics.increment("alert_total", site_id=site_id)
         if not self.enabled:
-            metrics.record_notification("skipped", "no external channel is configured")
+            metrics.record_notification(
+                "skipped",
+                "no external channel is configured",
+                site_id=site_id,
+            )
             self.logger.warning(
                 "[NOTIFIER][LOCAL_ONLY][%s] %s",
                 level,
@@ -415,7 +477,7 @@ class Notifier:
                 enhanced_message += f"日志文件: {analysis.get('log_path', '未知')}"
 
         results = {}
-        metrics.record_notification("attempted")
+        metrics.record_notification("attempted", site_id=site_id)
 
         if self.channels["wechat"]["enabled"] and self._wechat_circuit_enabled:
             try:
@@ -439,16 +501,28 @@ class Notifier:
                 self.logger.error(f"[NOTIFIER][WEBHOOK] 调用异常: {e}")
 
         if not results:
-            metrics.record_notification("skipped", "all configured channels are unavailable")
+            metrics.record_notification(
+                "skipped",
+                "all configured channels are unavailable",
+                site_id=site_id,
+            )
             return False
 
         successes = sum(bool(value) for value in results.values())
         if successes == len(results):
-            metrics.record_notification("success")
+            metrics.record_notification("success", site_id=site_id)
         elif successes:
-            metrics.record_notification("partial", "one or more notification channels failed")
+            metrics.record_notification(
+                "partial",
+                "one or more notification channels failed",
+                site_id=site_id,
+            )
         else:
-            metrics.record_notification("failed", "all notification channels failed")
+            metrics.record_notification(
+                "failed",
+                "all notification channels failed",
+                site_id=site_id,
+            )
 
         # 日志输出必须在所有通道尝试后，避免重复
         # 提取核心消息（第一行）用于日志，保持日志简洁
@@ -631,7 +705,7 @@ class Notifier:
         if self._alert_thread and self._alert_thread.is_alive():
             # 发送退出信号
             try:
-                self._alert_queue.put_nowait((None, None))  # None作为退出信号
+                self._alert_queue.put_nowait((None, None, None))  # None作为退出信号
             except queue.Full:
                 pass
 
@@ -746,6 +820,12 @@ def format_alert_message(context: dict) -> str:
 
     # -- 公共头部 --
     header = f"[Anteumbra {level}] {ts}"
+    site_id = str(context.get("site_id", "")).strip()
+    site_name = str(context.get("site_name", "")).strip()
+    if site_name and site_id:
+        header += f"\n[Site] {site_name} ({site_id})"
+    elif site_name or site_id:
+        header += f"\n[Site] {site_name or site_id}"
 
     if alert_type == "local_detection":
         body = (

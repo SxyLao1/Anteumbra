@@ -16,12 +16,13 @@ import logging
 import os
 import posixpath
 import re
-import socket
 import sys
 import time
 import signal
 import subprocess
 from pathlib import Path
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 import click
 
@@ -126,14 +127,17 @@ def _is_running(pid: int) -> bool:
 
 
 def _service_ready(host: str, port: int, timeout: float = 0.25) -> bool:
-    """Return whether the configured HTTP listener accepts connections."""
+    """Return whether the running service answers its public health endpoint."""
     connect_host = host
     if host in {"0.0.0.0", "::", "[::]"}:
         connect_host = "127.0.0.1"
+    if ":" in connect_host and not connect_host.startswith("["):
+        connect_host = f"[{connect_host}]"
+    health_url = f"http://{connect_host}:{port}/api/v1/health"
     try:
-        with socket.create_connection((connect_host, port), timeout=timeout):
-            return True
-    except OSError:
+        with urlrequest.urlopen(health_url, timeout=timeout) as response:
+            return 200 <= response.status < 300
+    except (OSError, ValueError, urlerror.URLError):
         return False
 
 
@@ -293,8 +297,8 @@ def start(host, port):
         popen_kwargs["stdout"] = log_stream
         process = subprocess.Popen(cmd, **popen_kwargs)
 
-    # A PID file alone is not readiness.  Wait for both process startup and
-    # the configured HTTP listener so configuration/bind failures are visible.
+    # A PID file or bound socket is not readiness. Wait for a successful HTTP
+    # health response so startup work that follows Waitress binding is included.
     ready_checks = 0
     for _ in range(60):
         time.sleep(0.25)

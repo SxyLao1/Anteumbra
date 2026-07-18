@@ -1,4 +1,4 @@
-# Anteumbra Technical White Paper v1.0.27
+# Anteumbra Technical White Paper v1.0.28
 
 > **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
 
@@ -17,6 +17,7 @@
 7. [Key Algorithms](#7-key-algorithms)
 8. [Security Design](#8-security-design)
 9. [Development Decision Guide](#9-development-decision-guide)
+10. [Site Isolation and Runtime Composition](#10-site-isolation-and-runtime-composition)
 
 ---
 
@@ -68,6 +69,20 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 3. **Application is the orchestration layer**: Contains no business logic, only module orchestration and event routing
 4. **Infrastructure implements Domain interfaces**: Repository, Detector, Notifier are all implementations of ABCs defined in Domain
 5. **Event bus decoupling**: Infrastructure modules communicate with each other via EDA events, never through direct calls
+
+### Current Refactoring Boundary
+
+The codebase is a modular monolith under active dependency inversion, not a
+claim of fully independent microservices. New work must respect these rules:
+
+- Domain contracts do not import Flask, `ConfigRegistry`, filesystems, or storage.
+- `launcher.py` is the composition root. It creates `RuntimeServices` once and
+  gives monitors their registry, metrics, event publisher, and site resolver.
+- A monitor must not select a global or "first" website. It owns one explicit
+  `SiteIdentity` and includes `site_id` and `site_name` in persisted records
+  and emitted events.
+- Interfaces call application services or read models. They may filter by
+  `site_id`, but do not infer ownership from display names.
 
 ---
 
@@ -302,14 +317,30 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 ### 4.1 Storage Architecture
 
 ```
-Config-Driven Backend Selection
+Core state stores
         │
-        ├── "json"    → JsonRepository
-        ├── "sqlite"  → SqliteRepository
-        └── "both"    → DualWriteRepository
-                            ├── JsonRepository (write + fallback)
-                            └── SqliteRepository (preferred read)
+        ├── Registry / quarantine / block ledger / threat graph
+        │       │
+        │       ├── JSON file (authoritative read and write)
+        │       └── SQLite shadow (sqlite / both only)
+        │               └── recovery only when JSON is unavailable
+        │
+        └── Generic Repository consumers
+                ├── "json"    -> JsonRepository
+                ├── "sqlite"  -> SqliteRepository
+                └── "both"    -> DualWriteRepository
 ```
+
+Registry, quarantine, block-ledger, and threat-graph modules own their JSON
+format because compatibility, atomic writes, and disk recovery are part of
+their domain behavior. They use `get_shadow_repository()` for SQLite, rather
+than a generic dual-write repository. This prevents a site-qualified Registry
+key from being written into JSON as a replacement `file_path`.
+
+For these core stores, valid JSON always wins. SQLite is read only when the
+JSON source is missing or unreadable. The threat-graph shadow contains profile
+records but not the complete IP-reputation table, so its recovery is explicitly
+partial and operators must back up the JSON state as a unit.
 
 ### 4.2 ER Diagram
 
@@ -819,7 +850,63 @@ Merge conditions:
 |-------------|:------------:|---------|
 | New milestone or incompatible product architecture | MILESTONE | 2.0.0 |
 | User-facing feature line | FEATURE | 1.1.0 |
-| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.27 |
+| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.28 |
+
+---
+
+## 10. Site Isolation and Runtime Composition
+
+### 10.1 Ownership Model
+
+`SiteIdentity` is the stable ownership value for every configured website. Its
+`site_id` comes from `website.id`, while `site_name` is display metadata. A
+file path is not globally unique: two sites can legitimately record the same
+path. Registry identity is therefore `(site_id, file_path)` in SQLite and
+site-aware in JSON, application services, and emitted events.
+
+Records created before this model are assigned the explicit `legacy` identity.
+No module may silently choose the first configured site to reinterpret them.
+
+### 10.2 Runtime Composition
+
+`launcher.py` is the composition root. It resolves sites once, builds shared
+`RuntimeServices`, then starts one file monitor and optional log monitor for
+each enabled site. Monitors receive their site identity and runtime services as
+dependencies; they do not import a global website selection.
+
+```
+config.toml -> ConfigRegistry -> SiteResolver -> launcher.py
+                                              -> RuntimeServices
+                                              -> monitor(site A)
+                                              -> monitor(site B)
+                                              -> log monitor(site N)
+```
+
+The shutdown path follows the same ownership graph in reverse, so a failed or
+disabled site does not prevent independent sites from starting or stopping.
+
+### 10.3 Event and Data Contract
+
+All file-detection paths, including moved files, enter the same queued scan
+pipeline. A result carries `site_id` and `site_name` through Registry,
+quarantine, metrics, notification batching, SSE history, scan history, and
+dashboard summaries. Notification batches are partitioned by site and a
+restore or false-positive operation only mutates the matching site record.
+
+### 10.4 Extension Contract
+
+An independently developed module must:
+
+- accept an explicit `SiteIdentity` or a site-aware application service;
+- publish and consume site-labelled event payloads;
+- avoid direct `ConfigRegistry`, private globals, and first-site selection in
+  normal operation;
+- use application services from web routes instead of mutating persistence
+  modules directly; and
+- add an isolation test when it persists, aggregates, or mutates site data.
+
+These constraints keep the current modular monolith extensible without
+pretending it is a distributed system.
 
 ---
 
@@ -857,5 +944,5 @@ Merge conditions:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.27 — Evolving alongside the code</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.28 — Evolving alongside the code</sub>
 </div>

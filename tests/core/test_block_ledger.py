@@ -30,6 +30,23 @@ def isolate_block_ledger(monkeypatch, tmp_path):
     yield bl
 
 
+def test_json_ledger_is_authoritative_over_sqlite_shadow(
+    isolate_block_ledger, monkeypatch
+):
+    from anteumbra.infrastructure import persistence
+
+    ledger = isolate_block_ledger
+    expected = [{"ip": "10.0.0.250", "source": "manual"}]
+    ledger._LEDGER_PATH.write_text(json.dumps(expected), encoding="utf-8")
+
+    def unexpected_shadow_read(_namespace):
+        pytest.fail("a valid JSON ledger must not read the SQLite shadow")
+
+    monkeypatch.setattr(persistence, "get_shadow_repository", unexpected_shadow_read)
+
+    assert ledger._load() == expected
+
+
 # ── Core CRUD Tests ───────────────────────────────────────────
 
 

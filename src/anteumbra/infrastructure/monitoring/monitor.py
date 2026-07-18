@@ -26,6 +26,7 @@ import fnmatch
 from pathlib import Path
 from typing import Callable, Dict, Optional, Set
 from watchdog.events import FileSystemEventHandler
+from anteumbra.domain.runtime import RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
 from watchdog.observers import Observer
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
@@ -64,11 +65,34 @@ class FileMonitorHandler(FileSystemEventHandler):
     最大化幽灵目录修复的覆盖范围。
     """
 
-    def __init__(self, scan_callback: Callable, scan_options: ScanOptions, base_path: Path, logger: logging.Logger, website: 'Website' = None):
+    def __init__(
+        self,
+        scan_callback: Callable,
+        scan_options: ScanOptions,
+        base_path: Path,
+        logger: logging.Logger,
+        website: 'Website' = None,
+        services: RuntimeServices | None = None,
+    ):
         self.scan_callback = scan_callback
         self.scan_options = scan_options
         self.base_path = base_path
         self.logger = logger
+        if services is None:
+            from anteumbra.infrastructure.runtime_adapters import (
+                build_compatibility_runtime_services,
+            )
+
+            services = build_compatibility_runtime_services(
+                _runtime_config(), [website] if website else []
+            )
+        self.services = services
+        self.runtime = services.context
+        self.site = (
+            self.runtime.site_for_website(website)
+            if website is not None
+            else self.runtime.site_for_path(base_path)
+        )
         self.website = website  # v1.0.10: 修复 LogAnalyzer 需要 website 属性
         self.exclude_dirs = {d.lower() for d in scan_options.exclude_dirs}
         self._dedupe_window = 5.0
@@ -78,7 +102,7 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         # Bounded queue: overload falls back to synchronous processing instead
         # of silently dropping a file-system event.
-        scanner_cfg = _runtime_config().get("scanner", {})
+        scanner_cfg = self.runtime.config.get("scanner", {})
         try:
             queue_size = max(1, int(scanner_cfg.get("event_queue_size", 500)))
         except (TypeError, ValueError):
@@ -127,7 +151,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         v1.8.1: 初始化平台自适应配置
         对应论文6.3.2节T-01-B实验发现的二元阈值特性
         """
-        config = _runtime_config()
+        config = self.runtime.config
         monitor_cfg = config.get("monitor", {})
 
         # 检测平台
@@ -318,10 +342,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         except Exception:
             self.logger.debug("Failed to check file size for monitoring decision", exc_info=True)
 
-        config = _runtime_config()
-        website_cfg = config.get("website", {})
-        scan_options_cfg = website_cfg.get("scan_options", {})
-        exclude_files = scan_options_cfg.get("exclude_files", ["*.log", "*.cache"])
+        exclude_files = self.scan_options.exclude_files or ["*.log", "*.cache"]
 
         for pattern in exclude_files:
             if fnmatch.fnmatch(event_path.name, pattern):
@@ -357,8 +378,7 @@ class FileMonitorHandler(FileSystemEventHandler):
             "block_device_count": 0,
         }
         try:
-            from anteumbra.infrastructure.config.registry import ConfigRegistry
-            cfg = ConfigRegistry.get_raw_config()
+            cfg = self.runtime.config
             status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
             blocker_cfg = cfg.get("ip_blocker", {})
             status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
@@ -373,19 +393,17 @@ class FileMonitorHandler(FileSystemEventHandler):
                     features: list, first_seen_ip: str, level: str, **extra) -> None:
         """Emit alert_requested via event bus → notifier_handler plugin."""
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("alert_requested", "monitor", {
-                    "alert_type": alert_type,
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "file_path": file_path,
-                    "engine": engine,
-                    "features": features,
-                    "first_seen_ip": first_seen_ip,
-                    "level": level,
-                    **extra,
-                })
+            self.services.events.publish("alert_requested", "monitor", {
+                "alert_type": alert_type,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "file_path": file_path,
+                "engine": engine,
+                "features": features,
+                "first_seen_ip": first_seen_ip,
+                "level": level,
+                **self.site.as_dict(),
+                **extra,
+            })
         except Exception:
             self.logger.debug("PluginManager emit alert_requested failed", exc_info=True)
 
@@ -394,30 +412,29 @@ class FileMonitorHandler(FileSystemEventHandler):
                                first_seen_ip: str = "127.0.0.1") -> None:
         """Emit file_quarantined via event bus → quarantine_handler plugin."""
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("file_quarantined", "monitor", {
-                    "file_path": file_path,
-                    "rule_name": rule_name,
-                    "features": features,
-                    "original_path": original_path,
-                    "first_seen_ip": first_seen_ip,
-                })
+            self.services.events.publish("file_quarantined", "monitor", {
+                "file_path": file_path,
+                "rule_name": rule_name,
+                "features": features,
+                "original_path": original_path,
+                "first_seen_ip": first_seen_ip,
+                "quarantine_enabled": self.runtime.config.get(
+                    "quarantine", {}
+                ).get("auto_quarantine_enabled", True),
+                **self.site.as_dict(),
+            })
         except Exception:
             self.logger.debug("PluginManager emit file_quarantined failed", exc_info=True)
 
     def _flush_batch_notify(self):
         """v1.0.9: emit batch notification via event bus → notifier_handler."""
         try:
-            from anteumbra.application.plugin_manager import get_plugin_manager
-            pm = get_plugin_manager()
-            if pm.is_enabled:
-                pm.emit("alert_requested", "monitor", {
-                    "alert_type": "quarantine_batch",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "level": "INFO",
-                })
+            self.services.events.publish("alert_requested", "monitor", {
+                "alert_type": "quarantine_batch",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "level": "INFO",
+                **self.site.as_dict(),
+            })
         except Exception as e:
             self.logger.warning(f"[BATCH_NOTIFY] emit 失败: {e}")
 
@@ -445,7 +462,7 @@ class FileMonitorHandler(FileSystemEventHandler):
     def _do_detect_magic_number(self, file_path: Path) -> bool:
         """魔术头检测实现 (保持原有逻辑)"""
         try:
-            config = ConfigRegistry.get_raw_config()
+            config = self.runtime.config
             filesizes_cfg = config.get("filesizes", {})
             max_size_mb = filesizes_cfg.get("magic_detection_size_mb", 10)
 
@@ -483,7 +500,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         if file_path.is_dir():
             return False
 
-        config = ConfigRegistry.get_raw_config()
+        config = self.runtime.config
         paths_cfg = config.get("paths", {})
         default_extensions = paths_cfg.get("monitor_extensions",
                                            ['.php', '.php3', '.php4', '.php5', '.php7', '.php8',
@@ -580,20 +597,19 @@ class FileMonitorHandler(FileSystemEventHandler):
                 scan_func = self.scan_callback
 
             scan_result = scan_func(event_path, self.scan_options, self.logger)
+            self.services.metrics.increment_site("scan_total", self.site.site_id)
 
             # v2.0: Emit FileScannedEvent to PluginManager (dual-write: existing flow + event-driven)
             try:
-                from anteumbra.application.plugin_manager import get_plugin_manager
-                pm = get_plugin_manager()
-                if pm.is_enabled:
-                    pm.emit("file_scanned", "monitor", {
-                        "file_path": str(event_path),
-                        "event_type": event_type,
-                        "is_suspicious": scan_result.is_suspicious if scan_result else False,
-                        "engine": scan_result.engine if scan_result else "unknown",
-                        "features": scan_result.features if scan_result else [],
-                        "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
-                    })
+                self.services.events.publish("file_scanned", "monitor", {
+                    "file_path": str(event_path),
+                    "event_type": event_type,
+                    "is_suspicious": scan_result.is_suspicious if scan_result else False,
+                    "engine": scan_result.engine if scan_result else "unknown",
+                    "features": scan_result.features if scan_result else [],
+                    "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
+                    **self.site.as_dict(),
+                })
             except Exception:
                 self.logger.debug("PluginManager emit file_scanned failed", exc_info=True)
 
@@ -604,7 +620,6 @@ class FileMonitorHandler(FileSystemEventHandler):
                 # v1.0.9: 统一在此处完成 注册→事件化隔离，保证事务完整性
                 # Surgery 4 completion: quarantine + notification go through event bus.
                 try:
-                    from anteumbra.infrastructure.suspicious_registry import add
                     from anteumbra.infrastructure.quarantine import is_recently_restored
 
                     # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
@@ -672,13 +687,20 @@ class FileMonitorHandler(FileSystemEventHandler):
                                      first_seen_ip, "CRITICAL")
 
                     # Step 1: 注册到Registry — add() emits record_added internally
-                    add(event_path, scan_result.features, first_seen_ip=first_seen_ip, detection_source="passive")
+                    self.services.registry.add(
+                        event_path,
+                        scan_result.features,
+                        first_seen_ip=first_seen_ip,
+                        detection_source="passive",
+                        site=self.site,
+                    )
 
                     # Step 2: 检查隔离总开关（日志用；quarantine_handler 也会检查）
                     quarantine_enabled = True
                     try:
-                        from anteumbra.infrastructure.config.registry import ConfigRegistry
-                        quarantine_enabled = ConfigRegistry.get_raw_config().get('quarantine', {}).get('auto_quarantine_enabled', True)
+                        quarantine_enabled = self.runtime.config.get(
+                            "quarantine", {}
+                        ).get("auto_quarantine_enabled", True)
                     except Exception:
                         self.logger.debug("Failed to read quarantine config", exc_info=True)
 
@@ -733,9 +755,9 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
         except queue.Full:
             try:
-                from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-                get_metrics().increment("scan_queue_overflow")
+                self.services.metrics.increment(
+                    "scan_queue_overflow", site_id=self.site.site_id
+                )
             except Exception:
                 self.logger.debug("Failed to record scan queue overflow", exc_info=True)
             log_with_symbol(
@@ -748,7 +770,7 @@ class FileMonitorHandler(FileSystemEventHandler):
 
     def _handle_event(self, event, event_type: str, override_path: Path = None):
         """v1.7.9: 统一事件处理 → 异步入队，不阻塞watchdog主线程"""
-        if event.is_directory:
+        if getattr(event, "is_directory", False):
             return
 
         event_path = override_path or normalize_path(event.src_path)
@@ -891,43 +913,11 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 f"{src_path.name} -> {dest_path.name}", self.logger)
                 self._update_cache_on_move(src_path, dest_path)
 
-            # v1.7.9: move事件也走统一注册+隔离流程
-            if dest_path.suffix.lower() in self.monitor_extensions:
-                if self._should_monitor(dest_path):
-                    try:
-                        from anteumbra.infrastructure.quarantine import is_recently_restored
-
-                        if is_recently_restored(str(dest_path)):
-                            self.logger.info(
-                                "[RESTORE][SKIP] Recently restored file: %s",
-                                dest_path.name,
-                            )
-                            return
-                    except Exception:
-                        self.logger.debug(
-                            "Failed to check restored-file guard before moved-file scanning",
-                            exc_info=True,
-                        )
-                    try:
-                        from anteumbra.infrastructure.suspicious_registry import add
-                        result = self.scan_callback(dest_path, self.scan_options, self.logger)
-                        if result and result.is_suspicious:
-                            log_with_symbol("scan_hit", "critical",
-                                            f"{dest_path.name} | 引擎: {result.engine}", self.logger)
-                            # 注册 — v2.0: add() emits record_added, threat_graph_handler follows
-                            add(dest_path, result.features, first_seen_ip="127.0.0.1")
-                            # v1.0.9: 事件化隔离 — quarantine_handler 处理全链路
-                            self._emit_file_quarantined(
-                                file_path=str(dest_path),
-                                rule_name=result.features[0] if result.features else "unknown",
-                                features=result.features,
-                                original_path=str(dest_path),
-                            )
-                    except Exception as e:
-                        log_with_symbol("error_scan", "error", f"{dest_path}: {e}", self.logger)
-            else:
-                log_with_symbol("create_skip", "debug",
-                                f"后缀不在监控列表: {dest_path.suffix}", self.logger)
+            # File moves now enter the same queue and scan transaction as
+            # create/modify events. This preserves attribution, alerting,
+            # metrics, Registry writes, and quarantine behavior in one flow.
+            if not is_directory:
+                self._handle_event(event, "MOVE", override_path=dest_path)
 
         except PermissionError:
             log_with_symbol("warning_permission", "warning",
@@ -966,7 +956,9 @@ class FileMonitorHandler(FileSystemEventHandler):
             from anteumbra.infrastructure.suspicious_registry import get_all
             is_quarantined = False
             try:
-                all_records = get_all(include_deleted=True)
+                all_records = get_all(
+                    include_deleted=True, site_id=self.site.site_id
+                )
                 rk = path_to_key(event_path)
                 for r in all_records:
                     if isinstance(r, dict) and r.get("file_path") == rk and r.get("quarantine_id"):
@@ -982,9 +974,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 log_with_symbol("delete_file", "info", f"[DELETE][FILE] {event_path.name}", self.logger)
 
         # Registry清理
-        from anteumbra.infrastructure.suspicious_registry import remove
-        registry_key = path_to_key(event_path)
-        if remove(registry_key):
+        if self.services.registry.remove(event_path, site=self.site):
             log_with_symbol("registry_remove", "info",
                             f"Registry清理: {event_path.name}", self.logger)
 
@@ -1001,10 +991,23 @@ class FileMonitorHandler(FileSystemEventHandler):
 class WebsiteMonitor:
     """网站监控管理器 (保持原有逻辑)"""
 
-    def __init__(self, website: Website, scan_callback: Callable, logger: logging.Logger):
+    def __init__(
+        self,
+        website: Website,
+        scan_callback: Callable,
+        logger: logging.Logger,
+        services: RuntimeServices | None = None,
+    ):
         self.website = website
         self.scan_callback = scan_callback
         self.logger = logger
+        if services is None:
+            from anteumbra.infrastructure.runtime_adapters import (
+                build_compatibility_runtime_services,
+            )
+
+            services = build_compatibility_runtime_services(_runtime_config(), [website])
+        self.services = services
         self._is_running = False
         self._baseline_stop = threading.Event()
         self._baseline_thread = None
@@ -1017,6 +1020,7 @@ class WebsiteMonitor:
             scan_options=website.scan_options,
             base_path=website.path,
             logger=logger,
+            services=self.services,
             website=website  # v1.0.10: 修复 LogAnalyzer(self.website, ...)
         )
 
@@ -1057,7 +1061,7 @@ class WebsiteMonitor:
         self._start_baseline_scan()
 
     def _start_baseline_scan(self):
-        config = _runtime_config()
+        config = self.services.context.config
         if not config.get("scanner", {}).get("scan_existing_on_start", True):
             return
         if self._baseline_thread and self._baseline_thread.is_alive():
@@ -1089,11 +1093,12 @@ class WebsiteMonitor:
                         self.handler.enqueue_scan(file_path, "BASELINE")
                         queued += 1
             try:
-                from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-                metrics = get_metrics()
-                metrics.increment("baseline_runs")
-                metrics.increment("baseline_files_queued", queued)
+                self.services.metrics.increment(
+                    "baseline_runs", site_id=self.website.site_id
+                )
+                self.services.metrics.increment(
+                    "baseline_files_queued", queued, site_id=self.website.site_id
+                )
             except Exception:
                 self.logger.debug("Failed to record baseline metrics", exc_info=True)
             self.logger.info(

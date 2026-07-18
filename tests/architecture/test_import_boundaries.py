@@ -115,7 +115,6 @@ KNOWN_INTERFACES_TO_INFRASTRUCTURE: set[tuple[str, str]] = {
 # instead of importing the application PluginManager directly.
 KNOWN_INFRASTRUCTURE_TO_PLUGIN_MANAGER: set[tuple[str, str]] = {
     ("infrastructure/block_ledger.py", "anteumbra.application.plugin_manager"),
-    ("infrastructure/monitoring/monitor.py", "anteumbra.application.plugin_manager"),
     ("infrastructure/suspicious_registry.py", "anteumbra.application.plugin_manager"),
     ("infrastructure/wal_manager.py", "anteumbra.application.plugin_manager"),
 }

@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.27
+# Anteumbra 用户手册 v1.0.28
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -257,9 +257,13 @@ backend = "both"            # "json" | "sqlite" | "both"
 db_path = "data/anteumbra.db"
 ```
 
-- `json` — 简单、人类可读、无依赖
-- `sqlite` — 高性能、WAL 模式、外键约束、13 个索引列
-- `both` — 双写，SQLite 优先读取（生产环境推荐）
+- `json` — 仅使用 JSON，简单且便于人工审计
+- `sqlite` — 启用 SQLite Repository 使用者；核心状态仍以 JSON 为权威来源
+- `both` — 核心状态同时写入 JSON 和 SQLite 影子副本。JSON 始终为权威来源；
+  SQLite 用于索引查看，并在 JSON 不可用时参与恢复（推荐）
+
+请整体备份 `data/`。Registry、隔离、封禁台账和威胁画像的 JSON 文件健康时，不要
+直接修改 SQLite 数据库来修复记录；下一次权威 JSON 写入可能覆盖该影子值。
 
 ### 3.7 IP 封禁
 
@@ -832,5 +836,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.27 — MIT License</sub>
+  <sub>Anteumbra v1.0.28 — MIT License</sub>
 </div>

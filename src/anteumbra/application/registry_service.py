@@ -27,6 +27,7 @@ from anteumbra.infrastructure.suspicious_registry import (
     get_async_save_queue_size,
     get_registry_path,
     clear_memory_cache,
+    migrate_site_metadata,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "get_async_save_queue_size",
     "get_registry_path",
     "clear_memory_cache",
+    "migrate_site_metadata",
 ]

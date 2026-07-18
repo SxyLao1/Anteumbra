@@ -31,6 +31,8 @@ class LogMonitor:
     def __init__(self, logger, analyzer):
         self.logger = logger
         self.analyzer = analyzer
+        self.website = analyzer.website
+        self.site_id = analyzer.website.site_id
         self._is_running = False
         self._thread: Optional[Thread] = None
 
@@ -185,7 +187,9 @@ class LogMonitor:
             self.logger.info(f"[LOG_MONITOR][URL] 访问: {access_url} | IP: {ip}")
 
             # 匹配可疑文件
-            suspicious_files = get_all(include_deleted=True)
+            suspicious_files = get_all(
+                include_deleted=True, site_id=self.site_id
+            )
             for record in suspicious_files:
                 file_path = normalize_path(record["file_path"])
                 file_name = file_path.name
@@ -201,7 +205,7 @@ class LogMonitor:
                     )
 
                     # 立即递增
-                    increment_access(file_path, ip)
+                    increment_access(file_path, ip, site_id=self.site_id)
 
                     # 三层冷却策略
                     alert_level, should_alert = self._check_alert_layers(file_path, ip, line)
@@ -414,7 +418,7 @@ class LogMonitor:
         """异步触发告警（增强版）"""
         try:
             # 标记已告警
-            mark_alerted(file_path)
+            mark_alerted(file_path, site_id=self.site_id)
 
             # 同步日志
             self.logger.critical("=" * 50)
@@ -445,10 +449,16 @@ class LogMonitor:
                         "attacker_ip": attacker_ip,
                         "alert_level": alert_level,
                         "level": alert_level,
+                        "site_id": self.site_id,
+                        "site_name": self.website.name,
                     }
                     ctx.update(sys_status)
                     message = format_alert_message(ctx)
-                    notifier.send_alert(message, level=alert_level)
+                    notifier.send_alert(
+                        message,
+                        level=alert_level,
+                        site_id=self.site_id,
+                    )
                 except Exception as e:
                     self.logger.error(f"[ALERT] Notification failed: {e}")
 

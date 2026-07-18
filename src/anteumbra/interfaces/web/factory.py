@@ -10,6 +10,7 @@ Flask应用工厂：v1.7.3分离access.log与monitor.log
 import logging
 import os
 import secrets
+import time
 from datetime import timedelta
 
 from flask import Flask, request, session, jsonify
@@ -320,6 +321,15 @@ class WaitressRuntimeServer:
     def shutdown(self) -> None:
         if self._closed:
             return
+        try:
+            from anteumbra.application.sse_service import cleanup_sse_connections
+
+            if cleanup_sse_connections():
+                # Give active generators a bounded chance to consume their
+                # sentinel before Waitress closes the underlying trigger.
+                time.sleep(0.15)
+        except Exception:
+            logger.debug("SSE client cleanup failed during server shutdown", exc_info=True)
         self._server.close()
         self._closed = True
 

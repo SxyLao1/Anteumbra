@@ -612,8 +612,10 @@ class TestPentestRegressions:
                 self.findings = []
 
         class DummyScanner:
-            def __init__(self, logger):
+            def __init__(self, logger, site_id=None, site_name=None):
                 self.logger = logger
+                self.site_id = site_id
+                self.site_name = site_name
 
             def scan_directory(self, **kwargs):
                 result = DummyResult()

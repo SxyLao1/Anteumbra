@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import glob
 from anteumbra.infrastructure.models import Website
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 # v1.7.4新增：导入符号化日志接口（铁律19）
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
@@ -92,11 +91,6 @@ class LogAnalyzer:
         # 如果scan_options中没有，尝试从全局配置读取
         if not access_log_path_cfg:
             log_config = getattr(self.website, "log_config", {}) or {}
-            if not log_config:
-                config = ConfigRegistry.get_raw_config()
-                website_config = config.get("website", {})
-                if isinstance(website_config, dict):
-                    log_config = website_config.get("log_config", {})
             access_log_path_cfg = log_config.get("access_log_path", "").strip()
 
         if not access_log_path_cfg:
@@ -172,11 +166,6 @@ class LogAnalyzer:
 
                 # 修复：正确读取配置中的filter_internal_ip
                 log_config = getattr(self.website, "log_config", {}) or {}
-                if not log_config:
-                    config = ConfigRegistry.get_raw_config()
-                    website_config = config.get("website", {})
-                    if isinstance(website_config, dict):
-                        log_config = website_config.get("log_config", {})
                 filter_internal = log_config.get("filter_internal_ip", False)
 
                 if filter_internal and self._is_internal_ip(ip):

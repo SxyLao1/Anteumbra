@@ -282,7 +282,7 @@ def emit_critical_alert(trace_result: Dict) -> bool:
         except Exception as exc:
             logger.debug("MemoryShellTracer: SIEM emit failed: %s", exc)
 
-        notifier.send_alert(title, body, level="critical")
+        notifier.send_alert(f"{title}\n{body}", level="CRITICAL")
         logger.critical("MemoryShellTracer: CRITICAL alert sent for %s", trace_result["ip"])
         return True
     except Exception as exc:

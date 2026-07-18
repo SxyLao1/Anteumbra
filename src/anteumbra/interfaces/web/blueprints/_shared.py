@@ -30,6 +30,8 @@ def save_scan_to_disk(result) -> None:
             "start_time": result.start_time,
             "end_time": result.end_time,
             "status": result.status,
+            "site_id": getattr(result, "site_id", ""),
+            "site_name": getattr(result, "site_name", ""),
             "total_files": result.total_files,
             "scanned_files": result.scanned_files,
             "new_findings": result.new_findings,

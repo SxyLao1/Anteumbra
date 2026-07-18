@@ -31,6 +31,10 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         print("[FATAL] No enabled websites in config.toml")
         return
 
+    from anteumbra.application.runtime_adapters import build_runtime_services
+
+    runtime_services = build_runtime_services(config, websites)
+
     missing_paths: list[Path] = []
     for website in websites:
         website.path = normalize_path(website.path)
@@ -79,7 +83,10 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
 
         _start_plugins(config, warnings)
 
-        monitors, log_monitors, site_warnings = _start_site_monitors(websites)
+        _migrate_site_metadata(warnings)
+        monitors, log_monitors, site_warnings = _start_site_monitors(
+            websites, runtime_services=runtime_services
+        )
         warnings.extend(site_warnings)
         _launcher_state["monitors"] = monitors
         _launcher_state["log_monitors"] = log_monitors
@@ -137,9 +144,32 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         stop_all()
 
 
+def _migrate_site_metadata(warnings: list[str]) -> None:
+    """Backfill historical records once the configured site roots are available."""
+    try:
+        from anteumbra.application.quarantine_service import (
+            migrate_site_metadata as migrate_quarantine_sites,
+        )
+        from anteumbra.application.registry_service import (
+            migrate_site_metadata as migrate_registry_sites,
+        )
+
+        registry_changed = migrate_registry_sites()
+        quarantine_changed = migrate_quarantine_sites()
+        if registry_changed or quarantine_changed:
+            print(
+                "[OK] Site metadata migrated: "
+                f"registry={registry_changed}, quarantine={quarantine_changed}"
+            )
+    except Exception as exc:
+        logger.exception("Site metadata migration failed")
+        warnings.append(f"Site metadata migration failed: {exc}")
+
+
 def _start_site_monitors(
     websites,
     *,
+    runtime_services: Any | None = None,
     monitor_factory: Callable[..., Any] | None = None,
     logger_factory: Callable[[str], logging.Logger] | None = None,
     scan_callback: Callable[..., Any] | None = None,
@@ -173,7 +203,15 @@ def _start_site_monitors(
     for website in websites:
         site_logger = logger_factory(website.name)
         try:
-            monitor = monitor_factory(website, scan_callback, site_logger)
+            if runtime_services is None:
+                monitor = monitor_factory(website, scan_callback, site_logger)
+            else:
+                monitor = monitor_factory(
+                    website,
+                    scan_callback,
+                    site_logger,
+                    services=runtime_services,
+                )
             monitor.start()
             if getattr(monitor, "is_running", True):
                 monitors.append(monitor)

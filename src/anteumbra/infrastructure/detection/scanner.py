@@ -395,9 +395,20 @@ def quick_scan_yara(file_path: Path, scan_options: ScanOptions, logger: logging.
     """
     v1.7.7-Patch8: 修复指标分裂问题，统一由ScannerChain计数
     """
-    config = ConfigRegistry.get_raw_config()
-    paths_cfg = config.get("paths", {})
-    monitor_extensions = paths_cfg.get("monitor_extensions", [".php", ".asp", ".jsp", ".aspx", ".jspx"])
+    configured_extensions = getattr(scan_options, "monitor_extensions", None)
+    if configured_extensions:
+        monitor_extensions = {
+            str(extension).lower() for extension in configured_extensions
+        }
+    else:
+        config = ConfigRegistry.get_raw_config()
+        paths_cfg = config.get("paths", {})
+        monitor_extensions = {
+            str(extension).lower()
+            for extension in paths_cfg.get(
+                "monitor_extensions", [".php", ".asp", ".jsp", ".aspx", ".jspx"]
+            )
+        }
 
     # ===== 1. 后缀过滤 =====
     if file_path.suffix.lower() not in monitor_extensions:

@@ -380,6 +380,27 @@ class TestPersistLoad:
         tg2.load()
         assert len(tg2._profiles) == len(graph._profiles)
 
+    def test_load_prefers_json_to_sqlite_shadow(
+        self, graph, sample_waf_event, tmp_path, monkeypatch
+    ):
+        from anteumbra.infrastructure import persistence
+
+        graph.ingest_waf_event(sample_waf_event)
+        persist_path = tmp_path / "authoritative_threat_graph.json"
+        graph.set_persist_path(str(persist_path))
+        graph.persist()
+
+        def unexpected_shadow_read(_namespace):
+            pytest.fail("a valid threat graph JSON file must not read SQLite")
+
+        monkeypatch.setattr(persistence, "get_shadow_repository", unexpected_shadow_read)
+
+        recovered = ThreatGraph()
+        recovered.set_persist_path(str(persist_path))
+        recovered.load()
+
+        assert len(recovered._profiles) == len(graph._profiles)
+
     def test_load_nonexistent_file(self, graph, tmp_path):
         graph.set_persist_path(str(tmp_path / "nonexistent.json"))
         graph.load()  # Should not crash

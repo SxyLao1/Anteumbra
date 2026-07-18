@@ -72,10 +72,38 @@ def _enhance_records(raw_records):
             "features": _deserialize_list(r.get("features")),
             "communication_count": r.get("communication_count", 0),
             "file_path": r.get("file_path", ""),
+            "site_id": r.get("site_id", "legacy"),
+            "site_name": r.get("site_name", "Legacy / unassigned"),
             "deleted_at": r.get("deleted_at", ""),
             "quarantine_id": r.get("quarantine_id", ""),
         })
     return enhanced
+
+
+def _requested_site_id():
+    """Return an optional site filter supplied by a form or query string."""
+    return request.values.get("site_id") or None
+
+
+def _find_record(file_path, *, site_id=None):
+    """Resolve one record without allowing an ambiguous cross-site mutation."""
+    target = path_to_key(file_path)
+    matches = [
+        record
+        for record in get_all(
+            include_deleted=True,
+            include_false_positive=True,
+            site_id=site_id,
+        )
+        if record.get("file_path") == target
+    ]
+    if len(matches) > 1:
+        logger.warning(
+            "[RECORDS] refusing ambiguous record operation for %s; site_id is required",
+            target,
+        )
+        return None
+    return matches[0] if matches else None
 
 
 # ── Records List ───────────────────────────────────────────
@@ -87,6 +115,7 @@ def get_records():
     try:
         force_reload = request.args.get('force', 'false').lower() == 'true'
         audit_mode = request.args.get('audit', 'false').lower() in ('true', '1')
+        site_id = request.args.get('site_id') or None
 
         page_str = request.args.get('page', '1')
         try:
@@ -102,7 +131,11 @@ def get_records():
             clear_memory_cache()
             current_app.logger.info("[RECORDS] 强制刷新：已清除内存缓存")
 
-        all_records = get_all(include_deleted=audit_mode, include_false_positive=audit_mode)
+        all_records = get_all(
+            include_deleted=audit_mode,
+            include_false_positive=audit_mode,
+            site_id=site_id,
+        )
 
         # v2.0 fix: Always exclude quarantined items (they have their own Quarantine page)
         all_records = [r for r in all_records if not r.get("quarantine_id")]
@@ -127,6 +160,7 @@ def get_records():
                 'records': enhanced,
                 'pagination': {'page': page, 'total_pages': total_pages, 'total': total, 'per_page': per_page},
                 'audit_mode': audit_mode,
+                'site_id': site_id,
             })
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 致命错误: {e}", exc_info=True)
@@ -144,12 +178,7 @@ def manual_quarantine():
 
         from anteumbra.application.quarantine_service import quarantine_registered_file
 
-        target = path_to_key(file_path)
-        record = None
-        for r in get_all(include_deleted=True):
-            if r.get("file_path") == target:
-                record = r
-                break
+        record = _find_record(file_path, site_id=_requested_site_id())
 
         if not record:
             return jsonify({"error": "文件不在检测记录中"}), 404
@@ -160,7 +189,8 @@ def manual_quarantine():
         rule_name = features[0] if features else "manual_quarantine"
         result = quarantine_registered_file(
             file_path=str(file_path), rule_name=rule_name,
-            features=features, original_path=str(file_path))
+            features=features, original_path=str(file_path),
+            site_id=record.get("site_id"), site_name=record.get("site_name"))
 
         if result is None:
             return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
@@ -186,22 +216,24 @@ def records_batch():
         from anteumbra.application.quarantine_service import quarantine_registered_file
 
         results = {'success': 0, 'failed': 0, 'skipped': 0, 'errors': []}
+        site_id = _requested_site_id()
         if action == 'quarantine':
-            records_by_path = {
-                item.get('file_path'): item
-                for item in get_all(include_deleted=True)
-                if item.get('file_path')
-            }
             for fp in file_paths:
                 try:
-                    target = path_to_key(fp)
-                    record = records_by_path.get(target)
+                    record = _find_record(fp, site_id=site_id)
                     if not record or record.get('quarantine_id'):
                         results['skipped'] += 1
                         continue
                     features = record.get('features', [])
                     rule = features[0] if features else 'batch'
-                    qr = quarantine_registered_file(str(fp), rule, features, str(fp))
+                    qr = quarantine_registered_file(
+                        str(fp),
+                        rule,
+                        features,
+                        str(fp),
+                        record.get("site_id"),
+                        record.get("site_name"),
+                    )
                     if qr:
                         results['success'] += 1
                     else:
@@ -221,7 +253,10 @@ def records_batch():
             # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
-                    if mark_false_positive(fp, ''):
+                    record = _find_record(fp, site_id=site_id)
+                    if mark_false_positive(
+                        fp, '', record.get("site_id") if record else None
+                    ):
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
@@ -236,7 +271,10 @@ def records_batch():
             # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
-                    if soft_delete_record(fp):
+                    record = _find_record(fp, site_id=site_id)
+                    if soft_delete_record(
+                        fp, record.get("site_id") if record else None
+                    ):
                         results['success'] += 1
                     else:
                         results['skipped'] += 1
@@ -270,12 +308,8 @@ def get_record_detail():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        records = get_all(include_deleted=True)
-        record = None
-        for r in records:
-            if r.get("file_path") == file_path:
-                record = r
-                break
+        site_id = _requested_site_id()
+        record = _find_record(file_path, site_id=site_id)
         if not record:
             return jsonify({"error": "记录不存在"}), 404
 
@@ -288,7 +322,9 @@ def get_record_detail():
             file_size = 0
 
         from anteumbra.application.quarantine_service import get_quarantine_list
-        quarantine_records = get_quarantine_list(status=None)
+        quarantine_records = get_quarantine_list(
+            status=None, site_id=record.get("site_id")
+        )
         quarantine_info = None
         for q in quarantine_records:
             if q.get("original_path", "") == file_path:
@@ -322,6 +358,8 @@ def get_record_detail():
             "first_seen_ip": record.get("first_seen_ip", "N/A"),
             "alerted": record.get("alerted", False),
             "marked_false_positive": record.get("marked_false_positive", False),
+            "site_id": record.get("site_id", "legacy"),
+            "site_name": record.get("site_name", "Legacy / unassigned"),
             "deleted_at": record.get("deleted_at", "N/A"),
             "quarantine_info": quarantine_info,
             "linked_profiles": linked_profiles,
@@ -343,7 +381,7 @@ def get_record_detail():
 def search():
     """HTMX 搜索端点"""
     query = request.args.get('q', '').lower()
-    records = get_all(include_deleted=True)
+    records = get_all(include_deleted=True, site_id=_requested_site_id())
     filtered = [r for r in records
                 if query in str(r.get("file_path", "")).lower()
                 or query in str(r.get("features", [])).lower()]
@@ -371,14 +409,19 @@ def remove_file(file_path):
         current_app.logger.warning(f"[RECORDS] 物理删除记录: {decoded_path}")
         normalized_path = normalize_path(decoded_path)
         target_key = path_to_key(normalized_path)
-        success = registry_remove(target_key)
+        site_id = _requested_site_id()
+        success = registry_remove(target_key, site_id=site_id)
 
         if not success:
             return jsonify({"status": "error", "message": "删除失败或记录不存在"}), 404
 
         trigger_registry_update()
 
-        filtered_records = get_all(include_deleted=False, include_false_positive=False)
+        filtered_records = get_all(
+            include_deleted=False,
+            include_false_positive=False,
+            site_id=site_id,
+        )
         enhanced = _enhance_records(filtered_records)
 
         config = ConfigRegistry.get_raw_config()
@@ -406,13 +449,18 @@ def mark_false_positive_route(file_path):
         decoded_path = unquote(file_path)
         normalized_path = normalize_path(decoded_path)
 
-        ok = mark_false_positive(normalized_path)
+        site_id = _requested_site_id()
+        ok = mark_false_positive(normalized_path, site_id=site_id)
         if not ok:
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
         trigger_registry_update()
 
-        filtered_records = get_all(include_deleted=False, include_false_positive=False)
+        filtered_records = get_all(
+            include_deleted=False,
+            include_false_positive=False,
+            site_id=site_id,
+        )
         enhanced = _enhance_records(filtered_records)
 
         config = ConfigRegistry.get_raw_config()
@@ -441,7 +489,11 @@ def audit_records():
         config = ConfigRegistry.get_raw_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
-        all_records = get_all(include_deleted=True, include_false_positive=True)
+        all_records = get_all(
+            include_deleted=True,
+            include_false_positive=True,
+            site_id=_requested_site_id(),
+        )
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)

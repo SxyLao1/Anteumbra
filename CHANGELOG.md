@@ -4,6 +4,50 @@
 
 ---
 
+## [1.0.28] - 2026-07-18
+
+### Fixed
+- Made Registry identity site-qualified so the same file path in two websites
+  can be recorded, marked, restored, or quarantined without cross-site
+  mutation.
+- Routed moved-file detection through the normal queued scan path, preserving
+  attribution, alerting, metrics, quarantine, and SIEM behavior.
+- Partitioned notification batches, metrics, dashboard summaries, scanner
+  history, and quarantine operations by explicit site ownership.
+- Corrected JSON/SQLite persistence semantics: valid JSON is authoritative,
+  SQLite is a shadow and recovery source, and site-qualified SQLite keys can
+  no longer corrupt JSON Registry paths.
+- Removed stale SQLite-primary reads from the block ledger and threat graph;
+  old shadow data can no longer replace healthy JSON state.
+- Imported the `datetime` type used by model forward annotations so reflective
+  type resolution is valid.
+- Made CLI background startup wait for a successful HTTP health response,
+  rather than treating a pre-startup Waitress socket bind as readiness.
+- Fixed SSE shutdown on Windows by preserving the stream termination signal
+  until the generator consumes it before Waitress closes its trigger.
+- Bounded SQLite shadow lock waits and serialized in-process schema setup so
+  a shadow-store contention cannot stall authoritative JSON workflows.
+
+### Changed
+- Added `SiteIdentity`, `SiteResolver`, runtime service ports/adapters, and a
+  dashboard read-model service for explicit multi-site composition.
+- Added SQLite site metadata and indexes while preserving full raw record data
+  for compatibility.
+- Documented site ownership, runtime composition, event propagation, and
+  JSON-authoritative persistence in both architecture and user manuals.
+- Added Ruff as a development dependency with a project-wide fatal/undefined
+  name quality gate; broader legacy style cleanup is now touch-on-change.
+
+### Tests
+- Added regression coverage for site-qualified Registry identity, per-site
+  scan options, notification batching, dashboard summaries, moved-file queue
+  handling, restore isolation, JSON-authoritative ledger/graph reads, and
+  SQLite shadow storage.
+- Added HTTP startup-readiness and graceful-SSE-disconnect regressions.
+- Passed `488` non-browser tests with one intentional live-WAF skip and all
+  `41` browser tests. Built a wheel, completed clean wheel installation and
+  editable-source installation, and verified both live health endpoints.
+
 ## [1.0.27] - 2026-07-17
 
 ### Fixed

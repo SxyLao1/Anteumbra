@@ -20,6 +20,25 @@ class TestSqliteRepository:
         assert r is not None
         assert "file_path" in r
 
+    def test_registry_preserves_site_metadata_and_raw_fields(self, sql_repo):
+        sql_repo.save(
+            "rec-site",
+            {
+                "file_path": "/tmp/site.php",
+                "features": ["rule"],
+                "site_id": "alpha",
+                "site_name": "Alpha",
+                "false_positive_reason": "reviewed",
+            },
+        )
+
+        record = sql_repo.get("rec-site")
+
+        assert record["site_id"] == "alpha"
+        assert record["site_name"] == "Alpha"
+        assert record["false_positive_reason"] == "reviewed"
+        assert sql_repo.query({"site_id": "alpha"})[0]["record_id"] == "rec-site"
+
     def test_delete(self, sql_repo):
         sql_repo.save("rec-x", {"file_path": "/tmp/x.php"})
         assert sql_repo.delete("rec-x") is True
@@ -79,3 +98,42 @@ class TestDualWriteRepository:
         assert dual.count() >= 1
         sql_repo.close()
         time.sleep(0.1)  # Allow WAL to flush before temp dir cleanup
+
+    def test_dual_write_reads_json_as_the_authoritative_copy(self, temp_dir):
+        jp = temp_dir / "authoritative.json"
+        sp = temp_dir / "authoritative.db"
+        json_repo = JsonRepository(jp, key_field="record_id")
+        sql_repo = SqliteRepository(str(sp))
+        dual = DualWriteRepository(json_repo, sql_repo)
+        dual.save("record", {"file_path": "/json.php", "site_id": "alpha"})
+        sql_repo.save("record", {"file_path": "/stale.sqlite.php", "site_id": "beta"})
+
+        assert dual.get("record")["file_path"] == "/json.php"
+        sql_repo.close()
+
+
+def test_shadow_repository_uses_sqlite_without_a_json_repository(monkeypatch):
+    from anteumbra.infrastructure import persistence
+
+    created = []
+
+    class ShadowRepository:
+        def __init__(self, *args, **kwargs):
+            created.append((args, kwargs))
+
+    monkeypatch.setattr(persistence, "SqliteRepository", ShadowRepository)
+    monkeypatch.setattr(
+        persistence,
+        "_storage_settings",
+        lambda: ("both", "data/test-shadow.db"),
+    )
+    persistence.clear_repository_cache()
+
+    repo = persistence.get_shadow_repository("registry")
+
+    assert isinstance(repo, ShadowRepository)
+    assert created[0][0][0] == "data/test-shadow.db"
+    assert created[0][1]["table_name"] == "registry"
+    assert persistence.get_shadow_repository("registry") is repo
+
+    persistence.clear_repository_cache()

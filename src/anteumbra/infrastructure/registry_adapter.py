@@ -45,7 +45,14 @@ class RegistryRepository(Repository):
         features = data.get("features", [])
         first_seen_ip = data.get("first_seen_ip")
         detection_source = data.get("detection_source", "passive")
-        registry_add(file_path, features, first_seen_ip, detection_source)
+        registry_add(
+            file_path,
+            features,
+            first_seen_ip,
+            detection_source,
+            data.get("site_id"),
+            data.get("site_name"),
+        )
         # Force immediate write to disk (async save is for production batching)
         _save_registry_sync(_load_registry())
 

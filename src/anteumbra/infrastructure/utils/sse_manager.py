@@ -140,19 +140,20 @@ def register_sse_client() -> queue.Queue:
     return client_queue
 
 
-def unregister_sse_client(client_queue: queue.Queue):
+def unregister_sse_client(client_queue: queue.Queue, *, drain: bool = True):
     """注销SSE客户端"""
     with _sse_lock:
         if client_queue in _sse_clients:
             _sse_clients.remove(client_queue)
-    # 清理队列内容（无需锁 — 队列已经不在全局列表中了）
-    try:
-        while True:
-            client_queue.get_nowait()
-    except queue.Empty:
-        pass
+    if drain:
+        # The queue is no longer visible to producers, so it is safe to drain.
+        try:
+            while True:
+                client_queue.get_nowait()
+        except queue.Empty:
+            pass
 
-def cleanup_sse_connections(client_ip: str = None):
+def cleanup_sse_connections(client_ip: str = None) -> int:
     """强制清理指定IP的所有SSE连接（确保计数同步）"""
     cleaned = 0
 
@@ -163,9 +164,18 @@ def cleanup_sse_connections(client_ip: str = None):
     for client_queue in clients_snapshot:
         if client_ip is None or getattr(client_queue, '_client_ip', None) == client_ip:
             try:
-                # 强制关闭队列
-                client_queue.put_nowait(None)  # 发送退出信号
-                unregister_sse_client(client_queue)
+                # Drop stale messages, then leave the sentinel available for the
+                # generator after removing this queue from future broadcasts.
+                while True:
+                    client_queue.get_nowait()
+            except queue.Empty:
+                pass
+            except Exception as e:
+                logging.getLogger("monitor.sse_worker").debug(f"清理连接失败: {e}")
+                continue
+            try:
+                client_queue.put_nowait(None)
+                unregister_sse_client(client_queue, drain=False)
                 cleaned += 1
             except Exception as e:
                 logging.getLogger("monitor.sse_worker").debug(f"清理连接失败: {e}")
@@ -173,6 +183,7 @@ def cleanup_sse_connections(client_ip: str = None):
     logging.getLogger("monitor.sse_worker").info(
         f"[SSE] 强制清理了 {cleaned} 个连接 (IP: {client_ip or 'ALL'})"
     )
+    return cleaned
 
 def trigger_registry_update():
     """触发Registry更新"""

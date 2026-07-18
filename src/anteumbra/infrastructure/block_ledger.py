@@ -29,36 +29,32 @@ def _init_path():
 
 
 def _load() -> List[Dict]:
-    """加载台账 — v2.0: Repository-first, JSON fallback"""
+    """Load ledger records from authoritative JSON or SQLite recovery."""
     global _LEDGER_CACHE
     _init_path()
     if _LEDGER_CACHE:
         return _LEDGER_CACHE
 
-    # v2.0: Try Repository first (SQLite primary)
-    try:
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
-        config = ConfigRegistry.get_raw_config()
-        backend = config.get("storage", {}).get("backend", "json")
-        if backend != "json":
-            from anteumbra.infrastructure.persistence import get_repository
-            repo = get_repository("block_ledger")
-            records = repo.list_all(limit=999999)
-            if records and any(r.get("ip") for r in records[:1]):
-                _LEDGER_CACHE = records
-                return records
-    except Exception:
-        logger.debug("Repository load failed, falling back to JSON", exc_info=True)
-
-    # Fallback: load from JSON file
     try:
         if _LEDGER_PATH.exists():
-            data = json.loads(_LEDGER_PATH.read_text(encoding='utf-8'))
+            data = json.loads(_LEDGER_PATH.read_text(encoding="utf-8"))
             if isinstance(data, list):
                 _LEDGER_CACHE = data
                 return data
-    except Exception as e:
-        logger.warning(f"[BLOCK_LEDGER] 加载失败: {e}")
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("[BLOCK_LEDGER] JSON load failed: %s", exc)
+
+    try:
+        from anteumbra.infrastructure.persistence import get_shadow_repository
+
+        repo = get_shadow_repository("block_ledger")
+        if repo is not None:
+            records = repo.list_all(limit=999999)
+            if records and any(record.get("ip") for record in records):
+                _LEDGER_CACHE = records
+                return records
+    except Exception:
+        logger.debug("SQLite shadow load failed", exc_info=True)
     return []
 
 
@@ -85,8 +81,11 @@ def _repo_shadow_save(data: List[Dict]):
     Best-effort — failures are silently ignored.
     """
     try:
-        from anteumbra.infrastructure.persistence import get_repository
-        repo = get_repository("block_ledger")
+        from anteumbra.infrastructure.persistence import get_shadow_repository
+
+        repo = get_shadow_repository("block_ledger")
+        if repo is None:
+            return
         for item in data:
             key = item.get("ip", "")
             if key:

@@ -42,10 +42,9 @@ if not logger.handlers:
 class QuarantineHandlerPlugin(Plugin):
     """Bridge plugin: subscribes to file_quarantined and delegates to concrete quarantine."""
 
-    # -- Batch notification state (moved from FileMonitorHandler) --
-    _batch_queued: int = 0
-    _batch_threshold: int = 50
-    _batch_last_flush: float = 0.0
+    def __init__(self) -> None:
+        self._batch_threshold = 50
+        self._batch_state: Dict[str, Dict[str, Any]] = {}
 
     @property
     def name(self) -> str:
@@ -60,14 +59,17 @@ class QuarantineHandlerPlugin(Plugin):
         return ["file_quarantined"]
 
     def activate(self, config: Dict[str, Any]) -> None:
-        self._batch_queued = 0
-        self._batch_threshold = config.get("batch_threshold", 50)
-        self._batch_last_flush = time.time()
+        try:
+            self._batch_threshold = max(1, int(config.get("batch_threshold", 50)))
+        except (TypeError, ValueError):
+            self._batch_threshold = 50
+        self._batch_state = {}
         logger.info("QuarantineHandler: 已激活 (batch_threshold=%d)", self._batch_threshold)
 
     def deactivate(self) -> None:
         # Flush any pending batch notifications on shutdown
-        self._flush_batch()
+        for site_id in tuple(self._batch_state):
+            self._flush_batch(site_id)
         logger.info("QuarantineHandler: 已停用")
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
@@ -78,6 +80,8 @@ class QuarantineHandlerPlugin(Plugin):
         features = payload.get("features", [])
         original_path = payload.get("original_path", file_path)
         first_seen_ip = payload.get("first_seen_ip", "127.0.0.1")
+        site_id = payload.get("site_id")
+        site_name = payload.get("site_name")
 
         import time as _time
         ts = _time.strftime("%Y-%m-%d %H:%M:%S")
@@ -104,6 +108,8 @@ class QuarantineHandlerPlugin(Plugin):
                 features,
                 "WARNING",
                 reason=f"config unavailable: {exc}",
+                site_id=site_id,
+                site_name=site_name,
             )
             return None
 
@@ -128,6 +134,8 @@ class QuarantineHandlerPlugin(Plugin):
                 features,
                 "WARNING",
                 reason=f"restore guard unavailable: {exc}",
+                site_id=site_id,
+                site_name=site_name,
             )
             return None
 
@@ -135,7 +143,8 @@ class QuarantineHandlerPlugin(Plugin):
             # Emit skipped alert
             self._emit_alert("quarantine_skipped", ts, file_path,
                              first_seen_ip, features, "WARNING",
-                             reason="auto_quarantine_disabled")
+                             reason="auto_quarantine_disabled",
+                             site_id=site_id, site_name=site_name)
             return None
 
         # -- Perform quarantine --
@@ -146,26 +155,42 @@ class QuarantineHandlerPlugin(Plugin):
                 rule_name=rule_name,
                 features=features,
                 original_path=original_path,
+                site_id=site_id,
+                site_name=site_name,
             )
         except Exception as e:
             logger.warning("[QUARANTINE] quarantine_file() 调用失败: %s", e)
             self._emit_alert("quarantine_failed", ts, file_path,
                              first_seen_ip, features, "WARNING",
-                             reason=f"quarantine_file exception: {e}")
+                             reason=f"quarantine_file exception: {e}",
+                             site_id=site_id, site_name=site_name)
             return None
 
         if result is not None:
             # -- Success: application service committed quarantine + Registry --
-            # Batch notification (aggregated, not per-file)
-            self._batch_queued += 1
-            elapsed = _time.time() - self._batch_last_flush
-            if self._batch_queued >= self._batch_threshold or elapsed > 300:
-                self._flush_batch()
+            # Batch notifications are isolated by site. Combining detections
+            # from different website roots would make both the alert and its
+            # metrics impossible to attribute safely.
+            batch_site_id = str(site_id or "legacy").strip().lower() or "legacy"
+            batch_site_name = str(
+                site_name
+                or ("Legacy / unassigned" if batch_site_id == "legacy" else batch_site_id)
+            ).strip()
+            state = self._batch_state.setdefault(
+                batch_site_id,
+                {"count": 0, "last_flush": _time.time(), "site_name": batch_site_name},
+            )
+            state["site_name"] = batch_site_name
+            state["count"] += 1
+            elapsed = _time.time() - state["last_flush"]
+            if state["count"] >= self._batch_threshold or elapsed > 300:
+                self._flush_batch(batch_site_id)
         else:
             # -- Failure: immediate notification --
             self._emit_alert("quarantine_failed", ts, file_path,
                              first_seen_ip, features, "WARNING",
-                             reason="文件可能已被删除或权限不足")
+                             reason="文件可能已被删除或权限不足",
+                             site_id=site_id, site_name=site_name)
 
         return None
 
@@ -173,6 +198,8 @@ class QuarantineHandlerPlugin(Plugin):
 
     def _emit_alert(self, alert_type: str, timestamp: str, file_path: str,
                     first_seen_ip: str, features: list, level: str,
+                    site_id: Optional[str] = None,
+                    site_name: Optional[str] = None,
                     **extra) -> None:
         """Emit alert_requested event through PluginManager (best-effort)."""
         try:
@@ -186,6 +213,8 @@ class QuarantineHandlerPlugin(Plugin):
                     "first_seen_ip": first_seen_ip,
                     "features": features,
                     "level": level,
+                    "site_id": site_id,
+                    "site_name": site_name,
                     "engine": "QuarantineHandler",
                     **extra,
                 })
@@ -197,13 +226,14 @@ class QuarantineHandlerPlugin(Plugin):
                 exc_info=True,
             )
 
-    def _flush_batch(self) -> None:
-        """Send aggregated batch quarantine-success notification."""
-        if self._batch_queued <= 0:
+    def _flush_batch(self, site_id: str) -> None:
+        """Send one site's aggregated quarantine-success notification."""
+        state = self._batch_state.get(site_id)
+        if not state or state["count"] <= 0:
             return
-        count = self._batch_queued
-        self._batch_queued = 0
-        self._batch_last_flush = time.time()
+        count = state["count"]
+        state["count"] = 0
+        state["last_flush"] = time.time()
         try:
             from anteumbra.application.plugin_manager import get_plugin_manager
             pm = get_plugin_manager()
@@ -213,10 +243,13 @@ class QuarantineHandlerPlugin(Plugin):
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "batch_count": count,
                     "level": "INFO",
+                    "site_id": site_id,
+                    "site_name": state["site_name"],
                 })
         except Exception:
             logger.warning(
-                "[QUARANTINE] failed to emit batch alert for %d files",
+                "[QUARANTINE] failed to emit batch alert for %d files at site %s",
                 count,
+                site_id,
                 exc_info=True,
             )

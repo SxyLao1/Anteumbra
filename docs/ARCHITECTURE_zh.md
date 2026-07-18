@@ -1,4 +1,4 @@
-# Anteumbra 技术白皮书 v1.0.27
+# Anteumbra 技术白皮书 v1.0.28
 
 > **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
@@ -17,6 +17,7 @@
 7. [关键算法](#7-关键算法)
 8. [安全设计](#8-安全设计)
 9. [开发决策指南](#9-开发决策指南)
+10. [站点隔离与运行时组装](#10-站点隔离与运行时组装)
 
 ---
 
@@ -297,14 +298,27 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 ### 4.1 存储架构
 
 ```
-Config-Driven Backend Selection
+核心状态存储
         │
-        ├── "json"    → JsonRepository
-        ├── "sqlite"  → SqliteRepository
-        └── "both"    → DualWriteRepository
-                            ├── JsonRepository (写入 + 兜底)
-                            └── SqliteRepository (优先读)
+        ├── Registry / 隔离 / 封禁台账 / 威胁画像
+        │       │
+        │       ├── JSON 文件（权威读写）
+        │       └── SQLite 影子副本（仅 sqlite / both）
+        │               └── 仅在 JSON 不可用时用于恢复
+        │
+        └── 通用 Repository 使用者
+                ├── "json"    -> JsonRepository
+                ├── "sqlite"  -> SqliteRepository
+                └── "both"    -> DualWriteRepository
 ```
+
+Registry、隔离、封禁台账和威胁画像模块自行维护 JSON 格式，因为兼容、原子写入和
+磁盘恢复都属于其领域行为。它们通过 `get_shadow_repository()` 写入 SQLite，不能使用
+通用双写 Repository；否则带站点前缀的 Registry 键可能被写回 JSON 的 `file_path`。
+
+这些核心存储中，只要 JSON 有效就以 JSON 为准；SQLite 仅在 JSON 缺失或不可读时
+参与恢复。威胁画像影子库只保存画像记录，不保存完整 IP 信誉表，因此该恢复是明确的
+部分恢复，运维人员必须整体备份 JSON 状态。
 
 ### 4.2 ER 图
 
@@ -801,7 +815,56 @@ decay_factor:
 |---------|:------:|------|
 | 新里程碑或不兼容产品架构 | 里程碑 | 2.0.0 |
 | 面向用户的新功能线 | 功能 | 1.1.0 |
-| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.27 |
+| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.28 |
+
+---
+
+## 10. 站点隔离与运行时组装
+
+### 10.1 所有权模型
+
+`SiteIdentity` 是每个已配置网站的稳定所有权值。`site_id` 来自 `website.id`，
+`site_name` 仅用于展示。文件路径不是全局唯一的，两个站点可以合法地记录同一路径；
+因此 SQLite 中的 Registry 身份为 `(site_id, file_path)`，JSON、应用服务和事件也都
+携带站点信息。
+
+早于该模型的记录会被显式标为 `legacy`。任何模块都不得通过“取第一个已配置站点”的
+方式重新解释这些记录。
+
+### 10.2 运行时组装
+
+`launcher.py` 是组合根。它只解析一次站点，创建共享的 `RuntimeServices`，再为每个
+启用站点启动一个文件监控器和可选的日志监控器。监控器通过依赖注入得到自身的站点
+身份和运行时服务，不会导入全局网站选择。
+
+```
+config.toml -> ConfigRegistry -> SiteResolver -> launcher.py
+                                              -> RuntimeServices
+                                              -> monitor(site A)
+                                              -> monitor(site B)
+                                              -> log monitor(site N)
+```
+
+关闭顺序沿同一所有权图反向执行，因此单个站点启动失败或被禁用不会阻止其他站点独立
+启动和停止。
+
+### 10.3 事件与数据契约
+
+所有文件检测路径，包括移动文件，都会进入同一条排队扫描管道。扫描结果会把 `site_id`
+和 `site_name` 传递到 Registry、隔离、指标、通知批处理、SSE 历史、扫描历史和仪表盘
+汇总中。通知批次按站点分组；还原或误报操作只会修改匹配站点的记录。
+
+### 10.4 扩展契约
+
+独立开发的模块必须：
+
+- 接受显式 `SiteIdentity` 或具备站点意识的应用服务；
+- 发布和消费带站点标记的事件负载；
+- 在正常流程中避免直接使用 `ConfigRegistry`、私有全局变量或“第一个站点”选择；
+- 让 Web 路由调用应用服务，而非直接修改持久化模块；以及
+- 只要持久化、汇总或修改站点数据，就增加隔离回归测试。
+
+这些约束让当前模块化单体能够持续扩展，而不假装它已经是分布式系统。
 
 ---
 
@@ -839,5 +902,5 @@ decay_factor:
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.27 — 随代码一起演进</sub>
+  <sub>Anteumbra Architecture White Paper v1.0.28 — 随代码一起演进</sub>
 </div>

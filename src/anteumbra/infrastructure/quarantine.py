@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
@@ -82,6 +83,51 @@ def _normalize_records(raw_records: Any) -> List[Dict[str, Any]]:
     return [by_qid[qid] for qid in order]
 
 
+def _resolve_site_identity(
+    file_path: str,
+    site_id: Optional[str] = None,
+    site_name: Optional[str] = None,
+) -> SiteIdentity:
+    """Resolve ownership for new or historical quarantine metadata."""
+    try:
+        from anteumbra.infrastructure.config.registry import ConfigRegistry
+
+        return ConfigRegistry.resolve_site_identity(
+            file_path,
+            site_id=site_id,
+            site_name=site_name,
+        )
+    except Exception:
+        if site_id:
+            return SiteIdentity.from_values(site_id, site_name or site_id)
+        return SiteIdentity.legacy()
+
+
+def _ensure_site_metadata(record: Dict[str, Any]) -> bool:
+    identity = _resolve_site_identity(
+        str(record.get("original_path", "")),
+        record.get("site_id"),
+        record.get("site_name"),
+    )
+    changed = (
+        record.get("site_id") != identity.site_id
+        or record.get("site_name") != identity.site_name
+    )
+    if changed:
+        record.update(identity.as_dict())
+    return changed
+
+
+def migrate_site_metadata() -> int:
+    """Persist site metadata for historical quarantine records after startup."""
+    with _quarantine_lock:
+        records = _load_db()
+        changed = sum(1 for record in records if _ensure_site_metadata(record))
+        if changed:
+            _save_db(records)
+        return changed
+
+
 
 def _get_quarantine_dir() -> Path:
     """获取隔离目录路径，不存在则自动创建（线程安全）"""
@@ -124,8 +170,10 @@ def _load_db() -> List[Dict[str, Any]]:
         config = ConfigRegistry.get_raw_config()
         backend = config.get("storage", {}).get("backend", "json")
         if backend != "json":
-            from anteumbra.infrastructure.persistence import get_repository
-            repo = get_repository("quarantine")
+            from anteumbra.infrastructure.persistence import get_shadow_repository
+            repo = get_shadow_repository("quarantine")
+            if repo is None:
+                raise RuntimeError("SQLite shadow store is unavailable")
             records = _normalize_records(repo.list_all(limit=999999))
             if records and any(r.get("quarantine_id") or r.get("status") for r in records[:1]):
                 return records
@@ -176,8 +224,10 @@ def _repo_shadow_save_quarantine(records: List[Dict[str, Any]]) -> None:
     (the primary store) is never impacted.
     """
     try:
-        from anteumbra.infrastructure.persistence import get_repository
-        repo = get_repository("quarantine")
+        from anteumbra.infrastructure.persistence import get_shadow_repository
+        repo = get_shadow_repository("quarantine")
+        if repo is None:
+            return
         for item in records:
             key = item.get("quarantine_id", "")
             if key:
@@ -231,7 +281,9 @@ def quarantine_file(
     file_path: str,
     rule_name: str,
     features: List[str],
-    original_path: str = None
+    original_path: str = None,
+    site_id: str = None,
+    site_name: str = None,
 ) -> Optional[Dict[str, Any]]:
     """
     隔离文件
@@ -249,6 +301,11 @@ def quarantine_file(
         }
     """
     with _quarantine_lock:
+        site = _resolve_site_identity(
+            original_path or file_path,
+            site_id=site_id,
+            site_name=site_name,
+        )
         src = normalize_path(file_path)
         if not src.exists():
             log_with_symbol("quarantine_skip", "WARNING",
@@ -300,6 +357,7 @@ def quarantine_file(
             "features": features,
             "file_size": file_size,
             "status": "quarantined",  # quarantined | restored | deleted
+            **site.as_dict(),
         }
 
         # 写入数据库。元数据提交失败时必须把文件放回原处，避免出现
@@ -602,7 +660,8 @@ def is_recently_restored(file_path: str) -> bool:
 def get_quarantine_list(
     status: str = None,
     limit: int = 100,
-    offset: int = 0
+    offset: int = 0,
+    site_id: str = None,
 ) -> List[Dict[str, Any]]:
     """
     查询隔离记录列表
@@ -617,12 +676,17 @@ def get_quarantine_list(
     """
     with _quarantine_lock:
         records = _load_db()
+        for record in records:
+            _ensure_site_metadata(record)
         # v1.0.10: normalize field names — SQLite records may have created_at instead of quarantine_time
         for r in records:
             if isinstance(r, dict) and "quarantine_time" not in r and "created_at" in r:
                 r["quarantine_time"] = r["created_at"]
         if status:
             records = [r for r in records if r["status"] == status]
+        if site_id is not None:
+            normalized_id = str(site_id).strip().lower()
+            records = [r for r in records if r.get("site_id") == normalized_id]
         return records[offset:offset + limit]
 
 
@@ -632,11 +696,12 @@ def get_quarantine_detail(quarantine_id: str) -> Optional[Dict[str, Any]]:
         records = _load_db()
         for r in records:
             if r["quarantine_id"] == quarantine_id:
+                _ensure_site_metadata(r)
                 return r
     return None
 
 
-def get_quarantine_stats() -> Dict[str, int]:
+def get_quarantine_stats(site_id: str = None) -> Dict[str, int]:
     """获取隔离统计数字
 
     v2.0 fix: Use .get() for defensive access. SqliteRepository.list_all()
@@ -654,6 +719,11 @@ def get_quarantine_stats() -> Dict[str, int]:
                         records = json.load(f)
                 except Exception:
                     records = []
+        for record in records:
+            _ensure_site_metadata(record)
+        if site_id is not None:
+            normalized_id = str(site_id).strip().lower()
+            records = [r for r in records if r.get("site_id") == normalized_id]
         return {
             "total": len(records),
             "quarantined": sum(1 for r in records if r.get("status") == "quarantined"),

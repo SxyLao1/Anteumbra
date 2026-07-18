@@ -150,6 +150,8 @@ def stream_logs():
             while True:
                 try:
                     signal = client_queue.get_nowait()
+                    if signal is None:
+                        return
                     if signal == "registry_update":
                         yield "data: [REGISTRY][UPDATE] Registry updated\n\n"
                         continue

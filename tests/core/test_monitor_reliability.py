@@ -281,3 +281,37 @@ def test_recently_restored_moved_file_is_not_scanned(monkeypatch, tmp_path):
         assert scans == []
     finally:
         handler.shutdown()
+
+
+def test_moved_file_uses_the_standard_scan_queue(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    destination = tmp_path / "moved.php"
+    destination.write_text("<?php", encoding="utf-8")
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.moved-queue"),
+        website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+    )
+    queued = []
+    try:
+        monkeypatch.setattr(handler, "_verify_directory", lambda _path: False)
+        monkeypatch.setattr(handler, "_update_cache_on_move", lambda *_args: None)
+        monkeypatch.setattr(
+            handler,
+            "enqueue_scan",
+            lambda path, event_type: queued.append((path, event_type)),
+        )
+
+        handler.on_moved(
+            SimpleNamespace(
+                src_path=str(tmp_path / "staged.php"),
+                dest_path=str(destination),
+            )
+        )
+
+        assert queued == [(destination.resolve(), "MOVE")]
+    finally:
+        handler.shutdown()

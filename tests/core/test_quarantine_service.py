@@ -100,6 +100,36 @@ def test_restore_without_registry_record_remains_supported(monkeypatch):
     assert quarantine_service.restore_file("Q-test") is restored
 
 
+def test_restore_ignores_a_same_path_record_from_another_site(monkeypatch):
+    record = {
+        "quarantine_id": "Q-test",
+        "original_path": "sample.php",
+        "site_id": "alpha",
+        "status": "quarantined",
+    }
+    restored = dict(record, status="restored")
+    monkeypatch.setattr(quarantine_service, "get_quarantine_detail", lambda _qid: record)
+    monkeypatch.setattr(quarantine_service, "_restore_file", lambda _qid: restored)
+
+    from anteumbra.application import registry_service
+
+    calls = []
+
+    def get_all(**kwargs):
+        calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(registry_service, "get_all", get_all)
+    monkeypatch.setattr(
+        registry_service,
+        "mark_restored",
+        lambda *_args: pytest.fail("a different site's record must not be restored"),
+    )
+
+    assert quarantine_service.restore_file("Q-test") is restored
+    assert calls[0]["site_id"] == "alpha"
+
+
 def test_registry_restore_failure_is_compensated(monkeypatch):
     record = {
         "quarantine_id": "Q-test",

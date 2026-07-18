@@ -104,19 +104,19 @@ class NotifierHandlerPlugin(Plugin):
             message = f"[Anteumbra {level}] {alert_type}"
 
         # Send via concrete Notifier
-        self._send(message, level)
+        self._send(message, level, payload.get("site_id"))
 
         return None
 
     # -- Internal --
 
-    def _send(self, message: str, level: str) -> None:
+    def _send(self, message: str, level: str, site_id: str | None = None) -> None:
         """Send alert through concrete Notifier instance (best-effort)."""
         try:
             if self._notifier is None:
                 from anteumbra.infrastructure.monitoring.notifier import get_notifier
                 self._notifier = get_notifier(self._logger or logging.getLogger("monitor.notifier"))
-            self._notifier._safe_notify(message, level=level)
+            self._notifier._safe_notify(message, level=level, site_id=site_id)
             logger.info("NotifierHandler: queued alert level=%s", level)
         except Exception as e:
             logger.warning("NotifierHandler: _safe_notify 失败: %s", e)

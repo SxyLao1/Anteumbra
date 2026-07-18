@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # 表顺序有讲究：被引用的表必须先创建，否则 FK 约束会失败。
 # quarantine → threat_profiles → registry / block_ledger → scan_history → wal_events
 
-SCHEMA_VERSION = 2  # 递增以触发迁移
+SCHEMA_VERSION = 3  # 递增以触发迁移
 
 SCHEMA = {
     # ── 独立表（被其他表引用）─────────────────────────────
@@ -48,6 +48,8 @@ SCHEMA = {
             status TEXT DEFAULT 'quarantined',
             created_at TEXT DEFAULT (datetime('now')),
             restored_at TEXT,
+            site_id TEXT,
+            site_name TEXT,
             raw_json TEXT
         )
     """,
@@ -90,6 +92,8 @@ SCHEMA = {
             profile_id TEXT,
             deleted_at TEXT,
             detection_source TEXT DEFAULT 'passive',
+            site_id TEXT,
+            site_name TEXT,
             raw_json TEXT,              -- 完整 JSON 备份（兼容性）
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now')),
@@ -130,6 +134,8 @@ SCHEMA = {
             errors INTEGER DEFAULT 0,
             duration REAL DEFAULT 0,
             findings TEXT,              -- JSON array (max 200)
+            site_id TEXT,
+            site_name TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         )
     """,
@@ -153,14 +159,17 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_registry_profile ON registry(profile_id)",
     "CREATE INDEX IF NOT EXISTS idx_registry_detected ON registry(detected_at)",
     "CREATE INDEX IF NOT EXISTS idx_registry_deleted ON registry(deleted_at)",
+    "CREATE INDEX IF NOT EXISTS idx_registry_site_path ON registry(site_id, file_path)",
     # quarantine
     "CREATE INDEX IF NOT EXISTS idx_quarantine_status ON quarantine(status)",
+    "CREATE INDEX IF NOT EXISTS idx_quarantine_site ON quarantine(site_id)",
     # block_ledger
     "CREATE INDEX IF NOT EXISTS idx_block_ledger_ip ON block_ledger(ip)",
     "CREATE INDEX IF NOT EXISTS idx_block_ledger_source ON block_ledger(source)",
     "CREATE INDEX IF NOT EXISTS idx_block_ledger_time ON block_ledger(blocked_at)",
     # scan_history
     "CREATE INDEX IF NOT EXISTS idx_scan_history_time ON scan_history(start_time)",
+    "CREATE INDEX IF NOT EXISTS idx_scan_history_site ON scan_history(site_id)",
     # threat_profiles — 排序 + 筛选
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_score ON threat_profiles(risk_score)",
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_status ON threat_profiles(status)",
@@ -175,6 +184,23 @@ _EXPECTED_FOREIGN_KEYS = {
     },
     "block_ledger": {
         ("profile_id", "threat_profiles", "profile_id"),
+    },
+}
+
+_REQUIRED_COLUMNS = {
+    "registry": {
+        "site_id": "TEXT",
+        "site_name": "TEXT",
+        "raw_json": "TEXT",
+    },
+    "quarantine": {
+        "site_id": "TEXT",
+        "site_name": "TEXT",
+        "raw_json": "TEXT",
+    },
+    "scan_history": {
+        "site_id": "TEXT",
+        "site_name": "TEXT",
     },
 }
 
@@ -196,6 +222,7 @@ class SqliteRepository(EventRepository):
         "registry", "quarantine", "block_ledger",
         "threat_profiles", "scan_history", "wal_events",
     }
+    _schema_lock = threading.RLock()
 
     def __init__(self, db_path: str = "data/anteumbra.db", table_name: str = "registry",
                  key_column: str = "record_id", sort_column: str = "detected_at"):
@@ -225,7 +252,11 @@ class SqliteRepository(EventRepository):
     def _get_conn(self) -> sqlite3.Connection:
         """获取当前线程的数据库连接（自动创建）"""
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+            conn = sqlite3.connect(
+                str(self._db_path), check_same_thread=False, timeout=2.0
+            )
+            # SQLite shadows must never hold up authoritative JSON workflows.
+            conn.execute("PRAGMA busy_timeout=2000")
             conn.execute("PRAGMA journal_mode=WAL")       # 高并发读
             conn.execute("PRAGMA synchronous=NORMAL")      # 平衡性能/安全
             conn.execute("PRAGMA foreign_keys=ON")
@@ -235,14 +266,34 @@ class SqliteRepository(EventRepository):
 
     def _ensure_schema(self):
         """建表 + 索引 + 迁移（幂等）"""
-        conn = self._get_conn()
-        for table_name, ddl in SCHEMA.items():
-            conn.execute(ddl)
-        for idx in INDEXES:
-            conn.execute(idx)
-        conn.commit()
-        self._run_migrations()
+        # Schema DDL can acquire an exclusive SQLite lock. Serialize it within
+        # this process so concurrent shadow repositories do not block each
+        # other during startup or tests.
+        with self._schema_lock:
+            conn = self._get_conn()
+            for table_name, ddl in SCHEMA.items():
+                conn.execute(ddl)
+            self._ensure_required_columns(conn)
+            for idx in INDEXES:
+                conn.execute(idx)
+            conn.commit()
+            self._run_migrations()
         logger.info("SqliteRepository: schema ready at %s", self._db_path)
+
+    @staticmethod
+    def _ensure_required_columns(conn) -> None:
+        """Add backward-compatible columns before site-aware indexes are created."""
+        for table_name, columns in _REQUIRED_COLUMNS.items():
+            existing = {
+                row["name"]
+                for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            for column_name, declaration in columns.items():
+                if column_name not in existing:
+                    conn.execute(
+                        f"ALTER TABLE {table_name} "
+                        f"ADD COLUMN {column_name} {declaration}"
+                    )
 
     def _run_migrations(self):
         """检测并添加缺失的外键约束（表重建实现）。
@@ -303,6 +354,32 @@ class SqliteRepository(EventRepository):
 
         conn.commit()
 
+    @staticmethod
+    def _row_to_data(row) -> Dict[str, Any]:
+        """Restore shadowed JSON fields that do not have first-class columns."""
+        data = dict(row)
+        raw_json = data.get("raw_json")
+        if isinstance(raw_json, str) and raw_json:
+            try:
+                raw_data = json.loads(raw_json)
+            except (TypeError, json.JSONDecodeError):
+                raw_data = None
+            if isinstance(raw_data, dict):
+                raw_data.update(
+                    {key: value for key, value in data.items() if value is not None}
+                )
+                data = raw_data
+
+        value = data.get("features")
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (TypeError, json.JSONDecodeError):
+                parsed = None
+            if isinstance(parsed, list):
+                data["features"] = parsed
+        return data
+
     # ── Repository 接口 ──────────────────────────────────
 
     def save(self, record_id: str, data: Dict[str, Any]) -> None:
@@ -313,6 +390,8 @@ class SqliteRepository(EventRepository):
         """
         conn = self._get_conn()
         row = dict(data)
+        if "raw_json" in self._columns:
+            row["raw_json"] = json.dumps(data, ensure_ascii=False, default=str)
         for k, v in row.items():
             if isinstance(v, (list, dict)):
                 row[k] = json.dumps(v, ensure_ascii=False, default=str)
@@ -335,14 +414,14 @@ class SqliteRepository(EventRepository):
         row = conn.execute(
             f"SELECT * FROM {self._table} WHERE {self._key_column}=?", (record_id,)
         ).fetchone()
-        return dict(row) if row else None
+        return self._row_to_data(row) if row else None
 
     def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
             f"SELECT * FROM {self._table} ORDER BY {self._sort_column} DESC LIMIT ? OFFSET ?",
             (limit, offset)).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_data(row) for row in rows]
 
     # Whitelist of allowed query columns (prevents SQL injection via filter keys)
     _ALLOWED_COLUMNS = {
@@ -350,7 +429,7 @@ class SqliteRepository(EventRepository):
         "file_exists", "communication_count", "first_seen_ip", "alerted",
         "marked_false_positive", "quarantine_id", "deleted_at",
         "detection_source", "status", "source", "ip", "blocked_by",
-        "broadcast_status",
+        "broadcast_status", "site_id", "site_name",
     }
 
     def query(self, filters: Dict[str, Any],
@@ -369,7 +448,7 @@ class SqliteRepository(EventRepository):
         sql += f" ORDER BY {self._sort_column} DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_data(row) for row in rows]
 
     def delete(self, record_id: str) -> bool:
         conn = self._get_conn()
@@ -538,7 +617,7 @@ class SqliteRepository(EventRepository):
 # ── 双写适配器 ──────────────────────────────────────────
 
 class DualWriteRepository:
-    """同时写入 JSON 和 SQLite，读取优先 SQLite。
+    """Write JSON and SQLite, with JSON as the authoritative read store.
 
     用法：
         from anteumbra.infrastructure.persistence.json_repository import JsonRepository
@@ -559,26 +638,27 @@ class DualWriteRepository:
             logger.warning("DualWrite: SQLite save failed for %s: %s", record_id, e)
 
     def get(self, record_id: str) -> Optional[Dict[str, Any]]:
+        record = self._json.get(record_id)
+        if record is not None:
+            return record
         try:
-            r = self._sql.get(record_id)
-            if r:
-                return r
+            return self._sql.get(record_id)
         except Exception:
-            logger.debug("SQLite get failed for record %s, falling back to JSON", record_id, exc_info=True)
-        return self._json.get(record_id)
+            logger.debug("SQLite fallback get failed for record %s", record_id, exc_info=True)
+            return None
 
     def list_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         try:
-            return self._sql.list_all(limit, offset)
-        except Exception:
             return self._json.list_all(limit, offset)
+        except Exception:
+            return self._sql.list_all(limit, offset)
 
     def query(self, filters: Dict[str, Any],
               limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         try:
-            return self._sql.query(filters, limit, offset)
-        except Exception:
             return self._json.query(filters, limit, offset)
+        except Exception:
+            return self._sql.query(filters, limit, offset)
 
     def delete(self, record_id: str) -> bool:
         ok = self._json.delete(record_id)
@@ -590,6 +670,10 @@ class DualWriteRepository:
 
     def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         try:
-            return self._sql.count(filters)
-        except Exception:
             return self._json.count(filters)
+        except Exception:
+            return self._sql.count(filters)
+
+    def close(self) -> None:
+        """Release the SQLite connection when a repository cache is cleared."""
+        self._sql.close()

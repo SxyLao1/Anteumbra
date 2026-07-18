@@ -8,9 +8,11 @@
 v1.7.4增强：ScanOptions支持access_log_path配置
 """
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 
@@ -111,8 +113,15 @@ class Website:
     enabled: bool = False
     scan_options: ScanOptions = field(default_factory=ScanOptions)
     log_config: Dict[str, Any] = field(default_factory=dict)
+    # Keep this after the pre-existing positional fields. Older integrations
+    # may still construct Website(name, path, port, enabled, options, logs).
+    site_id: str = ""
 
     def __post_init__(self):
+        """Normalize the site identity and validate the parsed website configuration."""
+        identity = SiteIdentity.from_values(self.site_id, self.name)
+        self.site_id = identity.site_id
+        self.name = identity.site_name
         """对象创建后的自动验证"""
         # 确保path是Path对象
         if isinstance(self.path, str):
@@ -128,4 +137,7 @@ class Website:
 
     def __str__(self):
         """用于友好打印"""
-        return f"Website(name='{self.name}', path={self.path}, port={self.port}, enabled={self.enabled})"
+        return (
+            f"Website(site_id='{self.site_id}', name='{self.name}', "
+            f"path={self.path}, port={self.port}, enabled={self.enabled})"
+        )

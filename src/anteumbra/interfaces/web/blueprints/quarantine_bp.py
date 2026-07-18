@@ -21,12 +21,25 @@ from anteumbra.interfaces.web.auth import require_auth
 quarantine_bp = Blueprint('quarantine', __name__, url_prefix='/admin')
 
 
+def _requested_site_id():
+    """Read an optional site boundary from either query or form input."""
+    return request.values.get("site_id") or None
+
+
+def _record_matches_site(record, site_id):
+    """Avoid acting on a quarantine item outside the requested site boundary."""
+    return not site_id or (
+        record and record.get("site_id") == str(site_id).strip().lower()
+    )
+
+
 @quarantine_bp.route('/quarantine', methods=['GET'])
 @require_auth
 def quarantine_list():
     """隔离文件列表"""
     try:
         status = request.args.get('status', 'quarantined')
+        site_id = request.args.get('site_id') or None
         page_str = request.args.get('page', '1')
         try:
             page = max(1, int(page_str))
@@ -36,7 +49,10 @@ def quarantine_list():
         config = ConfigRegistry.get_raw_config()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
-        all_records = get_quarantine_list(status=status if status != 'all' else None)
+        all_records = get_quarantine_list(
+            status=status if status != 'all' else None,
+            site_id=site_id,
+        )
 
         # v1.8.4: 搜索过滤
         q = request.args.get('q', '').lower()
@@ -55,7 +71,7 @@ def quarantine_list():
         end = start + per_page
         paginated = all_records[start:end]
 
-        stats = get_quarantine_stats()
+        stats = get_quarantine_stats(site_id=site_id)
 
         all_qids = [r.get('quarantine_id', '') for r in all_records if r.get('quarantine_id')]
 
@@ -100,7 +116,7 @@ def quarantine_detail():
             return jsonify({"error": "缺少 qid 参数"}), 400
 
         record = get_quarantine_detail(qid)
-        if not record:
+        if not record or not _record_matches_site(record, _requested_site_id()):
             return jsonify({"error": "记录不存在"}), 404
 
         if request.headers.get('HX-Request'):
@@ -113,15 +129,15 @@ def quarantine_detail():
         return jsonify({"error": str(e)}), 500
 
 
-def _render_quarantine_list(status=None):
+def _render_quarantine_list(status=None, site_id=None):
     """v1.7.9: 渲染隔离列表片段，供 restore/delete 后刷新用"""
     config = ConfigRegistry.get_raw_config()
     per_page = config.get("web_admin", {}).get("items_per_page", 20)
-    all_records = get_quarantine_list(status=status)
+    all_records = get_quarantine_list(status=status, site_id=site_id)
     total = len(all_records)
     total_pages = max(1, (total + per_page - 1) // per_page)
     paginated = all_records[:per_page]
-    stats = get_quarantine_stats()
+    stats = get_quarantine_stats(site_id=site_id)
     return render_template('admin/quarantine_list.html',
         records=paginated, stats=stats, page=1, total_pages=total_pages,
         total=total, per_page=per_page, current_status=status or 'all')
@@ -136,10 +152,15 @@ def quarantine_restore():
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
-        result = restore_file(qid)
+        site_id = _requested_site_id()
+        record = get_quarantine_detail(qid)
+        if not record or not _record_matches_site(record, site_id):
+            return jsonify({"error": "记录不存在"}), 404
+
+        restore_file(qid)
         # 返回刷新后的列表，保留当前筛选状态
         status = request.args.get('status', 'quarantined')
-        return _render_quarantine_list(status=None)  # 显示全部，包含刚恢复的
+        return _render_quarantine_list(status=None, site_id=site_id)
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][RESTORE] 错误: {e}", exc_info=True)
@@ -155,8 +176,13 @@ def quarantine_delete():
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
+        site_id = _requested_site_id()
+        record = get_quarantine_detail(qid)
+        if not record or not _record_matches_site(record, site_id):
+            return jsonify({"error": "记录不存在"}), 404
+
         delete_quarantine(qid)
-        return _render_quarantine_list(status=None)
+        return _render_quarantine_list(status=None, site_id=site_id)
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][DELETE] 错误: {e}", exc_info=True)
@@ -174,9 +200,14 @@ def quarantine_batch():
             return jsonify({"error": "missing qids"}), 400
 
         results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+        site_id = _requested_site_id()
 
         for qid in qids:
             try:
+                record = get_quarantine_detail(qid)
+                if not record or not _record_matches_site(record, site_id):
+                    results["skipped"] += 1
+                    continue
                 if action == 'restore':
                     if restore_file(qid):
                         results["success"] += 1
