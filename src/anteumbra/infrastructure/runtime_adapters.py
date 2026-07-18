@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -76,6 +77,26 @@ class NullEventPublisher:
 
     def publish(self, event_type: str, source: str, payload: Mapping[str, Any]) -> None:
         logger.debug("Ignoring uncomposed event %s from %s", event_type, source)
+
+
+class EventPublisherRouter:
+    """Route events to a late-bound publisher without process-global state."""
+
+    def __init__(self, publisher: EventPublisherPort | None = None) -> None:
+        self._lock = threading.RLock()
+        self._publisher = publisher
+
+    def bind(self, publisher: EventPublisherPort | None) -> None:
+        with self._lock:
+            self._publisher = publisher
+
+    def publish(self, event_type: str, source: str, payload: Mapping[str, Any]) -> None:
+        with self._lock:
+            publisher = self._publisher
+        if publisher is None:
+            logger.debug("Ignoring uncomposed event %s from %s", event_type, source)
+            return
+        publisher.publish(event_type, source, payload)
 
 
 def build_compatibility_runtime_services(

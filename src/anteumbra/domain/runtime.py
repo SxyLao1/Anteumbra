@@ -97,6 +97,13 @@ class EventPublisherPort(Protocol):
         """Publish an event on the configured event bus."""
 
 
+class BindableEventPublisherPort(EventPublisherPort, Protocol):
+    """Runtime-owned publisher that can bind the late-built plugin event bus."""
+
+    def bind(self, publisher: EventPublisherPort | None) -> None:
+        """Atomically replace the active event target."""
+
+
 @dataclass(frozen=True)
 class RuntimeContext:
     """Immutable runtime configuration plus the configured site resolver."""

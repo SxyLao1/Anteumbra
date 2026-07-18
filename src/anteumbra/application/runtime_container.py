@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from anteumbra.domain.runtime import ConfigProviderPort
+from anteumbra.domain.blocking import BlockLedgerPort, IPBlockerPort
+from anteumbra.domain.runtime import BindableEventPublisherPort, ConfigProviderPort
 
 
 @dataclass
@@ -18,6 +19,7 @@ class RuntimeContainer:
     """
 
     config: ConfigProviderPort
+    events: BindableEventPublisherPort
     plugin_manager: Any | None = None
     metrics: Any | None = None
     notifier: Any | None = None
@@ -25,13 +27,13 @@ class RuntimeContainer:
     yara_engine: Any | None = None
     scanner: Any | None = None
     threat_graph: Any | None = None
-    ip_blocker: Any | None = None
+    ip_blocker: IPBlockerPort | None = None
     hash_engine: Any | None = None
     file_cluster_engine: Any | None = None
     log_heuristic_engine: Any | None = None
     registry: Any | None = None
     quarantine: Any | None = None
-    block_ledger: Any | None = None
+    block_ledger: BlockLedgerPort | None = None
     wal: Any | None = None
     sse: Any | None = None
     waf_poller: Any | None = None

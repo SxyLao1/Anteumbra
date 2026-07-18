@@ -1,284 +1,256 @@
-# -*- coding: utf-8 -*-
-"""v1.0.9: Unit tests for block_ledger.py — IP block audit ledger.
+"""Behavioral tests for the runtime-owned block audit ledger."""
 
-Tests cover: add_entry, get_by_ip, get_entries, get_stats, update_notes,
-export_ledger (json + csv), remove_entry, and dedup behavior.
-"""
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
-# ── Fixtures ──────────────────────────────────────────────────
+from anteumbra.domain.site import SiteIdentity
+from anteumbra.infrastructure.block_ledger import (
+    BlockLedger,
+    BlockLedgerPersistenceError,
+)
 
 
-@pytest.fixture(autouse=True)
-def isolate_block_ledger(monkeypatch, tmp_path):
-    """Force block_ledger to use a temp JSON file, bypass SQLite shadow."""
-    from anteumbra.infrastructure import block_ledger as bl
+class MemoryShadow:
+    def __init__(self, records=(), *, fail_save=False, fail_load=False):
+        self.records = {str(item.get("record_id", index)): dict(item) for index, item in enumerate(records)}
+        self.fail_save = fail_save
+        self.fail_load = fail_load
+        self.closed = False
+        self.load_calls = 0
 
-    ledger_path = tmp_path / "block_ledger.json"
-    monkeypatch.setattr(bl, "_LEDGER_PATH", ledger_path)
-    monkeypatch.setattr(bl, "_LEDGER_CACHE", [])
-    monkeypatch.setattr(bl, "_repo_shadow_save", lambda data: None)
+    def save(self, record_id, data):
+        if self.fail_save:
+            raise OSError("shadow unavailable")
+        self.records[record_id] = dict(data)
 
-    # Ensure save writes to temp path
-    bl._LEDGER_PATH = ledger_path
-    bl._LEDGER_CACHE = []
-    yield bl
+    def get(self, record_id):
+        return self.records.get(record_id)
 
+    def list_all(self, limit=100, offset=0):
+        self.load_calls += 1
+        if self.fail_load:
+            raise OSError("shadow unavailable")
+        return list(self.records.values())[offset : offset + limit]
 
-def test_json_ledger_is_authoritative_over_sqlite_shadow(
-    isolate_block_ledger, monkeypatch
-):
-    from anteumbra.infrastructure import persistence
+    def query(self, filters, limit=100, offset=0):
+        records = [
+            item
+            for item in self.records.values()
+            if all(item.get(key) == value for key, value in filters.items())
+        ]
+        return records[offset : offset + limit]
 
-    ledger = isolate_block_ledger
-    expected = [{"ip": "10.0.0.250", "source": "manual"}]
-    ledger._LEDGER_PATH.write_text(json.dumps(expected), encoding="utf-8")
+    def delete(self, record_id):
+        return self.records.pop(record_id, None) is not None
 
-    def unexpected_shadow_read(_namespace):
-        pytest.fail("a valid JSON ledger must not read the SQLite shadow")
+    def count(self, filters=None):
+        return len(self.query(filters or {}, limit=1_000_000))
 
-    monkeypatch.setattr(persistence, "get_shadow_repository", unexpected_shadow_read)
-
-    assert ledger._load() == expected
-
-
-# ── Core CRUD Tests ───────────────────────────────────────────
-
-
-class TestAddEntry:
-    """Test add_entry() — create and dedup."""
-
-    def test_add_single_entry(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        entry = bl.add_entry("10.0.0.1", source="scanner", reason="SQLMap detected")
-        assert entry["ip"] == "10.0.0.1"
-        assert entry["source"] == "scanner"
-        assert entry["reason"] == "SQLMap detected"
-        assert "blocked_at" in entry
-
-    def test_add_entry_defaults(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        entry = bl.add_entry("10.0.0.2")
-        assert entry["source"] == "manual"
-        assert entry["blocked_by"] == "admin"
-        assert entry["notes"] == ""
-
-    def test_add_duplicate_updates_entry(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.3", reason="First block")
-        entry = bl.add_entry("10.0.0.3", reason="Updated reason", source="waf")
-        assert entry["reason"] == "Updated reason"
-        assert entry["source"] == "waf"
-
-    def test_add_entry_with_broadcast_results(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        broadcast = [{"device": "router1", "status": "ok"}]
-        entry = bl.add_entry("10.0.0.4", broadcast_results=broadcast)
-        # broadcast_results is destructured into broadcast_devices + broadcast_status
-        assert "broadcast_devices" in entry
-        assert "broadcast_status" in entry
+    def close(self):
+        self.closed = True
 
 
-class TestGetByIp:
-    """Test get_by_ip() single-entry lookup."""
+class EventRecorder:
+    def __init__(self):
+        self.events = []
 
-    def test_get_existing_ip(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.5", reason="Brute force")
-        record = bl.get_by_ip("10.0.0.5")
-        assert record is not None
-        assert record["reason"] == "Brute force"
-
-    def test_get_nonexistent_ip(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        record = bl.get_by_ip("192.168.99.99")
-        assert record is None
+    def publish(self, event_type, source, payload):
+        self.events.append((event_type, source, dict(payload)))
 
 
-class TestGetEntries:
-    """Test get_entries() with pagination and filters."""
-
-    def test_get_entries_returns_list(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.6")
-        bl.add_entry("10.0.0.7")
-        entries, total = bl.get_entries()
-        assert total == 2
-        assert len(entries) == 2
-
-    def test_get_entries_pagination(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        for i in range(5):
-            bl.add_entry(f"10.0.0.{10 + i}")
-        entries, total = bl.get_entries(limit=3, offset=0)
-        assert len(entries) == 3
-        assert total == 5
-
-    def test_get_entries_source_filter(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.20", source="scanner")
-        bl.add_entry("10.0.0.21", source="waf")
-        entries, total = bl.get_entries(source_filter="scanner")
-        assert total == 1
-        assert entries[0]["source"] == "scanner"
-
-    def test_get_entries_search(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.30", reason="SQL injection")
-        bl.add_entry("10.0.0.31", reason="XSS attack")
-        entries, total = bl.get_entries(search="SQL")
-        assert total == 1
+@pytest.fixture
+def alpha():
+    return SiteIdentity("alpha", "Alpha")
 
 
-class TestGetStats:
-    """Test get_stats() aggregation."""
-
-    def test_get_stats_empty(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        stats = bl.get_stats()
-        assert stats["total"] == 0
-
-    def test_get_stats_with_entries(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.40", source="auto")
-        bl.add_entry("10.0.0.41", source="manual")
-        bl.add_entry("10.0.0.42", source="auto")
-        stats = bl.get_stats()
-        assert stats["total"] == 3
-        assert stats["auto"] == 2
-        assert stats["manual"] == 1
-
-    def test_get_stats_recent_count(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.50")
-        stats = bl.get_stats()
-        assert "today" in stats
+@pytest.fixture
+def beta():
+    return SiteIdentity("beta", "Beta")
 
 
-class TestUpdateNotes:
-    """Test update_notes() inline editing."""
-
-    def test_update_notes_existing(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.60")
-        result = bl.update_notes("10.0.0.60", "False positive — internal scanner")
-        assert result is True
-        record = bl.get_by_ip("10.0.0.60")
-        assert record["notes"] == "False positive — internal scanner"
-
-    def test_update_notes_nonexistent(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        result = bl.update_notes("10.99.99.99", "N/A")
-        assert result is False
+@pytest.fixture
+def ledger(tmp_path):
+    return BlockLedger(tmp_path / "block_ledger.json")
 
 
-class TestExportLedger:
-    """Test export_ledger() JSON and CSV formats."""
+def test_add_persists_site_owned_record(ledger, alpha):
+    entry = ledger.add_entry(
+        "10.0.0.1",
+        site=alpha,
+        source="scanner",
+        reason="SQLMap detected",
+        broadcast_results=[{"device": "waf", "success": True}],
+    )
 
-    def test_export_json(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.70", reason="Test export")
-        exported = bl.export_ledger("json")
-        data = json.loads(exported)
-        assert isinstance(data, list)
-        assert data[0]["ip"] == "10.0.0.70"
-
-    def test_export_csv(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.80", reason="CSV test")
-        exported = bl.export_ledger("csv")
-        assert "10.0.0.80" in exported
-        assert "CSV test" in exported
-
-    def test_export_empty_ledger(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        exported = bl.export_ledger("json")
-        assert exported == "[]"
+    assert entry["record_id"] == "alpha|10.0.0.1"
+    assert entry["site_id"] == "alpha"
+    assert entry["broadcast_status"] == "success"
+    assert json.loads(ledger.path.read_text(encoding="utf-8"))[0]["site_name"] == "Alpha"
 
 
-class TestRemoveEntry:
-    """Test remove_entry() — mark as removed."""
+def test_same_ip_is_independent_across_sites(ledger, alpha, beta):
+    ledger.add_entry("10.0.0.2", site=alpha, reason="alpha reason")
+    ledger.add_entry("10.0.0.2", site=beta, reason="beta reason")
 
-    def test_remove_existing(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.90")
-        result = bl.remove_entry("10.0.0.90")
-        assert result is True
-
-    def test_remove_nonexistent(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        result = bl.remove_entry("10.99.99.99")
-        assert result is False
-
-    def test_remove_then_get_returns_none(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.91")
-        bl.remove_entry("10.0.0.91")
-        record = bl.get_by_ip("10.0.0.91")
-        assert record is None
+    assert ledger.get_by_ip("10.0.0.2", site_id="alpha")["reason"] == "alpha reason"
+    assert ledger.get_by_ip("10.0.0.2", site_id="beta")["reason"] == "beta reason"
+    assert ledger.get_entries(site_id="alpha")[1] == 1
+    assert ledger.get_entries()[1] == 2
 
 
-# ── Persistence Round-Trip ────────────────────────────────────
+def test_duplicate_updates_only_its_site_and_preserves_notes(ledger, alpha, beta):
+    ledger.add_entry("10.0.0.3", site=alpha, reason="first")
+    ledger.update_notes("10.0.0.3", "reviewed", site_id="alpha")
+    ledger.add_entry("10.0.0.3", site=beta, reason="beta")
+    updated = ledger.add_entry("10.0.0.3", site=alpha, reason="second", source="auto")
+
+    assert updated["reason"] == "second"
+    assert updated["notes"] == "reviewed"
+    assert ledger.get_by_ip("10.0.0.3", site_id="beta")["reason"] == "beta"
 
 
-class TestPersistenceRoundTrip:
-    """Test that entries survive save + reload."""
+def test_filters_and_stats_respect_site_boundary(ledger, alpha, beta):
+    ledger.add_entry("10.0.0.4", site=alpha, source="auto", reason="SQL injection")
+    ledger.add_entry("10.0.0.5", site=alpha, source="manual", reason="XSS")
+    ledger.add_entry("10.0.0.6", site=beta, source="auto", reason="SQL injection")
 
-    def test_entries_persist_to_disk(self, isolate_block_ledger, tmp_path):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.100", reason="Persistence test")
-        # Force save to disk
-        bl._save(bl._LEDGER_CACHE)
-        assert bl._LEDGER_PATH.exists()
-        raw = bl._LEDGER_PATH.read_text(encoding="utf-8")
-        assert "10.0.0.100" in raw
+    entries, total = ledger.get_entries(site_id="alpha", source_filter="auto", search="SQL")
+    stats = ledger.get_stats(site_id="alpha")
 
-    def test_load_from_existing_file(self, isolate_block_ledger, tmp_path):
-        bl = isolate_block_ledger
-        # Write a pre-existing ledger file
-        test_data = [
+    assert total == 1
+    assert entries[0]["ip"] == "10.0.0.4"
+    assert stats == {"total": 2, "auto": 1, "manual": 1, "today": 2, "blocked": 2, "unblocked": 0}
+
+
+def test_mark_unblocked_retains_audit_history(ledger, alpha):
+    ledger.add_entry("10.0.0.7", site=alpha)
+
+    assert ledger.mark_unblocked("10.0.0.7", site_id="alpha", unblocked_by="operator")
+    record = ledger.get_by_ip("10.0.0.7", site_id="alpha")
+
+    assert record["status"] == "unblocked"
+    assert record["unblocked_by"] == "operator"
+    assert record["unblocked_at"]
+    assert ledger.get_stats(site_id="alpha")["unblocked"] == 1
+
+
+def test_update_and_delete_cannot_cross_site(ledger, alpha, beta):
+    ledger.add_entry("10.0.0.8", site=alpha)
+
+    assert not ledger.update_notes("10.0.0.8", "wrong", site_id=beta.site_id)
+    assert not ledger.remove_entry("10.0.0.8", site_id=beta.site_id)
+    assert ledger.get_by_ip("10.0.0.8", site_id=alpha.site_id) is not None
+    assert ledger.remove_entry("10.0.0.8", site_id=alpha.site_id)
+
+
+def test_valid_json_is_authoritative_and_reconciles_shadow(tmp_path, alpha):
+    path = tmp_path / "block_ledger.json"
+    path.write_text(
+        json.dumps([{"ip": "10.0.0.9", **alpha.as_dict(), "blocked_at": "2026-01-01"}]),
+        encoding="utf-8",
+    )
+    shadow = MemoryShadow(
+        [
             {
-                "ip": "10.0.0.101",
-                "source": "waf",
-                "reason": "Pre-existing",
-                "blocked_at": "2026-07-04 12:00:00",
-                "blocked_by": "auto",
-                "notes": "",
-                "broadcast_results": [],
+                "record_id": "alpha|10.0.0.9",
+                "ip": "10.0.0.9",
+                **alpha.as_dict(),
+                "blocked_at": "2025-01-01",
+                "reason": "stale",
             }
         ]
-        bl._LEDGER_PATH.write_text(json.dumps(test_data), encoding="utf-8")
-        bl._LEDGER_CACHE = bl._load()
-        assert len(bl._LEDGER_CACHE) == 1
-        assert bl._LEDGER_CACHE[0]["ip"] == "10.0.0.101"
+    )
+    ledger = BlockLedger(path, shadow_repository=shadow)
 
-    def test_load_corrupt_json_returns_empty(self, isolate_block_ledger, tmp_path):
-        bl = isolate_block_ledger
-        bl._LEDGER_PATH.write_text("{corrupt json!!!", encoding="utf-8")
-        result = bl._load()
-        assert result == []
+    assert ledger.get_by_ip("10.0.0.9", site_id="alpha")["reason"] == ""
+    assert shadow.records["alpha|10.0.0.9"]["reason"] == ""
 
 
-# ── Edge Cases ────────────────────────────────────────────────
+def test_missing_json_recovers_shadow_and_rebuilds_primary(tmp_path, alpha):
+    record = {
+        "record_id": "alpha|10.0.0.10",
+        "ip": "10.0.0.10",
+        **alpha.as_dict(),
+        "blocked_at": "2026-01-01T00:00:00+00:00",
+    }
+    shadow = MemoryShadow([record])
+    ledger = BlockLedger(tmp_path / "block_ledger.json", shadow_repository=shadow)
+
+    assert ledger.get_by_ip("10.0.0.10", site_id="alpha")["site_name"] == "Alpha"
+    assert ledger.path.exists()
 
 
-class TestEdgeCases:
-    """Test edge cases and boundary conditions."""
+def test_corrupt_primary_without_recovery_raises(tmp_path):
+    path = tmp_path / "block_ledger.json"
+    path.write_text("{not json", encoding="utf-8")
+    ledger = BlockLedger(path)
 
-    def test_add_entry_empty_reason(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        entry = bl.add_entry("10.0.0.200", reason="")
-        assert entry["reason"] == ""
+    with pytest.raises(BlockLedgerPersistenceError, match="cannot load authoritative"):
+        ledger.get_entries()
 
-    def test_multiple_entries_same_source(self, isolate_block_ledger):
-        bl = isolate_block_ledger
-        bl.add_entry("10.0.0.210", source="auto")
-        bl.add_entry("10.0.0.211", source="auto")
-        bl.add_entry("10.0.0.212", source="auto")
-        stats = bl.get_stats()
-        assert stats["auto"] == 3
+
+def test_primary_write_failure_is_not_reported_as_success(tmp_path, alpha):
+    parent_file = tmp_path / "not-a-directory"
+    parent_file.write_text("occupied", encoding="utf-8")
+    ledger = BlockLedger(parent_file / "block_ledger.json")
+
+    with pytest.raises(BlockLedgerPersistenceError, match="cannot persist authoritative"):
+        ledger.add_entry("10.0.0.11", site=alpha)
+
+
+def test_shadow_failure_is_diagnostic_but_primary_succeeds(tmp_path, alpha):
+    shadow = MemoryShadow(fail_save=True)
+    ledger = BlockLedger(tmp_path / "block_ledger.json", shadow_repository=shadow)
+
+    entry = ledger.add_entry("10.0.0.12", site=alpha)
+
+    assert entry["ip"] == "10.0.0.12"
+    assert ledger.path.exists()
+    assert "save: OSError: shadow unavailable" in ledger.shadow_errors
+
+
+def test_events_include_site_identity(tmp_path, alpha):
+    events = EventRecorder()
+    ledger = BlockLedger(tmp_path / "block_ledger.json", event_publisher=events)
+
+    ledger.add_entry("10.0.0.13", site=alpha)
+    ledger.mark_unblocked("10.0.0.13", site_id="alpha")
+
+    assert [item[0] for item in events.events] == ["block_executed", "block_removed"]
+    assert all(item[2]["site_id"] == "alpha" for item in events.events)
+
+
+def test_legacy_record_is_migrated_to_explicit_bucket(tmp_path):
+    path = tmp_path / "block_ledger.json"
+    path.write_text(
+        json.dumps([{"ip": "10.0.0.14", "blocked_at": "2026-01-01"}]),
+        encoding="utf-8",
+    )
+    ledger = BlockLedger(path)
+
+    assert ledger.get_by_ip("10.0.0.14", site_id="legacy")["site_name"] == "Legacy / unassigned"
+
+
+def test_csv_export_neutralizes_formula_values(ledger, alpha):
+    ledger.add_entry("10.0.0.15", site=alpha, reason="=HYPERLINK(\"bad\")")
+
+    exported = ledger.export_ledger("csv", site_id="alpha")
+
+    assert "'=HYPERLINK" in exported
+
+
+def test_invalid_ip_and_format_are_rejected(ledger, alpha):
+    with pytest.raises(ValueError, match="invalid IP"):
+        ledger.add_entry("not-an-ip", site=alpha)
+    with pytest.raises(ValueError, match="format"):
+        ledger.export_ledger("xml")
+
+
+def test_close_releases_shadow(tmp_path):
+    shadow = MemoryShadow()
+    ledger = BlockLedger(tmp_path / "block_ledger.json", shadow_repository=shadow)
+
+    ledger.close()
+
+    assert shadow.closed

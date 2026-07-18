@@ -32,13 +32,16 @@ class TestFullChain:
 
         Each step verifies intermediate state.
         """
-        from anteumbra.infrastructure.block_ledger import add_entry, get_entries, get_by_ip
+        from anteumbra.domain.site import SiteIdentity
+        from anteumbra.infrastructure.block_ledger import BlockLedger
 
         # ── Setup: temp data directories ──────────────────────
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "quarantine").mkdir()
         (data_dir / "threat_intel").mkdir()
+        site = SiteIdentity("primary", "Primary")
+        block_ledger = BlockLedger(data_dir / "block_ledger.json")
 
         www_dir = tmp_path / "www"
         www_dir.mkdir()
@@ -196,8 +199,9 @@ class TestFullChain:
         reason = f"Profile {profile.profile_id} — AntSword scan / risk {profile.risk_score:.2f}"
 
         # Add to block ledger
-        entry = add_entry(
+        entry = block_ledger.add_entry(
             ip=attacker_ip,
+            site=site,
             source="auto",
             reason=reason,
             profile_id=profile.profile_id,
@@ -209,22 +213,18 @@ class TestFullChain:
 
         # ── Step 8: Verify Block Ledger ───────────────────────
         # Query by IP
-        found = get_by_ip(attacker_ip)
+        found = block_ledger.get_by_ip(attacker_ip, site_id=site.site_id)
         assert found is not None, "Step 8 FAIL: Block ledger entry not found by IP"
         assert found["reason"] == reason
 
         # Get all entries
-        all_entries = get_entries()
-        assert len(all_entries) >= 1, "Step 8 FAIL: Block ledger should have entries"
+        all_entries, total = block_ledger.get_entries(site_id=site.site_id)
+        assert total >= 1 and all_entries, "Step 8 FAIL: Block ledger should have entries"
 
         # Get stats
-        try:
-            from anteumbra.infrastructure.block_ledger import get_stats
-            stats = get_stats()
-            assert stats["total"] >= 1, f"Step 8 FAIL: stats total = {stats['total']}"
-            assert stats["auto"] >= 1, f"Step 8 FAIL: stats auto = {stats['auto']}"
-        except ImportError:
-            pass  # get_stats may not exist yet
+        stats = block_ledger.get_stats(site_id=site.site_id)
+        assert stats["total"] >= 1, f"Step 8 FAIL: stats total = {stats['total']}"
+        assert stats["auto"] >= 1, f"Step 8 FAIL: stats auto = {stats['auto']}"
 
         # ── Final verification ────────────────────────────────
         assert len(profiles) >= 1, "Final: No profiles"

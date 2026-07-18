@@ -55,7 +55,7 @@ function renderLedger(data) {
       + '<td style="padding:4px 10px;"><code style="color:#ccc;font-size:10px;">' + _escHtml(e.ip) + '</code></td>'
       + '<td style="padding:4px 10px;text-align:center;"><span style="color:' + sc + ';font-size:9px;">' + e.source + '</span></td>'
       + '<td style="padding:4px 10px;color:#888;font-size:10px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _escHtml(e.reason||'') + '">' + reason + '</td>'
-      + '<td style="padding:4px 10px;" class="notes-cell" data-ip="' + _escHtml(e.ip) + '" onclick="startEditNotes(this)">'
+      + '<td style="padding:4px 10px;" class="notes-cell" data-ip="' + _escHtml(e.ip) + '" data-site-id="' + _escHtml(e.site_id || 'legacy') + '" onclick="startEditNotes(this)">'
       + '<span style="color:' + (notes?'#ccc':'#555') + ';font-size:10px;cursor:pointer;">' + (notes || '[add note]') + '</span></td>'
       + '<td style="padding:4px 10px;color:#555;font-size:9px;">' + (e.blocked_at||'').substring(0,16) + '</td>'
       + '<td style="padding:4px 10px;text-align:center;"><span style="color:' + st + ';font-size:9px;" title="' + _escHtml((e.broadcast_devices||[]).join(', ')) + '">' + stIcon + '</span></td>'
@@ -73,22 +73,23 @@ function renderLedger(data) {
 function startEditNotes(cell) {
   if (cell.querySelector('input')) return;
   var ip = cell.dataset.ip;
+  var siteId = cell.dataset.siteId || 'legacy';
   var curText = (cell.textContent || '').trim();
   if (curText === '[add note]') curText = '';
   var input = document.createElement('input');
   input.type = 'text'; input.value = curText;
   input.style.cssText = 'background:#111;color:#ccc;border:1px solid #00ff41;padding:2px 6px;font-size:10px;width:100%;font-family:var(--font-mono);';
-  input.addEventListener('blur', function() { saveNotes(ip, input.value, cell); });
+  input.addEventListener('blur', function() { saveNotes(ip, siteId, input.value, cell); });
   input.addEventListener('keydown', function(ev) {
     if (ev.key==='Enter') input.blur();
     if (ev.key==='Escape') { cell.innerHTML = '<span style="color:'+(curText?'#ccc':'#555')+';font-size:10px;cursor:pointer;">'+(curText||'[add note]')+'</span>'; }
   });
   cell.innerHTML = ''; cell.appendChild(input); input.focus();
 }
-function saveNotes(ip, notes, cell) {
+function saveNotes(ip, siteId, notes, cell) {
   fetch('/admin/blocklist/notes', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ip:ip, notes:notes})
+    body: JSON.stringify({ip:ip, site_id:siteId, notes:notes})
   }).then(function(r) { return r.json(); }).then(function() {
     cell.innerHTML = '<span style="color:'+(notes?'#ccc':'#555')+';font-size:10px;cursor:pointer;">'+(notes||'[add note]')+'</span>';
   });

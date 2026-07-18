@@ -11,7 +11,7 @@ v1.9.2: SQLite 仓库实现
   - 双写模式兼容（与 JSON 并行写入）
 
 v1.0.4 优化:
-  - 3 条外键约束 (registry → quarantine/threat_profiles, block_ledger → threat_profiles)
+  - Registry foreign keys to quarantine and threat profiles
   - 5 条新索引 (profile_id, deleted_at, blocked_at, status, last_seen)
   - 表创建顺序保证引用完整性
   - 自动迁移：检测缺失 FK → 重建受影响的表
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ── SQL Schema ────────────────────────────────────────────
 # 表顺序有讲究：被引用的表必须先创建，否则 FK 约束会失败。
-# quarantine → threat_profiles → registry / block_ledger → scan_history → wal_events
+# Core entities plus site-qualified block ledger, scan history, and WAL events.
 
 SCHEMA_VERSION = 3  # 递增以触发迁移
 
@@ -101,10 +101,12 @@ SCHEMA = {
             FOREIGN KEY (profile_id) REFERENCES threat_profiles(profile_id) ON DELETE SET NULL
         )
     """,
-    "block_ledger": """
-        CREATE TABLE IF NOT EXISTS block_ledger (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip TEXT UNIQUE NOT NULL,
+    "block_ledger_entries": """
+        CREATE TABLE IF NOT EXISTS block_ledger_entries (
+            record_id TEXT PRIMARY KEY,
+            site_id TEXT NOT NULL,
+            site_name TEXT NOT NULL,
+            ip TEXT NOT NULL,
             source TEXT DEFAULT 'manual',
             reason TEXT,
             notes TEXT DEFAULT '',
@@ -112,9 +114,13 @@ SCHEMA = {
             blocked_by TEXT DEFAULT 'system',
             broadcast_devices TEXT,     -- JSON array
             broadcast_status TEXT DEFAULT 'success',
+            status TEXT DEFAULT 'blocked',
             blocked_at TEXT DEFAULT (datetime('now')),
+            unblocked_at TEXT,
+            unblocked_by TEXT,
+            raw_json TEXT,
             updated_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (profile_id) REFERENCES threat_profiles(profile_id) ON DELETE SET NULL
+            UNIQUE(site_id, ip)
         )
     """,
     # ── 独立日志表 ──────────────────────────────────────
@@ -163,10 +169,10 @@ INDEXES = [
     # quarantine
     "CREATE INDEX IF NOT EXISTS idx_quarantine_status ON quarantine(status)",
     "CREATE INDEX IF NOT EXISTS idx_quarantine_site ON quarantine(site_id)",
-    # block_ledger
-    "CREATE INDEX IF NOT EXISTS idx_block_ledger_ip ON block_ledger(ip)",
-    "CREATE INDEX IF NOT EXISTS idx_block_ledger_source ON block_ledger(source)",
-    "CREATE INDEX IF NOT EXISTS idx_block_ledger_time ON block_ledger(blocked_at)",
+    # site-qualified block ledger
+    "CREATE INDEX IF NOT EXISTS idx_block_ledger_site_ip ON block_ledger_entries(site_id, ip)",
+    "CREATE INDEX IF NOT EXISTS idx_block_ledger_source ON block_ledger_entries(source)",
+    "CREATE INDEX IF NOT EXISTS idx_block_ledger_time ON block_ledger_entries(blocked_at)",
     # scan_history
     "CREATE INDEX IF NOT EXISTS idx_scan_history_time ON scan_history(start_time)",
     "CREATE INDEX IF NOT EXISTS idx_scan_history_site ON scan_history(site_id)",
@@ -180,9 +186,6 @@ INDEXES = [
 _EXPECTED_FOREIGN_KEYS = {
     "registry": {
         ("quarantine_id", "quarantine", "quarantine_id"),
-        ("profile_id", "threat_profiles", "profile_id"),
-    },
-    "block_ledger": {
         ("profile_id", "threat_profiles", "profile_id"),
     },
 }
@@ -211,7 +214,7 @@ class SqliteRepository(EventRepository):
     """基于 SQLite 的数据仓库，实现 Repository + EventRepository 接口
 
     v2.0 fix: ``table_name`` parameter routes data to the correct table.
-    Previously every namespace (registry, quarantine, block_ledger,
+    Previously every namespace (registry, quarantine, block ledger,
     threat_profiles) was hardcoded to INSERT INTO ``registry``.
 
     v1.0.8 fix: table_name is now validated against an allowlist to prevent
@@ -219,7 +222,7 @@ class SqliteRepository(EventRepository):
     """
 
     _ALLOWED_TABLE_NAMES = {
-        "registry", "quarantine", "block_ledger",
+        "registry", "quarantine", "block_ledger_entries",
         "threat_profiles", "scan_history", "wal_events",
     }
     _schema_lock = threading.RLock()
@@ -513,54 +516,6 @@ class SqliteRepository(EventRepository):
             f"INSERT INTO quarantine ({','.join(columns)}) VALUES ({','.join(ph)}) ON CONFLICT(quarantine_id) DO UPDATE SET {','.join(ups)}",
             row)
         conn.commit()
-
-    def save_ledger(self, ip: str, data: Dict[str, Any]) -> None:
-        conn = self._get_conn()
-        row = dict(data)
-        for k, v in row.items():
-            if isinstance(v, (list, dict)):
-                row[k] = json.dumps(v, ensure_ascii=False, default=str)
-        row["ip"] = ip
-        columns = list(row.keys())
-        ph = [f":{c}" for c in columns]
-        ups = [f"{c}=excluded.{c}" for c in columns if c != "ip"]
-        conn.execute(
-            f"INSERT INTO block_ledger ({','.join(columns)}) VALUES ({','.join(ph)}) ON CONFLICT(ip) DO UPDATE SET {','.join(ups)}, updated_at=datetime('now')",
-            row)
-        conn.commit()
-
-    def get_ledger(self, limit: int = 100, offset: int = 0,
-                   source_filter: str = "all", search: str = "") -> tuple:
-        """分页查询台账 (entries, total)"""
-        conn = self._get_conn()
-        where = []
-        params = []
-        if source_filter != "all":
-            where.append("source=?")
-            params.append(source_filter)
-        if search:
-            where.append("(ip LIKE ? OR reason LIKE ? OR notes LIKE ?)")
-            s = f"%{search}%"
-            params.extend([s, s, s])
-        sql = "SELECT * FROM block_ledger"
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        count_sql = sql.replace("SELECT *", "SELECT COUNT(*)")
-        total = conn.execute(count_sql, params).fetchone()[0]
-        rows = conn.execute(
-            sql + " ORDER BY blocked_at DESC LIMIT ? OFFSET ?",
-            params + [limit, offset]).fetchall()
-        entries = []
-        for r in rows:
-            d = dict(r)
-            for field in ["broadcast_devices"]:
-                if d.get(field) and isinstance(d[field], str):
-                    try:
-                        d[field] = json.loads(d[field])
-                    except json.JSONDecodeError:
-                        pass
-            entries.append(d)
-        return entries, total
 
     def save_scan(self, scan_id: str, data: Dict[str, Any]) -> None:
         conn = self._get_conn()

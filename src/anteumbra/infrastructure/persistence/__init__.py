@@ -34,7 +34,7 @@ _NAMESPACE_MAP: Dict[str, tuple] = {
     # (json_file, json_key_field, sqlite_table, sqlite_key_column, sqlite_sort_column)
     "registry":        ("data/suspicious_registry.json", "file_path",    "registry",        "record_id",     "detected_at"),
     "quarantine":      ("data/quarantine/quarantine.json",  "quarantine_id", "quarantine",    "quarantine_id", "created_at"),
-    "block_ledger":    ("data/block_ledger.json",          "ip",           "block_ledger",   "ip",            "blocked_at"),
+    "block_ledger":    ("data/block_ledger.json",          "record_id",    "block_ledger_entries", "record_id", "blocked_at"),
     "threat_profiles": ("data/threat_graph.json",          "profile_id",   "threat_profiles", "profile_id",    "updated_at"),
 }
 

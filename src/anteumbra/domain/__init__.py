@@ -6,8 +6,17 @@ from anteumbra.domain.notifier import Notifier, AlertMessage, AlertLevel
 from anteumbra.domain.event_source import EventSource, PollableEventSource, StreamEventSource
 from anteumbra.domain.waf_source import WAFEvent, WAFEventSource
 from anteumbra.domain.site import SiteIdentity, SiteResolver, SiteRoot, derive_site_id
+from anteumbra.domain.blocking import (
+    BlockDecision,
+    BlockLedgerEntry,
+    BlockLedgerPort,
+    BlockResult,
+    IPBlockerPort,
+    canonical_ip,
+)
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
+    BindableEventPublisherPort,
     DetectionRegistryPort,
     EventPublisherPort,
     MetricsPort,
@@ -23,6 +32,9 @@ __all__ = [
     "EventSource", "PollableEventSource", "StreamEventSource",
     "WAFEvent", "WAFEventSource",
     "SiteIdentity", "SiteResolver", "SiteRoot", "derive_site_id",
-    "ConfigProviderPort", "DetectionRegistryPort", "EventPublisherPort", "MetricsPort",
+    "BlockDecision", "BlockLedgerEntry", "BlockLedgerPort", "BlockResult",
+    "IPBlockerPort", "canonical_ip",
+    "ConfigProviderPort", "BindableEventPublisherPort", "DetectionRegistryPort",
+    "EventPublisherPort", "MetricsPort",
     "RuntimeContext", "RuntimeServices",
 ]

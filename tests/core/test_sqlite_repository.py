@@ -56,16 +56,32 @@ class TestSqliteRepository:
         page = sql_repo.list_all(limit=3, offset=0)
         assert len(page) == 3
 
-    def test_ledger_crud(self, sql_repo):
-        sql_repo.save_ledger("10.0.0.1", {
-            "ip": "10.0.0.1", "source": "manual", "reason": "test block",
-            "broadcast_devices": ["stdout"], "broadcast_status": "success"
-        })
-        entries, total = sql_repo.get_ledger(limit=10, offset=0)
-        assert total >= 1
-        e = entries[0]
-        assert e["ip"] == "10.0.0.1"
-        assert e["source"] == "manual"
+    def test_site_qualified_ledger_crud(self, temp_dir):
+        repo = SqliteRepository(
+            str(temp_dir / "ledger.db"),
+            table_name="block_ledger_entries",
+            key_column="record_id",
+            sort_column="blocked_at",
+        )
+        try:
+            repo.save("alpha|10.0.0.1", {
+                "record_id": "alpha|10.0.0.1",
+                "site_id": "alpha",
+                "site_name": "Alpha",
+                "ip": "10.0.0.1",
+                "source": "manual",
+                "reason": "test block",
+                "broadcast_devices": ["stdout"],
+                "broadcast_status": "success",
+            })
+
+            entry = repo.get("alpha|10.0.0.1")
+
+            assert entry["ip"] == "10.0.0.1"
+            assert entry["site_id"] == "alpha"
+            assert repo.query({"site_id": "alpha"})[0]["source"] == "manual"
+        finally:
+            repo.close()
 
     def test_scan_history(self, sql_repo):
         sql_repo.save_scan("scan-test", {

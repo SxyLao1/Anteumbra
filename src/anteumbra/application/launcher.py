@@ -26,6 +26,7 @@ def build_runtime_container(
     """Build one runtime container at the process composition root."""
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.config.registry import ConfigRegistry
+    from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
     from anteumbra.infrastructure.detection.scanner import ScannerService
@@ -33,6 +34,9 @@ def build_runtime_container(
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
     from anteumbra.infrastructure.monitoring.notifier import Notifier
     from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
+    from anteumbra.infrastructure.ip_blocker import IPBlocker
+    from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository
+    from anteumbra.infrastructure.runtime_adapters import EventPublisherRouter
     from anteumbra.infrastructure.threat_graph import ThreatGraph
     from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.infrastructure.utils.path_utils import normalize_path
@@ -41,6 +45,34 @@ def build_runtime_container(
     ConfigRegistry.bind(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
+    events = EventPublisherRouter(plugin_manager)
+    shadow_ledger = None
+    storage = config.get("storage", {})
+    if str(storage.get("backend", "json")).strip().lower() in {"sqlite", "both"}:
+        try:
+            db_path = normalize_path(
+                storage.get("db_path") or storage.get("sqlite_path", "data/anteumbra.db")
+            )
+            shadow_ledger = SqliteRepository(
+                str(db_path),
+                table_name="block_ledger_entries",
+                key_column="record_id",
+                sort_column="blocked_at",
+            )
+        except Exception:
+            get_logger("block_ledger").exception(
+                "Block ledger SQLite shadow initialization failed; JSON remains authoritative"
+            )
+    block_ledger = BlockLedger(
+        data_dir / "block_ledger.json",
+        shadow_repository=shadow_ledger,
+        event_publisher=events,
+    )
+    ip_blocker = IPBlocker.from_config(
+        config.get("ip_blocker", {}),
+        retry_path=data_dir / "block_retry_queue.json",
+        log=get_logger("ip_blocker"),
+    )
     metrics = MetricsCollector(data_dir / "metrics.json")
     notifier = Notifier(config.get("notifier", {}), get_logger("monitor.notifier"), metrics)
     siem_exporter = SIEMExporter(config.get("siem", {}))
@@ -53,6 +85,7 @@ def build_runtime_container(
     scanner = ScannerService(provider, yara_engine, metrics)
     return RuntimeContainer(
         config=provider,
+        events=events,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,
@@ -62,6 +95,8 @@ def build_runtime_container(
         threat_graph=threat_graph,
         yara_engine=yara_engine,
         scanner=scanner,
+        ip_blocker=ip_blocker,
+        block_ledger=block_ledger,
     )
 
 
@@ -128,13 +163,16 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             container.threat_graph,
         )
         container.plugin_manager = plugin_manager
+        container.events.bind(plugin_manager)
+        if container.ip_blocker is not None:
+            container.ip_blocker.start()
 
         from anteumbra.application.runtime_adapters import build_runtime_services
 
         runtime_services = build_runtime_services(
             config,
             websites,
-            event_publisher=plugin_manager,
+            event_publisher=container.events,
             metrics=container.metrics,
         )
 
@@ -511,11 +549,23 @@ def stop_all() -> None:
     if poller:
         _stop_resource("WAF poller", poller.stop)
 
+    container = state.get("container")
+    ip_blocker = getattr(container, "ip_blocker", None)
+    if ip_blocker:
+        _stop_resource("IP blocker", ip_blocker.stop)
+
     manager = state.get("plugin_manager")
     if manager:
         _stop_resource("plugin manager", manager.shutdown)
 
-    container = state.get("container")
+    events = getattr(container, "events", None)
+    if events:
+        events.bind(None)
+
+    block_ledger = getattr(container, "block_ledger", None)
+    if block_ledger:
+        _stop_resource("block ledger", block_ledger.close)
+
     notifier = getattr(container, "notifier", None)
     if notifier:
         _stop_resource("notifier", notifier.shutdown)

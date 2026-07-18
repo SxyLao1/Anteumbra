@@ -1,286 +1,325 @@
-# -*- coding: utf-8 -*-
-"""
-v1.9.0: Blocklist Blueprint — IP 封禁台账 + 封禁 API
+"""Authenticated IP blocking and site-qualified audit ledger routes."""
 
-从 admin_bp.py 拆分。
-路由前缀: /admin/blocklist/*, /admin/api/v1/blocklist/*, /admin/block/*
-"""
-import logging
+from __future__ import annotations
 
-from flask import (
-    Blueprint, render_template, request, jsonify,
-    Response, current_app
-)
+from collections.abc import Mapping
+from typing import Any
 
+from flask import Blueprint, Response, current_app, jsonify, render_template, request
+
+from anteumbra.domain.blocking import canonical_ip
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
-logger = logging.getLogger(__name__)
 
-# ── Blueprint ──────────────────────────────────────────────
-
-blocklist_bp = Blueprint('blocklist', __name__, url_prefix='/admin')
+blocklist_bp = Blueprint("blocklist", __name__, url_prefix="/admin")
 
 
-# ── Blocklist API ──────────────────────────────────────────
+def _blocking_services():
+    runtime = get_runtime()
+    if runtime.ip_blocker is None or runtime.block_ledger is None:
+        raise RuntimeError("IP blocking services are not configured")
+    return runtime.ip_blocker, runtime.block_ledger
 
-@blocklist_bp.route('/api/v1/blocklist/add', methods=['POST'])
+
+def _site_identity(site_id: object = None) -> SiteIdentity:
+    normalized = str(site_id or "").strip().lower()
+    if not normalized or normalized == "legacy":
+        return SiteIdentity.legacy()
+    website = get_runtime().config.get_website(normalized)
+    if website is None:
+        raise ValueError(f"unknown site_id: {normalized}")
+    return SiteIdentity.from_values(website.site_id, website.name)
+
+
+def _site_filter() -> str | None:
+    raw = request.args.get("site_id")
+    return _site_identity(raw).site_id if raw else None
+
+
+def _payload() -> Mapping[str, Any]:
+    data = request.get_json(silent=True)
+    if not isinstance(data, Mapping):
+        raise ValueError("request body must be a JSON object")
+    return data
+
+
+def _validated_ips(data: Mapping[str, Any]) -> tuple[str, ...]:
+    raw = data.get("ips")
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, list) or not raw:
+        raise ValueError("ips must be a non-empty array")
+    return tuple(dict.fromkeys(canonical_ip(str(item)) for item in raw))
+
+
+def _device_filter(data: Mapping[str, Any]) -> tuple[str, ...] | None:
+    raw = data.get("devices")
+    if raw in (None, []):
+        return None
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        raise ValueError("devices must be an array of names")
+    return tuple(dict.fromkeys(raw))
+
+
+def _result_payload(results) -> list[dict[str, object]]:
+    return [
+        {
+            "device": item.device_name,
+            "ip": item.ip,
+            "success": item.success,
+            "message": item.message,
+        }
+        for item in results
+    ]
+
+
+def _block(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
+    blocker, ledger = _blocking_services()
+    ips = _validated_ips(data)
+    site = _site_identity(data.get("site_id"))
+    profile_id = str(data.get("profile_id") or "")
+    reason = str(data.get("reason") or "").strip()
+    source = str(data.get("source") or "manual")
+    risk_score = 0.0
+
+    if profile_id and not reason:
+        graph = get_runtime().threat_graph
+        profile = graph.query_profile(profile_id) if graph is not None else None
+        if profile is not None:
+            tool = profile.tool_signature or "Unknown tool"
+            risk_score = float(profile.risk_score)
+            reason = f"Profile {profile_id[:8]} - {tool} / risk {round(risk_score * 100)}%"
+            if risk_score >= 0.7:
+                source = "auto"
+    reason = reason or "Manual block from Anteumbra"
+
+    results = blocker.block(
+        ips,
+        reason=reason,
+        site=site,
+        profile_id=profile_id,
+        risk_score=risk_score,
+        device_names=_device_filter(data),
+    )
+    ledger_errors: list[dict[str, str]] = []
+    for ip in ips:
+        ip_results = [item for item in results if item.ip == ip]
+        try:
+            ledger.add_entry(
+                ip,
+                site=site,
+                source=source,
+                reason=reason,
+                profile_id=profile_id,
+                blocked_by="admin",
+                broadcast_results=_result_payload(ip_results),
+            )
+        except Exception as exc:
+            current_app.logger.exception("Block ledger write failed for site=%s ip=%s", site.site_id, ip)
+            ledger_errors.append({"ip": ip, "error": str(exc)})
+
+    success_count = sum(item.success for item in results)
+    all_succeeded = bool(results) and success_count == len(results)
+    success = success_count > 0 and not ledger_errors
+    if success_count == 0:
+        status_code = 502
+    elif ledger_errors or not all_succeeded:
+        status_code = 207
+    else:
+        status_code = 200
+    message = f"Blocked {success_count}/{len(results)} device operations"
+    if ledger_errors:
+        message += f"; {len(ledger_errors)} audit writes failed"
+    return {
+        "success": success,
+        "message": message,
+        "site_id": site.site_id,
+        "results": _result_payload(results),
+        "ledger_errors": ledger_errors,
+    }, status_code
+
+
+def _unblock(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
+    blocker, ledger = _blocking_services()
+    ips = _validated_ips(data)
+    site = _site_identity(data.get("site_id"))
+    results = blocker.unblock(ips, device_names=_device_filter(data))
+    ledger_errors: list[dict[str, str]] = []
+    for ip in ips:
+        if not any(item.success and item.ip == ip for item in results):
+            continue
+        try:
+            ledger.mark_unblocked(ip, site_id=site.site_id, unblocked_by="admin")
+        except Exception as exc:
+            current_app.logger.exception(
+                "Block ledger unblock update failed for site=%s ip=%s",
+                site.site_id,
+                ip,
+            )
+            ledger_errors.append({"ip": ip, "error": str(exc)})
+
+    success_count = sum(item.success for item in results)
+    all_succeeded = bool(results) and success_count == len(results)
+    success = success_count > 0 and not ledger_errors
+    if success_count == 0:
+        status_code = 502
+    elif ledger_errors or not all_succeeded:
+        status_code = 207
+    else:
+        status_code = 200
+    return {
+        "success": success,
+        "message": f"Unblocked {success_count}/{len(results)} device operations",
+        "site_id": site.site_id,
+        "results": _result_payload(results),
+        "ledger_errors": ledger_errors,
+    }, status_code
+
+
+def _command_response(command, context: str):
+    try:
+        payload, status = command(_payload())
+        return jsonify(payload), status
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except RuntimeError as exc:
+        current_app.logger.warning("%s unavailable: %s", context, exc)
+        return jsonify({"success": False, "message": str(exc)}), 503
+    except Exception:
+        current_app.logger.exception("%s failed", context)
+        return jsonify({"success": False, "message": "Internal blocking service error"}), 500
+
+
+@blocklist_bp.route("/api/v1/blocklist/add", methods=["POST"])
 @require_auth
 def blocklist_add():
-    """封禁 IP — 自动写入 BlockLedger"""
-    try:
-        data = request.get_json()
-        ips = data.get('ips', [])
-        profile_id = data.get('profile_id', '')
-        reason = data.get('reason', '') or 'Manual block from Anteumbra'
-        source = data.get('source', 'manual')
-
-        if not ips:
-            return jsonify({"success": False, "message": "No IPs provided"}), 400
-
-        if profile_id and not data.get('reason'):
-            try:
-                tg = get_runtime().threat_graph
-                if tg is None:
-                    raise RuntimeError("ThreatGraph is not configured")
-                profile = tg.query_profile(profile_id)
-                if profile:
-                    tool = profile.tool_signature or 'Unknown tool'
-                    risk = round(profile.risk_score * 100)
-                    reason = f"Profile {profile_id[:8]} — {tool} / risk {risk}%"
-                    if profile.risk_score >= 0.7:
-                        source = "auto"
-            except Exception:
-                logger.debug("Failed to auto-generate block reason from threat profile", exc_info=True)
-
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        blocker = get_ip_blocker()
-        results = blocker.block(ips, reason=reason, profile_id=profile_id)
-        success_count = sum(1 for r in results if r.success)
-
-        for ip in ips:
-            try:
-                from anteumbra.application.block_ledger_service import add_entry
-                add_entry(
-                    ip=ip, source=source, reason=reason,
-                    profile_id=profile_id, blocked_by="admin",
-                    broadcast_results=[
-                        {"device": r.device_name, "success": r.success, "message": r.message}
-                        for r in results if r.ip == ip
-                    ]
-                )
-            except Exception as le:
-                current_app.logger.warning(f"[BLOCKLIST] ledger write failed for {ip}: {le}")
-
-        return jsonify({
-            "success": success_count > 0,
-            "message": f"Blocked {success_count}/{len(results)} across {len(blocker.devices)} device(s)",
-            "results": [{"device": r.device_name, "ip": r.ip, "success": r.success, "message": r.message} for r in results]
-        })
-    except Exception as e:
-        current_app.logger.error(f"[BLOCKLIST] add failed: {e}", exc_info=True)
-        return jsonify({"success": False, "message": str(e)}), 500
+    return _command_response(_block, "Blocklist add")
 
 
-@blocklist_bp.route('/api/v1/blocklist/remove', methods=['POST'])
+@blocklist_bp.route("/blocklist/block", methods=["POST"])
+@require_auth
+def blocklist_manual_block():
+    return _command_response(_block, "Manual block")
+
+
+@blocklist_bp.route("/api/v1/blocklist/remove", methods=["POST"])
 @require_auth
 def blocklist_remove():
-    """解封 IP"""
-    try:
-        data = request.get_json()
-        ips = data.get('ips', [])
-        if not ips:
-            return jsonify({"success": False, "message": "No IPs provided"}), 400
-
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        blocker = get_ip_blocker()
-        results = blocker.unblock(ips)
-        success_count = sum(1 for r in results if r.success)
-        return jsonify({
-            "success": success_count > 0,
-            "message": f"Unblocked {success_count}/{len(results)}",
-            "results": [{"device": r.device_name, "ip": r.ip, "success": r.success} for r in results]
-        })
-    except Exception as e:
-        current_app.logger.error(f"[BLOCKLIST] remove failed: {e}", exc_info=True)
-        return jsonify({"success": False, "message": str(e)}), 500
+    return _command_response(_unblock, "Blocklist remove")
 
 
-@blocklist_bp.route('/api/v1/blocklist', methods=['GET'])
+@blocklist_bp.route("/blocklist/unblock", methods=["POST"])
+@require_auth
+def blocklist_manual_unblock():
+    return _command_response(_unblock, "Manual unblock")
+
+
+@blocklist_bp.route("/api/v1/blocklist", methods=["GET"])
 @require_auth
 def blocklist_get():
-    """获取当前黑名单"""
-    try:
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        blocker = get_ip_blocker()
-        return jsonify({
+    blocker, _ = _blocking_services()
+    return jsonify(
+        {
             "blocklist": blocker.get_blocklist(),
             "history": blocker.get_history(limit=20),
-            "auto_block_enabled": blocker._auto_block_enabled,
-            "device_count": len(blocker.devices),
-        })
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+            "enabled": blocker.enabled,
+            "auto_block_enabled": blocker.auto_block_enabled,
+            "device_count": blocker.device_count,
+        }
+    )
 
 
-# ── Block Status ───────────────────────────────────────────
-
-@blocklist_bp.route('/block/status')
+@blocklist_bp.route("/block/status")
 @require_auth
 def block_status():
-    """封禁状态面板数据"""
-    try:
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        blocker = get_ip_blocker()
-        return jsonify({
-            "auto_block_enabled": blocker._auto_block_enabled,
-            "auto_block_min_score": blocker._auto_block_min_score,
-            "device_count": len(blocker.devices),
-            "devices": [d.get_name() for d in blocker.devices],
+    blocker, _ = _blocking_services()
+    return jsonify(
+        {
+            "enabled": blocker.enabled,
+            "auto_block_enabled": blocker.auto_block_enabled,
+            "auto_block_min_score": blocker.auto_block_min_score,
+            "device_count": blocker.device_count,
+            "devices": list(blocker.device_names),
             "retry_queue": blocker.get_retry_queue_status(),
             "history": blocker.get_history(limit=20),
             "blocklist": blocker.get_blocklist(),
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        }
+    )
 
 
-# ── Block Audit Ledger ─────────────────────────────────────
-
-@blocklist_bp.route('/blocklist')
+@blocklist_bp.route("/blocklist")
 @require_auth
 def blocklist_page():
-    """封禁台账页面"""
-    try:
-        return render_template('admin/blocklist.html')
-    except Exception as e:
-        current_app.logger.error(f"[BLOCKLIST] page error: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+    return render_template("admin/blocklist.html")
 
 
-@blocklist_bp.route('/blocklist/data')
+@blocklist_bp.route("/blocklist/data")
 @require_auth
 def blocklist_data():
-    """台账数据 JSON（分页 + 筛选）"""
-    try:
-        from anteumbra.application.block_ledger_service import get_entries, get_stats
-        source = request.args.get('source', 'all')
-        search = request.args.get('q', '')
-        page = max(1, request.args.get('page', 1, type=int))
-        per_page = 30
-        offset = (page - 1) * per_page
-        entries, total = get_entries(limit=per_page, offset=offset, source_filter=source, search=search)
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        return jsonify({
+    _, ledger = _blocking_services()
+    source = request.args.get("source", "all")
+    search = request.args.get("q", "")
+    status = request.args.get("status")
+    page = max(1, request.args.get("page", 1, type=int))
+    per_page = 30
+    site_id = _site_filter()
+    entries, total = ledger.get_entries(
+        limit=per_page,
+        offset=(page - 1) * per_page,
+        source_filter=source,
+        search=search,
+        status=status,
+        site_id=site_id,
+    )
+    return jsonify(
+        {
             "entries": entries,
-            "stats": get_stats(),
+            "stats": ledger.get_stats(site_id=site_id),
             "page": page,
-            "total_pages": total_pages,
+            "total_pages": max(1, (total + per_page - 1) // per_page),
             "total": total,
-        })
-    except Exception as e:
-        current_app.logger.error(f"[BLOCKLIST] data error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        }
+    )
 
 
-@blocklist_bp.route('/blocklist/notes', methods=['POST'])
+@blocklist_bp.route("/blocklist/notes", methods=["POST"])
 @require_auth
 def blocklist_update_notes():
-    """更新封禁备注"""
     try:
-        data = request.get_json() or {}
-        ip = data.get('ip', '')
-        notes = data.get('notes', '')
+        data = _payload()
+        ip = str(data.get("ip") or "")
         if not ip:
-            return jsonify({"error": "missing ip"}), 400
-        from anteumbra.application.block_ledger_service import update_notes
-        ok = update_notes(ip, notes)
-        return jsonify({"success": ok})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            raise ValueError("ip is required")
+        site = _site_identity(data.get("site_id"))
+        _, ledger = _blocking_services()
+        updated = ledger.update_notes(
+            ip,
+            str(data.get("notes") or ""),
+            site_id=site.site_id,
+        )
+        return jsonify({"success": updated}), (200 if updated else 404)
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
 
 
-@blocklist_bp.route('/blocklist/devices')
+@blocklist_bp.route("/blocklist/devices")
 @require_auth
 def blocklist_devices():
-    """获取可用封禁设备列表"""
-    try:
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        blocker = get_ip_blocker()
-        devices = [{'name': d.get_name(), 'available': d.is_available()} for d in blocker.devices]
-        return jsonify({'devices': devices})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    blocker, _ = _blocking_services()
+    return jsonify({"devices": blocker.device_status()})
 
 
-@blocklist_bp.route('/blocklist/block', methods=['POST'])
-@require_auth
-def blocklist_manual_block():
-    """手动封禁（从台账页）"""
-    try:
-        from anteumbra.application.ip_blocker_service import get_ip_blocker, BlockDecision
-        from anteumbra.application.block_ledger_service import add_entry
-        data = request.get_json() or {}
-        ips = data.get('ips', [])
-        reason = data.get('reason', 'Manual block')
-        devices_filter = data.get('devices', [])
-        if not ips:
-            return jsonify({'success': False, 'message': 'No IPs'}), 400
-        blocker = get_ip_blocker()
-        if devices_filter:
-            results = []
-            for ip in ips:
-                for dev in blocker.devices:
-                    if dev.get_name() in devices_filter:
-                        results.append(dev.block(BlockDecision(ip=ip, reason=reason)))
-        else:
-            results = blocker.block(ips, reason=reason)
-        success = sum(1 for r in results if r.success)
-        for ip in ips:
-            add_entry(ip=ip, source='manual', reason=reason,
-                      broadcast_results=[{'device': r.device_name, 'success': r.success} for r in results if r.ip == ip])
-        return jsonify({'success': success > 0, 'message': f'Blocked {success}/{len(results)}',
-                        'results': [{'device': r.device_name, 'ip': r.ip, 'success': r.success, 'message': r.message} for r in results]})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@blocklist_bp.route('/blocklist/unblock', methods=['POST'])
-@require_auth
-def blocklist_manual_unblock():
-    """手动解封（从台账页）"""
-    try:
-        from anteumbra.application.ip_blocker_service import get_ip_blocker
-        data = request.get_json() or {}
-        ips = data.get('ips', [])
-        devices_filter = data.get('devices', [])
-        if not ips:
-            return jsonify({'success': False, 'message': 'No IPs'}), 400
-        blocker = get_ip_blocker()
-        if devices_filter:
-            results = []
-            for ip in ips:
-                for dev in blocker.devices:
-                    if dev.get_name() in devices_filter:
-                        results.append(dev.unblock(ip))
-        else:
-            results = blocker.unblock(ips)
-        success = sum(1 for r in results if r.success)
-        return jsonify({'success': success > 0, 'message': f'Unblocked {success}/{len(results)}',
-                        'results': [{'device': r.device_name, 'ip': r.ip, 'success': r.success, 'message': r.message} for r in results]})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@blocklist_bp.route('/blocklist/export')
+@blocklist_bp.route("/blocklist/export")
 @require_auth
 def blocklist_export():
-    """导出台账"""
-    fmt = request.args.get('format', 'json')
-    from anteumbra.application.block_ledger_service import export_ledger
-    data = export_ledger(fmt)
-    if fmt == 'csv':
-        return Response(data, mimetype='text/csv',
-                       headers={'Content-Disposition': 'attachment;filename=block_ledger.csv'})
-    return Response(data, mimetype='application/json',
-                   headers={'Content-Disposition': 'attachment;filename=block_ledger.json'})
+    fmt = request.args.get("format", "json").lower()
+    if fmt not in {"json", "csv"}:
+        return jsonify({"success": False, "message": "format must be json or csv"}), 400
+    _, ledger = _blocking_services()
+    data = ledger.export_ledger(fmt, site_id=_site_filter())
+    mime = "text/csv" if fmt == "csv" else "application/json"
+    return Response(
+        data,
+        mimetype=mime,
+        headers={"Content-Disposition": f"attachment;filename=block_ledger.{fmt}"},
+    )
