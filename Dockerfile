@@ -1,4 +1,4 @@
-# Anteumbra v1.0.27 - Web Perimeter Threat Intelligence
+# Anteumbra v1.0.28 - Web Perimeter Threat Intelligence
 # Multi-stage build with a dedicated runtime virtualenv.
 
 FROM python:3.12-slim AS builder
@@ -46,7 +46,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.27"
+LABEL org.opencontainers.image.version="1.0.28"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence - passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 

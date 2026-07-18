@@ -1,8 +1,8 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.28 (release candidate, 2026-07-18)
+> **Current Version**: v1.0.28 (released, 2026-07-18)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Current Status**: v1.0.28 completes the site-isolation and JSON-authoritative persistence cleanup. Non-browser, browser, clean-wheel, and editable-source validation pass; Docker, tag, push, and trusted-publishing remain release steps. It is not positioned as a replacement for WAF, EDR, SIEM, centralized fleet management, or distributed HA.
+> **Current Status**: v1.0.28 completes the site-isolation and JSON-authoritative persistence cleanup. Non-browser, browser, clean-wheel, editable-source, CI, tag/push, and trusted PyPI publishing validation pass. It is not positioned as a replacement for WAF, EDR, SIEM, centralized fleet management, or distributed HA.
 
 ---
 
@@ -28,9 +28,9 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 ### Known Truths
 
-- The project is usable as a beta/release-candidate security tool, but should not be described as fully production-hardened yet.
-- The architecture is significantly cleaner than the inherited Trident shape, but not fully re-architected.
-- The deepest remaining coupling is still around global runtime state, especially `ConfigRegistry`, process-wide paths, and singleton service factories. Launcher resource ownership is cleaner, but the runtime is not yet dependency-injected.
+- The project is usable as a single-host security operations tool, but should not be described as a replacement for a production WAF, EDR, SIEM, centralized fleet manager, or distributed HA platform.
+- The architecture is significantly cleaner than the inherited Trident shape; `launcher.py` is the composition root and injects site-aware runtime services into monitoring components.
+- Compatibility globals still exist at selected interface boundaries, but core monitoring, Registry, metrics, notifications, quarantine, and dashboard read models now use explicit site identity and injected services.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
 - Some historical comments and older modules still contain encoding damage from earlier development; they do not block runtime, but they hurt maintainability.
 
@@ -48,7 +48,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.25 | Docker full-runtime deployment and documentation sync | Done |
 | 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Released to PyPI |
 | 1.0.27 | Runtime observability, bounded backpressure, trusted proxies, SIEM bridge, YARA governance, restore de-duplication | Released to PyPI |
-| 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Release candidate |
+| 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Released to PyPI |
 
 ---
 
@@ -61,11 +61,11 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Update CHANGELOG through the current version | Done for 1.0.28 |
 | P0 | Verify release wheel clean install in a fresh runtime directory | Done for 1.0.28 |
 | P0 | Verify source editable install in a fresh runtime directory | Done for 1.0.28 |
-| P0 | Verify Docker build/run/health/detection path | Pending v1.0.28 validation |
+| P0 | Verify Docker build/run/health/detection path | Done for 1.0.28 |
 | P0 | Confirm README commands match real output | Done for 1.0.28 |
 | P1 | Run deployment, architecture, and relevant web regression tests | Done: 488 non-browser passed, 1 explicit skip; 41 UI passed |
-| P1 | Tag release and push only after the final clean install check | Pending v1.0.28 validation |
-| P1 | Publish to PyPI from tag using the release workflow | Pending v1.0.28 release tag |
+| P1 | Tag release and push only after the final clean install check | Done for 1.0.28 |
+| P1 | Publish to PyPI from tag using the release workflow | Done for 1.0.28 |
 
 ---
 
@@ -73,15 +73,15 @@ Before a wider user push or PyPI release, complete this checklist.
 
 Goal: make the project easier for one AI or one engineer to implement a module independently, without accidentally coupling to global process state.
 
-| Priority | Work Item | Why |
-|----------|-----------|-----|
-| P0 | Introduce an application/runtime context object | Replace scattered global lookups with explicit dependencies. |
-| P0 | Reduce direct `ConfigRegistry` imports outside infrastructure/config and composition roots | Keep feature modules easier to test and reuse. |
-| P0 | Define stable module integration contracts for scanner, monitor, log analyzer, notifier, quarantine, and WAF adapters | Let independent module work plug in without hidden side effects. |
-| P1 | Separate startup resource allocation from request handlers | Make web, CLI, Docker, and tests share the same runtime composition path. |
-| P1 | Add tests that enforce no new cross-layer imports | Keep the architecture from drifting backward. |
-| P1 | Normalize old mojibake comments in touched modules | Improve maintainability without risky broad rewrites. |
-| P2 | Create developer module templates for plugins/analyzers/adapters | Make extension work repeatable for humans and AIs. |
+| Priority | Work Item | Status | Why |
+|----------|-----------|--------|-----|
+| P0 | Introduce an application/runtime context object | Done in 1.0.28 | Replace scattered global lookups with explicit dependencies. |
+| P0 | Reduce direct `ConfigRegistry` imports outside infrastructure/config and composition roots | In progress | Keep feature modules easier to test and reuse. |
+| P0 | Define stable module integration contracts for scanner, monitor, log analyzer, notifier, quarantine, and WAF adapters | In progress | Let independent module work plug in without hidden side effects. |
+| P1 | Separate startup resource allocation from request handlers | Done in 1.0.28 | Make web, CLI, Docker, and tests share the same runtime composition path. |
+| P1 | Add tests that enforce no new cross-layer imports | Done in 1.0.28 | Keep the architecture from drifting backward. |
+| P1 | Normalize old mojibake comments in touched modules | Ongoing | Improve maintainability without risky broad rewrites. |
+| P2 | Create developer module templates for plugins/analyzers/adapters | Planned | Make extension work repeatable for humans and AIs. |
 
 ---
 
