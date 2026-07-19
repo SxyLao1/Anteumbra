@@ -84,7 +84,11 @@ def _block(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
 
     if profile_id and not reason:
         graph = get_runtime().threat_graph
-        profile = graph.query_profile(profile_id) if graph is not None else None
+        profile = (
+            graph.query_profile(profile_id, site_id=site.site_id)
+            if graph is not None
+            else None
+        )
         if profile is not None:
             tool = profile.tool_signature or "Unknown tool"
             risk_score = float(profile.risk_score)

@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 profiles_bp = Blueprint('profiles', __name__, url_prefix='/admin')
 
 
+def _requested_site_id():
+    value = request.args.get("site_id")
+    return str(value).strip().lower() if value else None
+
+
 # ── Profile List ───────────────────────────────────────────
 
 @profiles_bp.route('/profiles')
@@ -34,7 +39,8 @@ def profiles_list():
         graph = get_runtime().threat_graph
         if graph is None:
             raise RuntimeError("ThreatGraph is not configured")
-        all_profiles = graph.get_active_profiles(min_score=0.1)
+        site_id = _requested_site_id()
+        all_profiles = graph.get_active_profiles(min_score=0.1, site_id=site_id)
 
         q = request.args.get('q', '').lower()
         if q:
@@ -71,6 +77,8 @@ def profiles_list():
 
             enriched.append({
                 "profile_id": p.profile_id,
+                "site_id": p.site_id,
+                "site_name": p.site_name,
                 "ua_fingerprint": p.ua_fingerprint,
                 "tool_signature": p.tool_signature,
                 "risk_score": round(p.risk_score * 100, 1),
@@ -98,11 +106,14 @@ def profiles_data():
         graph = get_runtime().threat_graph
         if graph is None:
             raise RuntimeError("ThreatGraph is not configured")
-        profiles = graph.get_active_profiles(min_score=0.1)
+        site_id = _requested_site_id()
+        profiles = graph.get_active_profiles(min_score=0.1, site_id=site_id)
         result = []
         for p in profiles[:50]:
             result.append({
                 "profile_id": p.profile_id,
+                "site_id": p.site_id,
+                "site_name": p.site_name,
                 "ua_fingerprint": p.ua_fingerprint,
                 "tool_signature": p.tool_signature,
                 "risk_score": round(p.risk_score * 100, 1),
@@ -131,7 +142,7 @@ def profile_detail_page(profile_id):
         graph = get_runtime().threat_graph
         if graph is None:
             raise RuntimeError("ThreatGraph is not configured")
-        profile = graph.query_profile(profile_id)
+        profile = graph.query_profile(profile_id, site_id=_requested_site_id())
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
 
@@ -146,7 +157,7 @@ def profile_detail_page(profile_id):
 
         ip_details = []
         for ip in ip_paginated:
-            rep = graph.query_ip(ip)
+            rep = graph.query_ip(ip, site_id=profile.site_id)
             if rep:
                 ip_details.append({
                     "ip": ip, "event_count": rep.event_count,
@@ -169,7 +180,9 @@ def profile_detail_page(profile_id):
             if ce is None:
                 raise RuntimeError("FileClusterEngine is not configured")
             quarantined_map = {}
-            for q in runtime.quarantine.list_records(status="quarantined", limit=500):
+            for q in runtime.quarantine.list_records(
+                status="quarantined", limit=500, site_id=profile.site_id
+            ):
                 orig = q.get('original_path', '')
                 if orig:
                     quarantined_map[orig] = q.get('quarantine_path', '')
@@ -200,9 +213,13 @@ def profile_detail_page(profile_id):
         try:
             from anteumbra.application.path_service import path_to_key
             runtime = get_runtime()
-            all_reg = runtime.registry.get_all(include_deleted=True)
+            all_reg = runtime.registry.get_all(
+                include_deleted=True, site_id=profile.site_id
+            )
             qmap = {}
-            for q in runtime.quarantine.list_records(status="quarantined", limit=1000):
+            for q in runtime.quarantine.list_records(
+                status="quarantined", limit=1000, site_id=profile.site_id
+            ):
                 orig = q.get("original_path", "")
                 if orig:
                     qmap[orig] = q.get("quarantine_id", "")
@@ -241,7 +258,7 @@ def profile_report(profile_id):
         graph = get_runtime().threat_graph
         if graph is None:
             raise RuntimeError("ThreatGraph is not configured")
-        profile = graph.query_profile(profile_id)
+        profile = graph.query_profile(profile_id, site_id=_requested_site_id())
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
 

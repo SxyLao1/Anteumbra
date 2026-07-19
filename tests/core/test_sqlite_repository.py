@@ -82,6 +82,35 @@ class TestSqliteRepository:
         finally:
             repo.close()
 
+    def test_threat_profile_shadow_preserves_site_and_raw_fields(self, temp_dir):
+        repo = SqliteRepository(
+            str(temp_dir / "profiles.db"),
+            table_name="threat_profiles",
+            key_column="profile_id",
+            sort_column="updated_at",
+        )
+        try:
+            repo.save(
+                "profile-alpha",
+                {
+                    "profile_id": "profile-alpha",
+                    "site_id": "alpha",
+                    "site_name": "Alpha",
+                    "risk_score": 0.9,
+                    "raw_score": 0.95,
+                    "created_at": "2026-07-19T01:00:00",
+                    "updated_at": "2026-07-19T01:00:00",
+                },
+            )
+
+            profile = repo.get("profile-alpha")
+
+            assert profile["site_id"] == "alpha"
+            assert profile["site_name"] == "Alpha"
+            assert profile["raw_score"] == 0.95
+        finally:
+            repo.close()
+
     def test_scan_history(self, sql_repo):
         sql_repo.save_scan("scan-test", {
             "scan_id": "scan-test", "target_dir": "/tmp", "status": "completed",

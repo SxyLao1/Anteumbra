@@ -24,6 +24,8 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path
 class AttackEvent:
     """单次攻击事件"""
     timestamp: 'datetime'
+    site_id: str = "legacy"
+    site_name: str = "Legacy / unassigned"
     event_type: str = ""
     src_ip: str = ""
     user_agent: str = ""
@@ -38,6 +40,8 @@ class AttackerProfile:
     profile_id: str
     created_at: 'datetime'
     updated_at: 'datetime'
+    site_id: str = "legacy"
+    site_name: str = "Legacy / unassigned"
     ip_pool: Set[str] = field(default_factory=set)
     target_files: Set[str] = field(default_factory=set)
     target_urls: Set[str] = field(default_factory=set)
@@ -60,6 +64,8 @@ class IPReputation:
     ip: str
     first_seen: 'datetime'
     last_seen: 'datetime'
+    site_id: str = "legacy"
+    site_name: str = "Legacy / unassigned"
     event_count: int = 0
     unique_files: Set[str] = field(default_factory=set)
     unique_urls: Set[str] = field(default_factory=set)
@@ -74,6 +80,8 @@ class FileReputation:
     path: str
     first_seen: 'datetime'
     last_seen: 'datetime'
+    site_id: str = "legacy"
+    site_name: str = "Legacy / unassigned"
     detection_count: int = 0
     unique_ips: Set[str] = field(default_factory=set)
     yara_rules: list = field(default_factory=list)

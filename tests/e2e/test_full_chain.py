@@ -38,7 +38,7 @@ def test_full_chain_waf_detection_quarantine_and_block(
             }
         )
 
-    profiles = graph.get_active_profiles()
+    profiles = graph.get_active_profiles(site_id=site.site_id)
     assert profiles
     profile = profiles[0]
     assert attacker_ip in profile.ip_pool
@@ -95,7 +95,7 @@ def test_full_chain_waf_detection_quarantine_and_block(
             }
         )
 
-    profile = graph.query_profile(profile.profile_id)
+    profile = graph.query_profile(profile.profile_id, site_id=site.site_id)
     assert profile is not None
     assert profile.risk_score >= 0.5
 

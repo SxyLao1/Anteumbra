@@ -45,6 +45,10 @@ enabled = false
 type = "mock"
 url = "http://127.0.0.1:8081"
 poll_interval = 10
+# Fallback ownership for WAFs that do not include site_id/site_name per event.
+# Multi-site sources should emit these fields on every event instead.
+site_id = "default"
+site_name = "Default Website"
 
 # v1.9.0: 目的IP过滤——WAF在出口抓全流量时，只分析打向本机的攻击
 # 空列表 = 自动探测本机非回环IP。手动填写则使用指定IP列表。

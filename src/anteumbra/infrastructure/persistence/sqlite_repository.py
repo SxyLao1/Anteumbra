@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # 表顺序有讲究：被引用的表必须先创建，否则 FK 约束会失败。
 # Core entities plus site-qualified block ledger, scan history, and WAL events.
 
-SCHEMA_VERSION = 3  # 递增以触发迁移
+SCHEMA_VERSION = 4  # 递增以触发迁移
 
 SCHEMA = {
     # ── 独立表（被其他表引用）─────────────────────────────
@@ -57,6 +57,8 @@ SCHEMA = {
         CREATE TABLE IF NOT EXISTS threat_profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             profile_id TEXT UNIQUE NOT NULL,
+            site_id TEXT,
+            site_name TEXT,
             ua_fingerprint TEXT,
             tool_signature TEXT,
             risk_score REAL DEFAULT 0,
@@ -68,7 +70,8 @@ SCHEMA = {
             decay_factor REAL DEFAULT 1.0,
             last_seen TEXT,
             created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
+            updated_at TEXT DEFAULT (datetime('now')),
+            raw_json TEXT
         )
     """,
     # ── 依赖表（引用 quarantine / threat_profiles）─────────
@@ -180,6 +183,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_score ON threat_profiles(risk_score)",
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_status ON threat_profiles(status)",
     "CREATE INDEX IF NOT EXISTS idx_threat_profiles_last_seen ON threat_profiles(last_seen)",
+    "CREATE INDEX IF NOT EXISTS idx_threat_profiles_site ON threat_profiles(site_id)",
 ]
 
 # 外键期望清单 — 用于迁移检测
@@ -204,6 +208,11 @@ _REQUIRED_COLUMNS = {
     "scan_history": {
         "site_id": "TEXT",
         "site_name": "TEXT",
+    },
+    "threat_profiles": {
+        "site_id": "TEXT",
+        "site_name": "TEXT",
+        "raw_json": "TEXT",
     },
 }
 

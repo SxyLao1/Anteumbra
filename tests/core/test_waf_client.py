@@ -56,6 +56,8 @@ def _provider(enabled=True):
                 "type": "mock",
                 "url": "http://new",
                 "poll_interval": 0.05,
+                "site_id": "alpha",
+                "site_name": "Alpha",
             }
         }
     )
@@ -99,9 +101,27 @@ def test_poll_once_hot_reloads_url_and_deduplicates_events(tmp_path):
             "waf_rule_id": "upload",
             "waf_score": 90,
             "attack_type": "webshell",
+            "site_id": "alpha",
+            "site_name": "Alpha",
         }
     ]
     assert source.windows[1][0] == now
+
+
+def test_same_waf_event_id_is_deduplicated_per_site(tmp_path):
+    alpha = _event("shared-id")
+    alpha.site_id = "alpha"
+    alpha.site_name = "Alpha"
+    beta = _event("shared-id")
+    beta.site_id = "beta"
+    beta.site_name = "Beta"
+    poller = WAFPoller(Source([alpha, beta]), _provider(), tmp_path / "waf.jsonl")
+
+    assert poller.poll_once() == 2
+    assert {item["site_id"] for item in poller.get_cached_events()} == {
+        "alpha",
+        "beta",
+    }
 
 
 def test_checkpoint_prevents_duplicates_after_reconstruction(tmp_path):

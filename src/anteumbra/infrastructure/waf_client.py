@@ -72,6 +72,8 @@ class MockWAFSource(WAFEventSource):
             waf_rule_id=str(raw.get("waf_rule_id", "")),
             waf_score=float(raw.get("waf_score", 0)),
             attack_type=str(raw.get("attack_type", "unknown")),
+            site_id=str(raw.get("site_id", "")),
+            site_name=str(raw.get("site_name", "")),
         )
 
 
@@ -200,14 +202,18 @@ class WAFPoller:
             return 0
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         written = 0
+        settings = self._settings()
         with self._lock:
             with self._cache_path.open("a", encoding="utf-8") as handle:
                 for event in events:
-                    key = self._event_key(event)
+                    key = self._event_key(event, settings["site_id"])
                     if key in self._seen_event_keys:
                         continue
                     handle.write(
-                        json.dumps(self._event_payload(event), ensure_ascii=False) + "\n"
+                        json.dumps(
+                            self._event_payload(event, settings), ensure_ascii=False
+                        )
+                        + "\n"
                     )
                     self._seen_event_keys.add(key)
                     written += 1
@@ -230,6 +236,7 @@ class WAFPoller:
             return
 
         newest_time: datetime | None = None
+        default_site_id = self._settings()["site_id"]
         for line in recent_lines:
             try:
                 raw = json.loads(line)
@@ -237,7 +244,7 @@ class WAFPoller:
                 timestamp = self._parse_timestamp(event.timestamp)
             except (json.JSONDecodeError, TypeError, ValueError, KeyError):
                 continue
-            self._seen_event_keys.add(self._event_key(event))
+            self._seen_event_keys.add(self._event_key(event, default_site_id))
             if timestamp is not None and (newest_time is None or timestamp > newest_time):
                 newest_time = timestamp
         self._last_poll_time = newest_time
@@ -248,10 +255,15 @@ class WAFPoller:
             interval = float(raw.get("poll_interval", self._default_interval))
             if interval <= 0:
                 raise ValueError("poll_interval must be positive")
+            site_id = str(raw.get("site_id") or "legacy").strip().lower() or "legacy"
             return {
                 "enabled": bool(raw.get("enabled", False)),
                 "url": str(raw.get("url", "")).rstrip("/"),
                 "poll_interval": interval,
+                "site_id": site_id,
+                "site_name": str(
+                    raw.get("site_name") or raw.get("site_id") or "Legacy / unassigned"
+                ).strip(),
             }
         except (AttributeError, TypeError, ValueError):
             self._logger.warning("Invalid WAF poller settings; using safe defaults")
@@ -259,6 +271,8 @@ class WAFPoller:
                 "enabled": True,
                 "url": "",
                 "poll_interval": self._default_interval,
+                "site_id": "legacy",
+                "site_name": "Legacy / unassigned",
             }
 
     def _poll_interval(self) -> float:
@@ -273,7 +287,10 @@ class WAFPoller:
             self._logger.info("WAF source URL reloaded: %s -> %s", old_url, url)
 
     @staticmethod
-    def _event_payload(event: WAFEvent) -> dict[str, Any]:
+    def _event_payload(
+        event: WAFEvent,
+        settings: dict[str, Any],
+    ) -> dict[str, Any]:
         return {
             "event_id": event.event_id,
             "src_ip": event.src_ip,
@@ -284,14 +301,18 @@ class WAFPoller:
             "waf_rule_id": event.waf_rule_id,
             "waf_score": event.waf_score,
             "attack_type": event.attack_type,
+            "site_id": event.site_id or settings["site_id"],
+            "site_name": event.site_name or settings["site_name"],
         }
 
     @classmethod
-    def _event_key(cls, event: WAFEvent) -> str:
+    def _event_key(cls, event: WAFEvent, default_site_id: str = "legacy") -> str:
+        site_id = event.site_id or default_site_id
         if event.event_id:
-            return f"id:{event.event_id}"
+            return f"site:{site_id}:id:{event.event_id}"
         return "fallback:" + "|".join(
             [
+                site_id,
                 event.timestamp,
                 event.src_ip,
                 event.http_method,

@@ -22,6 +22,8 @@ class WAFEvent:
     waf_rule_id: str
     waf_score: float
     attack_type: str        # webshell, sqli, rce, c2, scanner, mixed
+    site_id: str = ""
+    site_name: str = ""
 
     # 画像引擎使用的额外字段
     file_path: Optional[str] = None    # 关联的本地文件路径（文件事件关联后填充）

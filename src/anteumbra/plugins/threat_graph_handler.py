@@ -62,6 +62,8 @@ class ThreatGraphHandlerPlugin(Plugin):
             "first_seen_ip": payload.get("first_seen_ip", "127.0.0.1"),
             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "detection_source": payload.get("detection_source", "passive"),
+            "site_id": payload.get("site_id") or "legacy",
+            "site_name": payload.get("site_name") or "Legacy / unassigned",
         }
         # registry_changed carries flat fields — extract quota/file state directly
         for key in ("quarantine_id", "file_exists", "marked_false_positive"):
@@ -70,13 +72,14 @@ class ThreatGraphHandlerPlugin(Plugin):
 
         try:
             graph = self._graph
-            old_count = len(graph.get_active_profiles())
+            site_id = entry["site_id"]
+            old_count = len(graph.get_active_profiles(site_id=site_id))
             graph.ingest_registry_entry(entry)
-            new_count = len(graph.get_active_profiles())
+            new_count = len(graph.get_active_profiles(site_id=site_id))
 
             # Emit threat_graph_updated if a new profile was created
             if new_count > old_count:
-                self._emit_updated(graph)
+                self._emit_updated(graph, site_id, entry["site_name"])
         except Exception as e:
             self._logger.warning("ThreatGraphHandler: ingest_registry_entry 失败: %s", e)
 
@@ -84,14 +87,16 @@ class ThreatGraphHandlerPlugin(Plugin):
 
     # -- Internal --
 
-    def _emit_updated(self, graph) -> None:
+    def _emit_updated(self, graph, site_id: str, site_name: str) -> None:
         """Emit threat_graph_updated through the injected runtime port."""
         try:
-            active = graph.get_active_profiles()
+            active = graph.get_active_profiles(site_id=site_id)
             self._events.publish("threat_graph_updated", self.name, {
                 "active_profile_count": len(active),
                 "top_profile_id": active[0].profile_id if active else None,
                 "top_risk_score": active[0].risk_score if active else 0,
+                "site_id": site_id,
+                "site_name": site_name,
             })
         except Exception:
             self._logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)

@@ -141,6 +141,11 @@ class TestGenerateProfileId:
         pid2 = graph.generate_profile_id("nmap", time_window_hours=4)
         assert pid1 != pid2
 
+    def test_same_ua_is_partitioned_by_site(self, graph):
+        alpha = graph.generate_profile_id("sqlmap", site_id="alpha")
+        beta = graph.generate_profile_id("sqlmap", site_id="beta")
+        assert alpha != beta
+
 
 # ── Management IP Tests ───────────────────────────────────────
 
@@ -380,6 +385,67 @@ class TestPersistLoad:
         tg2.load()
         assert len(tg2._profiles) == len(graph._profiles)
 
+    def test_site_qualified_tables_round_trip(self, graph, tmp_path):
+        shared = {
+            "src_ip": "192.0.2.44",
+            "timestamp": datetime.now().isoformat(),
+            "user_agent": "sqlmap/1.8",
+            "url": "/upload.php",
+            "site_id": "alpha",
+            "site_name": "Alpha",
+        }
+        graph.ingest_waf_event(shared)
+        graph.ingest_registry_entry({
+            "file_path": "/srv/shared/shell.php",
+            "first_seen_ip": "192.0.2.44",
+            "features": ["php_eval"],
+            "site_id": "alpha",
+            "site_name": "Alpha",
+        })
+        path = tmp_path / "site-aware.json"
+        graph.set_persist_path(path)
+        graph.persist()
+
+        recovered = _new_graph()
+        recovered.set_persist_path(path)
+        recovered.load()
+
+        assert recovered.query_ip("192.0.2.44", site_id="alpha").site_name == "Alpha"
+        assert recovered.query_file(
+            "/srv/shared/shell.php", site_id="alpha"
+        ).detection_count == 1
+        assert recovered.get_active_profiles(site_id="alpha")[0].site_id == "alpha"
+
+    def test_legacy_flat_json_migrates_to_explicit_legacy_bucket(self, graph, tmp_path):
+        path = tmp_path / "legacy.json"
+        path.write_text(
+            """{
+  "profiles": {
+    "old-profile": {
+      "profile_id": "old-profile",
+      "created_at": "2026-07-19T01:00:00",
+      "updated_at": "2026-07-19T01:00:00",
+      "ip_pool": ["192.0.2.55"]
+    }
+  },
+  "ip_table": {
+    "192.0.2.55": {
+      "ip": "192.0.2.55",
+      "first_seen": "2026-07-19T01:00:00",
+      "last_seen": "2026-07-19T01:00:00"
+    }
+  }
+}""",
+            encoding="utf-8",
+        )
+        graph.set_persist_path(path)
+        graph.load()
+
+        assert graph.query_profile("old-profile").site_id == "legacy"
+        assert graph.query_ip("192.0.2.55", site_id="legacy").site_name == (
+            "Legacy / unassigned"
+        )
+
     def test_load_prefers_json_to_sqlite_shadow(
         self, graph, sample_waf_event, tmp_path
     ):
@@ -459,6 +525,70 @@ class TestThreatGraphOwnership:
         second = _new_graph()
         first._profiles["test"] = object()
         assert second._profiles == {}
+
+
+class TestThreatGraphSiteIsolation:
+    def test_same_ip_and_fingerprint_do_not_cross_sites(self, graph):
+        base = {
+            "src_ip": "198.51.100.23",
+            "timestamp": datetime.now().isoformat(),
+            "user_agent": "sqlmap/1.8",
+            "url": "/login.php",
+            "waf_score": 0.8,
+        }
+        alpha_id = graph.ingest_waf_event({
+            **base, "site_id": "alpha", "site_name": "Alpha"
+        })
+        beta_id = graph.ingest_waf_event({
+            **base, "site_id": "beta", "site_name": "Beta"
+        })
+
+        assert alpha_id != beta_id
+        assert graph.query_ip("198.51.100.23") is None
+        assert graph.query_ip("198.51.100.23", site_id="alpha").event_count == 1
+        assert graph.query_ip("198.51.100.23", site_id="beta").event_count == 1
+        assert [p.site_id for p in graph.get_active_profiles(site_id="alpha")] == [
+            "alpha"
+        ]
+
+    def test_same_file_path_does_not_cross_sites(self, graph):
+        entry = {
+            "file_path": "/srv/www/shell.php",
+            "features": ["php_eval"],
+            "first_seen_ip": "198.51.100.24",
+        }
+        graph.ingest_registry_entry({
+            **entry, "site_id": "alpha", "site_name": "Alpha"
+        })
+        graph.ingest_registry_entry({
+            **entry, "site_id": "beta", "site_name": "Beta"
+        })
+
+        assert graph.query_file("/srv/www/shell.php") is None
+        assert graph.query_file(
+            "/srv/www/shell.php", site_id="alpha"
+        ).site_name == "Alpha"
+        assert graph.query_file(
+            "/srv/www/shell.php", site_id="beta"
+        ).site_name == "Beta"
+
+    def test_profile_merge_stays_within_site(self, graph):
+        base = {
+            "src_ip": "203.0.113.7",
+            "timestamp": datetime.now().isoformat(),
+            "user_agent": "sqlmap/1.8",
+            "url": "/login.php",
+        }
+        graph.ingest_waf_event({
+            **base, "site_id": "alpha", "site_name": "Alpha"
+        })
+        graph.ingest_waf_event({
+            **base, "site_id": "beta", "site_name": "Beta"
+        })
+
+        graph.merge_overlapping_profiles(min_overlap=1)
+
+        assert len(graph.get_active_profiles()) == 2
 
 
 # ── Edge Cases ────────────────────────────────────────────────

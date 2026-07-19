@@ -178,6 +178,48 @@ def test_quarantine_batch_alert_carries_one_site_identity(monkeypatch):
     assert payload["site_name"] == "Alpha"
 
 
+def test_threat_graph_handler_preserves_site_identity():
+    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
+    from anteumbra.domain import DomainEvent
+
+    ingested = []
+    filters = []
+    emitted = []
+
+    class Graph:
+        def get_active_profiles(self, *, site_id=None):
+            filters.append(site_id)
+            return []
+
+        def ingest_registry_entry(self, entry):
+            ingested.append(entry)
+
+    class Events:
+        def publish(self, event_type, source, payload):
+            emitted.append((event_type, source, payload))
+
+    plugin = ThreatGraphHandlerPlugin(
+        Graph(),
+        Events(),
+        log=logging.getLogger("test.threat_graph_handler"),
+    )
+    plugin.on_event(DomainEvent(
+        "record_added",
+        0,
+        "registry",
+        {
+            "file_path": "/srv/alpha/shell.php",
+            "site_id": "alpha",
+            "site_name": "Alpha",
+        },
+    ))
+
+    assert ingested[0]["site_id"] == "alpha"
+    assert ingested[0]["site_name"] == "Alpha"
+    assert filters == ["alpha", "alpha"]
+    assert emitted == []
+
+
 def test_metrics_keep_global_compatibility_and_add_site_buckets(tmp_path):
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
 
