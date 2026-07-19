@@ -164,12 +164,12 @@ def profile_detail_page(profile_id):
         # File clusters
         file_clusters = []
         try:
-            from anteumbra.application.quarantine_service import get_quarantine_list
-            ce = get_runtime().file_cluster_engine
+            runtime = get_runtime()
+            ce = runtime.file_cluster_engine
             if ce is None:
                 raise RuntimeError("FileClusterEngine is not configured")
             quarantined_map = {}
-            for q in get_quarantine_list(status="quarantined", limit=500):
+            for q in runtime.quarantine.list_records(status="quarantined", limit=500):
                 orig = q.get('original_path', '')
                 if orig:
                     quarantined_map[orig] = q.get('quarantine_path', '')
@@ -198,12 +198,11 @@ def profile_detail_page(profile_id):
         # Linked records (bidirectional link)
         linked_records = []
         try:
-            from anteumbra.application.registry_service import get_all as reg_get_all
-            from anteumbra.application.quarantine_service import get_quarantine_list
             from anteumbra.application.path_service import path_to_key
-            all_reg = reg_get_all(include_deleted=True)
+            runtime = get_runtime()
+            all_reg = runtime.registry.get_all(include_deleted=True)
             qmap = {}
-            for q in get_quarantine_list(status="quarantined", limit=1000):
+            for q in runtime.quarantine.list_records(status="quarantined", limit=1000):
                 orig = q.get("original_path", "")
                 if orig:
                     qmap[orig] = q.get("quarantine_id", "")

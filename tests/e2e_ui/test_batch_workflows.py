@@ -6,28 +6,43 @@ from pathlib import Path
 from playwright.sync_api import expect
 
 
-def _seed_records(tmp_path: Path, prefix: str, count: int) -> list[str]:
-    from anteumbra.application.registry_service import add, clear_memory_cache
-
+def _seed_records(runtime, tmp_path: Path, prefix: str, count: int) -> list[str]:
     paths = []
     for idx in range(1, count + 1):
         path = tmp_path / prefix / f"{prefix}_{idx:02d}.php"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("<?php eval($_POST['cmd']); ?>\n", encoding="utf-8")
-        add(path, [prefix, "eval_post"], first_seen_ip="127.0.0.1", detection_source="active")
+        identity = runtime.config.resolve_site_identity(path)
+        runtime.registry.add(
+            path,
+            [prefix, "eval_post"],
+            first_seen_ip="127.0.0.1",
+            detection_source="active",
+            site=identity,
+        )
         paths.append(str(path.resolve()).lower())
-    clear_memory_cache()
     return paths
 
 
-def _seed_quarantine_records(tmp_path: Path, prefix: str, count: int):
-    from anteumbra.application.quarantine_service import quarantine_file
-
+def _seed_quarantine_records(runtime, tmp_path: Path, prefix: str, count: int):
     for idx in range(1, count + 1):
         path = tmp_path / prefix / f"{prefix}_{idx:02d}.php"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("<?php eval($_POST['cmd']); ?>\n", encoding="utf-8")
-        quarantine_file(str(path), prefix, [prefix, "eval_post"], str(path))
+        identity = runtime.config.resolve_site_identity(path)
+        runtime.registry.add(
+            path,
+            [prefix, "eval_post"],
+            first_seen_ip="127.0.0.1",
+            detection_source="active",
+            site=identity,
+        )
+        runtime.quarantine.quarantine_file(
+            path,
+            prefix,
+            [prefix, "eval_post"],
+            site=identity,
+        )
 
 
 def _open_threats(page):
@@ -114,15 +129,17 @@ def _wait_for_message(page, expected: str, timeout_ms: int = 10000):
     )
 
 
-def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path):
+def test_cross_page_batch_false_positive_quarantine_and_restore(
+    page, tmp_path, runtime
+):
     browser_errors = []
     page.on("console", lambda msg: browser_errors.append(f"{msg.type}: {msg.text}"))
     page.on("pageerror", lambda exc: browser_errors.append(f"pageerror: {exc}"))
     _stub_dialogs(page)
 
-    _seed_records(tmp_path, "codex_e2e_fp", 8)
-    _seed_records(tmp_path, "codex_e2e_q", 8)
-    _seed_quarantine_records(tmp_path, "codex_e2e_qrestore", 8)
+    _seed_records(runtime, tmp_path, "codex_e2e_fp", 8)
+    _seed_records(runtime, tmp_path, "codex_e2e_q", 8)
+    _seed_quarantine_records(runtime, tmp_path, "codex_e2e_qrestore", 8)
 
     page.request.get(page.url.rstrip("/") + "/records?force=true")
     _open_threats(page)
@@ -139,11 +156,12 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path):
         raise AssertionError(f"FP batch did not complete; messages={messages!r}; browser_errors={browser_errors!r}") from exc
     expect(page.locator("#records-table-container .rec-count")).to_contain_text("0 selected", timeout=8000)
 
-    from anteumbra.application.registry_service import get_all, clear_memory_cache
-    clear_memory_cache()
     fp_records = {
         Path(item["file_path"]).name: item
-        for item in get_all(include_deleted=True, include_false_positive=True)
+        for item in runtime.registry.get_all(
+            include_deleted=True,
+            include_false_positive=True,
+        )
         if "codex_e2e_fp" in item.get("file_path", "")
     }
     assert sum(bool(item.get("marked_false_positive")) for item in fp_records.values()) == 4
@@ -156,18 +174,21 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path):
     _wait_for_message(page, "8 success")
     expect(page.locator("#records-table-container .rec-count")).to_contain_text("0 selected", timeout=10000)
 
-    clear_memory_cache()
     quarantined_registry = [
         item
-        for item in get_all(include_deleted=True, include_false_positive=True)
-        if "codex_e2e_q" in item.get("file_path", "")
+        for item in runtime.registry.get_all(
+            include_deleted=True,
+            include_false_positive=True,
+        )
+        if Path(item.get("file_path", "")).name.startswith("codex_e2e_q_")
     ]
     assert len(quarantined_registry) == 8
     assert all(item.get("quarantine_id") for item in quarantined_registry)
     assert all(not Path(item["file_path"]).exists() for item in quarantined_registry)
 
-    from anteumbra.application.quarantine_service import get_quarantine_list
-    quarantine_records = get_quarantine_list(status="quarantined", limit=1000)
+    quarantine_records = runtime.quarantine.list_records(
+        status="quarantined", limit=1000
+    )
     stored_ids = {item["quarantine_id"] for item in quarantine_records}
     assert {item["quarantine_id"] for item in quarantined_registry} <= stored_ids
 
@@ -183,7 +204,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path):
 
     restored_records = [
         item
-        for item in get_quarantine_list(status="restored", limit=1000)
+        for item in runtime.quarantine.list_records(status="restored", limit=1000)
         if "codex_e2e_qrestore" in item.get("original_path", "")
     ]
     assert len(restored_records) == 8
@@ -197,10 +218,12 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path):
     _wait_for_message(page, "2 success")
     expect(page.locator("#records-table-container-audit input.rec-checkbox:checked")).to_have_count(0, timeout=10000)
 
-    clear_memory_cache()
     deleted_fp = [
         item
-        for item in get_all(include_deleted=True, include_false_positive=True)
+        for item in runtime.registry.get_all(
+            include_deleted=True,
+            include_false_positive=True,
+        )
         if "codex_e2e_fp" in item.get("file_path", "") and item.get("deleted_at")
     ]
     assert len(deleted_fp) == 2

@@ -1,168 +1,185 @@
 """Application-level quarantine consistency tests."""
 
+from __future__ import annotations
+
+from unittest.mock import Mock
+
 import pytest
 
-from anteumbra.application import quarantine_service
+from anteumbra.application.quarantine_service import (
+    QuarantineConsistencyError,
+    QuarantineService,
+)
+from anteumbra.domain.site import SiteIdentity
 
 
-def test_registered_quarantine_returns_committed_record(monkeypatch):
-    record = {"quarantine_id": "Q-test"}
-    monkeypatch.setattr(
-        quarantine_service, "quarantine_file", lambda *args, **kwargs: record
-    )
+def _resolver(_path, site_id=None, site_name=None):
+    return SiteIdentity.from_values(site_id or "legacy", site_name or "Legacy")
 
-    from anteumbra.application import registry_service
 
-    monkeypatch.setattr(registry_service, "mark_quarantined", lambda *_args: True)
-    monkeypatch.setattr(
-        quarantine_service,
-        "rollback_quarantine",
-        lambda _qid: pytest.fail("rollback must not run after a successful commit"),
-    )
+def _record(**changes):
+    record = {
+        "quarantine_id": "Q-test",
+        "original_path": "C:/sites/alpha/shell.php",
+        "quarantine_path": "data/quarantine/Q-test_shell.php",
+        "site_id": "alpha",
+        "site_name": "Alpha",
+        "status": "quarantined",
+    }
+    record.update(changes)
+    return record
 
-    result = quarantine_service.quarantine_registered_file(
-        "sample.php", "rule", ["feature"]
+
+@pytest.fixture
+def dependencies():
+    store = Mock()
+    registry = Mock()
+    service = QuarantineService(store, registry, site_resolver=_resolver)
+    return service, store, registry
+
+
+def test_quarantine_returns_record_after_both_commits(dependencies):
+    service, store, registry = dependencies
+    record = _record()
+    store.quarantine_file.return_value = record
+    registry.mark_quarantined.return_value = True
+
+    result = service.quarantine_file(
+        record["original_path"],
+        "rule",
+        ["feature"],
+        site_id="alpha",
+        site_name="Alpha",
     )
 
     assert result is record
-
-
-def test_registry_failure_rolls_quarantine_back(monkeypatch):
-    record = {"quarantine_id": "Q-test"}
-    rolled_back = []
-    monkeypatch.setattr(
-        quarantine_service, "quarantine_file", lambda *args, **kwargs: record
+    registry.mark_quarantined.assert_called_once_with(
+        record["original_path"], "Q-test", "alpha"
     )
+    store.rollback_quarantine.assert_not_called()
 
-    from anteumbra.application import registry_service
 
-    monkeypatch.setattr(registry_service, "mark_quarantined", lambda *_args: False)
-    monkeypatch.setattr(
-        quarantine_service,
-        "rollback_quarantine",
-        lambda qid: rolled_back.append(qid),
-    )
+def test_missing_source_does_not_touch_registry(dependencies):
+    service, store, registry = dependencies
+    store.quarantine_file.return_value = None
 
-    with pytest.raises(
-        quarantine_service.QuarantineConsistencyError,
-        match="was rolled back",
-    ):
-        quarantine_service.quarantine_registered_file(
-            "sample.php", "rule", ["feature"]
+    assert service.quarantine_file("missing.php", "rule", []) is None
+    registry.mark_quarantined.assert_not_called()
+
+
+@pytest.mark.parametrize("registry_result", [False, RuntimeError("registry down")])
+def test_registry_failure_rolls_quarantine_back(dependencies, registry_result):
+    service, store, registry = dependencies
+    store.quarantine_file.return_value = _record()
+    if isinstance(registry_result, Exception):
+        registry.mark_quarantined.side_effect = registry_result
+    else:
+        registry.mark_quarantined.return_value = registry_result
+
+    with pytest.raises(QuarantineConsistencyError, match="was rolled back"):
+        service.quarantine_file(
+            "C:/sites/alpha/shell.php",
+            "rule",
+            [],
+            site_id="alpha",
+            site_name="Alpha",
         )
 
-    assert rolled_back == ["Q-test"]
+    store.rollback_quarantine.assert_called_once_with("Q-test")
 
 
-def test_registry_and_rollback_failure_is_explicit(monkeypatch):
-    record = {"quarantine_id": "Q-test"}
-    monkeypatch.setattr(
-        quarantine_service, "quarantine_file", lambda *args, **kwargs: record
-    )
-
-    from anteumbra.application import registry_service
-
-    monkeypatch.setattr(registry_service, "mark_quarantined", lambda *_args: False)
-
-    def fail_rollback(_qid):
-        raise OSError("rollback blocked")
-
-    monkeypatch.setattr(quarantine_service, "rollback_quarantine", fail_rollback)
+def test_registry_and_quarantine_rollback_failure_is_explicit(dependencies):
+    service, store, registry = dependencies
+    store.quarantine_file.return_value = _record()
+    registry.mark_quarantined.return_value = False
+    store.rollback_quarantine.side_effect = OSError("rollback blocked")
 
     with pytest.raises(
-        quarantine_service.QuarantineConsistencyError,
+        QuarantineConsistencyError,
         match="rollback could not restore",
     ):
-        quarantine_service.quarantine_registered_file(
-            "sample.php", "rule", ["feature"]
+        service.quarantine_file(
+            "C:/sites/alpha/shell.php",
+            "rule",
+            [],
+            site_id="alpha",
+            site_name="Alpha",
         )
 
 
-def test_restore_without_registry_record_remains_supported(monkeypatch):
-    record = {
-        "quarantine_id": "Q-test",
-        "original_path": "sample.php",
-        "status": "quarantined",
-    }
-    restored = dict(record, status="restored")
-    monkeypatch.setattr(quarantine_service, "get_quarantine_detail", lambda _qid: record)
-    monkeypatch.setattr(quarantine_service, "_restore_file", lambda _qid: restored)
+def test_restore_updates_only_the_registry_linked_to_that_quarantine(dependencies):
+    service, store, registry = dependencies
+    record = _record()
+    store.get_detail.return_value = record
+    store.restore_file.return_value = _record(status="restored")
+    registry.get.return_value = {"quarantine_id": "Q-test"}
+    registry.mark_restored.return_value = True
 
-    from anteumbra.application import registry_service
+    restored = service.restore_file("Q-test")
 
-    monkeypatch.setattr(registry_service, "get_all", lambda **_kwargs: [])
-    monkeypatch.setattr(
-        registry_service,
-        "mark_restored",
-        lambda _path: pytest.fail("unlinked restore must not mutate Registry"),
-    )
-
-    assert quarantine_service.restore_file("Q-test") is restored
+    assert restored["status"] == "restored"
+    registry.get.assert_called_once_with(record["original_path"], "alpha")
+    registry.mark_restored.assert_called_once_with(record["original_path"], "alpha")
+    store.rollback_restore.assert_not_called()
 
 
-def test_restore_ignores_a_same_path_record_from_another_site(monkeypatch):
-    record = {
-        "quarantine_id": "Q-test",
-        "original_path": "sample.php",
-        "site_id": "alpha",
-        "status": "quarantined",
-    }
-    restored = dict(record, status="restored")
-    monkeypatch.setattr(quarantine_service, "get_quarantine_detail", lambda _qid: record)
-    monkeypatch.setattr(quarantine_service, "_restore_file", lambda _qid: restored)
+@pytest.mark.parametrize("linked", [None, {"quarantine_id": None}, {"quarantine_id": "Q-new"}])
+def test_restore_keeps_unlinked_registry_state_unchanged(dependencies, linked):
+    service, store, registry = dependencies
+    store.get_detail.return_value = _record()
+    store.restore_file.return_value = _record(status="restored")
+    registry.get.return_value = linked
 
-    from anteumbra.application import registry_service
-
-    calls = []
-
-    def get_all(**kwargs):
-        calls.append(kwargs)
-        return []
-
-    monkeypatch.setattr(registry_service, "get_all", get_all)
-    monkeypatch.setattr(
-        registry_service,
-        "mark_restored",
-        lambda *_args: pytest.fail("a different site's record must not be restored"),
-    )
-
-    assert quarantine_service.restore_file("Q-test") is restored
-    assert calls[0]["site_id"] == "alpha"
+    assert service.restore_file("Q-test")["status"] == "restored"
+    registry.mark_restored.assert_not_called()
 
 
-def test_registry_restore_failure_is_compensated(monkeypatch):
-    record = {
-        "quarantine_id": "Q-test",
-        "original_path": "sample.php",
-        "status": "quarantined",
-    }
-    monkeypatch.setattr(quarantine_service, "get_quarantine_detail", lambda _qid: record)
-    monkeypatch.setattr(
-        quarantine_service,
-        "_restore_file",
-        lambda _qid: dict(record, status="restored"),
-    )
+@pytest.mark.parametrize("registry_result", [False, RuntimeError("registry down")])
+def test_registry_restore_failure_is_compensated(dependencies, registry_result):
+    service, store, registry = dependencies
+    store.get_detail.return_value = _record()
+    store.restore_file.return_value = _record(status="restored")
+    registry.get.return_value = {"quarantine_id": "Q-test"}
+    if isinstance(registry_result, Exception):
+        registry.mark_restored.side_effect = registry_result
+    else:
+        registry.mark_restored.return_value = registry_result
 
-    from anteumbra.application import registry_service
-    from anteumbra.infrastructure.utils.path_utils import path_to_key
+    with pytest.raises(QuarantineConsistencyError, match="was rolled back"):
+        service.restore_file("Q-test")
 
-    monkeypatch.setattr(
-        registry_service,
-        "get_all",
-        lambda **_kwargs: [{"file_path": path_to_key("sample.php")}],
-    )
-    monkeypatch.setattr(registry_service, "mark_restored", lambda _path: False)
-    compensated = []
-    monkeypatch.setattr(
-        quarantine_service,
-        "rollback_restore",
-        lambda qid: compensated.append(qid),
-    )
+    store.rollback_restore.assert_called_once_with("Q-test")
+
+
+def test_registry_and_restore_rollback_failure_is_explicit(dependencies):
+    service, store, registry = dependencies
+    store.get_detail.return_value = _record()
+    store.restore_file.return_value = _record(status="restored")
+    store.rollback_restore.side_effect = OSError("rollback blocked")
+    registry.get.return_value = {"quarantine_id": "Q-test"}
+    registry.mark_restored.return_value = False
 
     with pytest.raises(
-        quarantine_service.QuarantineConsistencyError,
-        match="was rolled back",
+        QuarantineConsistencyError,
+        match="compensation could not restore",
     ):
-        quarantine_service.restore_file("Q-test")
+        service.restore_file("Q-test")
 
-    assert compensated == ["Q-test"]
+
+def test_service_delegates_reads_delete_migration_and_close(dependencies):
+    service, store, _registry = dependencies
+    store.list_records.return_value = [_record()]
+    store.get_detail.return_value = _record()
+    store.get_stats.return_value = {"total": 1}
+    store.delete_quarantine.return_value = _record(status="deleted")
+    store.migrate_site_metadata.return_value = 2
+
+    assert service.list_records("quarantined", 5, 1, "alpha") == [_record()]
+    assert service.get_detail("Q-test")["site_id"] == "alpha"
+    assert service.get_stats("alpha") == {"total": 1}
+    assert service.delete_quarantine("Q-test")["status"] == "deleted"
+    assert service.migrate_site_metadata() == 2
+    service.close()
+
+    store.list_records.assert_called_once_with("quarantined", 5, 1, "alpha")
+    store.close.assert_called_once_with()

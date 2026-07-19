@@ -1,7 +1,12 @@
-"""Tests for core/domain/entities.py and infrastructure/registry_adapter.py"""
-import pytest
-from anteumbra.domain.entities import FileRecord, DetectionSource, FileStatus, ScanResult, QuarantineRecord
-from anteumbra.infrastructure.registry_adapter import RegistryRepository, get_registry_repository
+"""Tests for domain entities."""
+
+from anteumbra.domain.entities import (
+    FileRecord,
+    DetectionSource,
+    FileStatus,
+    ScanResult,
+    QuarantineRecord,
+)
 
 
 class TestFileRecord:
@@ -72,6 +77,7 @@ class TestFileRecord:
 class TestScanResult:
     def test_to_record(self):
         from pathlib import Path
+
         sr = ScanResult(
             Path("/tmp/malware.php"),
             is_suspicious=True,
@@ -98,45 +104,3 @@ class TestQuarantineRecord:
         assert qr.quarantine_id == "q-001"
         assert qr.original_path == "/tmp/bad.php"
         assert qr.created_at is not None
-
-
-class TestRegistryAdapter:
-    def test_singleton(self):
-        r1 = get_registry_repository()
-        r2 = get_registry_repository()
-        assert r1 is r2
-
-    def test_get_entity_nonexistent(self):
-        repo = RegistryRepository()
-        r = repo.get_entity("/nonexistent/path.php")
-        assert r is None
-
-    def test_save_and_get(self, temp_dir):
-        # Create a real file so registry_add succeeds
-        test_file = temp_dir / "test_repo.php"
-        test_file.write_text("<?php echo 'test'; ?>")
-        repo = RegistryRepository()
-        entity = FileRecord(
-            file_path=str(test_file),
-            features=["test_entity"],
-        )
-        repo.save_entity(entity)
-        restored = repo.get_entity(str(test_file))
-        assert restored is not None, f"Failed to retrieve entity after save"
-        assert restored.features == ["test_entity"]
-
-    def test_get_active(self):
-        repo = RegistryRepository()
-        active = repo.get_active()
-        assert isinstance(active, list)
-        for r in active:
-            assert isinstance(r, FileRecord)
-            assert r.is_active is True
-
-    def test_stats(self):
-        repo = RegistryRepository()
-        stats = repo.get_stats()
-        assert "active" in stats
-        assert "total" in stats
-        assert "quarantined" in stats
-        assert stats["total"] >= stats["active"]

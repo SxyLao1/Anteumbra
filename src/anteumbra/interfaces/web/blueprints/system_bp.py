@@ -13,9 +13,6 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.registry_service import (
-    get_all, get_registry_path, is_async_save_enabled, get_async_save_queue_size,
-)
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.config_history_service import get_config_history_logger
 from anteumbra.application.session_service import cleanup_sessions
@@ -23,6 +20,11 @@ from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
+
+
+def _registry():
+    """Return the Registry owned by the current Flask runtime."""
+    return get_runtime().registry
 
 system_bp = Blueprint('system', __name__, url_prefix='/admin')
 
@@ -68,19 +70,16 @@ def system_management():
 def system_registry_panel():
     """Registry status monitoring data (independent refresh)"""
     try:
-        from anteumbra.application.wal_service import get_wal_info
+        all_records = _registry().get_all(include_deleted=True)
+        active_records = _registry().get_all(include_deleted=False)
 
-
-        all_records = get_all(include_deleted=True)
-        active_records = get_all(include_deleted=False)
-
-        wal_info = get_wal_info()
+        wal_info = get_runtime().wal.get_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
-        queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
+        queue_status = "Synchronous atomic mode"
 
         last_save = "Never saved"
-        rp = get_registry_path()
+        rp = _registry().path
         if rp and rp.exists():
             mtime = rp.stat().st_mtime
             last_save = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
@@ -105,11 +104,10 @@ def system_registry_panel():
 def system_wal_panel():
     """WAL management data panel"""
     try:
-        from anteumbra.application.wal_service import get_wal_info, list_archives, get_status_text
-
-        wal_info = get_wal_info()
-        archives = list_archives()
-        wal_status, wal_status_text, wal_size_mb = get_status_text()
+        wal = get_runtime().wal
+        wal_info = wal.get_info()
+        archives = wal.list_archives()
+        wal_status, wal_status_text, wal_size_mb = wal.get_status()
 
         current_wal = None
         if wal_info:
@@ -277,10 +275,6 @@ def system_config_panel():
 def system_registry_compact():
     """Manual registry compaction (enhanced feedback)"""
     try:
-        from anteumbra.application.registry_service import compact_registry
-        from anteumbra.application.wal_service import get_wal_info
-
-
         if hasattr(current_app, '_registry_compacting'):
             return render_template(
                 'admin/panels/registry_panel.html',
@@ -288,19 +282,19 @@ def system_registry_compact():
             )
 
         current_app._registry_compacting = True
-        result = compact_registry()
+        result = _registry().compact()
         delattr(current_app, '_registry_compacting')
 
-        all_records = get_all(include_deleted=True)
-        active_records = get_all(include_deleted=False)
+        all_records = _registry().get_all(include_deleted=True)
+        active_records = _registry().get_all(include_deleted=False)
 
-        wal_info = get_wal_info()
+        wal_info = get_runtime().wal.get_info()
         wal_size_mb = wal_info['size_mb'] if wal_info else 0.0
 
-        queue_status = "Async mode" if is_async_save_enabled() else "Sync mode"
+        queue_status = "Synchronous atomic mode"
 
         last_save = "Never saved"
-        rp = get_registry_path()
+        rp = _registry().path
         if rp and rp.exists():
             mtime = rp.stat().st_mtime
             last_save = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
@@ -347,13 +341,12 @@ def system_registry_compact():
 def system_wal_replay():
     """Manual WAL replay (returns rendered panel HTML)"""
     try:
-        from anteumbra.application.wal_service import replay, get_wal_info, list_archives, get_status_text
+        runtime = get_runtime()
+        recovered = runtime.registry.replay_wal()
 
-        recovered = replay()
-
-        wal_status, wal_status_text, wal_size_mb = get_status_text()
-        wal_info = get_wal_info()
-        archives = list_archives()
+        wal_status, wal_status_text, wal_size_mb = runtime.wal.get_status()
+        wal_info = runtime.wal.get_info()
+        archives = runtime.wal.list_archives()
 
         current_wal = None
         if wal_info:

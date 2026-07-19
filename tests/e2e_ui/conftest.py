@@ -5,12 +5,12 @@ E2E UI Tests — shared fixtures (Playwright + Flask test server)
 Each test gets a FRESH Flask server (function scope) to avoid state
 accumulation that causes intermittent timeouts.
 """
-import os
 import sys
 import socket
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from werkzeug.security import generate_password_hash
@@ -56,7 +56,7 @@ def browser():
 
 
 @pytest.fixture
-def server_url(monkeypatch, tmp_path):
+def runtime_server(monkeypatch, tmp_path):
     """Start a FRESH Flask app for each test — no state accumulation."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ANTEUMBRA_TOOL_MODE", "true")
@@ -74,11 +74,6 @@ def server_url(monkeypatch, tmp_path):
 
     project_root = Path(__file__).resolve().parent.parent.parent
     sys.path.insert(0, str(project_root))
-
-    from anteumbra.infrastructure import quarantine as quarantine_mod
-    quarantine_mod._quarantine_dir = None
-    quarantine_mod._quarantine_db = None
-    quarantine_mod._recently_restored = {}
 
     from anteumbra.interfaces.web.factory import create_app
     app = create_app()
@@ -109,15 +104,33 @@ def server_url(monkeypatch, tmp_path):
     else:
         raise RuntimeError(f"Flask server did not start on {base_url}")
 
-    yield base_url
+    runtime = app.extensions["anteumbra.runtime"]
+    yield SimpleNamespace(url=base_url, runtime=runtime)
 
     # Teardown
     server.shutdown()
     server_thread.join(timeout=5.0)
     server.server_close()
     auth_mod.get_admin_credentials = original_get_creds
-    quarantine_mod._quarantine_dir = None
-    quarantine_mod._quarantine_db = None
+    for resource, method in (
+        (runtime.quarantine, "close"),
+        (runtime.registry, "close"),
+        (runtime.block_ledger, "close"),
+        (runtime.notifier, "shutdown"),
+    ):
+        callback = getattr(resource, method, None)
+        if callable(callback):
+            callback()
+
+
+@pytest.fixture
+def server_url(runtime_server):
+    return runtime_server.url
+
+
+@pytest.fixture
+def runtime(runtime_server):
+    return runtime_server.runtime
 
 
 @pytest.fixture

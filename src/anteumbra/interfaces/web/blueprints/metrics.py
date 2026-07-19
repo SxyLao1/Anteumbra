@@ -25,7 +25,8 @@ def health_check():
     try:
         from anteumbra.application.runtime_health_service import assess_system_health
 
-        metrics = get_runtime().metrics
+        runtime = get_runtime()
+        metrics = runtime.metrics
         if metrics is None:
             raise RuntimeError("MetricsCollector is not configured")
 
@@ -42,7 +43,11 @@ def health_check():
         # 安全访问registry队列大小
         registry_qsize = data.get("registry_qsize", 0)
 
-        health = assess_system_health()
+        health = assess_system_health(
+            config_loader=runtime.config.get,
+            wal_probe=runtime.wal.get_info,
+            registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
+        )
         status = health["status"]
         if registry_qsize >= 1000 and status == "healthy":
             status = "warning"

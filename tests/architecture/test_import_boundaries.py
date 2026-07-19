@@ -103,6 +103,14 @@ KNOWN_LEGACY_BRANDING_LINES: set[tuple[str, str]] = {
 }
 
 
+DEPRECATED_GLOBAL_SERVICE_MODULES = {
+    PACKAGE_ROOT / "application" / "registry_service.py",
+    PACKAGE_ROOT / "application" / "sse_service.py",
+    PACKAGE_ROOT / "application" / "wal_service.py",
+    PACKAGE_ROOT / "infrastructure" / "registry_adapter.py",
+}
+
+
 def test_domain_layer_has_no_outward_dependencies():
     violations = [
         edge
@@ -112,6 +120,18 @@ def test_domain_layer_has_no_outward_dependencies():
         in {"application", "infrastructure", "interfaces", "plugins", "cli"}
     ]
     assert not violations, "domain layer must not import outer layers:\n" + _format_edges(violations)
+
+
+def test_deprecated_global_service_modules_are_removed():
+    remaining = sorted(
+        path.relative_to(PROJECT_ROOT).as_posix()
+        for path in DEPRECATED_GLOBAL_SERVICE_MODULES
+        if path.exists()
+    )
+    assert not remaining, (
+        "runtime-owned services must not regain module-global compatibility facades:\n"
+        + "\n".join(remaining)
+    )
 
 
 def test_packaged_code_does_not_import_top_level_tools():

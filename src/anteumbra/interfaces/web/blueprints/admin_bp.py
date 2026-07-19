@@ -11,30 +11,19 @@ import base64
 from flask_babel import gettext as _
 import json
 import logging
-import os
-import queue
-import re
-import sys
 import threading
 import time
-from datetime import datetime, timedelta
-from typing import Optional
-from urllib.parse import unquote
-from anteumbra.application.sse_service import persist_log_line
 
 from flask import (
-    Blueprint, render_template, request, jsonify, abort,
-    make_response, Response, current_app, stream_with_context,
-    session, redirect, url_for
+    Blueprint, render_template, request, jsonify, current_app, session, redirect, url_for
 )
+from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
 from anteumbra.application.logging_service import log_with_symbol
-from anteumbra.application.path_service import normalize_path, path_to_key
+from anteumbra.application.path_service import normalize_path
 from anteumbra.application.platform_service import check_port_reachable
-from anteumbra.application.sse_service import register_sse_client, unregister_sse_client, \
-    trigger_registry_update
 from anteumbra.application.password_service import check_password_strength, update_password_hash_in_config
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
@@ -49,8 +38,6 @@ logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # v1.9.0: 扫描结果缓存（供报告生成使用，1小时TTL）
-
-from flask_wtf.csrf import generate_csrf
 
 @admin_bp.context_processor
 def inject_csrf_token():
@@ -201,6 +188,8 @@ def dashboard_content():
             request.args.get("site_id") or None,
             metrics=runtime.metrics,
             websites=runtime.config.get_enabled_websites(),
+            registry=runtime.registry,
+            quarantine_stats_reader=runtime.quarantine.get_stats,
         )
         stats = summary["aggregate"]
         recent = summary["recent_events"]
@@ -482,11 +471,9 @@ def metrics_data():
             config = get_runtime().config.get()
             thresholds = config.get("thresholds", {})
             visual_alert = thresholds.get("visual_alert", {})
-            warning_threshold = visual_alert.get("warning_threshold", 1)
             critical_threshold = visual_alert.get("critical_threshold", 3)
         except Exception as e:
             current_app.logger.warning(f"[METRICS] 阈值配置读取失败: {e}")
-            warning_threshold = 1
             critical_threshold = 3
 
         # 关键修复：高危文件颜色计算
@@ -646,7 +633,12 @@ def public_health():
     """
     from anteumbra.application.runtime_health_service import assess_system_health
 
-    health = assess_system_health()
+    runtime = get_runtime()
+    health = assess_system_health(
+        config_loader=runtime.config.get,
+        wal_probe=runtime.wal.get_info,
+        registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
+    )
     return jsonify({"status": health["status"]}), health["http_status"]
 
 
@@ -660,7 +652,12 @@ def admin_health():
     from anteumbra.application.config_service import get_version
     from anteumbra.application.runtime_health_service import assess_system_health
 
-    health = assess_system_health()
+    runtime = get_runtime()
+    health = assess_system_health(
+        config_loader=runtime.config.get,
+        wal_probe=runtime.wal.get_info,
+        registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
+    )
     status = {
         'status': health['status'],
         'version': get_version(),

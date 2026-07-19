@@ -151,6 +151,7 @@ def _run_scan_job(scan_id: str) -> None:
             config_provider=runtime.config,
             scanner_service=runtime.scanner,
             metrics=runtime.metrics,
+            registry=runtime.registry,
         )
         target = normalize_path(Path(target_dir))
 
@@ -355,13 +356,12 @@ def scanner_quarantine():
             file_path, site_id=requested_site_id
         )
 
-        from anteumbra.application.registry_service import get_all, add as reg_add
-        from anteumbra.application.quarantine_service import quarantine_registered_file
         from anteumbra.application.path_service import path_to_key, normalize_path
 
+        registry = get_runtime().registry
         target = path_to_key(file_path)
         record = None
-        for r in get_all(include_deleted=True, site_id=identity.site_id):
+        for r in registry.get_all(include_deleted=True, site_id=identity.site_id):
             if r.get("file_path") == target:
                 record = r
                 break
@@ -371,15 +371,17 @@ def scanner_quarantine():
             actual_path = normalize_path(file_path)
             if actual_path.exists():
                 try:
-                    reg_add(actual_path, ["scanner_manual_quarantine"],
-                            first_seen_ip="127.0.0.1",
-                            detection_source="active",
-                            site_id=identity.site_id,
-                            site_name=identity.site_name)
+                    registry.add(
+                        actual_path,
+                        ["scanner_manual_quarantine"],
+                        first_seen_ip="127.0.0.1",
+                        detection_source="active",
+                        site=identity,
+                    )
                     current_app.logger.info(
                         f"[SCANNER] 自动注册后隔离: {file_path}")
                     # Re-read registry to get the new record
-                    for r in get_all(
+                    for r in registry.get_all(
                         include_deleted=True, site_id=identity.site_id
                     ):
                         if r.get("file_path") == target:
@@ -396,7 +398,7 @@ def scanner_quarantine():
 
         features = record.get("features", []) if record else ["scanner_manual_quarantine"]
         rule_name = features[0] if features else "manual_scan_quarantine"
-        result = quarantine_registered_file(
+        result = get_runtime().quarantine.quarantine_file(
             file_path=str(file_path),
             rule_name=rule_name,
             features=features,

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anteumbra.domain.blocking import BlockLedgerPort, IPBlockerPort
 from anteumbra.domain.runtime import BindableEventPublisherPort, ConfigProviderPort
+
+if TYPE_CHECKING:
+    from anteumbra.application.quarantine_service import QuarantineService
 
 
 @dataclass
@@ -32,7 +35,8 @@ class RuntimeContainer:
     file_cluster_engine: Any | None = None
     log_heuristic_engine: Any | None = None
     registry: Any | None = None
-    quarantine: Any | None = None
+    quarantine: QuarantineService | None = None
+    memory_shell_tracer: Any | None = None
     block_ledger: BlockLedgerPort | None = None
     wal: Any | None = None
     sse: Any | None = None

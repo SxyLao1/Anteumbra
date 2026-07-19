@@ -335,11 +335,10 @@ def siem_export():
     """Export detection records as SIEM-formatted events (JSON Lines / CEF)."""
     fmt = request.args.get('format', '')
     try:
-        from anteumbra.application.registry_service import get_all
         exporter = _siem_exporter()
         if fmt:
             exporter.set_format(fmt)
-        records = get_all(include_deleted=False)
+        records = get_runtime().registry.get_all(include_deleted=False)
         count = exporter.export_existing(records)
         export_path = exporter.export_path
         return jsonify({

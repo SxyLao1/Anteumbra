@@ -103,24 +103,11 @@ def assess_runtime_capabilities(config: Mapping[str, Any]) -> dict[str, Any]:
 
 def assess_system_health(
     *,
-    config_loader: Callable[[], Mapping[str, Any]] | None = None,
-    wal_probe: Callable[[], Any] | None = None,
-    registry_probe: Callable[[], Any] | None = None,
+    config_loader: Callable[[], Mapping[str, Any]],
+    wal_probe: Callable[[], Any],
+    registry_probe: Callable[[], Any],
 ) -> dict[str, Any]:
-    """Assess critical runtime dependencies and optional capabilities."""
-    if config_loader is None:
-        from anteumbra.application.config_service import load_config
-
-        config_loader = load_config
-    if wal_probe is None:
-        from anteumbra.application.wal_service import get_wal_info
-
-        wal_probe = get_wal_info
-    if registry_probe is None:
-        from anteumbra.application.registry_service import get_all
-
-        registry_probe = lambda: get_all(include_deleted=False)
-
+    """Assess explicitly supplied runtime dependencies and capabilities."""
     checks: dict[str, str] = {}
     errors: dict[str, str] = {}
     capabilities: dict[str, Any] | None = None

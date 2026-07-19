@@ -13,13 +13,10 @@ __all__ = [
     "platform_service",
     "plugin_manager",
     "quarantine_service",
-    "registry_service",
     "runtime_adapters",
     "runtime_container",
     "runtime_health_service",
     "scanner_service",
     "session_service",
-    "sse_service",
-    "wal_service",
     "yara_service",
 ]

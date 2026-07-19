@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 from anteumbra.domain.site import SiteIdentity
-from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
+from anteumbra.domain.runtime import ConfigProviderPort, DetectionRegistryPort, MetricsPort
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 
 logger = logging.getLogger("monitor.manual_scanner")
@@ -60,6 +60,7 @@ class ManualScanner:
         config_provider: ConfigProviderPort,
         scanner_service,
         metrics: MetricsPort,
+        registry: DetectionRegistryPort,
     ):
         self.logger = app_logger or logger
         self._known_paths: Set[str] = set()
@@ -69,16 +70,13 @@ class ManualScanner:
         self.config_provider = config_provider
         self.scanner_service = scanner_service
         self.metrics = metrics
+        self.registry = registry
 
     def _build_known_index(self):
         """预加载 Registry 全部记录到内存索引，O(1) 去重查找"""
-        try:
-            from anteumbra.infrastructure.suspicious_registry import get_all
-        except ImportError:
-            self.logger.warning("[MANUAL_SCANNER] 无法导入 suspicious_registry，去重功能不可用")
-            return
-
-        records = get_all(include_deleted=True, site_id=self._site_id)
+        records = self.registry.get_all(
+            include_deleted=True, site_id=self._site_id
+        )
         self._known_paths.clear()
         self._registry_records.clear()
         for r in records:
@@ -272,12 +270,13 @@ class ManualScanner:
                         # 不在 Registry → 新发现！自动注册
                         result.new_findings += 1
                         try:
-                            from anteumbra.infrastructure.suspicious_registry import add
-                            add(file_path, scan_result.features,
+                            self.registry.add(
+                                file_path,
+                                scan_result.features,
                                 first_seen_ip="127.0.0.1",
                                 detection_source="active",
-                                site_id=self._site_id,
-                                site_name=self._site_name)
+                                site=identity,
+                            )
                             # 立即更新索引，避免同次扫描重复记录
                             self._known_paths.add(norm_key)
                             self._registry_records[norm_key] = {

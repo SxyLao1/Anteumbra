@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from anteumbra.interfaces.web.runtime import get_runtime
+
 
 
 logger = logging.getLogger(__name__)
@@ -74,10 +76,9 @@ def verify_file_in_registry(file_path: str) -> bool:
     original-case paths from scanner findings.
     """
     try:
-        from anteumbra.application.registry_service import get_all
         from anteumbra.application.path_service import path_to_key
         raw_key = path_to_key(file_path)
-        records = get_all()
+        records = get_runtime().registry.get_all()
         for r in records:
             rp = path_to_key(r.get("file_path", ""))
             if rp == raw_key:
@@ -94,8 +95,7 @@ def verify_file_in_registry(file_path: str) -> bool:
 def verify_file_in_quarantine(qid: str) -> Optional[Path]:
     """验证文件是否在 Quarantine 中，返回实际路径"""
     try:
-        from anteumbra.application.quarantine_service import get_quarantine_detail
-        record = get_quarantine_detail(qid)
+        record = get_runtime().quarantine.get_detail(qid)
         if not record:
             return None
         fp = record.get("quarantine_path", "")
@@ -113,7 +113,6 @@ def verify_file_in_quarantine(qid: str) -> Optional[Path]:
 
 
 # v1.0.5: Use markupsafe.escape() instead of custom implementation (Kimi P2-3)
-from markupsafe import escape as html_escape
 
 
 # ── SSE Token 生成 ──────────────────────────────────────

@@ -16,9 +16,8 @@ import os
 from pathlib import Path
 from threading import Thread
 from typing import Optional, Dict, List
-from anteumbra.domain.runtime import ConfigProviderPort
+from anteumbra.domain.runtime import ConfigProviderPort, DetectionRegistryPort
 from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
-from anteumbra.infrastructure.suspicious_registry import get_all, mark_alerted, increment_access
 from anteumbra.infrastructure.monitoring.notifier import format_alert_message
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
@@ -33,11 +32,13 @@ class LogMonitor:
         *,
         config_provider: ConfigProviderPort,
         notifier,
+        registry: DetectionRegistryPort,
     ):
         self.logger = logger
         self.analyzer = analyzer
         self.config_provider = config_provider
         self.notifier = notifier
+        self.registry = registry
         self.website = analyzer.website
         self.site_id = analyzer.website.site_id
         self._is_running = False
@@ -187,7 +188,7 @@ class LogMonitor:
             self.logger.info(f"[LOG_MONITOR][URL] 访问: {access_url} | IP: {ip}")
 
             # 匹配可疑文件
-            suspicious_files = get_all(
+            suspicious_files = self.registry.get_all(
                 include_deleted=True, site_id=self.site_id
             )
             for record in suspicious_files:
@@ -205,7 +206,9 @@ class LogMonitor:
                     )
 
                     # 立即递增
-                    increment_access(file_path, ip, site_id=self.site_id)
+                    self.registry.increment_access(
+                        file_path, ip, site_id=self.site_id
+                    )
 
                     # 三层冷却策略
                     alert_level, should_alert = self._check_alert_layers(file_path, ip, line)
@@ -418,7 +421,7 @@ class LogMonitor:
         """异步触发告警（增强版）"""
         try:
             # 标记已告警
-            mark_alerted(file_path, site_id=self.site_id)
+            self.registry.mark_alerted(file_path, site_id=self.site_id)
 
             # 同步日志
             self.logger.critical("=" * 50)

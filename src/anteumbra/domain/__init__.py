@@ -6,6 +6,7 @@ from anteumbra.domain.notifier import Notifier, AlertMessage, AlertLevel
 from anteumbra.domain.event_source import EventSource, PollableEventSource, StreamEventSource
 from anteumbra.domain.waf_source import WAFEvent, WAFEventSource
 from anteumbra.domain.site import SiteIdentity, SiteResolver, SiteRoot, derive_site_id
+from anteumbra.domain.quarantine import QuarantineGuardPort, QuarantineStorePort
 from anteumbra.domain.blocking import (
     BlockDecision,
     BlockLedgerEntry,
@@ -32,6 +33,7 @@ __all__ = [
     "EventSource", "PollableEventSource", "StreamEventSource",
     "WAFEvent", "WAFEventSource",
     "SiteIdentity", "SiteResolver", "SiteRoot", "derive_site_id",
+    "QuarantineGuardPort", "QuarantineStorePort",
     "BlockDecision", "BlockLedgerEntry", "BlockLedgerPort", "BlockResult",
     "IPBlockerPort", "canonical_ip",
     "ConfigProviderPort", "BindableEventPublisherPort", "DetectionRegistryPort",

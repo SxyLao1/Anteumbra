@@ -1,452 +1,342 @@
-# -*- coding: utf-8 -*-
-"""v1.0.8: Unit tests for suspicious_registry.py — the central persistence module.
+"""Tests for the runtime-owned suspicious-file Registry."""
 
-Tests cover: add, get, get_all, mark_quarantined, mark_false_positive,
-soft_delete_record, remove, increment_access, compact_registry,
-clear_memory_cache, and the v1.0.8 public getter functions.
-"""
-import os
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-# Ensure test isolation — set env before any imports happen inside suspicious_registry
-os.environ["ANTEUMBRA_TOOL_MODE"] = "true"
+from anteumbra.domain.site import SiteIdentity
+from anteumbra.infrastructure.suspicious_registry import (
+    RegistryDataError,
+    RegistryPersistenceError,
+    SuspiciousRegistry,
+)
+from anteumbra.infrastructure.wal_manager import WalManager
 
-# Import path_to_key for test assertions (Windows normalizes paths)
-from anteumbra.infrastructure.utils.path_utils import path_to_key
+
+class ConfigStub:
+    def __init__(self):
+        self.compact_days = 30
+
+    def get(self):
+        return {"filesizes": {"registry_compact_days": self.compact_days}}
+
+    def resolve_site_identity(
+        self,
+        file_path,
+        site_id=None,
+        site_name=None,
+    ):
+        if site_id:
+            return SiteIdentity.from_values(site_id, site_name or site_id)
+        normalized = str(file_path).replace("\\", "/").lower()
+        if "/alpha/" in normalized:
+            return SiteIdentity("alpha", "Alpha")
+        if "/beta/" in normalized:
+            return SiteIdentity("beta", "Beta")
+        return SiteIdentity.legacy()
 
 
-# ── Fixtures ──────────────────────────────────────────────────
+class EventStub:
+    def __init__(self):
+        self.events = []
+
+    def publish(self, event_type, source, payload):
+        self.events.append((event_type, source, dict(payload)))
 
 
-@pytest.fixture(autouse=True)
-def clean_registry(monkeypatch, tmp_path):
-    """Own an isolated JSON registry for every test."""
-    from anteumbra.infrastructure import suspicious_registry as sr
+class ShadowStub:
+    def __init__(self, records=None, fail=False):
+        self.records = dict(records or {})
+        self.fail = fail
+        self.closed = False
 
-    registry_path = tmp_path / "test_registry.json"
-    monkeypatch.setattr(sr, "_REGISTRY_PATH", registry_path)
-    monkeypatch.setattr(sr, "_REGISTRY_BACKUP_PATH", registry_path.with_suffix(".json.bak"))
-    monkeypatch.setattr(sr, "_ensure_initialized", lambda: None)
-    monkeypatch.setattr(sr, "_async_save_enabled", False)
-    monkeypatch.setattr(sr, "_async_save_queue", None)
-    monkeypatch.setattr(sr, "_repo_load_registry", lambda: None)
-    monkeypatch.setattr(sr, "_repo_shadow_save", lambda data: None)
-    sr._clear_memory_cache()
-    yield
+    def save(self, record_id, data):
+        if self.fail:
+            raise RuntimeError("shadow unavailable")
+        self.records[record_id] = dict(data)
+
+    def delete(self, record_id):
+        return self.records.pop(record_id, None) is not None
+
+    def list_all(self, limit=100, offset=0):
+        return list(self.records.values())[offset : offset + limit]
+
+    def close(self):
+        self.closed = True
 
 
 @pytest.fixture
-def sample_path():
-    """Return a sample Path for testing. Use sample_key for stored key comparison."""
-    return Path("/var/www/html/shell.php")
+def registry_bundle(tmp_path):
+    config = ConfigStub()
+    events = EventStub()
+    changes = []
+    wal = WalManager(tmp_path / "registry_wal.log")
+    registry = SuspiciousRegistry(
+        tmp_path / "suspicious_registry.json",
+        config=config,
+        wal=wal,
+        event_publisher=events,
+        change_callback=lambda: changes.append("changed"),
+    )
+    return registry, wal, config, events, changes
 
 
-@pytest.fixture
-def sample_key(sample_path):
-    """Return the path_to_key resolution of sample_path (what gets stored)."""
-    return path_to_key(sample_path)
+def test_full_record_lifecycle_is_synchronous_and_durable(registry_bundle):
+    registry, wal, config, events, changes = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+
+    registry.add(path, ["eval"], "10.0.0.1", "active")
+    registry.increment_access(path, "10.0.0.2")
+    assert registry.mark_alerted(path) is True
+    assert registry.mark_quarantined(path, "q-1") is True
+    assert registry.mark_restored(path) is True
+    assert registry.mark_false_positive(path, "reviewed") is True
+
+    record = registry.get(path)
+    assert record["site_id"] == "alpha"
+    assert record["features"] == ["eval"]
+    assert record["communication_count"] == 1
+    assert record["alerted"] is True
+    assert record["quarantine_id"] is None
+    assert record["file_exists"] is True
+    assert record["marked_false_positive"] is True
+    assert registry.get_all() == []
+    assert len(registry.get_all(include_false_positive=True)) == 1
+    assert wal.read_entries(pending_only=True) == []
+    assert len(events.events) == 6
+    assert len(changes) == 6
+
+    reloaded = SuspiciousRegistry(
+        registry.path,
+        config=config,
+        wal=wal,
+        event_publisher=events,
+    )
+    assert reloaded.get(path)["communication_count"] == 1
 
 
-@pytest.fixture
-def sample_features():
-    """Return sample YARA rule features."""
-    return ["php_eval", "base64_decode", "exec"]
+def test_duplicate_add_refreshes_one_record_without_crossing_sites(registry_bundle):
+    registry, _, _, _, _ = registry_bundle
+    path = Path("/shared/shell.php")
+    alpha = SiteIdentity("alpha", "Alpha")
+    beta = SiteIdentity("beta", "Beta")
+
+    registry.add(path, ["first"], "1.1.1.1", site=alpha)
+    registry.add(path, ["second"], "2.2.2.2", site=alpha)
+    registry.add(path, ["beta"], "3.3.3.3", site=beta)
+
+    assert len(registry.get_all(site_id="alpha")) == 1
+    assert len(registry.get_all(site_id="beta")) == 1
+    assert registry.get(path, "alpha")["features"] == ["second"]
+    assert registry.get(path, "beta")["features"] == ["beta"]
 
 
-# ── Core CRUD Tests ───────────────────────────────────────────
+def test_returned_records_are_defensive_copies(registry_bundle):
+    registry, _, _, _, _ = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+    registry.add(path, ["eval"])
+
+    record = registry.get(path)
+    record["features"].append("mutated")
+    all_records = registry.get_all()
+    all_records[0]["site_name"] = "Changed"
+
+    persisted = registry.get(path)
+    assert persisted["features"] == ["eval"]
+    assert persisted["site_name"] == "Alpha"
 
 
-class TestAddAndGetAll:
-    """Test basic add() and get_all() operations."""
+def test_remove_and_soft_delete_preserve_audit_records(registry_bundle):
+    registry, _, _, _, _ = registry_bundle
+    first = Path("/srv/alpha/first.php")
+    second = Path("/srv/alpha/second.php")
+    registry.add(first, ["eval"])
+    registry.add(second, ["assert"])
 
-    def test_add_single_record(self, sample_path, sample_key, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get_all
+    assert registry.remove(first) is True
+    assert registry.soft_delete_record(second) is True
+    assert registry.remove(Path("/srv/alpha/missing.php")) is False
 
-        add(sample_path, sample_features, first_seen_ip="192.168.1.1")
-        records = get_all()
-        assert len(records) == 1
-        assert records[0]["file_path"] == sample_key
-        assert records[0]["features"] == sample_features
-        assert records[0]["first_seen_ip"] == "192.168.1.1"
+    records = registry.get_all(include_deleted=True)
+    assert len(records) == 2
+    assert all(record["file_exists"] is False for record in records)
+    assert all(record["deleted_at"] for record in records)
 
-    def test_add_multiple_records(self):
-        from anteumbra.infrastructure.suspicious_registry import add, get_all
 
-        add(Path("/var/www/shell1.php"), ["eval"])
-        add(Path("/var/www/shell2.php"), ["assert"])
-        records = get_all()
-        assert len(records) == 2
+def test_failed_json_commit_stays_pending_and_replays_idempotently(
+    registry_bundle, monkeypatch
+):
+    registry, wal, _, _, _ = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+    registry.add(path, ["eval"])
+    original_write = registry._atomic_write
 
-    def test_add_duplicate_updates_record(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get_all
+    def fail_primary(target, content):
+        if target == registry.path:
+            raise OSError("disk full")
+        original_write(target, content)
 
-        add(sample_path, sample_features, first_seen_ip="1.2.3.4")
-        # Add same path again with different features
-        add(sample_path, ["new_feature"], first_seen_ip="5.6.7.8")
-        records = get_all()
-        assert len(records) == 1
-        # add() REPLACES features on duplicate (not merge)
-        assert records[0]["features"] == ["new_feature"]
-        # first_seen_ip IS overwritten when a new value is provided
-        assert records[0]["first_seen_ip"] == "5.6.7.8"
+    monkeypatch.setattr(registry, "_atomic_write", fail_primary)
+    with pytest.raises(RegistryPersistenceError, match="WAL transaction"):
+        registry.increment_access(path, "10.0.0.1")
 
-    def test_add_with_detection_source(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get_all
+    assert registry.get(path)["communication_count"] == 0
+    assert len(wal.read_entries(pending_only=True)) == 1
 
-        add(sample_path, sample_features, detection_source="scanner")
-        records = get_all()
-        assert records[0]["detection_source"] == "scanner"
+    monkeypatch.setattr(registry, "_atomic_write", original_write)
+    assert registry.replay_wal() == 1
+    assert registry.get(path)["communication_count"] == 1
+    assert registry.replay_wal() == 0
+    assert registry.get(path)["communication_count"] == 1
 
-    def test_get_all_default_excludes_deleted(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, soft_delete_record,
+
+def test_backup_recovers_corrupt_primary(registry_bundle):
+    registry, wal, config, events, _ = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+    registry.add(path, ["eval"])
+    registry.path.write_text("not-json", encoding="utf-8")
+
+    recovered = SuspiciousRegistry(
+        registry.path,
+        config=config,
+        wal=wal,
+        event_publisher=events,
+    )
+
+    assert recovered.get(path)["features"] == ["eval"]
+    assert isinstance(json.loads(registry.path.read_text(encoding="utf-8")), list)
+
+
+def test_invalid_primary_and_backup_fail_explicitly(tmp_path):
+    path = tmp_path / "registry.json"
+    path.write_text("bad", encoding="utf-8")
+    path.with_name("registry.json.bak").write_text("also-bad", encoding="utf-8")
+
+    with pytest.raises(RegistryDataError, match="no valid recovery source"):
+        SuspiciousRegistry(
+            path,
+            config=ConfigStub(),
+            wal=WalManager(tmp_path / "wal.log"),
+            event_publisher=EventStub(),
         )
 
-        add(sample_path, sample_features)
-        soft_delete_record(sample_path)
-        records = get_all()
-        assert len(records) == 0  # deleted records excluded by default
 
-    def test_get_all_include_deleted(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, soft_delete_record,
-        )
+def test_dict_format_is_migrated_to_canonical_list(tmp_path):
+    path = tmp_path / "registry.json"
+    path.write_text(
+        json.dumps(
+            {
+                "/srv/alpha/shell.php": {
+                    "detected_at": "2026-01-01T00:00:00",
+                    "features": ["eval"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = SuspiciousRegistry(
+        path,
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+    )
+
+    assert registry.get(Path("/srv/alpha/shell.php"))["site_id"] == "alpha"
+    assert isinstance(json.loads(path.read_text(encoding="utf-8")), list)
+
+
+def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
+    shadow = ShadowStub(
+        {
+            "shadow:only": {
+                "file_path": "/srv/beta/shadow.php",
+                "detected_at": "2020-01-01T00:00:00",
+                "features": ["shadow"],
+            }
+        }
+    )
+    path = tmp_path / "registry.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "file_path": "/srv/alpha/json.php",
+                    "detected_at": "2026-01-01T00:00:00",
+                    "features": ["json"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    registry = SuspiciousRegistry(
+        path,
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+
+    assert registry.get(Path("/srv/alpha/json.php")) is not None
+    assert registry.get(Path("/srv/beta/shadow.php")) is None
+
+
+def test_shadow_failure_does_not_undo_authoritative_json(tmp_path):
+    registry = SuspiciousRegistry(
+        tmp_path / "registry.json",
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=ShadowStub(fail=True),
+    )
+
+    registry.add(Path("/srv/alpha/shell.php"), ["eval"])
+
+    assert registry.get(Path("/srv/alpha/shell.php")) is not None
+    assert registry.path.exists()
+
+
+def test_compaction_removes_only_old_inactive_records(registry_bundle):
+    registry, _, _, _, _ = registry_bundle
+    old = Path("/srv/alpha/old.php")
+    recent = Path("/srv/alpha/recent.php")
+    active = Path("/srv/alpha/active.php")
+    for path in (old, recent, active):
+        registry.add(path, ["eval"])
+    registry.soft_delete_record(old)
+    registry.soft_delete_record(recent)
+
+    records = json.loads(registry.path.read_text(encoding="utf-8"))
+    next(record for record in records if record["file_path"].endswith("old.php"))[
+        "detected_at"
+    ] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    serialized = json.dumps(records)
+    registry.path.write_text(serialized, encoding="utf-8")
+    registry.backup_path.write_text(serialized, encoding="utf-8")
+    registry.reload()
+
+    result = registry.compact(30)
+
+    assert result == {"total": 3, "cleaned": 1, "remaining": 2}
+    assert registry.get(old) is None
+    assert registry.get(recent) is not None
+    assert registry.get(active) is not None
 
-        add(sample_path, sample_features)
-        soft_delete_record(sample_path)
-        records = get_all(include_deleted=True)
-        assert len(records) == 1
 
-    def test_get_all_excludes_false_positive_by_default(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, mark_false_positive,
-        )
+def test_close_releases_injected_shadow(tmp_path):
+    shadow = ShadowStub()
+    registry = SuspiciousRegistry(
+        tmp_path / "registry.json",
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
 
-        add(sample_path, sample_features)
-        mark_false_positive(sample_path, "test")
-        records = get_all()
-        assert len(records) == 0
+    registry.close()
 
-    def test_get_all_include_false_positive(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, mark_false_positive,
-        )
-
-        add(sample_path, sample_features)
-        mark_false_positive(sample_path, "test")
-        records = get_all(include_false_positive=True)
-        assert len(records) == 1
-
-
-# ── Single Record Lookup ──────────────────────────────────────
-
-
-class TestGet:
-    """Test get() for single record lookup."""
-
-    def test_get_existing_record(self, sample_path, sample_key, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get
-
-        add(sample_path, sample_features)
-        record = get(sample_path)
-        assert record is not None
-        assert record["file_path"] == sample_key
-
-    def test_get_nonexistent_record(self):
-        from anteumbra.infrastructure.suspicious_registry import get
-
-        record = get(Path("/nonexistent/path.php"))
-        assert record is None
-
-    def test_is_suspicious_true(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, is_suspicious
-
-        add(sample_path, sample_features)
-        assert is_suspicious(sample_path) is True
-
-    def test_is_suspicious_false(self):
-        from anteumbra.infrastructure.suspicious_registry import is_suspicious
-
-        assert is_suspicious(Path("/clean/file.txt")) is False
-
-
-# ── State Mutation Tests ──────────────────────────────────────
-
-
-class TestMarkQuarantined:
-    """Test mark_quarantined() operation."""
-
-    def test_mark_quarantined_sets_id(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, mark_quarantined,
-        )
-
-        add(sample_path, sample_features)
-        mark_quarantined(sample_path, "qr-12345")
-        record = get(sample_path)
-        assert record["quarantine_id"] == "qr-12345"
-
-    def test_mark_quarantined_str_path(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, mark_quarantined,
-        )
-
-        add(sample_path, sample_features)
-        # Accept string path (not Path object)
-        mark_quarantined(sample_path, "qr-67890")
-        record = get(sample_path)
-        assert record["quarantine_id"] == "qr-67890"
-
-
-class TestMarkRestored:
-    """Test mark_restored() operation."""
-
-    def test_mark_restored_clears_quarantine_state(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, mark_quarantined, mark_restored,
-        )
-
-        add(sample_path, sample_features)
-        mark_quarantined(sample_path, "qr-restore")
-        result = mark_restored(sample_path)
-        record = get(sample_path)
-
-        assert result is True
-        assert record["file_exists"] is True
-        assert record["quarantine_id"] is None
-        assert "restored_at" in record
-
-
-class TestMarkFalsePositive:
-    """Test mark_false_positive() operation."""
-
-    def test_mark_false_positive_sets_fields(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, mark_false_positive,
-        )
-
-        add(sample_path, sample_features)
-        result = mark_false_positive(sample_path, "Admin review")
-        assert result is True
-        record = get(sample_path)
-        assert record["marked_false_positive"] is True
-        assert record["false_positive_reason"] == "Admin review"
-        assert "false_positive_at" in record
-
-    def test_mark_false_positive_nonexistent(self):
-        from anteumbra.infrastructure.suspicious_registry import mark_false_positive
-
-        result = mark_false_positive("/nonexistent/shell.php", "test")
-        assert result is False
-
-    def test_mark_false_positive_path_object(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, mark_false_positive,
-        )
-
-        add(sample_path, sample_features)
-        # Accept Path object
-        result = mark_false_positive(sample_path, "Path object test")
-        assert result is True
-        record = get(sample_path)
-        assert record["marked_false_positive"] is True
-
-
-class TestSoftDeleteRecord:
-    """Test soft_delete_record() v1.1.0 public API."""
-
-    def test_soft_delete_sets_fields(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, soft_delete_record,
-        )
-
-        add(sample_path, sample_features)
-        result = soft_delete_record(sample_path)
-        assert result is True
-        records = get_all(include_deleted=True)
-        assert len(records) == 1
-        assert records[0]["file_exists"] is False
-        assert "deleted_at" in records[0]
-
-    def test_soft_delete_nonexistent(self):
-        from anteumbra.infrastructure.suspicious_registry import soft_delete_record
-
-        result = soft_delete_record("/nonexistent/shell.php")
-        assert result is False
-
-    def test_soft_delete_path_object(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, soft_delete_record,
-        )
-
-        add(sample_path, sample_features)
-        result = soft_delete_record(sample_path)
-        assert result is True
-        records = get_all(include_deleted=True)
-        assert records[0]["file_exists"] is False
-
-
-class TestRemove:
-    """Test remove() hard-delete operation."""
-
-    def test_remove_existing_record(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get, remove
-
-        add(sample_path, sample_features)
-        result = remove(sample_path)
-        assert result is True
-        # remove() is a SOFT delete — record persists with file_exists=False
-        record = get(sample_path)
-        assert record is not None
-        assert record["file_exists"] is False
-        assert "deleted_at" in record
-
-    def test_remove_nonexistent(self):
-        from anteumbra.infrastructure.suspicious_registry import remove
-
-        result = remove("/nonexistent/file.php")
-        assert result is False
-
-
-class TestIncrementAccess:
-    """Test increment_access() counter."""
-
-    def test_increment_access_increases_counter(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get, increment_access
-
-        add(sample_path, sample_features)
-        increment_access(sample_path, "10.0.0.1")
-        record = get(sample_path)
-        assert record["communication_count"] == 1
-
-    def test_increment_access_multiple(self, sample_path, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import add, get, increment_access
-
-        add(sample_path, sample_features)
-        increment_access(sample_path, "10.0.0.1")
-        increment_access(sample_path, "10.0.0.2")
-        increment_access(sample_path, "10.0.0.1")  # duplicate IP
-        record = get(sample_path)
-        assert record["communication_count"] == 3
-
-
-# ── Compact Tests ─────────────────────────────────────────────
-
-
-class TestCompactRegistry:
-    """Test compact_registry() — old record cleanup."""
-
-    def test_compact_returns_stats(self):
-        from anteumbra.infrastructure.suspicious_registry import compact_registry
-
-        stats = compact_registry({})
-        assert "total" in stats
-        assert "cleaned" in stats
-        assert "remaining" in stats
-
-
-# ── Cache Tests ───────────────────────────────────────────────
-
-
-class TestClearMemoryCache:
-    """Test clear_memory_cache() public API."""
-
-    def test_clear_cache_no_error(self):
-        from anteumbra.infrastructure.suspicious_registry import clear_memory_cache
-
-        # Should not raise when cache is already empty
-        clear_memory_cache()
-
-    def test_clear_cache_after_load(self, sample_path, sample_key, sample_features):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get_all, clear_memory_cache,
-        )
-
-        add(sample_path, sample_features)
-        records_before = get_all()
-        assert len(records_before) == 1
-        # Clear and reload — should still return same data
-        clear_memory_cache()
-        records_after = get_all()
-        assert len(records_after) == 1
-        assert records_after[0]["file_path"] == sample_key
-
-
-# ── v1.1.0 Public Getters ─────────────────────────────────────
-
-
-class TestPublicGetters:
-    """Test v1.1.0 public getter functions."""
-
-    def test_is_async_save_enabled(self):
-        from anteumbra.infrastructure.suspicious_registry import is_async_save_enabled
-
-        # In test mode, async save should be disabled
-        assert is_async_save_enabled() is False
-
-    def test_get_async_save_queue_size(self):
-        from anteumbra.infrastructure.suspicious_registry import get_async_save_queue_size
-
-        # In test mode, queue should be 0
-        assert get_async_save_queue_size() == 0
-
-    def test_get_registry_path(self):
-        from anteumbra.infrastructure.suspicious_registry import get_registry_path
-
-        rp = get_registry_path()
-        assert rp is not None
-        assert "test" in str(rp) or "registry_test_isolated" in str(rp)
-
-    def test_get_registry_path_returns_path_object(self):
-        from anteumbra.infrastructure.suspicious_registry import get_registry_path
-
-        rp = get_registry_path()
-        assert isinstance(rp, Path)
-
-
-# ── Integration Tests ─────────────────────────────────────────
-
-
-class TestFullLifecycle:
-    """End-to-end record lifecycle: add → access → quarantine → soft-delete."""
-
-    def test_full_lifecycle(self):
-        from anteumbra.infrastructure.suspicious_registry import (
-            add, get, get_all, mark_quarantined, soft_delete_record,
-            increment_access,
-        )
-
-        path = Path("/var/www/evil.php")
-        features = ["godzilla", "behinder"]
-
-        # 1. Add
-        add(path, features, first_seen_ip="10.0.0.99")
-        records = get_all()
-        assert len(records) == 1
-
-        # 2. Access
-        increment_access(path, "10.0.0.100")
-        record = get(path)
-        assert record["communication_count"] == 1
-
-        # 3. Quarantine
-        mark_quarantined(str(path), "qr-lifecycle")
-        record = get(path)
-        assert record["quarantine_id"] == "qr-lifecycle"
-
-        # 4. Soft delete
-        result = soft_delete_record(path)
-        assert result is True
-        record = get(path)
-        assert record["file_exists"] is False
-        assert "deleted_at" in record
-
-        # 5. Not visible in default get_all
-        records = get_all()
-        assert len(records) == 0
-
-        # 6. Visible with include_deleted
-        records = get_all(include_deleted=True)
-        assert len(records) == 1
+    assert shadow.closed is True

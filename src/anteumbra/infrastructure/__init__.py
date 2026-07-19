@@ -1,2 +1,1 @@
-# Anteumbra v1.0
-from anteumbra.infrastructure.registry_adapter import RegistryRepository, get_registry_repository
+"""Infrastructure implementations composed by the application launcher."""

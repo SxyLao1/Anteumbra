@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
+from anteumbra.domain.quarantine import QuarantineGuardPort
 from anteumbra.domain.site import SiteIdentity, SiteResolver
 
 
@@ -60,6 +61,28 @@ class DetectionRegistryPort(Protocol):
 
     def remove(self, file_path: Path, *, site: SiteIdentity) -> bool:
         """Mark a suspicious-file record as removed within its site boundary."""
+
+    def get(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Return one site-qualified record, including inactive states."""
+
+    def mark_quarantined(
+        self,
+        file_path: str | Path,
+        quarantine_id: str,
+        site_id: str | None = None,
+    ) -> bool:
+        """Link a Registry record to a committed quarantine object."""
+
+    def mark_restored(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> bool:
+        """Clear quarantine state after a committed restore."""
 
 
 class MetricsPort(Protocol):
@@ -143,3 +166,4 @@ class RuntimeServices:
     registry: DetectionRegistryPort
     metrics: MetricsPort
     events: EventPublisherPort
+    quarantine: QuarantineGuardPort

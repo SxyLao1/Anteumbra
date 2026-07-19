@@ -20,17 +20,9 @@ from flask import (
     Response, current_app, stream_with_context, session,
 )
 
-from anteumbra.application.registry_service import (
-    get_all, compact_registry,
-    get_registry_path, is_async_save_enabled, get_async_save_queue_size,
-)
 from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.application.path_service import normalize_path
-from anteumbra.application.sse_service import (
-    register_sse_client, unregister_sse_client, get_connected_client_count,
-    get_ip_client_count, get_ip_clients, persist_log_line,
-)
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
     is_ip_allowed,
@@ -39,6 +31,11 @@ from anteumbra.interfaces.web.auth import (
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
+
+
+def _registry():
+    """Return the Registry owned by the current Flask runtime."""
+    return get_runtime().registry
 
 monitor_bp = Blueprint('monitor', __name__, url_prefix='/admin')
 
@@ -53,28 +50,21 @@ def stream_logs():
         abort(403)
 
     client_ip = request.remote_addr
+    runtime = get_runtime()
+    sse = runtime.sse
+    if sse is None:
+        abort(503)
 
-    config = get_runtime().config.get()
+    config = runtime.config.get()
     web_admin_cfg = config.get("web_admin", {})
+    limits = sse.get_limits()
 
-    def _to_int(val, default=5):
-        try:
-            s = str(val).split('#')[0].strip()
-            return int(s)
-        except Exception:
-            return default
-
-    limits = {
-        'per_ip': _to_int(web_admin_cfg.get("sse_max_clients_per_ip", 5)),
-        'total': _to_int(web_admin_cfg.get("sse_max_total_clients", 20), 20)
-    }
-
-    ip_client_count = get_ip_client_count(client_ip)
-    ip_connections = get_ip_clients(client_ip)
+    ip_client_count = sse.ip_client_count(client_ip)
+    ip_connections = sse.ip_clients(client_ip)
 
     if ip_client_count >= limits['per_ip']:
         for old_queue in ip_connections:
-            unregister_sse_client(old_queue)
+            sse.unregister_client(old_queue)
         logging.getLogger("monitor.admin_sse").info(
             f"[SSE] IP {client_ip} cleaned {len(ip_connections)} old connections"
         )
@@ -127,12 +117,11 @@ def stream_logs():
         client_queue = None
         handles = []
         try:
-            client_queue = register_sse_client()
+            client_queue = sse.register_client(client_ip)
             if not client_queue:
                 yield "data: [SSE][ERROR] Client registration failed\n\n"
                 return
 
-            client_queue._client_ip = client_ip
             for log_file in log_files:
                 log_file.parent.mkdir(parents=True, exist_ok=True)
                 log_file.touch(exist_ok=True)
@@ -176,7 +165,7 @@ def stream_logs():
                     if "[SSE]" in log_line:
                         continue
                     cleaned = log_line.replace('\n', ' ').replace('\r', ' ')
-                    persist_log_line(cleaned)
+                    sse.persist_log_line(cleaned)
                     yield f"data: {cleaned}\n\n"
 
                 now = time.monotonic()
@@ -197,8 +186,8 @@ def stream_logs():
                 except OSError:
                     logger.debug("Failed to close SSE log handle", exc_info=True)
             if client_queue:
-                unregister_sse_client(client_queue)
-                remaining = get_connected_client_count()
+                sse.unregister_client(client_queue)
+                remaining = sse.connected_client_count()
                 logger.debug(f"[SSE] client {client_ip} disconnected, {remaining} remaining")
 
     response = Response(
@@ -357,8 +346,7 @@ def wal_manager():
 @require_auth
 def wal_current():
     """Return current WAL file info"""
-    from anteumbra.application.wal_service import get_wal_info
-    info = get_wal_info()
+    info = get_runtime().wal.get_info()
     if not info:
         return "<p style='color: #ff4444;'>WAL file not found</p>"
     size_mb = info['size_mb']
@@ -376,8 +364,7 @@ def wal_current():
 @require_auth
 def wal_list():
     """Return WAL archive list"""
-    from anteumbra.application.wal_service import list_archives
-    archives = list_archives()
+    archives = get_runtime().wal.list_archives()
     if not archives:
         return "<p style='color: #888;'>No archived WAL files</p>"
     html = ""
@@ -396,8 +383,7 @@ def wal_list():
 def wal_replay():
     """Manual WAL replay trigger"""
     try:
-        from anteumbra.application.wal_service import replay
-        recovered = replay()
+        recovered = get_runtime().registry.replay_wal()
         log_with_symbol("notice", "info", f"Manual WAL replay done, recovered {recovered} records", current_app.logger)
         return jsonify({"success": True, "recovered": recovered})
     except Exception as e:
@@ -418,29 +404,23 @@ def registry_monitor():
 @require_auth
 def registry_count():
     """Return registry record count"""
-    total = len(get_all(include_deleted=True))
-    active = len(get_all(include_deleted=False))
+    total = len(_registry().get_all(include_deleted=True))
+    active = len(_registry().get_all(include_deleted=False))
     return f"{active} / {total}"
 
 
 @monitor_bp.route('/registry/queue')
 @require_auth
 def registry_queue():
-    """Return async save queue status"""
-    if not is_async_save_enabled():
-        return "Sync mode"
-    try:
-        size = get_async_save_queue_size()
-        return f"{size} pending saves"
-    except Exception:
-        return "Queue not initialized"
+    """Return the authoritative Registry persistence mode."""
+    return "Synchronous atomic mode"
 
 
 @monitor_bp.route('/registry/last-save')
 @require_auth
 def registry_last_save():
     """Return last save timestamp"""
-    rp = get_registry_path()
+    rp = _registry().path
     if rp and rp.exists():
         mtime = rp.stat().st_mtime
         return datetime.fromtimestamp(mtime).strftime('%H:%M:%S')
@@ -452,7 +432,7 @@ def registry_last_save():
 def registry_compact():
     """Manual registry compaction trigger"""
     try:
-        compact_registry()
+        _registry().compact()
         log_with_symbol("notice", "info", "Manual registry compaction done", current_app.logger)
         return jsonify({"success": True})
     except Exception as e:
@@ -617,11 +597,10 @@ def config_signature():
 def sse_history():
     """Return persisted log history"""
     try:
-        from anteumbra.application.sse_service import get_log_buffer
         config = get_runtime().config.get()
         web_admin_cfg = config.get("web_admin", {})
         allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
-        buffer_logs = get_log_buffer()
+        buffer_logs = get_runtime().sse.get_log_buffer()
         # ... (rest of sse_history logic)
         return jsonify({"logs": buffer_logs, "levels": allowed_levels})
     except Exception as e:
@@ -633,11 +612,10 @@ def sse_history():
 def registry_wal_status():
     """Return registry + WAL combined status"""
     try:
-        from anteumbra.application.wal_service import get_wal_info
-        wal_info = get_wal_info()
+        wal_info = get_runtime().wal.get_info()
         wal_size = wal_info['size_mb'] if wal_info else 0.0
-        total = len(get_all(include_deleted=True))
-        active = len(get_all(include_deleted=False))
+        total = len(_registry().get_all(include_deleted=True))
+        active = len(_registry().get_all(include_deleted=False))
         return jsonify({
             "total": total,
             "active": active,

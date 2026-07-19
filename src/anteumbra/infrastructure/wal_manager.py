@@ -1,337 +1,457 @@
-"""Write-ahead log manager for registry crash recovery."""
+"""Runtime-owned write-ahead log for Registry recovery."""
+
+from __future__ import annotations
+
 import json
 import logging
 import os
 import sys
-import time
 import threading
+import time
+import uuid
+from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any
 
 from anteumbra.domain.runtime import EventPublisherPort
-from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-
-logger = logging.getLogger("monitor.wal_manager")
-
-# WAL 状态
-_WAL_PATH: Optional[Path] = None
-_replaying = False
-_replay_lock = threading.Lock()
-_init_lock = threading.Lock()
 
 
-def _init_wal_path():
-    """初始化 WAL 路径（线程安全）"""
-    global _WAL_PATH
-    if _WAL_PATH is None:
-        with _init_lock:
-            if _WAL_PATH is None:
-                try:
-                    config = ConfigRegistry.get_raw_config()
-                    paths = config.get("paths", {})
-                    data_dir = normalize_path(paths.get("data_dir", "data"))
-                except Exception:
-                    data_dir = normalize_path("data")
-                data_dir.mkdir(parents=True, exist_ok=True)
-                _WAL_PATH = data_dir / "registry_wal.log"
+class WalError(RuntimeError):
+    """Base class for WAL persistence failures."""
 
 
-def get_wal_path() -> Optional[Path]:
-    """获取当前 WAL 文件路径"""
-    _init_wal_path()
-    return _WAL_PATH
+class WalWriteError(WalError):
+    """Raised when a WAL record cannot be durably written."""
 
 
-def write_entry(operation: str, file_path, features: List[str], ip: Optional[str] = None) -> bool:
-    """写入 WAL 事务日志"""
-    try:
-        _init_wal_path()
-        config = ConfigRegistry.get_raw_config()
-        filesizes_cfg = config.get("filesizes", {})
-        wal_rotate_mb = filesizes_cfg.get("wal_rotate_threshold_mb", 10)
+class WalReplayError(WalError):
+    """Raised when replay cannot safely consume the WAL."""
 
-        wal_entry = {
-            "timestamp": datetime.now().isoformat(),
+
+class WalManager:
+    """Own one Registry WAL and its complete recovery lifecycle.
+
+    Operations and completion markers are append-only. A transaction that was
+    persisted to the Registry but not marked complete may be replayed, so the
+    replay callback must apply the supplied final state idempotently.
+    """
+
+    _FORMAT_VERSION = 2
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        settings_loader: Callable[[], Mapping[str, Any]] | None = None,
+        event_publisher: EventPublisherPort | None = None,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self.path = Path(path)
+        self.dead_letter_path = self.path.with_name(
+            f"{self.path.stem}.dead_letter{self.path.suffix}"
+        )
+        self._settings_loader = settings_loader
+        self._events = event_publisher
+        self._logger = logger or logging.getLogger("monitor.wal_manager")
+        self._lock = threading.RLock()
+        self._replay_lock = threading.Lock()
+        self._replaying = False
+
+    @property
+    def is_replaying(self) -> bool:
+        """Return whether this manager is currently replaying entries."""
+        with self._lock:
+            return self._replaying
+
+    def write_entry(
+        self,
+        operation: str,
+        file_path: str | Path | None = None,
+        features: list[str] | None = None,
+        ip: str | None = None,
+        *,
+        payload: Mapping[str, Any] | None = None,
+    ) -> str:
+        """Durably append one pending operation and return its transaction ID."""
+        operation = str(operation).strip()
+        if not operation:
+            raise ValueError("WAL operation must not be empty")
+
+        transaction_id = uuid.uuid4().hex
+        entry: dict[str, Any] = {
+            "version": self._FORMAT_VERSION,
+            "kind": "operation",
+            "transaction_id": transaction_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "operation": operation,
-            "file_path": path_to_key(file_path) if hasattr(file_path, 'name') else str(file_path),
-            "features": features,
-            "ip": ip,
             "pid": os.getpid(),
             "thread_id": threading.get_ident(),
-            "wal_threshold_mb": wal_rotate_mb
         }
+        if file_path is not None:
+            entry["file_path"] = str(file_path)
+        if features is not None:
+            entry["features"] = list(features)
+        if ip is not None:
+            entry["ip"] = ip
+        if payload is not None:
+            entry["payload"] = dict(payload)
 
-        _WAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._append_json(self.path, entry)
+        return transaction_id
 
-        with open(_WAL_PATH, "a", encoding='utf-8', buffering=1) as f:
-            f.write(json.dumps(wal_entry, ensure_ascii=False) + "\n")
-            f.flush()
-            if sys.platform != "win32":
-                os.fsync(f.fileno())
+    def mark_completed(self, transaction_id: str) -> None:
+        """Durably acknowledge a previously appended transaction."""
+        if not transaction_id:
+            raise ValueError("transaction_id must not be empty")
+        marker = {
+            "version": self._FORMAT_VERSION,
+            "kind": "completed",
+            "transaction_id": transaction_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._append_json(self.path, marker)
+        self._rotate_if_needed()
 
-        _rotate_if_needed()
-        return True
+    def read_entries(self, *, pending_only: bool = False) -> list[dict[str, Any]]:
+        """Return defensive copies of valid operation records."""
+        with self._lock:
+            records, _ = self._read_records()
+            operations, completed = self._split_records(records)
+            if pending_only:
+                operations = [
+                    entry
+                    for entry in operations
+                    if entry["transaction_id"] not in completed
+                ]
+            return [dict(entry) for entry in operations]
 
-    except Exception as e:
-        log_with_symbol("error_wal_write", "error", f"写入失败: {e}")
-        return False
+    def replay(
+        self,
+        callbacks: Mapping[str, Callable[[dict[str, Any]], None]]
+        | Callable[[dict[str, Any]], None],
+    ) -> int:
+        """Replay pending entries once and dead-letter every poison record.
 
+        A callback exception is treated as a poison message: the original entry
+        and error are durably copied to the dead-letter file, then the entry is
+        acknowledged so the next process start cannot loop over it forever.
+        """
+        with self._replay_lock:
+            with self._lock:
+                self._replaying = True
+            try:
+                records, malformed = self._read_records()
+                for raw_line, error in malformed:
+                    self._write_dead_letter(
+                        {"raw_line": raw_line},
+                        reason="malformed_record",
+                        error=error,
+                    )
 
-def read_entries() -> List[Dict]:
-    """读取所有 WAL 条目"""
-    _init_wal_path()
-    entries = []
-    if not _WAL_PATH or not _WAL_PATH.exists():
-        return entries
+                operations, completed = self._split_records(records)
+                pending = [
+                    entry
+                    for entry in operations
+                    if entry["transaction_id"] not in completed
+                ]
+                recovered = 0
+                for entry in pending:
+                    try:
+                        callback = (
+                            callbacks.get(entry["operation"])
+                            if isinstance(callbacks, Mapping)
+                            else callbacks
+                        )
+                        if callback is None:
+                            raise KeyError(f"unknown WAL operation: {entry['operation']}")
+                        callback(dict(entry))
+                    except Exception as exc:
+                        self._logger.error(
+                            "WAL transaction %s moved to dead letter: %s",
+                            entry["transaction_id"],
+                            exc,
+                            exc_info=True,
+                        )
+                        self._write_dead_letter(
+                            entry,
+                            reason="replay_failed",
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
+                    else:
+                        recovered += 1
+                    self.mark_completed(entry["transaction_id"])
 
-    try:
-        with open(_WAL_PATH, "r", encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
+                if records or malformed:
+                    self.archive_current_wal(allow_malformed=True)
+                self._emit("wal_replayed", {"recovered_count": recovered})
+                return recovered
+            except WalError:
+                raise
+            except Exception as exc:
+                raise WalReplayError(f"WAL replay failed: {exc}") from exc
+            finally:
+                with self._lock:
+                    self._replaying = False
+
+    def archive_current_wal(self, *, allow_malformed: bool = False) -> Path | None:
+        """Archive a fully acknowledged WAL and create a fresh empty file."""
+        with self._lock:
+            if not self.path.exists() or self.path.stat().st_size == 0:
+                return None
+            records, malformed = self._read_records()
+            operations, completed = self._split_records(records)
+            pending_ids = {
+                entry["transaction_id"]
+                for entry in operations
+                if entry["transaction_id"] not in completed
+            }
+            if pending_ids:
+                raise WalWriteError(
+                    "refusing to archive WAL with pending transactions: "
+                    + ", ".join(sorted(pending_ids)[:5])
+                )
+            if malformed and not allow_malformed:
+                raise WalWriteError("refusing to archive WAL with malformed records")
+
+            archive = self._next_archive_path()
+            try:
+                self.path.replace(archive)
+                self._write_header()
+            except OSError as exc:
+                raise WalWriteError(f"cannot archive WAL {self.path}: {exc}") from exc
+            self._cleanup_archives()
+            self._emit("wal_archived", {"archive_path": str(archive)})
+            return archive
+
+    def get_info(self) -> dict[str, Any]:
+        """Return current file information and pending transaction count."""
+        with self._lock:
+            if not self.path.exists():
+                return {}
+            stat = self.path.stat()
+            return {
+                "name": self.path.name,
+                "path": str(self.path),
+                "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                "mtime": stat.st_mtime,
+                "pending": len(self.read_entries(pending_only=True)),
+                "dead_letter_path": str(self.dead_letter_path),
+            }
+
+    def list_archives(self) -> list[dict[str, Any]]:
+        """List archived WAL files, newest first."""
+        with self._lock:
+            if not self.path.parent.exists():
+                return []
+            archives: list[dict[str, Any]] = []
+            for archive in self.path.parent.glob(f"{self.path.name}.*"):
+                if archive == self.dead_letter_path:
                     continue
                 try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    logger.debug("Corrupt WAL entry skipped", exc_info=True)
-    except FileNotFoundError:
-        logger.debug("WAL file not found during _load_entries", exc_info=True)
-    return entries
+                    stat = archive.stat()
+                except OSError as exc:
+                    self._logger.warning("Cannot stat WAL archive %s: %s", archive, exc)
+                    continue
+                archives.append(
+                    {
+                        "name": archive.name,
+                        "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                        "mtime": stat.st_mtime,
+                    }
+                )
+            return sorted(archives, key=lambda item: item["mtime"], reverse=True)
 
-
-def archive_current_wal(
-    event_publisher: EventPublisherPort | None = None,
-) -> Optional[Path]:
-    """将当前 WAL 归档并创建新的空 WAL"""
-    _init_wal_path()
-    if not _WAL_PATH or not _WAL_PATH.exists():
-        return None
-
-    try:
-        wal_backup = _WAL_PATH.with_suffix(f".log.{int(time.time())}")
-        _WAL_PATH.rename(wal_backup)
-        _WAL_PATH.touch()
-        with open(_WAL_PATH, 'w', encoding='utf-8') as f:
-            f.write(f"# WAL restarted at {datetime.now().isoformat()}\n")
-        _emit_wal_event(
-            event_publisher,
-            "wal_archived",
-            {"archive_path": str(wal_backup)},
+    def get_status(self) -> tuple[str, str, float]:
+        """Return the status level, display text, and current size in MB."""
+        info = self.get_info()
+        if not info:
+            return "normal", "WAL ready (0.0MB)", 0.0
+        size_mb = float(info["size_mb"])
+        threshold = self._settings()["rotate_threshold_mb"]
+        status = "normal" if size_mb < threshold else "warning"
+        text = (
+            f"WAL active ({size_mb:.1f}MB)"
+            if status == "normal"
+            else f"WAL near rotation threshold ({size_mb:.1f}MB)"
         )
-        return wal_backup
-    except Exception as e:
-        log_with_symbol("error_wal_archive", "error", f"归档失败: {e}")
-        return None
+        return status, text, size_mb
 
-
-def _emit_wal_event(
-    event_publisher: EventPublisherPort | None,
-    event_type: str,
-    extra: Dict = None,
-) -> None:
-    """Emit a WAL lifecycle event through the caller-owned publisher."""
-    if event_publisher is None:
-        return
-    try:
-        payload = {"event_type": event_type}
-        if extra:
-            payload.update(extra)
-        event_publisher.publish(event_type, "wal_manager", payload)
-    except Exception:
-        logger.debug("WAL event publish failed", exc_info=True)
-
-
-def _rotate_if_needed():
-    """检查并执行 WAL 轮转"""
-    _init_wal_path()
-    if not _WAL_PATH or not _WAL_PATH.exists():
-        return
-
-    try:
-        config = ConfigRegistry.get_raw_config()
-        filesizes_cfg = config.get("filesizes", {})
-        wal_rotate_mb = filesizes_cfg.get("wal_rotate_threshold_mb", 10)
-
-        size = _WAL_PATH.stat().st_size
-        if size > wal_rotate_mb * 1024 * 1024:
-            log_with_symbol("notice", "info", f"触发轮转，文件大小: {size / 1024 / 1024:.2f}MB")
-
-            daily_name = _WAL_PATH.parent / f"registry_wal.log.{datetime.now().strftime('%Y%m%d')}"
-            if daily_name.exists():
-                counter = 1
-                while True:
-                    alt_name = daily_name.parent / f"{daily_name.name}.{counter:03d}"
-                    if not alt_name.exists():
-                        daily_name = alt_name
-                        break
-                    counter += 1
-
-            _WAL_PATH.rename(daily_name)
-            log_with_symbol("notice", "info", f"轮转日志: {daily_name}")
-
-            _WAL_PATH.touch()
-            with open(_WAL_PATH, 'w', encoding='utf-8') as f:
-                f.write(f"# WAL restarted at {datetime.now().isoformat()}\n")
-                f.flush()
-                if sys.platform != "win32":
-                    os.fsync(f.fileno())
-
-            _cleanup_archives()
-    except Exception as e:
-        log_with_symbol("error_wal_rotate", "error", f"失败: {e}")
-
-
-def _cleanup_archives():
-    """清理过期 WAL 归档"""
-    _init_wal_path()
-    wal_dir = _WAL_PATH.parent
-
-    cutoff_time = time.time() - 7 * 86400
-    deleted_by_time = 0
-
-    for wal_file in wal_dir.glob("registry_wal.log.*"):
-        try:
-            if wal_file.stat().st_mtime < cutoff_time:
-                wal_file.unlink()
-                deleted_by_time += 1
-                log_with_symbol("notice", "info", f"删除过期: {wal_file.name}")
-        except Exception as e:
-            log_with_symbol("warning", "warning", f"删除失败 {wal_file}: {e}")
-
-    remaining = sorted(wal_dir.glob("registry_wal.log.*"), key=lambda p: p.stat().st_mtime, reverse=True)
-    deleted_by_count = 0
-    if len(remaining) > 20:
-        for old_file in remaining[20:]:
+    def _append_json(self, path: Path, value: Mapping[str, Any]) -> None:
+        with self._lock:
             try:
-                old_file.unlink()
-                deleted_by_count += 1
-                log_with_symbol("notice", "info", f"保留超限: {old_file.name}")
-            except Exception as e:
-                log_with_symbol("warning", "warning", f"删除失败 {old_file}: {e}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("a", encoding="utf-8", buffering=1) as handle:
+                    handle.write(json.dumps(dict(value), ensure_ascii=False) + "\n")
+                    handle.flush()
+                    if sys.platform != "win32":
+                        os.fsync(handle.fileno())
+            except (OSError, TypeError, ValueError) as exc:
+                raise WalWriteError(f"cannot append WAL record to {path}: {exc}") from exc
 
-
-def replay(
-    callbacks: Dict[str, callable],
-    event_publisher: EventPublisherPort | None = None,
-) -> int:
-    """重放 WAL（通过回调函数执行操作）
-
-    callbacks = {
-        'ADD': func(file_path, features, ip),
-        'INCREMENT': func(file_path, features, ip),
-        'REMOVE': func(file_path, features, ip),
-        'ALERTED': func(file_path, features, ip)
-    }
-    """
-    global _replaying
-    _init_wal_path()
-
-    if not _WAL_PATH or not _WAL_PATH.exists():
-        return 0
-
-    with _replay_lock:
-        _replaying = True
+    def _read_records(
+        self,
+    ) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
+        if not self.path.exists():
+            return [], []
+        records: list[dict[str, Any]] = []
+        malformed: list[tuple[str, str]] = []
         try:
-            logger = logging.getLogger("monitor.wal_manager")
-            if not logger.handlers:
-                logger.setLevel(logging.INFO)
-                handler = logging.StreamHandler()
-                handler.setFormatter(logging.Formatter('[%(asctime)s] [WAL] %(message)s'))
-                logger.addHandler(handler)
+            lines = self.path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            raise WalReplayError(f"cannot read WAL {self.path}: {exc}") from exc
 
-            logger.info("发现事务日志，正在重放...")
-            entries = read_entries()
-            recovered = 0
+        for line_number, raw_line in enumerate(lines, start=1):
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                value = json.loads(line)
+                records.append(self._normalize_record(value, line_number))
+            except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+                malformed.append((raw_line, f"line {line_number}: {exc}"))
+        return records, malformed
 
-            for entry in entries:
-                try:
-                    operation = entry["operation"]
-                    file_path = normalize_path(entry["file_path"])
-                    features = entry.get("features", [])
-                    ip = entry.get("ip")
-
-                    callback = callbacks.get(operation)
-                    if callback:
-                        callback(file_path, features, ip)
-                        recovered += 1
-                    else:
-                        logger.warning(f"未知操作: {operation}")
-
-                except Exception as e:
-                    logger.error(f"重放行失败: {e}", exc_info=True)
-
-            logger.info(f"重放完成，恢复 {recovered} 条记录")
-            _emit_wal_event(
-                event_publisher,
-                "wal_replayed",
-                {"recovered_count": recovered},
+    def _normalize_record(self, value: Any, line_number: int) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            raise TypeError("record must be a JSON object")
+        kind = value.get("kind")
+        if kind == "completed":
+            transaction_id = str(value["transaction_id"]).strip()
+            if not transaction_id:
+                raise ValueError("empty completion transaction_id")
+            return dict(value, transaction_id=transaction_id)
+        if kind == "operation":
+            transaction_id = str(value["transaction_id"]).strip()
+            operation = str(value["operation"]).strip()
+            if not transaction_id or not operation:
+                raise ValueError("empty operation transaction metadata")
+            return dict(
+                value,
+                transaction_id=transaction_id,
+                operation=operation,
             )
-            archive_current_wal(event_publisher)
-            return recovered
 
-        finally:
-            _replaying = False
+        # Legacy records had no kind or transaction ID. A deterministic ID
+        # keeps them replayable once without changing their payload shape.
+        operation = str(value.get("operation", "")).strip()
+        if not operation:
+            raise KeyError("operation")
+        transaction_id = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"{self.path}:{line_number}:{json.dumps(value, sort_keys=True)}",
+        ).hex
+        return {
+            **value,
+            "version": 1,
+            "kind": "operation",
+            "transaction_id": transaction_id,
+            "operation": operation,
+        }
 
+    @staticmethod
+    def _split_records(
+        records: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], set[str]]:
+        operations = [record for record in records if record.get("kind") == "operation"]
+        completed = {
+            str(record["transaction_id"])
+            for record in records
+            if record.get("kind") == "completed"
+        }
+        return operations, completed
 
-def is_replaying() -> bool:
-    """返回当前是否正在执行 WAL 重放"""
-    return _replaying
+    def _write_dead_letter(
+        self,
+        entry: Mapping[str, Any],
+        *,
+        reason: str,
+        error: str,
+    ) -> None:
+        envelope = {
+            "dead_lettered_at": datetime.now(timezone.utc).isoformat(),
+            "reason": reason,
+            "error": error,
+            "entry": dict(entry),
+        }
+        self._append_json(self.dead_letter_path, envelope)
+        self._emit("wal_dead_lettered", {"reason": reason, "error": error})
 
-
-def get_wal_info() -> Dict:
-    """获取当前 WAL 文件信息"""
-    _init_wal_path()
-    if not _WAL_PATH or not _WAL_PATH.exists():
-        return {}
-    stat = _WAL_PATH.stat()
-    return {
-        'name': _WAL_PATH.name,
-        'path': str(_WAL_PATH),
-        'size_mb': round(stat.st_size / 1024 / 1024, 2),
-        'mtime': stat.st_mtime
-    }
-
-
-def list_archives() -> List[Dict]:
-    """获取 WAL 归档文件列表"""
-    _init_wal_path()
-    if not _WAL_PATH:
-        return []
-    wal_dir = _WAL_PATH.parent
-    if not wal_dir.exists():
-        return []
-    archives = []
-    for wal_file in wal_dir.glob("registry_wal.log.*"):
+    def _write_header(self) -> None:
         try:
-            stat = wal_file.stat()
-            archives.append({
-                'name': wal_file.name,
-                'size_mb': round(stat.st_size / 1024 / 1024, 2),
-                'mtime': stat.st_mtime
-            })
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                f"# WAL started at {datetime.now(timezone.utc).isoformat()}\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise WalWriteError(f"cannot initialize WAL {self.path}: {exc}") from exc
+
+    def _next_archive_path(self) -> Path:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        candidate = self.path.with_name(f"{self.path.name}.{stamp}")
+        counter = 1
+        while candidate.exists():
+            candidate = self.path.with_name(
+                f"{self.path.name}.{stamp}.{counter:03d}"
+            )
+            counter += 1
+        return candidate
+
+    def _rotate_if_needed(self) -> None:
+        with self._lock:
+            if self._replaying or not self.path.exists():
+                return
+            threshold = self._settings()["rotate_threshold_mb"] * 1024 * 1024
+            if self.path.stat().st_size <= threshold:
+                return
+            if self.read_entries(pending_only=True):
+                return
+            self.archive_current_wal()
+
+    def _cleanup_archives(self) -> None:
+        settings = self._settings()
+        cutoff = time.time() - settings["retention_days"] * 86400
+        archives = []
+        for archive in self.path.parent.glob(f"{self.path.name}.*"):
+            try:
+                if archive.stat().st_mtime < cutoff:
+                    archive.unlink()
+                else:
+                    archives.append(archive)
+            except OSError as exc:
+                self._logger.warning("Cannot clean WAL archive %s: %s", archive, exc)
+        archives.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+        for archive in archives[settings["max_archives"] :]:
+            try:
+                archive.unlink()
+            except OSError as exc:
+                self._logger.warning("Cannot remove WAL archive %s: %s", archive, exc)
+
+    def _settings(self) -> dict[str, float | int]:
+        raw: Mapping[str, Any] = {}
+        if self._settings_loader is not None:
+            raw = self._settings_loader()
+        try:
+            threshold = max(0.01, float(raw.get("wal_rotate_threshold_mb", 10)))
+            retention = max(1, int(raw.get("wal_cleanup_days", 7)))
+            max_archives = max(1, int(raw.get("wal_cleanup_count", 20)))
+        except (TypeError, ValueError) as exc:
+            raise WalError(f"invalid WAL settings: {exc}") from exc
+        return {
+            "rotate_threshold_mb": threshold,
+            "retention_days": retention,
+            "max_archives": max_archives,
+        }
+
+    def _emit(self, event_type: str, extra: Mapping[str, Any]) -> None:
+        if self._events is None:
+            return
+        try:
+            self._events.publish(
+                event_type,
+                "wal_manager",
+                {"event_type": event_type, **dict(extra)},
+            )
         except Exception:
-            logger.debug("Failed to stat WAL archive file", exc_info=True)
-    return sorted(archives, key=lambda x: x['mtime'], reverse=True)
-
-
-def get_status_text() -> tuple:
-    """获取 WAL 状态文本和级别"""
-    info = get_wal_info()
-    if info is None:
-        return 'error', 'WAL文件不存在', 0.0
-    size_mb = info.get('size_mb', 0.0)
-    status = 'normal' if size_mb < 10 else 'warning'
-    text = f'正常写入 ({size_mb:.1f}MB)' if status == 'normal' else '接近阈值'
-    return status, text, size_mb
-
-
-# API 兼容别名 (v1.7.8 CI/CD 测试兼容)
-def read_wal_records(limit: int = 0) -> List[Dict]:
-    """读取 WAL 记录（兼容 v1.7.8 API 测试）"""
-    entries = read_entries()
-    if limit > 0:
-        return entries[:limit]
-    return entries
+            self._logger.warning("WAL event publish failed: %s", event_type, exc_info=True)

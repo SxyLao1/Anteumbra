@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
-from anteumbra.application.quarantine_service import get_quarantine_stats
-from anteumbra.application.registry_service import get_all
 from anteumbra.domain.site import SiteIdentity
 
 
@@ -36,15 +34,17 @@ def build_dashboard_summary(
     *,
     metrics,
     websites,
+    registry,
+    quarantine_stats_reader: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
     """Return aggregate and per-site dashboard data without a UI site selector."""
     normalized_site_id = str(site_id).strip().lower() if site_id else None
-    records = get_all(
+    records = registry.get_all(
         include_deleted=True,
         include_false_positive=True,
         site_id=normalized_site_id,
     )
-    quarantine_stats = get_quarantine_stats(site_id=normalized_site_id)
+    quarantine_stats = quarantine_stats_reader(site_id=normalized_site_id)
     metric_sites = metrics.get().get("sites", {})
 
     identities = {
@@ -66,7 +66,7 @@ def build_dashboard_summary(
         site_records = [
             record for record in records if record.get("site_id") == identity.site_id
         ]
-        site_quarantine = get_quarantine_stats(site_id=identity.site_id)
+        site_quarantine = quarantine_stats_reader(site_id=identity.site_id)
         false_positives = sum(
             1 for record in site_records if record.get("marked_false_positive")
         )

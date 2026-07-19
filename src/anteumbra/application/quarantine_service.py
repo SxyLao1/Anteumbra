@@ -1,147 +1,208 @@
-# -*- coding: utf-8 -*-
-"""
-v1.0.9: Quarantine Application Service
+"""Application service coordinating quarantine and Registry consistency."""
 
-Thin facade over infrastructure.quarantine.
-Establishes the DDD dependency direction:
-  Interface (blueprints) -> Application (here) -> Infrastructure
-"""
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
+import threading
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, NoReturn
 
-from anteumbra.infrastructure.quarantine import (
-    quarantine_file,
-    rollback_quarantine,
-    restore_file as _restore_file,
-    rollback_restore,
-    delete_quarantine,
-    is_recently_restored,
-    get_quarantine_list,
-    get_quarantine_detail,
-    get_quarantine_stats,
-    migrate_site_metadata,
-)
-
-logger = logging.getLogger(__name__)
+from anteumbra.domain.quarantine import QuarantineStorePort
+from anteumbra.domain.runtime import DetectionRegistryPort
+from anteumbra.domain.site import SiteIdentity
 
 
 class QuarantineConsistencyError(RuntimeError):
     """Raised when quarantine storage and Registry cannot commit together."""
 
 
-def quarantine_registered_file(
-    file_path: str,
-    rule_name: str,
-    features: List[str],
-    original_path: Optional[str] = None,
-    site_id: Optional[str] = None,
-    site_name: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """Quarantine a detected file and commit its Registry state.
+class QuarantineService:
+    """Coordinate physical quarantine state with site-qualified Registry state."""
 
-    The infrastructure operation guarantees consistency between the physical
-    file and quarantine metadata.  This application operation extends that
-    guarantee to the suspicious-file Registry.
-    """
-    record = quarantine_file(
-        file_path,
-        rule_name,
-        features,
-        original_path,
-        site_id,
-        site_name,
-    )
-    if record is None:
-        return None
+    def __init__(
+        self,
+        store: QuarantineStorePort,
+        registry: DetectionRegistryPort,
+        *,
+        site_resolver: Callable[..., SiteIdentity],
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self._store = store
+        self._registry = registry
+        self._site_resolver = site_resolver
+        self._logger = logger or logging.getLogger(__name__)
+        self._lock = threading.RLock()
 
-    from anteumbra.application.registry_service import mark_quarantined
-
-    registry_site_id = record.get("site_id")
-    marked = (
-        mark_quarantined(file_path, record["quarantine_id"], registry_site_id)
-        if registry_site_id
-        else mark_quarantined(file_path, record["quarantine_id"])
-    )
-    if marked:
-        return record
-
-    try:
-        rollback_quarantine(record["quarantine_id"])
-    except Exception as rollback_error:
-        logger.critical(
-            "Registry update and quarantine rollback both failed for %s",
-            record["quarantine_id"],
-            exc_info=True,
+    def quarantine_file(
+        self,
+        file_path: str | Path,
+        rule_name: str,
+        features: list[str],
+        original_path: str | Path | None = None,
+        site_id: str | None = None,
+        site_name: str | None = None,
+        *,
+        site: SiteIdentity | None = None,
+    ) -> dict[str, Any] | None:
+        """Quarantine a file and atomically link its Registry record."""
+        identity = self._resolve_site(
+            original_path or file_path,
+            site=site,
+            site_id=site_id,
+            site_name=site_name,
         )
-        raise QuarantineConsistencyError(
-            "Registry update failed and quarantine rollback could not restore "
-            f"{record['quarantine_id']}: {rollback_error}"
-        ) from rollback_error
+        with self._lock:
+            record = self._store.quarantine_file(
+                file_path,
+                rule_name,
+                features,
+                original_path,
+                site=identity,
+            )
+            if record is None:
+                return None
 
-    raise QuarantineConsistencyError(
-        f"Registry update failed; quarantine {record['quarantine_id']} was rolled back"
-    )
+            try:
+                marked = self._registry.mark_quarantined(
+                    record["original_path"],
+                    record["quarantine_id"],
+                    identity.site_id,
+                )
+            except Exception as registry_error:
+                self._compensate_quarantine(record["quarantine_id"], registry_error)
+            if not marked:
+                self._compensate_quarantine(record["quarantine_id"], None)
+            return record
 
+    def restore_file(self, quarantine_id: str) -> dict[str, Any]:
+        """Restore a file and clear a matching Registry quarantine link."""
+        with self._lock:
+            record = self._store.get_detail(quarantine_id)
+            if record is None:
+                return self._store.restore_file(quarantine_id)
 
-def restore_file(quarantine_id: str) -> Dict[str, Any]:
-    """Restore a quarantine record and synchronize a linked Registry record."""
-    record_before = get_quarantine_detail(quarantine_id)
-    if record_before is None:
-        return _restore_file(quarantine_id)
+            original_path = record["original_path"]
+            site_id = record["site_id"]
+            linked_record = self._registry.get(original_path, site_id)
+            should_update_registry = bool(
+                linked_record
+                and linked_record.get("quarantine_id") == quarantine_id
+            )
 
-    from anteumbra.application.registry_service import get_all, mark_restored
-    from anteumbra.infrastructure.utils.path_utils import path_to_key
+            restored = self._store.restore_file(quarantine_id)
+            if not should_update_registry:
+                return restored
 
-    original_path = record_before.get("original_path", "")
-    registry_key = path_to_key(original_path)
-    registry_site_id = record_before.get("site_id")
-    has_registry_record = any(
-        item.get("file_path") == registry_key
-        for item in get_all(
-            include_deleted=True,
-            include_false_positive=True,
-            site_id=registry_site_id,
+            try:
+                marked = self._registry.mark_restored(original_path, site_id)
+            except Exception as registry_error:
+                self._compensate_restore(quarantine_id, registry_error)
+            if not marked:
+                self._compensate_restore(quarantine_id, None)
+            return restored
+
+    def delete_quarantine(self, quarantine_id: str) -> dict[str, Any]:
+        """Permanently delete a quarantined file and retain its audit record."""
+        with self._lock:
+            return self._store.delete_quarantine(quarantine_id)
+
+    def is_recently_restored(self, file_path: str | Path) -> bool:
+        """Return whether a restored path is still suppressed from rescanning."""
+        return self._store.is_recently_restored(file_path)
+
+    def list_records(
+        self,
+        status: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        site_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return a filtered defensive snapshot of quarantine records."""
+        return self._store.list_records(status, limit, offset, site_id)
+
+    def get_detail(self, quarantine_id: str) -> dict[str, Any] | None:
+        """Return one quarantine record."""
+        return self._store.get_detail(quarantine_id)
+
+    def get_stats(self, site_id: str | None = None) -> dict[str, int]:
+        """Return quarantine aggregate counts."""
+        return self._store.get_stats(site_id)
+
+    def migrate_site_metadata(self) -> int:
+        """Persist corrected site ownership for historical records."""
+        with self._lock:
+            return self._store.migrate_site_metadata()
+
+    def close(self) -> None:
+        """Release resources owned by the quarantine store."""
+        self._store.close()
+
+    def _resolve_site(
+        self,
+        file_path: str | Path,
+        *,
+        site: SiteIdentity | None,
+        site_id: str | None,
+        site_name: str | None,
+    ) -> SiteIdentity:
+        if site is not None:
+            return site
+        return self._site_resolver(
+            str(file_path),
+            site_id=site_id,
+            site_name=site_name,
         )
-    )
 
-    restored = _restore_file(quarantine_id)
-    if not has_registry_record:
-        return restored
+    def _compensate_quarantine(
+        self,
+        quarantine_id: str,
+        registry_error: Exception | None,
+    ) -> NoReturn:
+        try:
+            self._store.rollback_quarantine(quarantine_id)
+        except Exception as rollback_error:
+            self._logger.critical(
+                "Registry update and quarantine rollback both failed for %s",
+                quarantine_id,
+                exc_info=True,
+            )
+            raise QuarantineConsistencyError(
+                "Registry update failed and quarantine rollback could not restore "
+                f"{quarantine_id}: {rollback_error}"
+            ) from rollback_error
 
-    marked = (
-        mark_restored(original_path, registry_site_id)
-        if registry_site_id
-        else mark_restored(original_path)
-    )
-    if marked:
-        return restored
-
-    try:
-        rollback_restore(quarantine_id)
-    except Exception as rollback_error:
-        logger.critical(
-            "Registry restore update and file rollback both failed for %s",
-            quarantine_id,
-            exc_info=True,
+        error = QuarantineConsistencyError(
+            f"Registry update failed; quarantine {quarantine_id} was rolled back"
         )
-        raise QuarantineConsistencyError(
-            "Registry restore update failed and compensation could not restore "
-            f"{quarantine_id}: {rollback_error}"
-        ) from rollback_error
+        if registry_error is not None:
+            raise error from registry_error
+        raise error
 
-    raise QuarantineConsistencyError(
-        f"Registry restore update failed; restore {quarantine_id} was rolled back"
-    )
+    def _compensate_restore(
+        self,
+        quarantine_id: str,
+        registry_error: Exception | None,
+    ) -> NoReturn:
+        try:
+            self._store.rollback_restore(quarantine_id)
+        except Exception as rollback_error:
+            self._logger.critical(
+                "Registry restore update and file rollback both failed for %s",
+                quarantine_id,
+                exc_info=True,
+            )
+            raise QuarantineConsistencyError(
+                "Registry restore update failed and compensation could not restore "
+                f"{quarantine_id}: {rollback_error}"
+            ) from rollback_error
 
-__all__ = [
-    "quarantine_file",
-    "quarantine_registered_file",
-    "QuarantineConsistencyError",
-    "restore_file",
-    "delete_quarantine",
-    "is_recently_restored",
-    "get_quarantine_list",
-    "get_quarantine_detail",
-    "get_quarantine_stats",
-    "migrate_site_metadata",
-]
+        error = QuarantineConsistencyError(
+            f"Registry restore update failed; restore {quarantine_id} was rolled back"
+        )
+        if registry_error is not None:
+            raise error from registry_error
+        raise error
+
+
+__all__ = ["QuarantineConsistencyError", "QuarantineService"]

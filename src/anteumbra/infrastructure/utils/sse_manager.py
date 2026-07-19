@@ -1,294 +1,344 @@
-# -*- coding: utf-8 -*-
-"""
-@Time: 1/16/2026 5:43 PM
-@Auth: SxyLao1
-@File: sse_manager.py
-@IDE: PyCharm
-@Motto: HACK THE REAL
-v1.7.5: 独立SSE推送管理器（解决循环导入和命名空间隔离）
-"""
+"""Runtime-owned Server-Sent Events client and log history manager."""
+
+from __future__ import annotations
+
+import json
 import logging
+import os
 import queue
 import threading
-import time
-import json
-from pathlib import Path
 from collections import deque
-from typing import List
-from anteumbra.infrastructure.config.registry import ConfigRegistry
+from pathlib import Path
+from typing import Any
 
-# 模块级全局变量
-_registry_update_queue = queue.Queue(maxsize=0)
-_sse_clients: List[queue.Queue] = []
-_sse_lock = threading.Lock()
-_worker_thread = None
-_worker_lock = threading.Lock()
-_worker_stop_event = threading.Event()
-_worker_stop_signal = object()
-
-def get_sse_limits():
-    """从config.toml动态读取SSE连接限制（支持热加载）"""
-    try:
-        config = ConfigRegistry.get_raw_config()
-        web_admin_cfg = config.get("web_admin", {})
-        return {
-            'per_ip': web_admin_cfg.get("sse_max_clients_per_ip", 5),
-            'total': web_admin_cfg.get("sse_max_total_clients", 20)
-        }
-    except Exception as e:
-        logging.getLogger("monitor.sse_worker").warning(
-            f"[SSE] 读取配置失败，使用默认值: {e}"
-        )
-        return {'per_ip': 5, 'total': 20}  # 安全默认值
-
-def start_sse_worker():
-    """启动SSE推送工作线程（全局单例）"""
-    global _worker_thread
-
-    def _worker():
-        logger = logging.getLogger("monitor.sse_worker")
-        logger.info("[SSE][WORKER] Registry推送工作线程已启动")
-
-        while not _worker_stop_event.is_set():
-            try:
-                signal = _registry_update_queue.get(timeout=0.5)
-                if signal is _worker_stop_signal:
-                    break
-                if signal == "registry_update":
-                    # 动态读取限制（支持配置热更新）
-                    limits = get_sse_limits()
-                    with _sse_lock:
-                        clients_snapshot = list(_sse_clients)
-                    logger.debug(
-                        f"[SSE] 广播Registry更新给 {len(clients_snapshot)}/{limits['total']} 个客户端"
-                    )
-
-                    dead_clients = []
-                    for client_queue in clients_snapshot:
-                        try:
-                            client_queue.put_nowait("registry_update")
-                        except queue.Full:
-                            dead_clients.append(client_queue)
-                        except Exception:
-                            dead_clients.append(client_queue)
-
-                    if dead_clients:
-                        with _sse_lock:
-                            for dead in dead_clients:
-                                if dead in _sse_clients:
-                                    _sse_clients.remove(dead)
-
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"[SSE][WORKER] 错误: {e}", exc_info=True)
-
-    with _worker_lock:
-        if _worker_thread is not None and _worker_thread.is_alive():
-            return
-        _worker_stop_event.clear()
-        _worker_thread = threading.Thread(
-            target=_worker,
-            daemon=True,
-            name="RegistrySSEWorker",
-        )
-        _worker_thread.start()
+from anteumbra.domain.runtime import ConfigProviderPort
 
 
-def stop_sse_worker(timeout: float = 2.0) -> bool:
-    """Stop the SSE worker and disconnect registered clients."""
-    global _worker_thread
+class SSECapacityError(RuntimeError):
+    """Raised when an SSE connection would exceed configured limits."""
 
-    with _worker_lock:
-        thread = _worker_thread
-        if thread is None:
-            cleanup_sse_connections()
-            return True
-        _worker_stop_event.set()
-        _registry_update_queue.put_nowait(_worker_stop_signal)
-
-    if thread is not threading.current_thread():
-        thread.join(timeout=timeout)
-    stopped = not thread.is_alive()
-    cleanup_sse_connections()
-
-    with _worker_lock:
-        if _worker_thread is thread and stopped:
-            _worker_thread = None
-    return stopped
-
-
-def is_sse_worker_running() -> bool:
-    """Return whether the singleton worker thread is alive."""
-    with _worker_lock:
-        return bool(_worker_thread and _worker_thread.is_alive())
-
-
-def register_sse_client() -> queue.Queue:
-    """注册新的SSE客户端，返回专属队列"""
-    client_queue = queue.Queue(maxsize=100)
-    with _sse_lock:
-        _sse_clients.append(client_queue)
-        current_total = len(_sse_clients)
-
-    limits = get_sse_limits()
-    logger = logging.getLogger("monitor.sse_worker")
-    logger.info(
-        f"[SSE] 新客户端注册，当前总数: {current_total}/{limits['total']}"
-    )
-
-    return client_queue
-
-
-def unregister_sse_client(client_queue: queue.Queue, *, drain: bool = True):
-    """注销SSE客户端"""
-    with _sse_lock:
-        if client_queue in _sse_clients:
-            _sse_clients.remove(client_queue)
-    if drain:
-        # The queue is no longer visible to producers, so it is safe to drain.
-        try:
-            while True:
-                client_queue.get_nowait()
-        except queue.Empty:
-            pass
-
-def cleanup_sse_connections(client_ip: str = None) -> int:
-    """强制清理指定IP的所有SSE连接（确保计数同步）"""
-    cleaned = 0
-
-    # 创建副本避免遍历时修改（锁快照）
-    with _sse_lock:
-        clients_snapshot = list(_sse_clients)
-
-    for client_queue in clients_snapshot:
-        if client_ip is None or getattr(client_queue, '_client_ip', None) == client_ip:
-            try:
-                # Drop stale messages, then leave the sentinel available for the
-                # generator after removing this queue from future broadcasts.
-                while True:
-                    client_queue.get_nowait()
-            except queue.Empty:
-                pass
-            except Exception as e:
-                logging.getLogger("monitor.sse_worker").debug(f"清理连接失败: {e}")
-                continue
-            try:
-                client_queue.put_nowait(None)
-                unregister_sse_client(client_queue, drain=False)
-                cleaned += 1
-            except Exception as e:
-                logging.getLogger("monitor.sse_worker").debug(f"清理连接失败: {e}")
-
-    logging.getLogger("monitor.sse_worker").info(
-        f"[SSE] 强制清理了 {cleaned} 个连接 (IP: {client_ip or 'ALL'})"
-    )
-    return cleaned
-
-def trigger_registry_update():
-    """触发Registry更新"""
-    try:
-        _registry_update_queue.put_nowait("registry_update")
-    except queue.Full:
-        pass
-
-
-def get_connected_client_count() -> int:
-    """获取当前连接的SSE客户端数量（线程安全）"""
-    limits = get_sse_limits()
-    with _sse_lock:
-        current = len(_sse_clients)
-    logger = logging.getLogger("monitor.sse_worker")
-    logger.debug(f"[SSE] 当前连接: {current}/{limits['total']}")
-    return current
-
-
-def get_ip_client_count(client_ip: str) -> int:
-    """获取指定IP的SSE客户端数量（线程安全）"""
-    with _sse_lock:
-        return sum(1 for q in _sse_clients if getattr(q, '_client_ip', None) == client_ip)
-
-
-def get_ip_clients(client_ip: str) -> list:
-    """获取指定IP的所有SSE客户端队列（线程安全，返回副本）"""
-    with _sse_lock:
-        return [q for q in _sse_clients if getattr(q, '_client_ip', None) == client_ip]
-
-
-def remove_dead_clients(dead_queues: list) -> int:
-    """批量移除已断开的SSE客户端（线程安全）"""
-    with _sse_lock:
-        removed = 0
-        for q in dead_queues:
-            if q in _sse_clients:
-                _sse_clients.remove(q)
-                removed += 1
-    return removed
 
 class LogBuffer:
-    def __init__(self, max_size=100, buffer_path="data/sse_log_buffer.json"):
+    """Bounded, thread-safe log history persisted with atomic replacement."""
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        max_size: int = 100,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        if max_size < 1:
+            raise ValueError("max_size must be positive")
+        self.path = Path(path)
         self.max_size = max_size
-        self.buffer_path = Path(buffer_path)
-        self.buffer_path.parent.mkdir(parents=True, exist_ok=True)
-        self._queue = deque(maxlen=max_size)
-        self._lock = threading.Lock()
+        self._logger = logger or logging.getLogger("monitor.sse")
+        self._items: deque[str] = deque(maxlen=max_size)
+        self._lock = threading.RLock()
         self._load()
 
-    def _load(self):
-        """从磁盘加载缓冲"""
-        if self.buffer_path.exists():
-            try:
-                data = json.loads(self.buffer_path.read_text(encoding='utf-8'))
-                with self._lock:
-                    self._queue.extend(data)
-            except Exception:
-                logger = logging.getLogger("monitor.sse_worker")
-                logger.warning("LogBuffer load failed, starting empty")
-                with self._lock:
-                    self._queue.clear()
-
-    def _save(self):
-        """保存到磁盘"""
-        try:
-            with self._lock:
-                data = list(self._queue)
-            self.buffer_path.write_text(
-                json.dumps(data, indent=2),
-                encoding='utf-8'
-            )
-        except Exception:
-            logger = logging.getLogger("monitor.sse_worker")
-            logger.warning("LogBuffer save failed")
-
-    def push(self, log_line):
-        """
-        添加日志到缓冲区，避免重复写入
-
-        Args:
-            log_line: 日志内容字符串
-
-        Returns:
-            bool: 是否成功添加（False表示已存在，跳过写入）
-        """
+    def push(self, log_line: str) -> bool:
+        """Persist a new line, returning false when it is already buffered."""
+        line = str(log_line).strip()
+        if not line:
+            return False
         with self._lock:
-            if log_line in self._queue:
+            if line in self._items:
                 return False
-            self._queue.append(log_line)
-        self._save()
+            self._items.append(line)
+            self._save_locked()
+            return True
+
+    def get_all(self) -> list[str]:
+        """Return a defensive snapshot ordered from oldest to newest."""
+        with self._lock:
+            return list(self._items)
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            return
+        try:
+            value = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(value, list) or not all(
+                isinstance(item, str) for item in value
+            ):
+                raise ValueError("log buffer must be a JSON array of strings")
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            corrupt = self.path.with_name(f"{self.path.name}.corrupt")
+            try:
+                os.replace(self.path, corrupt)
+            except OSError:
+                self._logger.error(
+                    "Cannot preserve corrupt SSE log history at %s",
+                    self.path,
+                    exc_info=True,
+                )
+            self._logger.warning(
+                "SSE log history was corrupt and moved to %s: %s", corrupt, exc
+            )
+            return
+        with self._lock:
+            self._items.extend(value[-self.max_size :])
+
+    def _save_locked(self) -> None:
+        temporary = self.path.with_name(f".{self.path.name}.tmp")
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(
+                json.dumps(list(self._items), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            os.replace(temporary, self.path)
+        except OSError:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                self._logger.debug("Cannot remove temporary SSE buffer", exc_info=True)
+            raise
+
+
+class SSEManager:
+    """Own SSE clients, update fan-out, worker lifetime, and log history."""
+
+    _STOP = object()
+    _REGISTRY_UPDATE = "registry_update"
+
+    def __init__(
+        self,
+        config: ConfigProviderPort,
+        log_buffer_path: str | Path,
+        *,
+        log_buffer_size: int = 100,
+        client_queue_size: int = 100,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        if client_queue_size < 1:
+            raise ValueError("client_queue_size must be positive")
+        self._config = config
+        self._logger = logger or logging.getLogger("monitor.sse")
+        self._client_queue_size = client_queue_size
+        self._updates: queue.Queue[object] = queue.Queue(maxsize=1)
+        self._clients: list[queue.Queue[str | None]] = []
+        self._clients_lock = threading.RLock()
+        self._lifecycle_lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._worker: threading.Thread | None = None
+        self._log_buffer = LogBuffer(
+            log_buffer_path,
+            max_size=log_buffer_size,
+            logger=self._logger,
+        )
+
+    @property
+    def is_running(self) -> bool:
+        """Return whether the fan-out worker is alive."""
+        with self._lifecycle_lock:
+            return bool(self._worker and self._worker.is_alive())
+
+    @property
+    def worker(self) -> threading.Thread | None:
+        """Expose the owned thread for diagnostics and lifecycle tests."""
+        with self._lifecycle_lock:
+            return self._worker
+
+    def get_limits(self) -> dict[str, int]:
+        """Read connection limits from the hot-reloadable provider."""
+        web_admin = self._config.get().get("web_admin", {})
+        return {
+            "per_ip": self._positive_int(
+                web_admin.get("sse_max_clients_per_ip", 5), "per_ip"
+            ),
+            "total": self._positive_int(
+                web_admin.get("sse_max_total_clients", 20), "total"
+            ),
+        }
+
+    def start(self) -> None:
+        """Start the fan-out worker once."""
+        with self._lifecycle_lock:
+            if self._worker is not None and self._worker.is_alive():
+                return
+            self._drain_updates()
+            self._stop_event.clear()
+            self._worker = threading.Thread(
+                target=self._run,
+                daemon=True,
+                name="RegistrySSEWorker",
+            )
+            self._worker.start()
+
+    def stop(self, timeout: float = 2.0) -> bool:
+        """Stop the worker and disconnect all clients within a bound."""
+        with self._lifecycle_lock:
+            worker = self._worker
+            self._stop_event.set()
+            self._drain_updates()
+            self._updates.put_nowait(self._STOP)
+
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(timeout=max(0.0, timeout))
+        stopped = worker is None or not worker.is_alive()
+        self.cleanup_connections()
+
+        with self._lifecycle_lock:
+            if self._worker is worker and stopped:
+                self._worker = None
+        return stopped
+
+    def register_client(self, client_ip: str | None = None) -> queue.Queue[str | None]:
+        """Register one bounded client queue while enforcing current limits."""
+        normalized_ip = str(client_ip or "").strip()
+        limits = self.get_limits()
+        with self._clients_lock:
+            if len(self._clients) >= limits["total"]:
+                raise SSECapacityError("SSE total client limit reached")
+            if normalized_ip and self._count_ip_locked(normalized_ip) >= limits["per_ip"]:
+                raise SSECapacityError(
+                    f"SSE client limit reached for IP {normalized_ip}"
+                )
+            client: queue.Queue[str | None] = queue.Queue(
+                maxsize=self._client_queue_size
+            )
+            client.client_ip = normalized_ip  # type: ignore[attr-defined]
+            self._clients.append(client)
+            return client
+
+    def unregister_client(
+        self,
+        client: queue.Queue[str | None],
+        *,
+        drain: bool = True,
+    ) -> bool:
+        """Remove one client and optionally drain stale signals."""
+        with self._clients_lock:
+            if client not in self._clients:
+                return False
+            self._clients.remove(client)
+        if drain:
+            self._drain_client(client)
         return True
 
-    def get_all(self):
-        """获取所有缓冲的日志（线程安全）"""
-        with self._lock:
-            return list(self._queue)
+    def cleanup_connections(self, client_ip: str | None = None) -> int:
+        """Disconnect all clients, or only clients belonging to one IP."""
+        normalized_ip = str(client_ip or "").strip()
+        with self._clients_lock:
+            selected = [
+                client
+                for client in self._clients
+                if not normalized_ip
+                or getattr(client, "client_ip", "") == normalized_ip
+            ]
+            for client in selected:
+                self._clients.remove(client)
 
-# 全局实例
-_log_buffer = LogBuffer(max_size=100)
+        for client in selected:
+            self._drain_client(client)
+            try:
+                client.put_nowait(None)
+            except queue.Full:
+                self._logger.error("Cannot signal SSE client disconnect")
+        return len(selected)
 
-def persist_log_line(log_line):
-    """供admin_bp.py调用，持久化日志"""
-    return _log_buffer.push(log_line)  # 返回bool，便于调用方知道是否写入成功
+    def trigger_registry_update(self) -> bool:
+        """Coalesce and queue a Registry update notification."""
+        try:
+            self._updates.put_nowait(self._REGISTRY_UPDATE)
+            return True
+        except queue.Full:
+            return False
 
-def get_log_buffer():
-    """获取缓冲的日志"""
-    return _log_buffer.get_all()
+    def connected_client_count(self) -> int:
+        """Return the total registered client count."""
+        with self._clients_lock:
+            return len(self._clients)
+
+    def ip_client_count(self, client_ip: str) -> int:
+        """Return the registered client count for one IP."""
+        with self._clients_lock:
+            return self._count_ip_locked(str(client_ip).strip())
+
+    def ip_clients(self, client_ip: str) -> list[queue.Queue[str | None]]:
+        """Return a defensive list of queues registered to one IP."""
+        normalized_ip = str(client_ip).strip()
+        with self._clients_lock:
+            return [
+                client
+                for client in self._clients
+                if getattr(client, "client_ip", "") == normalized_ip
+            ]
+
+    def remove_dead_clients(self, clients: list[queue.Queue[str | None]]) -> int:
+        """Remove queues that could not accept a fan-out signal."""
+        removed = 0
+        with self._clients_lock:
+            for client in clients:
+                if client in self._clients:
+                    self._clients.remove(client)
+                    removed += 1
+        return removed
+
+    def persist_log_line(self, log_line: str) -> bool:
+        """Append one unique log line to persistent history."""
+        return self._log_buffer.push(log_line)
+
+    def get_log_buffer(self) -> list[str]:
+        """Return all persisted history lines."""
+        return self._log_buffer.get_all()
+
+    def _run(self) -> None:
+        self._logger.debug("SSE fan-out worker started")
+        while not self._stop_event.is_set():
+            try:
+                signal = self._updates.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if signal is self._STOP:
+                break
+            if signal != self._REGISTRY_UPDATE:
+                self._logger.warning("Ignoring unknown SSE signal: %r", signal)
+                continue
+
+            with self._clients_lock:
+                clients = list(self._clients)
+            dead: list[queue.Queue[str | None]] = []
+            for client in clients:
+                try:
+                    client.put_nowait(self._REGISTRY_UPDATE)
+                except queue.Full:
+                    dead.append(client)
+            if dead:
+                self.remove_dead_clients(dead)
+                self._logger.warning("Removed %d stalled SSE clients", len(dead))
+        self._logger.debug("SSE fan-out worker stopped")
+
+    def _count_ip_locked(self, client_ip: str) -> int:
+        return sum(
+            1
+            for client in self._clients
+            if getattr(client, "client_ip", "") == client_ip
+        )
+
+    def _drain_updates(self) -> None:
+        try:
+            while True:
+                self._updates.get_nowait()
+        except queue.Empty:
+            return
+
+    @staticmethod
+    def _drain_client(client: queue.Queue[str | None]) -> None:
+        try:
+            while True:
+                client.get_nowait()
+        except queue.Empty:
+            return
+
+    @staticmethod
+    def _positive_int(value: Any, name: str) -> int:
+        try:
+            parsed = int(str(value).split("#", 1)[0].strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid SSE {name} limit: {value!r}") from exc
+        if parsed < 1:
+            raise ValueError(f"SSE {name} limit must be positive")
+        return parsed

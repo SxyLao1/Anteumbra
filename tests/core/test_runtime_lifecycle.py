@@ -4,38 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def test_sse_worker_start_is_idempotent_and_stop_disconnects_clients():
-    from anteumbra.infrastructure.utils import sse_manager
-
-    sse_manager.stop_sse_worker()
-    try:
-        sse_manager.start_sse_worker()
-        first_thread = sse_manager._worker_thread
-        sse_manager.start_sse_worker()
-
-        assert sse_manager.is_sse_worker_running() is True
-        assert sse_manager._worker_thread is first_thread
-
-        sse_manager.register_sse_client()
-        assert sse_manager.get_connected_client_count() == 1
-        assert sse_manager.stop_sse_worker() is True
-        assert sse_manager.is_sse_worker_running() is False
-        assert sse_manager.get_connected_client_count() == 0
-    finally:
-        sse_manager.stop_sse_worker()
-
-
-def test_sse_cleanup_leaves_a_disconnect_signal_for_the_generator():
-    from anteumbra.infrastructure.utils import sse_manager
-
-    sse_manager.stop_sse_worker()
-    client_queue = sse_manager.register_sse_client()
-
-    assert sse_manager.cleanup_sse_connections() == 1
-    assert sse_manager.get_connected_client_count() == 0
-    assert client_queue.get_nowait() is None
-
-
 def test_metrics_worker_start_is_idempotent_and_stops(tmp_path, monkeypatch):
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
 
@@ -57,18 +25,17 @@ def test_metrics_worker_start_is_idempotent_and_stops(tmp_path, monkeypatch):
         collector.stop(persist=False)
 
 
-def test_metrics_reports_total_registry_size(tmp_path, monkeypatch):
+def test_metrics_reports_total_registry_size(tmp_path):
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
-    from anteumbra.infrastructure import suspicious_registry
-
-    collector = MetricsCollector(tmp_path / "metrics.json")
 
     def fake_get_all(*, include_deleted=False, include_false_positive=False):
         if include_deleted and include_false_positive:
             return [{"file_path": "a"}, {"file_path": "b"}, {"file_path": "c"}]
         return [{"file_path": "a"}]
 
-    monkeypatch.setattr(suspicious_registry, "get_all", fake_get_all)
+    collector = MetricsCollector(
+        tmp_path / "metrics.json", registry_reader=fake_get_all
+    )
 
     snapshot = collector.get()
 
@@ -150,7 +117,6 @@ def test_config_registry_parses_per_site_log_configuration(tmp_path):
 
 def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     from anteumbra.application import launcher
-    from anteumbra.infrastructure.utils import sse_manager
 
     monkeypatch.chdir(tmp_path)
     calls = []
@@ -165,9 +131,9 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     manager = SimpleNamespace(shutdown=lambda: calls.append("plugins"))
     graph = SimpleNamespace(persist=lambda: calls.append("graph"))
     stop_event = __import__("threading").Event()
-    monkeypatch.setattr(sse_manager, "stop_sse_worker", lambda: calls.append("sse"))
     container = SimpleNamespace(
         metrics=SimpleNamespace(stop=lambda: calls.append("metrics")),
+        sse=SimpleNamespace(stop=lambda: calls.append("sse")),
     )
 
     launcher._launcher_state.clear()

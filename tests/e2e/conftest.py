@@ -4,11 +4,6 @@ E2E Test Suite — shared fixtures
 
 All tests use isolated temp directories. No running server required.
 """
-import os
-import sys
-import tempfile
-import shutil
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -71,6 +66,56 @@ def scanner_service(tmp_path):
     yara_engine = DisabledYaraEngine(tmp_path / "rules", logging.getLogger("test.yara"))
     metrics = MetricsCollector(tmp_path / "metrics.json")
     return ScannerService(provider, yara_engine, metrics)
+
+
+@pytest.fixture
+def detection_runtime(tmp_path):
+    """Assemble an isolated Registry + Quarantine application runtime."""
+    from anteumbra.application.quarantine_service import QuarantineService
+    from anteumbra.domain.site import SiteIdentity
+    from anteumbra.infrastructure.quarantine import QuarantineStore
+    from anteumbra.infrastructure.suspicious_registry import SuspiciousRegistry
+    from anteumbra.infrastructure.wal_manager import WalManager
+
+    site = SiteIdentity("test-site", "Test Site")
+
+    class Provider:
+        @staticmethod
+        def get():
+            return {"filesizes": {}}
+
+        @staticmethod
+        def resolve_site_identity(_path, site_id=None, site_name=None):
+            if site_id:
+                return SiteIdentity.from_values(site_id, site_name or str(site_id))
+            return site
+
+    provider = Provider()
+    events = SimpleNamespace(publish=lambda *_args, **_kwargs: None)
+    wal = WalManager(tmp_path / "runtime" / "registry_wal.log")
+    registry = SuspiciousRegistry(
+        tmp_path / "runtime" / "registry.json",
+        config=provider,
+        wal=wal,
+        event_publisher=events,
+    )
+    store = QuarantineStore(
+        tmp_path / "runtime" / "quarantine",
+        site_resolver=provider.resolve_site_identity,
+    )
+    quarantine = QuarantineService(
+        store,
+        registry,
+        site_resolver=provider.resolve_site_identity,
+    )
+    runtime = SimpleNamespace(
+        site=site,
+        registry=registry,
+        quarantine=quarantine,
+    )
+    yield runtime
+    quarantine.close()
+    registry.close()
 
 
 @pytest.fixture

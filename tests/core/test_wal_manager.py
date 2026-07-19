@@ -1,318 +1,162 @@
-# -*- coding: utf-8 -*-
-"""v1.0.9: Unit tests for wal_manager.py — Write-Ahead Log for crash recovery.
+"""Unit tests for the runtime-owned Registry write-ahead log."""
 
-Tests cover: write_entry, read_entries, archive_current_wal, replay,
-get_wal_info, list_archives, get_status_text, is_replaying, and rotation.
-"""
-import os
-import time
-from pathlib import Path
+from __future__ import annotations
+
+import json
 
 import pytest
 
-# ── Fixtures ──────────────────────────────────────────────────
+from anteumbra.infrastructure.wal_manager import WalManager, WalWriteError
 
 
-@pytest.fixture(autouse=True)
-def isolate_wal(monkeypatch, tmp_path):
-    """Force wal_manager to use temp paths, suppress ConfigRegistry access."""
-    from anteumbra.infrastructure import wal_manager as wm
-    from anteumbra.infrastructure.config import registry as cfg_reg
-
-    wal_path = tmp_path / "registry_wal.log"
-
-    # Stub ConfigRegistry to return minimal config — write_entry calls it directly
-    monkeypatch.setattr(
-        cfg_reg.ConfigRegistry, "get_raw_config",
-        lambda: {"filesizes": {"wal_rotate_threshold_mb": 100}},
+@pytest.fixture
+def wal(tmp_path):
+    return WalManager(
+        tmp_path / "registry_wal.log",
+        settings_loader=lambda: {"wal_rotate_threshold_mb": 10},
     )
 
-    # Stub _init_wal_path to set temp path WITHOUT ConfigRegistry
-    def _stub_init():
-        wm._WAL_PATH = wal_path
-        wm._WAL_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr(wm, "_init_wal_path", _stub_init)
-    monkeypatch.setattr(wm, "_replaying", False)
-
-    # Force reset state
-    wm._WAL_PATH = wal_path
-    wm._replaying = False
-    # Clean up any existing WAL
-    for p in [wal_path] + list(tmp_path.glob("*.wal")):
-        try:
-            p.unlink()
-        except Exception:
-            pass
-
-    yield wm
-
-    # Teardown
-    for p in [wal_path] + list(tmp_path.glob("*.wal")):
-        try:
-            p.unlink()
-        except Exception:
-            pass
-
-
-# ── Write / Read Tests ────────────────────────────────────────
-
-
-class TestWriteEntry:
-    """Test write_entry() — append to WAL."""
-
-    def test_write_single_entry(self, isolate_wal):
-        wm = isolate_wal
-        result = wm.write_entry("add", "/var/www/shell.php", ["php_eval"], ip="10.0.0.1")
-        assert result is True
-        assert wm._WAL_PATH.exists()
-
-    def test_write_entry_creates_file(self, isolate_wal):
-        wm = isolate_wal
-        assert not wm._WAL_PATH.exists()
-        wm.write_entry("add", "/tmp/test.php", ["test"])
-        assert wm._WAL_PATH.exists()
-
-    def test_write_entry_without_ip(self, isolate_wal):
-        wm = isolate_wal
-        result = wm.write_entry("remove", "/var/www/clean.php", [])
-        assert result is True
-
-    def test_write_entry_json_format(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/path/shell.php", ["eval", "base64"], ip="1.2.3.4")
-        content = wm._WAL_PATH.read_text(encoding="utf-8")
-        assert '"operation"' in content
-        assert '"file_path"' in content
-        assert '"features"' in content
-        assert "1.2.3.4" in content
-
-    def test_write_entry_while_replaying_is_skipped(self, isolate_wal):
-        wm = isolate_wal
-        wm._replaying = True
-        # write_entry doesn't check _replaying — it writes regardless.
-        # The _replaying flag is advisory for readers, not a write gate.
-        result = wm.write_entry("add", "/tmp/skip.php", [])
-        assert result is True  # Writes succeed even during replay
-
-
-class TestReadEntries:
-    """Test read_entries() — parse WAL file."""
-
-    def test_read_entries_empty_file(self, isolate_wal):
-        wm = isolate_wal
-        entries = wm.read_entries()
-        assert entries == []
-
-    def test_read_entries_returns_list_of_dicts(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/a.php", ["f1"])
-        wm.write_entry("remove", "/b.php", ["f2"])
-        entries = wm.read_entries()
-        assert len(entries) == 2
-        assert entries[0]["operation"] == "add"
-        assert entries[1]["operation"] == "remove"
-
-    def test_read_entries_skips_comments(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/a.php", ["f1"])
-        # Append a comment line manually
-        with open(wm._WAL_PATH, "a", encoding="utf-8") as f:
-            f.write("# This is a comment\n")
-        entries = wm.read_entries()
-        assert len(entries) == 1
-
-    def test_read_entries_skips_empty_lines(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/a.php", ["f1"])
-        with open(wm._WAL_PATH, "a", encoding="utf-8") as f:
-            f.write("\n  \n")
-        entries = wm.read_entries()
-        assert len(entries) == 1
 
+def test_write_and_complete_tracks_only_pending_transactions(wal):
+    transaction_id = wal.write_entry(
+        "upsert",
+        "/var/www/shell.php",
+        ["php_eval"],
+        "10.0.0.1",
+        payload={"record": {"site_id": "alpha"}},
+    )
+
+    entries = wal.read_entries()
+    assert len(entries) == 1
+    assert entries[0]["transaction_id"] == transaction_id
+    assert entries[0]["payload"]["record"]["site_id"] == "alpha"
+    assert wal.read_entries(pending_only=True) == entries
 
-# ── Archive Tests ─────────────────────────────────────────────
+    wal.mark_completed(transaction_id)
+    assert wal.read_entries(pending_only=True) == []
 
 
-class TestArchiveCurrentWal:
-    """Test archive_current_wal() — rotate WAL to archive."""
+def test_two_managers_do_not_share_paths_or_replay_state(tmp_path):
+    first = WalManager(tmp_path / "first" / "wal.log")
+    second = WalManager(tmp_path / "second" / "wal.log")
 
-    def test_archive_renames_wal(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/test.php", ["f1"])
-        original_size = wm._WAL_PATH.stat().st_size
-        result = wm.archive_current_wal()
-        # archive_current_wal returns the backup path on success
-        assert result is not None
-        assert result.exists()  # Archive created
+    first.write_entry("upsert", payload={"record": {"id": 1}})
 
-    def test_archive_empty_wal_returns_none(self, isolate_wal):
-        wm = isolate_wal
-        result = wm.archive_current_wal()
-        # Returns None when no WAL to archive
-        assert result is None
+    assert len(first.read_entries()) == 1
+    assert second.read_entries() == []
+    assert first.is_replaying is False
+    assert second.is_replaying is False
 
 
-# ── Rotation Tests ────────────────────────────────────────────
+def test_cleanup_uses_the_documented_filesize_setting_names(tmp_path):
+    manager = WalManager(
+        tmp_path / "wal.log",
+        settings_loader=lambda: {
+            "wal_cleanup_days": 3,
+            "wal_cleanup_count": 4,
+        },
+    )
 
+    settings = manager._settings()
 
-class TestRotation:
-    """Test WAL rotation logic (write many entries)."""
+    assert settings["retention_days"] == 3
+    assert settings["max_archives"] == 4
 
-    def test_write_many_entries_survives_rotation(self, isolate_wal):
-        wm = isolate_wal
-        for i in range(10):
-            wm.write_entry("add", f"/tmp/file_{i}.php", [f"feat_{i}"], ip="10.0.0.1")
-        entries = wm.read_entries()
-        assert len(entries) == 10
 
-    def test_rotation_preserves_entry_order(self, isolate_wal):
-        wm = isolate_wal
-        paths = [f"/tmp/file_{i}.php" for i in range(5)]
-        for p in paths:
-            wm.write_entry("add", p, [])
-        entries = wm.read_entries()
-        for i, entry in enumerate(entries):
-            assert entry["file_path"] == paths[i]
+def test_replay_acknowledges_success_and_archives_current_wal(wal):
+    wal.write_entry("upsert", payload={"record": {"file_path": "/a.php"}})
+    received = []
 
+    recovered = wal.replay({"upsert": received.append})
 
-# ── Replay Tests ──────────────────────────────────────────────
+    assert recovered == 1
+    assert received[0]["payload"]["record"]["file_path"] == "/a.php"
+    assert wal.read_entries() == []
+    assert len(wal.list_archives()) == 1
 
 
-class TestReplay:
-    """Test replay() — WAL crash recovery playback."""
-
-    def test_replay_dispatches_to_callbacks(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/tmp/shell.php", ["eval"], ip="10.0.0.5")
-        wm.write_entry("remove", "/tmp/clean.php", [], ip="10.0.0.6")
+def test_poison_entry_moves_to_dead_letter_and_never_replays_again(wal):
+    wal.write_entry("upsert", payload={"record": {"file_path": "/bad.php"}})
+    calls = []
 
-        calls = []
+    def fail(entry):
+        calls.append(entry["transaction_id"])
+        raise RuntimeError("invalid record")
 
-        def cb_add(file_path, features, ip):
-            calls.append(("add", str(file_path)))
+    assert wal.replay({"upsert": fail}) == 0
+    assert len(calls) == 1
+    dead_letters = [
+        json.loads(line)
+        for line in wal.dead_letter_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert dead_letters[0]["reason"] == "replay_failed"
+    assert "invalid record" in dead_letters[0]["error"]
 
-        def cb_remove(file_path, features, ip):
-            calls.append(("remove", str(file_path)))
-
-        count = wm.replay({"add": cb_add, "remove": cb_remove})
-        assert count == 2
-        # Paths are normalized by replay — match by suffix
-        assert calls[0][0] == "add"
-        assert "shell.php" in calls[0][1]
-        assert calls[1][0] == "remove"
-        assert "clean.php" in calls[1][1]
+    assert wal.replay({"upsert": fail}) == 0
+    assert len(calls) == 1
 
-    def test_replay_empty_wal_returns_zero(self, isolate_wal):
-        wm = isolate_wal
-        count = wm.replay({"add": lambda fp, feats, ip: None})
-        assert count == 0
 
-    def test_replay_unknown_operation_is_skipped(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/a.php", [])
-        wm.write_entry("unknown_op", "/b.php", [])
-        count = wm.replay({"add": lambda fp, feats, ip: None})
-        assert count == 1  # Only "add" dispatched
+def test_malformed_line_is_dead_lettered_and_removed_from_active_wal(wal):
+    wal.path.write_text("not-json\n", encoding="utf-8")
 
-    def test_replay_callback_error_does_not_abort(self, isolate_wal):
-        wm = isolate_wal
-
-        def failing_cb(file_path, features, ip):
-            raise RuntimeError("Simulated failure")
-
-        wm.write_entry("add", "/a.php", [])
-        wm.write_entry("add", "/b.php", [])
-        count = wm.replay({"add": failing_cb})
-        # Entries that throw are NOT counted as recovered (count == 0),
-        # but replay doesn't crash — it continues processing
-        assert count == 0
-
-    def test_replay_sets_replaying_flag(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/test.php", [])
-        assert wm.is_replaying() is False
-        wm.replay({"add": lambda fp, feats, ip: None})
-        assert wm.is_replaying() is False  # Reset after replay
-
-    def test_replay_archives_after_success(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/test.php", ["f1"])
-        wm.replay({"add": lambda fp, feats, ip: None})
-        # After replay, current WAL should exist (archive creates a fresh one)
-        # Verify archives exist in parent dir
-        archives = list(wm._WAL_PATH.parent.glob("registry_wal.log.*"))
-        assert len(archives) >= 1  # At least one archive was created
-
-
-# ── Info / Status Tests ───────────────────────────────────────
-
-
-class TestGetWalInfo:
-    """Test get_wal_info() — WAL status summary."""
-
-    def test_get_wal_info_empty(self, isolate_wal):
-        wm = isolate_wal
-        info = wm.get_wal_info()
-        # Returns {} when WAL doesn't exist yet
-        assert isinstance(info, dict)
-
-    def test_get_wal_info_with_entries(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/a.php", ["f1"])
-        wm.write_entry("add", "/b.php", ["f2"])
-        info = wm.get_wal_info()
-        assert info.get("name") is not None
-        assert info.get("size_mb", 0) >= 0
-
-
-class TestListArchives:
-    """Test list_archives() — enumerate archived WAL files."""
-
-    def test_list_archives_empty(self, isolate_wal):
-        wm = isolate_wal
-        archives = wm.list_archives()
-        assert archives == []
-
-    def test_list_archives_after_archive(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/test.php", ["f1"])
-        wm.archive_current_wal()
-        archives = wm.list_archives()
-        assert len(archives) == 1
-        assert "name" in archives[0]
-        assert "size_mb" in archives[0]
-
-
-class TestGetStatusText:
-    """Test get_status_text() — human-readable status."""
-
-    def test_get_status_text_tuple(self, isolate_wal):
-        wm = isolate_wal
-        result = wm.get_status_text()
-        assert isinstance(result, tuple)
-        assert len(result) == 3
-        status, text, size_mb = result
-        assert isinstance(status, str)
-        assert isinstance(text, str)
-
-
-# ── Compatibility ─────────────────────────────────────────────
-
-
-class TestReadWalRecords:
-    """Test read_wal_records() v1.7.8 compatibility alias."""
-
-    def test_read_wal_records_is_alias(self, isolate_wal):
-        wm = isolate_wal
-        wm.write_entry("add", "/test.php", ["f1"])
-        records = wm.read_wal_records()
-        assert len(records) == 1
-        assert records[0]["file_path"] == "/test.php"
-
-    def test_read_wal_records_with_limit(self, isolate_wal):
-        wm = isolate_wal
-        for i in range(5):
-            wm.write_entry("add", f"/tmp/{i}.php", [])
-        records = wm.read_wal_records(limit=3)
-        assert len(records) == 3
+    assert wal.replay({}) == 0
+
+    envelope = json.loads(wal.dead_letter_path.read_text(encoding="utf-8"))
+    assert envelope["reason"] == "malformed_record"
+    assert wal.read_entries() == []
+    assert len(wal.list_archives()) == 1
+
+
+def test_legacy_entry_replays_once(wal):
+    wal.path.write_text(
+        json.dumps(
+            {
+                "operation": "add",
+                "file_path": "/legacy.php",
+                "features": ["eval"],
+                "ip": "127.0.0.1",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    received = []
+
+    assert wal.replay({"add": received.append}) == 1
+    assert received[0]["version"] == 1
+    assert received[0]["file_path"] == "/legacy.php"
+    assert wal.replay({"add": received.append}) == 0
+    assert len(received) == 1
+
+
+def test_archive_refuses_to_discard_pending_transaction(wal):
+    wal.write_entry("upsert", payload={"record": {"id": 1}})
+
+    with pytest.raises(WalWriteError, match="pending transactions"):
+        wal.archive_current_wal()
+
+
+def test_completed_large_wal_rotates_without_losing_pending_data(tmp_path):
+    wal = WalManager(
+        tmp_path / "registry_wal.log",
+        settings_loader=lambda: {"wal_rotate_threshold_mb": 0.01},
+    )
+    transaction_id = wal.write_entry(
+        "upsert", payload={"record": {"blob": "x" * 20_000}}
+    )
+
+    wal.mark_completed(transaction_id)
+
+    assert wal.read_entries() == []
+    assert len(wal.list_archives()) == 1
+
+
+def test_status_and_info_are_safe_before_and_after_first_write(wal):
+    assert wal.get_info() == {}
+    assert wal.get_status() == ("normal", "WAL ready (0.0MB)", 0.0)
+
+    wal.write_entry("upsert", payload={"record": {"id": 1}})
+    info = wal.get_info()
+    assert info["name"] == "registry_wal.log"
+    assert info["pending"] == 1
+    assert wal.get_status()[0] == "normal"

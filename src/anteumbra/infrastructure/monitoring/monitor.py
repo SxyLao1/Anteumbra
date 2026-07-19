@@ -16,31 +16,19 @@ v1.8.1-Release: 平台自适应幽灵目录修复（改进版）
 import json
 import logging
 import os
-import re
 import sys
 import threading
 import time
 import queue
-from datetime import datetime
 import fnmatch
 from pathlib import Path
-from typing import Callable, Dict, Optional, Set
+from typing import Callable, Dict, Set
 from watchdog.events import FileSystemEventHandler
 from anteumbra.domain.runtime import RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
-from watchdog.observers import Observer
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
-from anteumbra.infrastructure.config.registry import ConfigRegistry
 from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-
-
-def _runtime_config() -> Dict:
-    """Read runtime configuration without making monitor teardown brittle."""
-    try:
-        return ConfigRegistry.get_raw_config()
-    except RuntimeError:
-        return {}
 
 
 class FileMonitorHandler(FileSystemEventHandler):
@@ -72,20 +60,13 @@ class FileMonitorHandler(FileSystemEventHandler):
         base_path: Path,
         logger: logging.Logger,
         website: 'Website' = None,
-        services: RuntimeServices | None = None,
+        *,
+        services: RuntimeServices,
     ):
         self.scan_callback = scan_callback
         self.scan_options = scan_options
         self.base_path = base_path
         self.logger = logger
-        if services is None:
-            from anteumbra.infrastructure.runtime_adapters import (
-                build_compatibility_runtime_services,
-            )
-
-            services = build_compatibility_runtime_services(
-                _runtime_config(), [website] if website else []
-            )
         self.services = services
         self.runtime = services.context
         self.site = (
@@ -573,9 +554,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         # scanner so an intentional restore produces neither a new finding nor
         # scan-log noise during its short guard window.
         try:
-            from anteumbra.infrastructure.quarantine import is_recently_restored
-
-            if is_recently_restored(str(event_path)):
+            if self.services.quarantine.is_recently_restored(str(event_path)):
                 self.logger.info(
                     "[RESTORE][SKIP] Recently restored file: %s",
                     event_path.name,
@@ -620,8 +599,6 @@ class FileMonitorHandler(FileSystemEventHandler):
                 # v1.0.9: 统一在此处完成 注册→事件化隔离，保证事务完整性
                 # Surgery 4 completion: quarantine + notification go through event bus.
                 try:
-                    from anteumbra.infrastructure.quarantine import is_recently_restored
-
                     # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
                     # 优先级: WAF事件日志 > LogAnalyzer(access log) > 默认127.0.0.1
                     first_seen_ip = "127.0.0.1"
@@ -632,7 +609,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                     try:
                         waf_log = Path("data/waf_events.jsonl")
                         if waf_log.exists():
-                            from datetime import datetime as _dt, timedelta as _td
+                            from datetime import datetime as _dt
                             now_dt = _dt.now()
                             with open(str(waf_log), 'r', encoding='utf-8') as f:
                                 lines = f.readlines()
@@ -710,7 +687,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                                          scan_result.engine, scan_result.features,
                                          first_seen_ip, "WARNING",
                                          reason="auto_quarantine_disabled")
-                    elif is_recently_restored(str(event_path)):
+                    elif self.services.quarantine.is_recently_restored(str(event_path)):
                         self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
                     else:
                         # Step 3: 事件化隔离 — quarantine_handler 处理全链路
@@ -953,19 +930,17 @@ class FileMonitorHandler(FileSystemEventHandler):
             }
         else:
             # v2.0 fix: Check if this file was quarantined before logging DELETE
-            from anteumbra.infrastructure.suspicious_registry import get_all
             is_quarantined = False
             try:
-                all_records = get_all(
-                    include_deleted=True, site_id=self.site.site_id
+                record = self.services.registry.get(
+                    event_path, site_id=self.site.site_id
                 )
-                rk = path_to_key(event_path)
-                for r in all_records:
-                    if isinstance(r, dict) and r.get("file_path") == rk and r.get("quarantine_id"):
-                        is_quarantined = True
-                        break
+                is_quarantined = bool(record and record.get("quarantine_id"))
             except Exception:
-                self.logger.debug("Failed to check quarantine status for deleted file", exc_info=True)
+                self.logger.warning(
+                    "Failed to check quarantine status for deleted file",
+                    exc_info=True,
+                )
 
             if is_quarantined:
                 log_with_symbol("quarantine_add", "info",
@@ -996,17 +971,11 @@ class WebsiteMonitor:
         website: Website,
         scan_callback: Callable,
         logger: logging.Logger,
-        services: RuntimeServices | None = None,
+        services: RuntimeServices,
     ):
         self.website = website
         self.scan_callback = scan_callback
         self.logger = logger
-        if services is None:
-            from anteumbra.infrastructure.runtime_adapters import (
-                build_compatibility_runtime_services,
-            )
-
-            services = build_compatibility_runtime_services(_runtime_config(), [website])
         self.services = services
         self._is_running = False
         self._baseline_stop = threading.Event()
@@ -1025,7 +994,6 @@ class WebsiteMonitor:
         )
 
         # 初始化Observer
-        from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
         self.observer = get_optimal_observer()
 
         # Linux权限检查

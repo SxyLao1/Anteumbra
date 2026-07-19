@@ -24,11 +24,13 @@ def build_runtime_container(
     plugin_manager: Any | None = None,
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
+    from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.config.registry import ConfigRegistry
     from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
+    from anteumbra.infrastructure.detection.memory_shell_tracer import MemoryShellTracer
     from anteumbra.infrastructure.detection.scanner import ScannerService
     from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
@@ -36,23 +38,40 @@ def build_runtime_container(
     from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
     from anteumbra.infrastructure.ip_blocker import IPBlocker
     from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository
+    from anteumbra.infrastructure.quarantine import QuarantineStore
     from anteumbra.infrastructure.runtime_adapters import EventPublisherRouter
+    from anteumbra.infrastructure.suspicious_registry import SuspiciousRegistry
     from anteumbra.infrastructure.threat_graph import ThreatGraph
     from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.infrastructure.utils.path_utils import normalize_path
+    from anteumbra.infrastructure.utils.sse_manager import SSEManager
+    from anteumbra.infrastructure.wal_manager import WalManager
 
     provider = TomlConfigProvider(config_path)
     ConfigRegistry.bind(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     events = EventPublisherRouter(plugin_manager)
+    wal = WalManager(
+        data_dir / "registry_wal.log",
+        settings_loader=lambda: provider.get().get("filesizes", {}),
+        event_publisher=events,
+        logger=get_logger("wal_manager"),
+    )
+    sse = SSEManager(
+        provider,
+        data_dir / "sse_log_buffer.json",
+        logger=get_logger("sse"),
+    )
     shadow_ledger = None
+    shadow_quarantine = None
+    shadow_registry = None
     storage = config.get("storage", {})
     if str(storage.get("backend", "json")).strip().lower() in {"sqlite", "both"}:
+        db_path = normalize_path(
+            storage.get("db_path") or storage.get("sqlite_path", "data/anteumbra.db")
+        )
         try:
-            db_path = normalize_path(
-                storage.get("db_path") or storage.get("sqlite_path", "data/anteumbra.db")
-            )
             shadow_ledger = SqliteRepository(
                 str(db_path),
                 table_name="block_ledger_entries",
@@ -63,17 +82,68 @@ def build_runtime_container(
             get_logger("block_ledger").exception(
                 "Block ledger SQLite shadow initialization failed; JSON remains authoritative"
             )
+        try:
+            shadow_quarantine = SqliteRepository(
+                str(db_path),
+                table_name="quarantine",
+                key_column="quarantine_id",
+                sort_column="created_at",
+            )
+        except Exception:
+            get_logger("quarantine").exception(
+                "Quarantine SQLite shadow initialization failed; JSON remains authoritative"
+            )
+        try:
+            shadow_registry = SqliteRepository(
+                str(db_path),
+                table_name="registry",
+                key_column="record_id",
+                sort_column="detected_at",
+            )
+        except Exception:
+            get_logger("suspicious_registry").exception(
+                "Registry SQLite shadow initialization failed; JSON remains authoritative"
+            )
     block_ledger = BlockLedger(
         data_dir / "block_ledger.json",
         shadow_repository=shadow_ledger,
         event_publisher=events,
+    )
+    quarantine_store = QuarantineStore(
+        data_dir / "quarantine",
+        site_resolver=provider.resolve_site_identity,
+        shadow_repository=shadow_quarantine,
+        logger=get_logger("quarantine"),
+    )
+    registry = SuspiciousRegistry(
+        data_dir / "suspicious_registry.json",
+        config=provider,
+        wal=wal,
+        event_publisher=events,
+        change_callback=sse.trigger_registry_update,
+        shadow_repository=shadow_registry,
+        logger=get_logger("suspicious_registry"),
+    )
+    registry.replay_wal()
+    quarantine = QuarantineService(
+        quarantine_store,
+        registry,
+        site_resolver=provider.resolve_site_identity,
+        logger=get_logger("quarantine_service"),
+    )
+    memory_shell_tracer = MemoryShellTracer(
+        registry_reader=registry.get_all,
+        config_provider=provider,
     )
     ip_blocker = IPBlocker.from_config(
         config.get("ip_blocker", {}),
         retry_path=data_dir / "block_retry_queue.json",
         log=get_logger("ip_blocker"),
     )
-    metrics = MetricsCollector(data_dir / "metrics.json")
+    metrics = MetricsCollector(
+        data_dir / "metrics.json",
+        registry_reader=registry.get_all,
+    )
     notifier = Notifier(config.get("notifier", {}), get_logger("monitor.notifier"), metrics)
     siem_exporter = SIEMExporter(config.get("siem", {}))
     hash_engine = HashEngine()
@@ -97,6 +167,11 @@ def build_runtime_container(
         scanner=scanner,
         ip_blocker=ip_blocker,
         block_ledger=block_ledger,
+        wal=wal,
+        sse=sse,
+        registry=registry,
+        quarantine=quarantine,
+        memory_shell_tracer=memory_shell_tracer,
     )
 
 
@@ -161,6 +236,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             container.notifier,
             container.siem_exporter,
             container.threat_graph,
+            container.quarantine,
         )
         container.plugin_manager = plugin_manager
         container.events.bind(plugin_manager)
@@ -173,7 +249,9 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             config,
             websites,
             event_publisher=container.events,
+            registry=container.registry,
             metrics=container.metrics,
+            quarantine=container.quarantine,
         )
 
         from anteumbra.interfaces.web.factory import create_app, create_runtime_server
@@ -182,12 +260,13 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         web_server = create_runtime_server(app, host, port)
         _launcher_state["web_server"] = web_server
 
-        _migrate_site_metadata(warnings)
+        _migrate_site_metadata(container, warnings)
         monitors, log_monitors, site_warnings = _start_site_monitors(
             websites,
             runtime_services=runtime_services,
             config_provider=container.config,
             notifier=container.notifier,
+            registry=container.registry,
             scan_callback=container.scanner.scan,
         )
         warnings.extend(site_warnings)
@@ -208,7 +287,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         )
         _launcher_state["threads"].extend(profile_threads)
 
-        _start_sse(warnings)
+        _start_sse(container.sse, warnings)
         _start_metrics(container.metrics, warnings)
         _start_siem(container.siem_exporter, warnings)
 
@@ -245,18 +324,11 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         stop_all()
 
 
-def _migrate_site_metadata(warnings: list[str]) -> None:
+def _migrate_site_metadata(container: RuntimeContainer, warnings: list[str]) -> None:
     """Backfill historical records once the configured site roots are available."""
     try:
-        from anteumbra.application.quarantine_service import (
-            migrate_site_metadata as migrate_quarantine_sites,
-        )
-        from anteumbra.application.registry_service import (
-            migrate_site_metadata as migrate_registry_sites,
-        )
-
-        registry_changed = migrate_registry_sites()
-        quarantine_changed = migrate_quarantine_sites()
+        registry_changed = container.registry.migrate_site_metadata()
+        quarantine_changed = container.quarantine.migrate_site_metadata()
         if registry_changed or quarantine_changed:
             print(
                 "[OK] Site metadata migrated: "
@@ -278,6 +350,7 @@ def _start_site_monitors(
     log_monitor_factory: Callable[..., Any] | None = None,
     config_provider: Any | None = None,
     notifier: Any | None = None,
+    registry: Any | None = None,
 ) -> tuple[list[Any], list[Any], list[str]]:
     if monitor_factory is None:
         from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
@@ -330,7 +403,7 @@ def _start_site_monitors(
             continue
         try:
             analyzer = analyzer_factory(website, site_logger)
-            if config_provider is None or notifier is None:
+            if config_provider is None or notifier is None or registry is None:
                 log_monitor = log_monitor_factory(site_logger, analyzer)
             else:
                 log_monitor = log_monitor_factory(
@@ -338,6 +411,7 @@ def _start_site_monitors(
                     analyzer,
                     config_provider=config_provider,
                     notifier=notifier,
+                    registry=registry,
                 )
             log_monitor.start()
             if getattr(log_monitor, "is_running", True):
@@ -398,6 +472,7 @@ def _start_plugins(
     notifier,
     siem_exporter,
     threat_graph,
+    quarantine,
 ):
     try:
         from anteumbra.application.plugin_manager import PluginManager
@@ -411,6 +486,7 @@ def _start_plugins(
                 notifier,
                 siem_exporter,
                 threat_graph,
+                quarantine,
             )
         )
         manager.init_from_config(config)
@@ -434,11 +510,10 @@ def _build_builtin_plugin_factories(
     notifier,
     siem_exporter,
     threat_graph,
+    quarantine,
 ) -> dict[str, Callable[[], Any]]:
     """Wire official plugins without allowing them to locate runtime services."""
-    from anteumbra.application.quarantine_service import quarantine_registered_file
     from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-    from anteumbra.infrastructure.quarantine import is_recently_restored
     from anteumbra.plugins.notifier_handler import NotifierHandlerPlugin
     from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
@@ -451,8 +526,8 @@ def _build_builtin_plugin_factories(
             config,
         ),
         "quarantine_handler": lambda: QuarantineHandlerPlugin(
-            quarantine_file=quarantine_registered_file,
-            recently_restored=is_recently_restored,
+            quarantine_file=quarantine.quarantine_file,
+            recently_restored=quarantine.is_recently_restored,
             events=event_publisher,
             runtime_config=config,
         ),
@@ -478,11 +553,11 @@ def _start_waf_poller(warnings: list[str]) -> None:
         warnings.append(f"WAF poller failed: {exc}")
 
 
-def _start_sse(warnings: list[str]) -> None:
+def _start_sse(sse, warnings: list[str]) -> None:
     try:
-        from anteumbra.infrastructure.utils.sse_manager import start_sse_worker
-
-        start_sse_worker()
+        if sse is None:
+            raise RuntimeError("SSEManager is not configured")
+        sse.start()
         _launcher_state["sse_started"] = True
     except Exception as exc:
         logger.exception("SSE worker startup failed")
@@ -566,6 +641,14 @@ def stop_all() -> None:
     if block_ledger:
         _stop_resource("block ledger", block_ledger.close)
 
+    registry = getattr(container, "registry", None)
+    quarantine = getattr(container, "quarantine", None)
+    if quarantine:
+        _stop_resource("quarantine", quarantine.close)
+
+    if registry:
+        _stop_resource("Registry", registry.close)
+
     notifier = getattr(container, "notifier", None)
     if notifier:
         _stop_resource("notifier", notifier.shutdown)
@@ -575,12 +658,9 @@ def stop_all() -> None:
         _stop_resource("SIEM exporter", siem_exporter.close)
 
     if state.get("sse_started"):
-        try:
-            from anteumbra.infrastructure.utils.sse_manager import stop_sse_worker
-
-            _stop_resource("SSE worker", stop_sse_worker)
-        except ImportError:
-            logger.exception("SSE shutdown import failed")
+        sse = getattr(container, "sse", None)
+        if sse:
+            _stop_resource("SSE worker", sse.stop)
 
     metrics = getattr(container, "metrics", None)
     if metrics:

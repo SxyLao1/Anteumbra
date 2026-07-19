@@ -13,22 +13,23 @@ from urllib.parse import unquote
 
 from flask import (
     Blueprint, render_template, request, jsonify,
-    Response, current_app, abort
+    current_app, abort
 )
+from markupsafe import escape as html_escape
 
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.application.registry_service import (
-    get_all, remove as registry_remove,
-    mark_false_positive, soft_delete_record, clear_memory_cache,
-)
 from anteumbra.application.path_service import normalize_path, path_to_key
-from anteumbra.application.sse_service import trigger_registry_update
 from anteumbra.interfaces.web.blueprints._shared import (
-    verify_file_in_registry, verify_file_in_quarantine, html_escape,
+    verify_file_in_registry, verify_file_in_quarantine,
 )
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
+
+
+def _registry():
+    """Return the Registry owned by the current Flask runtime."""
+    return get_runtime().registry
 
 # ── Blueprint ──────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ def _find_record(file_path, *, site_id=None):
     target = path_to_key(file_path)
     matches = [
         record
-        for record in get_all(
+        for record in _registry().get_all(
             include_deleted=True,
             include_false_positive=True,
             site_id=site_id,
@@ -128,10 +129,10 @@ def get_records():
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
         if force_reload:
-            clear_memory_cache()
+            _registry().reload()
             current_app.logger.info("[RECORDS] 强制刷新：已清除内存缓存")
 
-        all_records = get_all(
+        all_records = _registry().get_all(
             include_deleted=audit_mode,
             include_false_positive=audit_mode,
             site_id=site_id,
@@ -176,8 +177,6 @@ def manual_quarantine():
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
-        from anteumbra.application.quarantine_service import quarantine_registered_file
-
         record = _find_record(file_path, site_id=_requested_site_id())
 
         if not record:
@@ -187,7 +186,7 @@ def manual_quarantine():
 
         features = record.get("features", [])
         rule_name = features[0] if features else "manual_quarantine"
-        result = quarantine_registered_file(
+        result = get_runtime().quarantine.quarantine_file(
             file_path=str(file_path), rule_name=rule_name,
             features=features, original_path=str(file_path),
             site_id=record.get("site_id"), site_name=record.get("site_name"))
@@ -213,8 +212,6 @@ def records_batch():
         if not file_paths:
             return jsonify({'error': 'missing file_paths'}), 400
 
-        from anteumbra.application.quarantine_service import quarantine_registered_file
-
         results = {'success': 0, 'failed': 0, 'skipped': 0, 'errors': []}
         site_id = _requested_site_id()
         if action == 'quarantine':
@@ -226,7 +223,7 @@ def records_batch():
                         continue
                     features = record.get('features', [])
                     rule = features[0] if features else 'batch'
-                    qr = quarantine_registered_file(
+                    qr = get_runtime().quarantine.quarantine_file(
                         str(fp),
                         rule,
                         features,
@@ -254,7 +251,7 @@ def records_batch():
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
-                    if mark_false_positive(
+                    if _registry().mark_false_positive(
                         fp, '', record.get("site_id") if record else None
                     ):
                         results['success'] += 1
@@ -272,7 +269,7 @@ def records_batch():
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
-                    if soft_delete_record(
+                    if _registry().soft_delete_record(
                         fp, record.get("site_id") if record else None
                     ):
                         results['success'] += 1
@@ -321,8 +318,7 @@ def get_record_detail():
             display_name = Path(file_path).name
             file_size = 0
 
-        from anteumbra.application.quarantine_service import get_quarantine_list
-        quarantine_records = get_quarantine_list(
+        quarantine_records = get_runtime().quarantine.list_records(
             status=None, site_id=record.get("site_id")
         )
         quarantine_info = None
@@ -382,7 +378,9 @@ def get_record_detail():
 def search():
     """HTMX 搜索端点"""
     query = request.args.get('q', '').lower()
-    records = get_all(include_deleted=True, site_id=_requested_site_id())
+    records = _registry().get_all(
+        include_deleted=True, site_id=_requested_site_id()
+    )
     filtered = [r for r in records
                 if query in str(r.get("file_path", "")).lower()
                 or query in str(r.get("features", [])).lower()]
@@ -411,14 +409,14 @@ def remove_file(file_path):
         normalized_path = normalize_path(decoded_path)
         target_key = path_to_key(normalized_path)
         site_id = _requested_site_id()
-        success = registry_remove(target_key, site_id=site_id)
+        success = _registry().remove(target_key, site_id=site_id)
 
         if not success:
             return jsonify({"status": "error", "message": "删除失败或记录不存在"}), 404
 
-        trigger_registry_update()
+        get_runtime().sse.trigger_registry_update()
 
-        filtered_records = get_all(
+        filtered_records = _registry().get_all(
             include_deleted=False,
             include_false_positive=False,
             site_id=site_id,
@@ -451,13 +449,13 @@ def mark_false_positive_route(file_path):
         normalized_path = normalize_path(decoded_path)
 
         site_id = _requested_site_id()
-        ok = mark_false_positive(normalized_path, site_id=site_id)
+        ok = _registry().mark_false_positive(normalized_path, site_id=site_id)
         if not ok:
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
-        trigger_registry_update()
+        get_runtime().sse.trigger_registry_update()
 
-        filtered_records = get_all(
+        filtered_records = _registry().get_all(
             include_deleted=False,
             include_false_positive=False,
             site_id=site_id,
@@ -490,7 +488,7 @@ def audit_records():
         config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
-        all_records = get_all(
+        all_records = _registry().get_all(
             include_deleted=True,
             include_false_positive=True,
             site_id=_requested_site_id(),

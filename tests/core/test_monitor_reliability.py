@@ -4,6 +4,7 @@ import threading
 from types import SimpleNamespace
 
 from anteumbra.domain.entities import ScanResult
+from anteumbra.domain.runtime import RuntimeContext, RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
 
 
@@ -20,15 +21,40 @@ def _scanner_config():
     }
 
 
+def _services(
+    _base_path,
+    *,
+    config=None,
+    website=None,
+    registry=None,
+    quarantine=None,
+):
+    runtime_config = config or _scanner_config()
+    websites = [website] if website is not None and hasattr(website, "path") else []
+    context = RuntimeContext.from_websites(runtime_config, websites)
+    return RuntimeServices(
+        context=context,
+        registry=registry
+        or SimpleNamespace(add=lambda *_args, **_kwargs: None, remove=lambda *_args, **_kwargs: True),
+        metrics=SimpleNamespace(
+            increment=lambda *_args, **_kwargs: None,
+            increment_site=lambda *_args, **_kwargs: None,
+        ),
+        events=SimpleNamespace(publish=lambda *_args, **_kwargs: None),
+        quarantine=quarantine
+        or SimpleNamespace(is_recently_restored=lambda _path: False),
+    )
+
+
 def test_full_scan_queue_falls_back_to_synchronous_processing(monkeypatch, tmp_path):
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
-    monkeypatch.setattr(monitor_module, "_runtime_config", _scanner_config)
     handler = monitor_module.FileMonitorHandler(
         scan_callback=lambda *_args: None,
         scan_options=ScanOptions(monitor_extensions=[".php"]),
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.queue"),
+        services=_services(tmp_path),
     )
     try:
         handler._stop_scan_worker()
@@ -52,12 +78,12 @@ def test_full_scan_queue_falls_back_to_synchronous_processing(monkeypatch, tmp_p
 def test_handler_shutdown_stops_scan_worker(monkeypatch, tmp_path):
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
-    monkeypatch.setattr(monitor_module, "_runtime_config", _scanner_config)
     handler = monitor_module.FileMonitorHandler(
         scan_callback=lambda *_args: None,
         scan_options=ScanOptions(monitor_extensions=[".php"]),
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.shutdown"),
+        services=_services(tmp_path),
     )
     worker = handler._scan_worker_thread
 
@@ -99,7 +125,6 @@ def test_baseline_scan_queues_existing_script_files(monkeypatch, tmp_path):
             seen.set()
         return ScanResult(path, False, [], engine="test")
 
-    monkeypatch.setattr(monitor_module, "_runtime_config", _scanner_config)
     monkeypatch.setattr(
         "anteumbra.infrastructure.utils.platform_utils.get_optimal_observer",
         Observer,
@@ -115,6 +140,7 @@ def test_baseline_scan_queues_existing_script_files(monkeypatch, tmp_path):
         website,
         scan_callback,
         logging.getLogger("test.monitor.baseline"),
+        services=_services(tmp_path, website=website),
     )
     try:
         monitor.start()
@@ -126,7 +152,6 @@ def test_baseline_scan_queues_existing_script_files(monkeypatch, tmp_path):
 def _run_suspicious_scan_with_log_attribution(
     monkeypatch, tmp_path, *, log_monitor_enabled, analyzer_factory
 ):
-    from anteumbra.infrastructure import quarantine, suspicious_registry
     from anteumbra.infrastructure.monitoring import log_analyzer
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
@@ -136,6 +161,12 @@ def _run_suspicious_scan_with_log_attribution(
     website = SimpleNamespace(
         log_config={"log_monitor_enabled": log_monitor_enabled},
     )
+    registry = SimpleNamespace(
+        add=lambda path, features, **kwargs: recorded.append((path, features, kwargs)),
+        remove=lambda *_args, **_kwargs: True,
+    )
+    config = _scanner_config()
+    config["quarantine"] = {"auto_quarantine_enabled": False}
     handler = monitor_module.FileMonitorHandler(
         scan_callback=lambda path, *_args: ScanResult(
             path, True, ["test-rule"], engine="test"
@@ -144,17 +175,14 @@ def _run_suspicious_scan_with_log_attribution(
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.log-attribution"),
         website=website,
+        services=_services(
+            tmp_path,
+            config=config,
+            website=website,
+            registry=registry,
+        ),
     )
     try:
-        monkeypatch.setattr(monitor_module.ConfigRegistry, "get_raw_config", lambda: {
-            "quarantine": {"auto_quarantine_enabled": False}
-        })
-        monkeypatch.setattr(quarantine, "is_recently_restored", lambda _path: False)
-        monkeypatch.setattr(
-            suspicious_registry,
-            "add",
-            lambda path, features, **kwargs: recorded.append((path, features, kwargs)),
-        )
         monkeypatch.setattr(log_analyzer, "LogAnalyzer", analyzer_factory)
         monkeypatch.setattr(handler, "_emit_alert", lambda *_args, **_kwargs: None)
 
@@ -203,11 +231,16 @@ def test_file_detection_uses_log_attribution_when_log_monitor_is_enabled(
 def test_recently_restored_file_does_not_emit_a_duplicate_detection(
     monkeypatch, tmp_path
 ):
-    from anteumbra.infrastructure import quarantine, suspicious_registry
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
     restored = tmp_path / "restored.php"
     restored.write_text("<?php", encoding="utf-8")
+    registry = SimpleNamespace(
+        add=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("restored files must not be registered again")
+        ),
+        remove=lambda *_args, **_kwargs: True,
+    )
     handler = monitor_module.FileMonitorHandler(
         scan_callback=lambda path, *_args: ScanResult(
             path, True, ["test-rule"], engine="test"
@@ -216,16 +249,13 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.restore-guard"),
         website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(
+            tmp_path,
+            registry=registry,
+            quarantine=SimpleNamespace(is_recently_restored=lambda _path: True),
+        ),
     )
     try:
-        monkeypatch.setattr(quarantine, "is_recently_restored", lambda _path: True)
-        monkeypatch.setattr(
-            suspicious_registry,
-            "add",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                AssertionError("restored files must not be registered again")
-            ),
-        )
         monkeypatch.setattr(
             handler,
             "_emit_alert",
@@ -240,7 +270,6 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(
 
 
 def test_recently_restored_moved_file_is_not_scanned(monkeypatch, tmp_path):
-    from anteumbra.infrastructure import quarantine
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
     destination = tmp_path / "restored.php"
@@ -252,13 +281,15 @@ def test_recently_restored_moved_file_is_not_scanned(monkeypatch, tmp_path):
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.restore-move-guard"),
         website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(
+            tmp_path,
+            quarantine=SimpleNamespace(is_recently_restored=lambda _path: True),
+        ),
     )
     try:
         monkeypatch.setattr(handler, "_verify_directory", lambda _path: False)
         monkeypatch.setattr(handler, "_should_monitor", lambda _path: True)
         monkeypatch.setattr(handler, "_update_cache_on_move", lambda *_args: None)
-        monkeypatch.setattr(quarantine, "is_recently_restored", lambda _path: True)
-
         handler.on_moved(
             SimpleNamespace(
                 src_path=str(tmp_path / "quarantine-source.php"),
@@ -282,6 +313,7 @@ def test_moved_file_uses_the_standard_scan_queue(monkeypatch, tmp_path):
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.moved-queue"),
         website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(tmp_path),
     )
     queued = []
     try:

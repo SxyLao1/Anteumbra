@@ -285,7 +285,15 @@ def create_app(
 class WaitressRuntimeServer:
     """Small lifecycle adapter around Waitress' production WSGI server."""
 
-    def __init__(self, app: Flask, host: str, port: int, threads: int) -> None:
+    def __init__(
+        self,
+        app: Flask,
+        host: str,
+        port: int,
+        threads: int,
+        *,
+        sse_manager=None,
+    ) -> None:
         try:
             from waitress import create_server
         except ImportError as exc:
@@ -300,6 +308,7 @@ class WaitressRuntimeServer:
             threads=threads,
             ident="Anteumbra",
         )
+        self._sse = sse_manager
         self._closed = False
 
     def serve_forever(self) -> None:
@@ -309,9 +318,7 @@ class WaitressRuntimeServer:
         if self._closed:
             return
         try:
-            from anteumbra.application.sse_service import cleanup_sse_connections
-
-            if cleanup_sse_connections():
+            if self._sse is not None and self._sse.cleanup_connections():
                 # Give active generators a bounded chance to consume their
                 # sentinel before Waitress closes the underlying trigger.
                 time.sleep(0.15)
@@ -327,7 +334,14 @@ class WaitressRuntimeServer:
 
 def create_runtime_server(app: Flask, host: str, port: int, threaded: bool = True):
     """Bind Waitress synchronously so startup failures are visible."""
-    return WaitressRuntimeServer(app, host, port, threads=8 if threaded else 1)
+    runtime = app.extensions.get("anteumbra.runtime")
+    return WaitressRuntimeServer(
+        app,
+        host,
+        port,
+        threads=8 if threaded else 1,
+        sse_manager=getattr(runtime, "sse", None),
+    )
 
 
 def run_app(host: str = "127.0.0.1", port: int = 8080, threaded: bool = True):

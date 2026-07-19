@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from anteumbra.domain.runtime import RuntimeContext, RuntimeServices
+
 
 class _Observer:
     def schedule(self, *_args, **_kwargs):
@@ -24,6 +26,15 @@ def test_successful_monitor_startup_does_not_emit_critical_logs(monkeypatch, tmp
         path=tmp_path,
         scan_options=object(),
     )
+    services = RuntimeServices(
+        context=RuntimeContext.from_websites(
+            {"scanner": {}, "monitor": {}}, [website]
+        ),
+        registry=SimpleNamespace(),
+        metrics=SimpleNamespace(),
+        events=SimpleNamespace(),
+        quarantine=SimpleNamespace(is_recently_restored=lambda _path: False),
+    )
 
     monkeypatch.setattr(monitor_module, "FileMonitorHandler", Mock())
     monkeypatch.setattr(platform_utils, "get_optimal_observer", _Observer)
@@ -36,7 +47,9 @@ def test_successful_monitor_startup_does_not_emit_critical_logs(monkeypatch, tmp
         ),
     )
 
-    monitor = monitor_module.WebsiteMonitor(website, Mock(), logger)
+    monitor = monitor_module.WebsiteMonitor(
+        website, Mock(), logger, services=services
+    )
     monitor.start()
 
     logger.debug.assert_called_once_with("[DEBUG][CONFIG] Website配置: Test Site")
