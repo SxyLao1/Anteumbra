@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+No changes yet.
+
+---
+
+## [1.0.29] - 2026-07-19
+
 ### Fixed
 - Forced POSIX line endings for shell assets and normalized the Docker
   entrypoint during image construction, so images built from Windows clones no
@@ -62,7 +68,7 @@
   `site-packages` copy, so source regressions cannot pass against an old Wheel.
 
 ### Tests
-- Current source passes `496` non-browser tests, all `41` Playwright UI tests,
+- Current source passes `497` non-browser tests, all `41` Playwright UI tests,
   Ruff, `git diff --check`, and an import sweep of `116` package modules.
 - Added regressions for instance-owned lifecycle shutdown, service boundaries,
   site-qualified file/profile lookup, immutable cluster views, notification API,
@@ -74,7 +80,8 @@
   names, reserved/derived ID validation, and explicit CLI identity changes.
 - Added regressions for stable site log paths, legacy migration conflicts,
   multi-site history attribution/order, escaped rendering, and an absent
-  production `Server` header.
+  production `Server` header; deployment tests also enforce Docker's POSIX
+  entrypoint contract.
 
 ---
 
