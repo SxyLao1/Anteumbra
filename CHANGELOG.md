@@ -13,8 +13,9 @@
   headers, preventing the production HTTP response from advertising Anteumbra.
 - Keyed monitor logger ownership, `[site=<id>]` attribution, and
   `logs/<site_id>/monitor.log` paths by stable site ID; display-name log
-  directories are migrated and retained as history, so renaming a site no
-  longer hides logs or creates a second stream.
+  directories from both historical raw and sanitized layouts are migrated and
+  retained as history, so renaming a site no longer hides logs or creates a
+  second stream.
 - Canonicalized configured site display names by stable `website.id`, so a
   rename refreshes Registry/quarantine metadata without changing ownership.
 - Reserved the `legacy` site ID for unassigned records and made config

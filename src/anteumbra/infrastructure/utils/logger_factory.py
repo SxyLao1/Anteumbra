@@ -63,8 +63,7 @@ class RuntimeLoggerFactory:
     def get_site_history_paths(self, site: SiteIdentity) -> tuple[Path, ...]:
         """Return stable logs plus legacy display-name log files."""
         primary_dir = self.get_site_log_path(site).parent
-        legacy_dir = self._monitor_log_path(site.site_name).parent
-        directories = (primary_dir, legacy_dir)
+        directories = (primary_dir, *self._legacy_site_log_dirs(site))
         paths: list[Path] = []
         seen: set[str] = set()
         for directory in directories:
@@ -168,40 +167,60 @@ class RuntimeLoggerFactory:
             return runtime_logger
 
     def _monitor_log_path(self, scope: str) -> Path:
+        return self._monitor_log_base() / self._safe_scope(scope) / "monitor.log"
+
+    def _monitor_log_base(self) -> Path:
         config = self._config.get()
-        base = self._resolve_path(
+        return self._resolve_path(
             config.get("paths", {}).get("log_base_dir", "logs")
         )
-        return base / self._safe_scope(scope) / "monitor.log"
+
+    def _legacy_site_log_dirs(self, site: SiteIdentity) -> tuple[Path, ...]:
+        base = self._monitor_log_base()
+        candidates = [base / self._safe_scope(site.site_name)]
+        raw_name = str(site.site_name).strip()
+        if (
+            raw_name not in {"", ".", ".."}
+            and "/" not in raw_name
+            and "\\" not in raw_name
+        ):
+            candidates.append(base / raw_name)
+
+        directories: list[Path] = []
+        seen: set[str] = set()
+        for directory in candidates:
+            key = str(directory).casefold()
+            if key not in seen:
+                seen.add(key)
+                directories.append(directory)
+        return tuple(directories)
 
     def _migrate_legacy_site_logs(self, site: SiteIdentity) -> None:
         primary_dir = self.get_site_log_path(site).parent
-        legacy_dir = self._monitor_log_path(site.site_name).parent
-        if str(primary_dir).casefold() == str(legacy_dir).casefold():
-            return
-        if not legacy_dir.is_dir():
-            return
-
-        primary_dir.mkdir(parents=True, exist_ok=True)
-        for source in sorted(legacy_dir.glob("monitor.log*")):
-            if not source.is_file():
+        primary_key = str(primary_dir).casefold()
+        for legacy_dir in self._legacy_site_log_dirs(site):
+            if str(legacy_dir).casefold() == primary_key or not legacy_dir.is_dir():
                 continue
-            target = primary_dir / source.name
-            if target.exists():
-                target = self._next_legacy_archive(target, site.site_name)
+            primary_dir.mkdir(parents=True, exist_ok=True)
+            for source in sorted(legacy_dir.glob("monitor.log*")):
+                if not source.is_file():
+                    continue
+                target = primary_dir / source.name
+                if target.exists():
+                    target = self._next_legacy_archive(target, site.site_name)
+                try:
+                    source.replace(target)
+                except OSError:
+                    logger.warning(
+                        "Could not migrate legacy site log %s to %s",
+                        source,
+                        target,
+                        exc_info=True,
+                    )
             try:
-                source.replace(target)
+                legacy_dir.rmdir()
             except OSError:
-                logger.warning(
-                    "Could not migrate legacy site log %s to %s",
-                    source,
-                    target,
-                    exc_info=True,
-                )
-        try:
-            legacy_dir.rmdir()
-        except OSError:
-            pass
+                pass
 
     @classmethod
     def _next_legacy_archive(cls, target: Path, site_name: str) -> Path:

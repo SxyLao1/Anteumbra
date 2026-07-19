@@ -94,7 +94,7 @@ def test_site_logger_uses_stable_id_and_migrates_display_name_history(
 
     monkeypatch.delenv("ANTEUMBRA_TOOL_MODE", raising=False)
     root = tmp_path / "runtime"
-    legacy_log = root / "logs" / "Old_Name" / "monitor.log"
+    legacy_log = root / "logs" / "Old Name" / "monitor.log"
     legacy_log.parent.mkdir(parents=True)
     legacy_log.write_text("legacy history\n", encoding="utf-8")
     factory = RuntimeLoggerFactory(_Config(root / "config.toml", "[SITE]"))
