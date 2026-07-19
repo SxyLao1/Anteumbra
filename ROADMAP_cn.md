@@ -57,7 +57,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | 1.0.29 | 改名保持稳定站点身份、Launcher/登录限流实例所有权、ThreatGraph 站点隔离、稳定日志归属、服务 Protocol、Waitress 确定性关闭和 Docker/CI 加固 | 已发布 PyPI |
 | 1.0.30 | 清理 Registry 恢复边界并精确对账旧 SQLite 影子键 | 已发布 PyPI |
 | 1.0.31 | CLI 运行实例选择、防误覆盖配置、安装帮助与本机环境收敛 | 已发布 PyPI |
-| 1.0.32 | 安装摘要显示真实管理员身份与密码保留/重设语义 | 发布验证完成 |
+| 1.0.32 | 安装摘要显示真实管理员身份与密码保留/重设语义 | 已发布 PyPI |
 
 ---
 
@@ -71,8 +71,8 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | P0 | 验证 Docker build/run/health/检测链路 | 完成：健康、登录、检测、隔离和还原通过 |
 | P0 | 核对 README 命令与真实 CLI 输出 | Wheel/源码/专用 venv 冒烟已完成 |
 | P1 | 部署、架构与 Web 回归测试 | 完成：507 项非浏览器、41 项 UI |
-| P1 | 仅在以上检查全部通过且工作区干净后打 Tag | v1.0.32 发布门验证中 |
-| P1 | 验证 Trusted Publishing 与已发布 PyPI 包安装 | v1.0.31 已确认；v1.0.32 Tag 后核验 |
+| P1 | 仅在以上检查全部通过且工作区干净后打 Tag | v1.0.32 发布门已完成 |
+| P1 | 验证 Trusted Publishing 与已发布 PyPI 包安装 | v1.0.32 官方 Wheel 摘要、内容和纯净安装已确认 |
 
 ---
 
