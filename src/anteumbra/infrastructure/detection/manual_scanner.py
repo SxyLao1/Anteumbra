@@ -22,7 +22,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 from anteumbra.domain.site import SiteIdentity
-from anteumbra.domain.runtime import ConfigProviderPort, DetectionRegistryPort, MetricsPort
+from anteumbra.domain.runtime import (
+    ConfigProviderPort,
+    DetectionRegistryPort,
+    MetricsPort,
+)
+from anteumbra.domain.service_ports import ScannerPort
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 
 logger = logging.getLogger("monitor.manual_scanner")
@@ -58,7 +63,7 @@ class ManualScanner:
         site_name: Optional[str] = None,
         *,
         config_provider: ConfigProviderPort,
-        scanner_service,
+        scanner_service: ScannerPort,
         metrics: MetricsPort,
         registry: DetectionRegistryPort,
     ):

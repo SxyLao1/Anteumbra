@@ -6,12 +6,13 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from anteumbra.domain import DomainEvent, Plugin
+from anteumbra.domain.service_ports import SIEMExporterPort
 
 
 class SIEMHandlerPlugin(Plugin):
     """Export every suspicious-registry detection without coupling Registry to SIEM."""
 
-    def __init__(self, exporter: object, *, log: logging.Logger) -> None:
+    def __init__(self, exporter: SIEMExporterPort, *, log: logging.Logger) -> None:
         self._exporter = exporter
         self._logger = log
 

@@ -198,8 +198,6 @@ def scanner_run():
         return jsonify({"success": False, "error": "missing target_dir"}), 400
 
     runtime = get_runtime()
-    if runtime.scanner is None or runtime.metrics is None:
-        return jsonify({"success": False, "error": "scanner runtime is unavailable"}), 503
     try:
         identity = runtime.config.resolve_site_identity(
             target_dir, site_id=requested_site_id

@@ -3,13 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from anteumbra.domain.blocking import BlockLedgerPort, IPBlockerPort
 from anteumbra.domain.runtime import (
     BindableEventPublisherPort,
     ConfigProviderPort,
+    DetectionRegistryPort,
     RuntimeLoggingPort,
+    RuntimeMetricsPort,
+)
+from anteumbra.domain.service_ports import (
+    FileClusterEnginePort,
+    NotifierPort,
+    PluginManagerPort,
+    ScannerPort,
+    SIEMExporterPort,
+    SSEPort,
+    ThreatGraphPort,
+    WAFPollerPort,
+    WalPort,
+    YaraEnginePort,
 )
 
 if TYPE_CHECKING:
@@ -23,9 +37,9 @@ if TYPE_CHECKING:
 class RuntimeContainer:
     """Typed service inventory assembled only by the composition root.
 
-    Optional fields are populated as legacy global resources are migrated.
-    Keeping them named makes dependencies visible and prevents an arbitrary
-    string-keyed service locator from becoming the new architecture.
+    Required fields form the supported runtime contract. Optional fields are
+    capabilities that can genuinely be disabled, rather than placeholders for
+    dependencies that happen to be initialized later.
     """
 
     config: ConfigProviderPort
@@ -34,20 +48,18 @@ class RuntimeContainer:
     passwords: PasswordService
     config_history: ConfigHistoryLogger
     scan_state: ScanRuntimeState
-    plugin_manager: Any | None = None
-    metrics: Any | None = None
-    notifier: Any | None = None
-    siem_exporter: Any | None = None
-    yara_engine: Any | None = None
-    scanner: Any | None = None
-    threat_graph: Any | None = None
+    metrics: RuntimeMetricsPort
+    notifier: NotifierPort
+    siem_exporter: SIEMExporterPort
+    yara_engine: YaraEnginePort
+    scanner: ScannerPort
+    threat_graph: ThreatGraphPort
+    file_cluster_engine: FileClusterEnginePort
+    registry: DetectionRegistryPort
+    quarantine: QuarantineService
+    block_ledger: BlockLedgerPort
+    wal: WalPort
+    sse: SSEPort
+    plugin_manager: PluginManagerPort | None = None
     ip_blocker: IPBlockerPort | None = None
-    hash_engine: Any | None = None
-    file_cluster_engine: Any | None = None
-    registry: Any | None = None
-    quarantine: QuarantineService | None = None
-    memory_shell_tracer: Any | None = None
-    block_ledger: BlockLedgerPort | None = None
-    wal: Any | None = None
-    sse: Any | None = None
-    waf_poller: Any | None = None
+    waf_poller: WAFPollerPort | None = None

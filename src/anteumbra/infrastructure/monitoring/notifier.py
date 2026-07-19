@@ -240,15 +240,16 @@ class Notifier:
             self.logger.info(f"[ALERT][DRAIN] 主动疏通完成，{len(drained)}条告警已持久化")
         return len(drained)
 
-    def _safe_notify(
+    def enqueue_alert(
         self,
         message: str,
         level: str = "CRITICAL",
         *,
         site_id: str | None = None,
-    ):
+    ) -> bool:
         """
-        v1.7.9: 异步通知（唯一入口）
+        Queue an alert for asynchronous delivery.
+
         - 正常：写入队列
         - 队列积压>100: 丢弃旧告警，保留最新（防止内存爆炸）
         - 溢出：立即持久化到磁盘

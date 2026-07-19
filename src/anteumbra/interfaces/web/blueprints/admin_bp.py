@@ -181,8 +181,6 @@ def dashboard_content():
         from anteumbra.application.dashboard_service import build_dashboard_summary
 
         runtime = get_runtime()
-        if runtime.metrics is None:
-            raise RuntimeError("MetricsCollector is not configured")
         summary = build_dashboard_summary(
             request.args.get("site_id") or None,
             metrics=runtime.metrics,
@@ -385,17 +383,7 @@ def get_metric(metric_name):
     """获取单个指标（v1.7.2修复：返回HTML片段）"""
     try:
         metrics = get_runtime().metrics
-        if metrics is None:
-            raise RuntimeError("MetricsCollector is not configured")
-
-        # 安全获取指标，避免psutil异常
-        try:
-            metrics.record_memory_usage()
-        except Exception as e:
-            # Windows权限问题或psutil未安装
-            metrics._stats["memory_mb"] = 0
-            current_app.logger.warning(f"[METRICS] Memory monitoring failed: {e}")
-
+        metrics.record_memory_usage()
         data = metrics.get()
 
         if metric_name == 'scan_total':
@@ -449,8 +437,6 @@ def metrics_page():
     data = {}
     try:
         m = get_runtime().metrics
-        if m is None:
-            raise RuntimeError("MetricsCollector is not configured")
         data = m.get()
     except Exception:
         logger.debug("Failed to fetch metrics data for metrics_page", exc_info=True)
@@ -467,16 +453,7 @@ def metrics_data():
     """性能指标数据（v1.7.6-Patch12: 移除SSE属性，纯HTMX轮询）"""
     try:
         metrics = get_runtime().metrics
-        if metrics is None:
-            raise RuntimeError("MetricsCollector is not configured")
-
-        # 安全获取内存数据
-        try:
-            metrics.record_memory_usage()
-        except Exception as e:
-            current_app.logger.warning(f"[METRICS] 内存监控失败: {e}")
-            metrics._stats["memory_mb"] = 0
-
+        metrics.record_memory_usage()
         data = metrics.get()
 
         # 安全获取阈值配置

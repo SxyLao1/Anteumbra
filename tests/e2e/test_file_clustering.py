@@ -95,3 +95,32 @@ class TestFileClustering:
         assert "total_files" in stats, f"Stats should have total_files: {stats}"
         assert "total_clusters" in stats, f"Stats should have total_clusters: {stats}"
         assert stats["total_files"] >= 0, "total_files should be non-negative"
+
+    def test_cluster_engine_exposes_sorted_snapshots(self, tmp_path):
+        from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
+
+        class HashEngine:
+            track_name = "test"
+
+            @staticmethod
+            def hash_file(file_path):
+                return f"hash:{file_path}"
+
+            @staticmethod
+            def compare(_first, _second):
+                return 1.0
+
+        first = tmp_path / "first.php"
+        second = tmp_path / "second.php"
+        first.write_text("<?php eval($_POST['x']);", encoding="utf-8")
+        second.write_text("<?php eval($_GET['x']);", encoding="utf-8")
+        engine = FileClusterEngine(HashEngine())
+
+        engine.cluster_file(str(first))
+        engine.cluster_file(str(second))
+
+        clusters = engine.list_clusters()
+        assert [(cluster.size, cluster.hash_track) for cluster in clusters] == [
+            (2, "test")
+        ]
+        assert engine.list_clusters(min_size=3) == []

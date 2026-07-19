@@ -572,6 +572,39 @@ class TestThreatGraphSiteIsolation:
             "/srv/www/shell.php", site_id="beta"
         ).site_name == "Beta"
 
+    def test_file_profile_lookup_is_site_qualified(self, graph):
+        event = {
+            "src_ip": "198.51.100.25",
+            "timestamp": datetime.now().isoformat(),
+            "user_agent": "sqlmap/1.8",
+            "url": "/upload.php",
+        }
+        for site_id, site_name in (("alpha", "Alpha"), ("beta", "Beta")):
+            graph.ingest_waf_event({
+                **event,
+                "site_id": site_id,
+                "site_name": site_name,
+            })
+            graph.ingest_registry_entry({
+                "file_path": "/srv/www/shell.php",
+                "features": ["php_eval"],
+                "first_seen_ip": event["src_ip"],
+                "site_id": site_id,
+                "site_name": site_name,
+            })
+
+        assert {
+            profile.site_id
+            for profile in graph.find_profiles_for_file("/srv/www/shell.php")
+        } == {"alpha", "beta"}
+        assert [
+            profile.site_id
+            for profile in graph.find_profiles_for_file(
+                "/srv/www/shell.php",
+                site_id="alpha",
+            )
+        ] == ["alpha"]
+
     def test_profile_merge_stays_within_site(self, graph):
         base = {
             "src_ip": "203.0.113.7",

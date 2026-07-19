@@ -16,6 +16,7 @@ from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.runtime import EventPublisherPort
+from anteumbra.domain.service_ports import ThreatGraphPort
 
 
 class ThreatGraphHandlerPlugin(Plugin):
@@ -23,7 +24,7 @@ class ThreatGraphHandlerPlugin(Plugin):
 
     def __init__(
         self,
-        graph: object,
+        graph: ThreatGraphPort,
         events: EventPublisherPort,
         *,
         log: logging.Logger,
@@ -87,7 +88,12 @@ class ThreatGraphHandlerPlugin(Plugin):
 
     # -- Internal --
 
-    def _emit_updated(self, graph, site_id: str, site_name: str) -> None:
+    def _emit_updated(
+        self,
+        graph: ThreatGraphPort,
+        site_id: str,
+        site_name: str,
+    ) -> None:
         """Emit threat_graph_updated through the injected runtime port."""
         try:
             active = graph.get_active_profiles(site_id=site_id)

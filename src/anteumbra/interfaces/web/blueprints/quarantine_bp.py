@@ -29,10 +29,7 @@ def _record_matches_site(record, site_id):
 
 
 def _quarantine_service():
-    service = get_runtime().quarantine
-    if service is None:
-        raise RuntimeError("QuarantineService is not configured")
-    return service
+    return get_runtime().quarantine
 
 
 @quarantine_bp.route('/quarantine', methods=['GET'])

@@ -12,8 +12,8 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from anteumbra.domain import Repository
 from anteumbra.domain.logging import log_with_symbol
+from anteumbra.domain.service_ports import FileClusterEnginePort
 from anteumbra.domain.site import SiteIdentity
-from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
 from anteumbra.infrastructure.models import (
     AttackEvent,
     AttackerProfile,
@@ -56,7 +56,7 @@ class ThreatGraph:
     def __init__(
         self,
         config: Mapping[str, object],
-        file_cluster_engine: FileClusterEngine,
+        file_cluster_engine: FileClusterEnginePort,
         *,
         shadow_repository: Repository | None = None,
         log: logging.Logger | None = None,
@@ -423,6 +423,23 @@ class ThreatGraph:
                 return profile
             return profile if profile.site_id == self._normalize_site_id(site_id) else None
 
+    def find_profiles_for_file(
+        self,
+        path: str,
+        site_id: str | None = None,
+    ) -> List[AttackerProfile]:
+        """Return profiles linked to a file without exposing the profile table."""
+        path_key = self._path_key(path)
+        normalized_site = self._normalize_site_id(site_id) if site_id else None
+        with self._lock:
+            matches = [
+                profile
+                for profile in self._profiles.values()
+                if (normalized_site is None or profile.site_id == normalized_site)
+                and any(self._path_key(item) == path_key for item in profile.target_files)
+            ]
+        return sorted(matches, key=lambda profile: profile.risk_score, reverse=True)
+
     def get_active_profiles(
         self,
         min_score: float = 0.0,
@@ -502,6 +519,7 @@ class ThreatGraph:
                 f"[THREAT_GRAPH] Merged {merged} profiles by IP overlap",
                 self._logger,
             )
+        return merged
 
     # ── Basic Decay ───────────────────────────────────────────
 
@@ -529,6 +547,7 @@ class ThreatGraph:
 
             for pid in expired:
                 self._profiles[pid].status = "expired"
+        return len(expired)
 
     # ── Persistence ───────────────────────────────────────────
 

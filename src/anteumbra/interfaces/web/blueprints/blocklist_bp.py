@@ -18,8 +18,8 @@ blocklist_bp = Blueprint("blocklist", __name__, url_prefix="/admin")
 
 def _blocking_services():
     runtime = get_runtime()
-    if runtime.ip_blocker is None or runtime.block_ledger is None:
-        raise RuntimeError("IP blocking services are not configured")
+    if runtime.ip_blocker is None:
+        raise RuntimeError("IP blocking is not configured")
     return runtime.ip_blocker, runtime.block_ledger
 
 

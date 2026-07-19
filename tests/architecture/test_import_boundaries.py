@@ -252,6 +252,34 @@ def test_runtime_workflow_state_has_no_module_global_factories():
     )
 
 
+def test_runtime_container_has_no_untyped_or_unused_service_slots():
+    source = (
+        PACKAGE_ROOT / "application" / "runtime_container.py"
+    ).read_text(encoding="utf-8")
+
+    assert "Any" not in source
+    assert "hash_engine:" not in source
+    assert "memory_shell_tracer:" not in source
+
+
+def test_interfaces_and_plugins_do_not_reach_service_private_state():
+    forbidden = ("._stats", "._clusters", "._profiles", "._safe_notify")
+    violations: list[str] = []
+    for root in (PACKAGE_ROOT / "interfaces", PACKAGE_ROOT / "plugins"):
+        for path in root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            for token in forbidden:
+                if token in source:
+                    violations.append(
+                        f"{path.relative_to(PACKAGE_ROOT).as_posix()}: {token}"
+                    )
+
+    assert not violations, (
+        "cross-module integrations must use public service ports:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_symbol_logs_always_receive_an_explicit_logger():
     violations: list[str] = []
     for path in _python_files():

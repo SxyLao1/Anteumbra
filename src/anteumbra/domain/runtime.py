@@ -67,16 +67,32 @@ class DetectionRegistryPort(Protocol):
 
     def add(
         self,
-        file_path: Path,
+        file_path: str | Path,
         features: list[str],
+        first_seen_ip: str | None = None,
+        detection_source: str = "passive",
+        site_id: str | None = None,
+        site_name: str | None = None,
         *,
-        first_seen_ip: str | None,
-        detection_source: str,
-        site: SiteIdentity,
+        site: SiteIdentity | None = None,
     ) -> None:
         """Store or update a suspicious-file record."""
 
-    def remove(self, file_path: Path, *, site: SiteIdentity) -> bool:
+    def get_all(
+        self,
+        include_deleted: bool = False,
+        include_false_positive: bool = False,
+        site_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return a filtered defensive record snapshot."""
+
+    def remove(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+        *,
+        site: SiteIdentity | None = None,
+    ) -> bool:
         """Mark a suspicious-file record as removed within its site boundary."""
 
     def get(
@@ -100,6 +116,48 @@ class DetectionRegistryPort(Protocol):
         site_id: str | None = None,
     ) -> bool:
         """Clear quarantine state after a committed restore."""
+
+    def mark_alerted(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> bool:
+        """Mark a record after alert delivery."""
+
+    def mark_false_positive(
+        self,
+        file_path: str | Path,
+        reason: str = "",
+        site_id: str | None = None,
+    ) -> bool:
+        """Record a reviewed false positive."""
+
+    def soft_delete_record(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> bool:
+        """Soft-delete one record while preserving audit history."""
+
+    def increment_access(
+        self,
+        file_path: str | Path,
+        ip: str,
+        site_id: str | None = None,
+    ) -> None:
+        """Record one access-log correlation."""
+
+    def compact(self, compact_days: int | None = None) -> dict[str, int]:
+        """Permanently remove expired inactive records."""
+
+    def migrate_site_metadata(self) -> int:
+        """Backfill explicit site identity for historical records."""
+
+    def replay_wal(self) -> int:
+        """Replay pending Registry transactions."""
+
+    def close(self) -> None:
+        """Release persistence resources."""
 
 
 class MetricsPort(Protocol):
@@ -128,6 +186,22 @@ class MetricsPort(Protocol):
 
     def record_wechat_failure(self, *, site_id: str | None = None) -> None:
         """Record one WeChat channel failure."""
+
+
+class RuntimeMetricsPort(MetricsPort, Protocol):
+    """Metrics operations consumed by lifecycle and web diagnostics."""
+
+    def record_memory_usage(self) -> bool:
+        """Refresh process memory and report whether the probe succeeded."""
+
+    def get(self, site_id: str | None = None) -> dict[str, Any]:
+        """Return aggregate or site-qualified metrics."""
+
+    def start(self) -> None:
+        """Start persistence work."""
+
+    def stop(self, timeout: float = 2.0, persist: bool = True) -> bool:
+        """Stop persistence work."""
 
 
 class EventPublisherPort(Protocol):

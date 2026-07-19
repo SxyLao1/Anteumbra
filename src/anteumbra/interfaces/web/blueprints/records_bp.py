@@ -330,17 +330,16 @@ def get_record_detail():
         linked_profiles = []
         try:
             tg = get_runtime().threat_graph
-            if tg is None:
-                raise RuntimeError("ThreatGraph is not configured")
-            for pid, profile in tg._profiles.items():
-                if file_path in profile.target_files:
-                    linked_profiles.append({
-                        "profile_id": pid,
-                        "risk_score": round(profile.risk_score, 2),
-                        "ip_count": len(profile.ip_pool),
-                        "tool_signature": profile.tool_signature or "N/A",
-                    })
-            linked_profiles.sort(key=lambda p: p["risk_score"], reverse=True)
+            for profile in tg.find_profiles_for_file(
+                file_path,
+                site_id=record.get("site_id"),
+            ):
+                linked_profiles.append({
+                    "profile_id": profile.profile_id,
+                    "risk_score": round(profile.risk_score, 2),
+                    "ip_count": len(profile.ip_pool),
+                    "tool_signature": profile.tool_signature or "N/A",
+                })
         except Exception:
             logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 

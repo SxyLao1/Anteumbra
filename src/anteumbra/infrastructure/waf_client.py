@@ -102,6 +102,11 @@ class WAFPoller:
         self._last_poll_time: datetime | None = None
         self._seen_event_keys: set[str] = set()
 
+    @property
+    def source_name(self) -> str:
+        """Return the configured source name without exposing source internals."""
+        return self.source.get_name()
+
     def start(self) -> None:
         """Start one interruptible worker; repeated calls are idempotent."""
         with self._lock:
@@ -118,7 +123,7 @@ class WAFPoller:
             self._thread.start()
         self._logger.info(
             "WAF poller started: source=%s interval=%ss",
-            self.source.get_name(),
+            self.source_name,
             self._poll_interval(),
         )
 

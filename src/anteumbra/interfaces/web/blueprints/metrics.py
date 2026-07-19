@@ -27,17 +27,7 @@ def health_check():
 
         runtime = get_runtime()
         metrics = runtime.metrics
-        if metrics is None:
-            raise RuntimeError("MetricsCollector is not configured")
-
-        # 安全获取指标，避免psutil异常
-        try:
-            metrics.record_memory_usage()
-        except Exception as e:
-            # Windows权限问题或psutil未安装
-            metrics._stats["memory_mb"] = 0
-            logger.warning(f"[METRICS] Memory monitoring failed: {e}")
-
+        metrics.record_memory_usage()
         data = metrics.get()
 
         # 安全访问registry队列大小

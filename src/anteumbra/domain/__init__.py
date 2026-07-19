@@ -22,8 +22,22 @@ from anteumbra.domain.runtime import (
     EventPublisherPort,
     MetricsPort,
     RuntimeLoggingPort,
+    RuntimeMetricsPort,
     RuntimeContext,
     RuntimeServices,
+)
+from anteumbra.domain.service_ports import (
+    FileClusterEnginePort,
+    FileClusterViewPort,
+    NotifierPort,
+    PluginManagerPort,
+    ScannerPort,
+    SIEMExporterPort,
+    SSEPort,
+    ThreatGraphPort,
+    WAFPollerPort,
+    WalPort,
+    YaraEnginePort,
 )
 
 __all__ = [
@@ -38,6 +52,9 @@ __all__ = [
     "BlockDecision", "BlockLedgerEntry", "BlockLedgerPort", "BlockResult",
     "IPBlockerPort", "canonical_ip",
     "ConfigProviderPort", "BindableEventPublisherPort", "DetectionRegistryPort",
-    "EventPublisherPort", "MetricsPort", "RuntimeLoggingPort",
+    "EventPublisherPort", "FileClusterEnginePort", "FileClusterViewPort",
+    "MetricsPort", "NotifierPort", "PluginManagerPort", "RuntimeLoggingPort",
+    "RuntimeMetricsPort", "ScannerPort", "SIEMExporterPort", "SSEPort",
+    "ThreatGraphPort", "WAFPollerPort", "WalPort", "YaraEnginePort",
     "RuntimeContext", "RuntimeServices",
 ]

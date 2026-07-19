@@ -7,12 +7,25 @@ import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.application.runtime_health_service import assess_runtime_capabilities
-from anteumbra.domain.runtime import ConfigProviderPort
+from anteumbra.domain.runtime import (
+    ConfigProviderPort,
+    DetectionRegistryPort,
+    EventPublisherPort,
+    RuntimeMetricsPort,
+)
+from anteumbra.domain.service_ports import (
+    NotifierPort,
+    PluginManagerPort,
+    SIEMExporterPort,
+    SSEPort,
+    ThreatGraphPort,
+    WAFPollerPort,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +33,33 @@ logger = logging.getLogger(__name__)
 
 class RuntimeStartupError(RuntimeError):
     """Raised when the complete runtime cannot be started safely."""
+
+
+class MonitorResourcePort(Protocol):
+    """Lifecycle surface shared by file and access-log monitors."""
+
+    @property
+    def is_running(self) -> bool:
+        """Return whether the monitor worker is active."""
+
+    def start(self) -> None:
+        """Start monitoring."""
+
+    def stop(self) -> None:
+        """Stop monitoring."""
+
+
+class RuntimeServerPort(Protocol):
+    """Bound web-server lifecycle owned by RuntimeLifecycle."""
+
+    def serve_forever(self) -> None:
+        """Serve requests until shutdown."""
+
+    def shutdown(self) -> None:
+        """Stop accepting and serving requests."""
+
+    def server_close(self) -> None:
+        """Release the bound listener."""
 
 
 @dataclass(slots=True)
@@ -31,13 +71,13 @@ class RuntimeState:
     stopped: bool = False
     warnings: list[str] = field(default_factory=list)
     websites: list[str] = field(default_factory=list)
-    monitors: list[Any] = field(default_factory=list)
-    log_monitors: list[Any] = field(default_factory=list)
+    monitors: list[MonitorResourcePort] = field(default_factory=list)
+    log_monitors: list[MonitorResourcePort] = field(default_factory=list)
     threads: list[threading.Thread] = field(default_factory=list)
     stop_event: threading.Event = field(default_factory=threading.Event)
     container: RuntimeContainer | None = None
     pid_file: Path | None = None
-    web_server: Any | None = None
+    web_server: RuntimeServerPort | None = None
     web_thread: threading.Thread | None = None
     profile_tailer: JsonlEventTailer | None = None
     sse_started: bool = False
@@ -46,7 +86,7 @@ class RuntimeState:
 def build_runtime_container(
     config_path: str | Path | None = None,
     *,
-    plugin_manager: Any | None = None,
+    plugin_manager: PluginManagerPort | None = None,
     config_provider: ConfigProviderPort | None = None,
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
@@ -58,7 +98,6 @@ def build_runtime_container(
     from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
-    from anteumbra.infrastructure.detection.memory_shell_tracer import MemoryShellTracer
     from anteumbra.infrastructure.detection.scanner import ScannerService
     from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
@@ -182,10 +221,6 @@ def build_runtime_container(
         site_resolver=provider.resolve_site_identity,
         logger=runtime_logging.get_logger("quarantine_service"),
     )
-    memory_shell_tracer = MemoryShellTracer(
-        registry_reader=registry.get_all,
-        config_provider=provider,
-    )
     waf_poller = build_waf_poller(
         provider,
         data_dir / "waf_events.jsonl",
@@ -229,7 +264,6 @@ def build_runtime_container(
         metrics=metrics,
         notifier=notifier,
         siem_exporter=siem_exporter,
-        hash_engine=hash_engine,
         file_cluster_engine=file_cluster_engine,
         threat_graph=threat_graph,
         yara_engine=yara_engine,
@@ -240,7 +274,6 @@ def build_runtime_container(
         sse=sse,
         registry=registry,
         quarantine=quarantine,
-        memory_shell_tracer=memory_shell_tracer,
         waf_poller=waf_poller,
     )
 
@@ -571,15 +604,15 @@ def _start_site_monitors(
     websites,
     *,
     runtime_services: Any | None = None,
-    monitor_factory: Callable[..., Any] | None = None,
+    monitor_factory: Callable[..., MonitorResourcePort] | None = None,
     logger_factory: Callable[[str], logging.Logger] | None = None,
     scan_callback: Callable[..., Any] | None = None,
     analyzer_factory: Callable[..., Any] | None = None,
-    log_monitor_factory: Callable[..., Any] | None = None,
-    config_provider: Any | None = None,
-    notifier: Any | None = None,
-    registry: Any | None = None,
-) -> tuple[list[Any], list[Any], list[str]]:
+    log_monitor_factory: Callable[..., MonitorResourcePort] | None = None,
+    config_provider: ConfigProviderPort | None = None,
+    notifier: NotifierPort | None = None,
+    registry: DetectionRegistryPort | None = None,
+) -> tuple[list[MonitorResourcePort], list[MonitorResourcePort], list[str]]:
     if monitor_factory is None:
         from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
 
@@ -597,8 +630,8 @@ def _start_site_monitors(
 
         log_monitor_factory = LogMonitor
 
-    monitors: list[Any] = []
-    log_monitors: list[Any] = []
+    monitors: list[MonitorResourcePort] = []
+    log_monitors: list[MonitorResourcePort] = []
     warnings: list[str] = []
     for website in websites:
         site_logger = logger_factory(website.name)
@@ -653,9 +686,9 @@ def _start_site_monitors(
 
 
 def _start_profile_workers(
-    threat_graph,
-    runtime_logger,
-    stop_event,
+    threat_graph: ThreatGraphPort,
+    runtime_logger: logging.Logger,
+    stop_event: threading.Event,
     data_dir: Path,
 ) -> tuple[list[threading.Thread], JsonlEventTailer]:
     cache_path = data_dir / "waf_events.jsonl"
@@ -695,13 +728,13 @@ def _start_profile_workers(
 def _start_plugins(
     config: dict[str, Any],
     warnings: list[str],
-    metrics,
-    notifier,
-    siem_exporter,
-    threat_graph,
+    metrics: RuntimeMetricsPort,
+    notifier: NotifierPort,
+    siem_exporter: SIEMExporterPort,
+    threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
-) -> Any | None:
+) -> PluginManagerPort | None:
     manager = None
     try:
         from anteumbra.application.plugin_manager import PluginManager
@@ -739,10 +772,10 @@ def _start_plugins(
 
 def _build_builtin_plugin_factories(
     config: dict[str, Any],
-    event_publisher,
-    notifier,
-    siem_exporter,
-    threat_graph,
+    event_publisher: EventPublisherPort,
+    notifier: NotifierPort,
+    siem_exporter: SIEMExporterPort,
+    threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
 ) -> dict[str, Callable[[], Any]]:
@@ -783,20 +816,21 @@ def _build_builtin_plugin_factories(
     }
 
 
-def _start_waf_poller(poller, warnings: list[str]) -> None:
+def _start_waf_poller(
+    poller: WAFPollerPort | None,
+    warnings: list[str],
+) -> None:
     try:
         if poller:
             poller.start()
-            print(f"[OK] WAF poller: {poller.source.get_name()}")
+            print(f"[OK] WAF poller: {poller.source_name}")
     except Exception as exc:
         logger.exception("WAF poller startup failed")
         warnings.append(f"WAF poller failed: {exc}")
 
 
-def _start_sse(sse, warnings: list[str]) -> bool:
+def _start_sse(sse: SSEPort, warnings: list[str]) -> bool:
     try:
-        if sse is None:
-            raise RuntimeError("SSEManager is not configured")
         sse.start()
         return True
     except Exception as exc:
@@ -805,7 +839,7 @@ def _start_sse(sse, warnings: list[str]) -> bool:
         return False
 
 
-def _start_metrics(metrics, warnings: list[str]) -> None:
+def _start_metrics(metrics: RuntimeMetricsPort, warnings: list[str]) -> None:
     try:
         metrics.start()
     except Exception as exc:
@@ -813,9 +847,9 @@ def _start_metrics(metrics, warnings: list[str]) -> None:
         warnings.append(f"Metrics failed: {exc}")
 
 
-def _start_siem(exporter, warnings: list[str]) -> None:
+def _start_siem(exporter: SIEMExporterPort, warnings: list[str]) -> None:
     try:
-        if exporter is not None and exporter.enabled:
+        if exporter.enabled:
             print(f"[OK] SIEM export: {exporter.format} -> {exporter.export_path}")
     except Exception as exc:
         logger.exception("SIEM startup failed")

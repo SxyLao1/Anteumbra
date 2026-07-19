@@ -54,8 +54,6 @@ def _get_rules_path(config: Optional[Dict] = None) -> Path:
 def _reload_rules(expected_filename: Optional[str] = None) -> Tuple[bool, str]:
     """Reload the scanner and verify that a changed file joined the active set."""
     engine = get_runtime().yara_engine
-    if engine is None:
-        return False, "YaraEngine is not configured"
     if Path(engine.rules_path).resolve() != _get_rules_path().resolve():
         return False, "活动规则目录与当前配置不一致，请重启 Anteumbra"
     if not engine.reload():

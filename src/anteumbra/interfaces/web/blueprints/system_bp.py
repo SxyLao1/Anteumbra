@@ -255,13 +255,7 @@ def _config_panel_context(
     page = min(max(1, page), total_pages)
     start = (page - 1) * per_page
     engine = runtime.yara_engine
-    if engine is None:
-        raise RuntimeError("YaraEngine is not configured")
-    rule_stats = (
-        engine.get_rule_stats()
-        if hasattr(engine, "get_rule_stats")
-        else {}
-    )
+    rule_stats = engine.get_rule_stats()
     return {
         "config_signature": config_signature,
         "config_path": str(runtime.config.path),

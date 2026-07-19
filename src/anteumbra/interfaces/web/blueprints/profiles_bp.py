@@ -37,8 +37,6 @@ def profiles_list():
     """画像列表页 — 服务端渲染 + 分页 + 搜索"""
     try:
         graph = get_runtime().threat_graph
-        if graph is None:
-            raise RuntimeError("ThreatGraph is not configured")
         site_id = _requested_site_id()
         all_profiles = graph.get_active_profiles(min_score=0.1, site_id=site_id)
 
@@ -104,8 +102,6 @@ def profiles_data():
     """画像数据 API"""
     try:
         graph = get_runtime().threat_graph
-        if graph is None:
-            raise RuntimeError("ThreatGraph is not configured")
         site_id = _requested_site_id()
         profiles = graph.get_active_profiles(min_score=0.1, site_id=site_id)
         result = []
@@ -140,8 +136,6 @@ def profile_detail_page(profile_id):
     """画像详情（攻击链时间线 + 关联文件 + 关联记录）"""
     try:
         graph = get_runtime().threat_graph
-        if graph is None:
-            raise RuntimeError("ThreatGraph is not configured")
         profile = graph.query_profile(profile_id, site_id=_requested_site_id())
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
@@ -177,8 +171,6 @@ def profile_detail_page(profile_id):
         try:
             runtime = get_runtime()
             ce = runtime.file_cluster_engine
-            if ce is None:
-                raise RuntimeError("FileClusterEngine is not configured")
             quarantined_map = {}
             for q in runtime.quarantine.list_records(
                 status="quarantined", limit=500, site_id=profile.site_id
@@ -256,8 +248,6 @@ def profile_report(profile_id):
     """攻击者画像报告（可打印 HTML）"""
     try:
         graph = get_runtime().threat_graph
-        if graph is None:
-            raise RuntimeError("ThreatGraph is not configured")
         profile = graph.query_profile(profile_id, site_id=_requested_site_id())
         if not profile:
             return render_template('admin/error.html', error="Profile not found"), 404
@@ -281,21 +271,16 @@ def file_clusters_page():
     """文件聚类列表页面"""
     try:
         engine = get_runtime().file_cluster_engine
-        if engine is None:
-            raise RuntimeError("FileClusterEngine is not configured")
-        clusters = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)
+        clusters = engine.list_clusters()
         enriched = []
         for c in clusters:
-            # v2.0 fix: Include single-file clusters (was size < 2 filter)
-            if c.size < 1:
-                continue
             enriched.append({
                 "cluster_id": c.cluster_id,
                 "size": c.size,
                 "samples": c.sample_files,
                 "created": c.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "hash_track": c.hash_track if hasattr(c, 'hash_track') else 'unknown',
-                "threshold": c.threshold if hasattr(c, 'threshold') else 0.80,
+                "hash_track": c.hash_track,
+                "threshold": c.threshold,
             })
         total_files = sum(c["size"] for c in enriched)
         multi_count = sum(1 for c in enriched if c["size"] > 2)
@@ -318,16 +303,14 @@ def clusters_stats():
     """文件聚类统计 API"""
     try:
         engine = get_runtime().file_cluster_engine
-        if engine is None:
-            raise RuntimeError("FileClusterEngine is not configured")
         stats = engine.get_stats()
-        top = sorted(engine._clusters.values(), key=lambda c: c.size, reverse=True)[:10]
+        top = engine.list_clusters(min_size=2, limit=10)
         stats["top_clusters"] = [{
             "cluster_id": c.cluster_id,
             "size": c.size,
             "samples": c.sample_files,
             "created": c.created_at.strftime("%H:%M:%S"),
-        } for c in top if c.size > 1]
+        } for c in top]
         return jsonify(stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

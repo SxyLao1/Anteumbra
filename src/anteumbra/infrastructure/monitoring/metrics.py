@@ -125,13 +125,20 @@ class MetricsCollector:
         """Record one WeChat notification failure."""
         self.increment("wechat_failures", site_id=site_id)
 
-    def record_memory_usage(self) -> None:
-        """Sample the current process resident memory in MB."""
-        import psutil
+    def record_memory_usage(self) -> bool:
+        """Sample resident memory, publishing zero when the probe is unavailable."""
+        try:
+            import psutil
 
-        memory_mb = psutil.Process().memory_info().rss / 1024 / 1024
+            memory_mb = psutil.Process().memory_info().rss / 1024 / 1024
+            available = True
+        except Exception:
+            logger.warning("Memory metrics sample failed", exc_info=True)
+            memory_mb = 0
+            available = False
         with self._lock:
             self._stats["memory_mb"] = memory_mb
+        return available
 
     def get(self, site_id: str | None = None) -> dict[str, Any]:
         """Return an aggregate or site-specific defensive snapshot."""
@@ -152,10 +159,7 @@ class MetricsCollector:
             if self._worker is not None and self._worker.is_alive():
                 return
             self.load_persisted()
-            try:
-                self.record_memory_usage()
-            except Exception:
-                logger.warning("Initial memory metrics sample failed", exc_info=True)
+            self.record_memory_usage()
             self._stop_event.clear()
             self._worker = threading.Thread(
                 target=self._persistence_worker,

@@ -57,7 +57,7 @@ def test_incomplete_enabled_channels_never_attempt_network(tmp_path, monkeypatch
     assert notifier.channels["email"]["enabled"] is False
     assert notifier.channels["wechat"]["enabled"] is False
     assert notifier._alert_thread is None
-    assert notifier._safe_notify("detected", "CRITICAL") is False
+    assert notifier.enqueue_alert("detected", "CRITICAL") is False
     assert smtp_calls == []
     assert metrics.counters["alert_total"] == 1
     assert metrics.outcomes[-1][0] == "skipped"
@@ -72,7 +72,7 @@ def test_notification_metrics_keep_the_originating_site(tmp_path, monkeypatch):
         {"enabled": False}, logging.getLogger("test.notifier.site-metrics"), metrics
     )
 
-    assert notifier._safe_notify("detected", site_id="alpha") is False
+    assert notifier.enqueue_alert("detected", site_id="alpha") is False
     assert metrics.site_counters["alpha"]["alert_total"] == 1
     assert metrics.site_outcomes[-1] == (
         "skipped",

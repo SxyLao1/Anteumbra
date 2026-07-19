@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 
 from anteumbra.domain.entities import ScanResult
 from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
+from anteumbra.domain.service_ports import YaraEnginePort
 from anteumbra.infrastructure.models import ScanOptions
 
 
@@ -97,7 +98,11 @@ class StaticScanner(BaseScanner):
 class YaraScanner(BaseScanner):
     """Adapter from the runtime-owned YARA engine to the scanner strategy API."""
 
-    def __init__(self, config_provider: ConfigProviderPort, engine: Any) -> None:
+    def __init__(
+        self,
+        config_provider: ConfigProviderPort,
+        engine: YaraEnginePort,
+    ) -> None:
         self.config_provider = config_provider
         self.engine = engine
 
@@ -259,7 +264,7 @@ class ScannerService:
     def __init__(
         self,
         config_provider: ConfigProviderPort,
-        yara_engine: Any,
+        yara_engine: YaraEnginePort,
         metrics: MetricsPort,
     ) -> None:
         self.config_provider = config_provider

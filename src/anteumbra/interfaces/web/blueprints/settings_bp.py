@@ -19,10 +19,7 @@ settings_bp = Blueprint('settings', __name__, url_prefix='/admin')
 
 
 def _siem_exporter():
-    exporter = get_runtime().siem_exporter
-    if exporter is None:
-        raise RuntimeError("SIEMExporter is not configured")
-    return exporter
+    return get_runtime().siem_exporter
 
 
 @settings_bp.route('/settings')

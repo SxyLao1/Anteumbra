@@ -76,6 +76,7 @@ def test_two_pollers_do_not_share_cache_or_lifecycle(tmp_path):
 
     assert first.is_running is False
     assert second.is_running is False
+    assert first.source_name == "test"
     assert first._cache_path != second._cache_path
 
 

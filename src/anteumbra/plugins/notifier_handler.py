@@ -6,7 +6,7 @@ Subscribes to ``alert_requested`` events emitted by monitor.py and other
 components. Formats the alert message using the existing ``format_alert_message()``
 and dispatches it through the concrete ``Notifier`` instance.
 
-This plugin replaces the inline ``self.notifier._safe_notify()`` calls that
+This plugin replaces inline notifier calls that
 were previously scattered across FileMonitorHandler.
 """
 import logging
@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping
 from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain.service_ports import NotifierPort
 
 
 class NotifierHandlerPlugin(Plugin):
@@ -21,7 +22,7 @@ class NotifierHandlerPlugin(Plugin):
 
     def __init__(
         self,
-        notifier: object,
+        notifier: NotifierPort,
         formatter: Callable[[dict[str, Any]], str],
         runtime_config: Mapping[str, Any],
         *,
@@ -92,7 +93,7 @@ class NotifierHandlerPlugin(Plugin):
     def _send(self, message: str, level: str, site_id: str | None = None) -> None:
         """Send alert through concrete Notifier instance (best-effort)."""
         try:
-            self._notifier._safe_notify(message, level=level, site_id=site_id)
+            self._notifier.enqueue_alert(message, level=level, site_id=site_id)
             self._logger.info("NotifierHandler: queued alert level=%s", level)
         except Exception as e:
-            self._logger.warning("NotifierHandler: _safe_notify 失败: %s", e)
+            self._logger.warning("NotifierHandler: enqueue_alert 失败: %s", e)
