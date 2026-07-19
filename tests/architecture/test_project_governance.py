@@ -46,6 +46,18 @@ def test_active_document_names_no_longer_use_zh_suffix():
     )
 
 
+def test_obsolete_windows_launchers_are_absent():
+    obsolete = [
+        path.name
+        for path in (PROJECT_ROOT / "start.bat", PROJECT_ROOT / "stop.bat")
+        if path.exists()
+    ]
+    assert not obsolete, (
+        "use the cross-platform 'anteumbra start/stop' CLI instead of unsafe "
+        "machine-specific launchers: " + ", ".join(obsolete)
+    )
+
+
 def test_local_markdown_links_resolve():
     broken: list[str] = []
     for document in _documentation_files():
