@@ -45,6 +45,7 @@ def build_runtime_container(
     from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.infrastructure.utils.path_utils import normalize_path
     from anteumbra.infrastructure.utils.sse_manager import SSEManager
+    from anteumbra.infrastructure.waf_client import build_waf_poller
     from anteumbra.infrastructure.wal_manager import WalManager
 
     provider = TomlConfigProvider(config_path)
@@ -66,6 +67,7 @@ def build_runtime_container(
     shadow_ledger = None
     shadow_quarantine = None
     shadow_registry = None
+    shadow_threat_profiles = None
     storage = config.get("storage", {})
     if str(storage.get("backend", "json")).strip().lower() in {"sqlite", "both"}:
         db_path = normalize_path(
@@ -104,6 +106,17 @@ def build_runtime_container(
             get_logger("suspicious_registry").exception(
                 "Registry SQLite shadow initialization failed; JSON remains authoritative"
             )
+        try:
+            shadow_threat_profiles = SqliteRepository(
+                str(db_path),
+                table_name="threat_profiles",
+                key_column="profile_id",
+                sort_column="updated_at",
+            )
+        except Exception:
+            get_logger("threat_graph").exception(
+                "Threat profile SQLite shadow initialization failed; JSON remains authoritative"
+            )
     block_ledger = BlockLedger(
         data_dir / "block_ledger.json",
         shadow_repository=shadow_ledger,
@@ -135,6 +148,11 @@ def build_runtime_container(
         registry_reader=registry.get_all,
         config_provider=provider,
     )
+    waf_poller = build_waf_poller(
+        provider,
+        data_dir / "waf_events.jsonl",
+        log=get_logger("waf_client"),
+    )
     ip_blocker = IPBlocker.from_config(
         config.get("ip_blocker", {}),
         retry_path=data_dir / "block_retry_queue.json",
@@ -148,7 +166,11 @@ def build_runtime_container(
     siem_exporter = SIEMExporter(config.get("siem", {}))
     hash_engine = HashEngine()
     file_cluster_engine = FileClusterEngine(hash_engine)
-    threat_graph = ThreatGraph(config, file_cluster_engine)
+    threat_graph = ThreatGraph(
+        config,
+        file_cluster_engine,
+        shadow_repository=shadow_threat_profiles,
+    )
     threat_graph.set_persist_path(data_dir / "threat_intel" / "threat_graph.json")
     threat_graph.load()
     yara_engine = build_yara_engine(provider, get_logger("yara"))
@@ -172,6 +194,7 @@ def build_runtime_container(
         registry=registry,
         quarantine=quarantine,
         memory_shell_tracer=memory_shell_tracer,
+        waf_poller=waf_poller,
     )
 
 
@@ -183,6 +206,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
 
     container = build_runtime_container()
     config = container.config.get()
+    data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     websites = container.config.get_enabled_websites()
     if not websites:
         print("[FATAL] No enabled websites in config.toml")
@@ -199,9 +223,9 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         print("        Create the directories or update website.path in config.toml.")
         return
 
-    pid_dir = Path("data")
-    pid_dir.mkdir(parents=True, exist_ok=True)
-    (pid_dir / "anteumbra.pid").write_text(str(os.getpid()), encoding="utf-8")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    pid_file = data_dir / "anteumbra.pid"
+    pid_file.write_text(str(os.getpid()), encoding="utf-8")
 
     runtime_logger = get_logger("Anteumbra")
     stop_event = threading.Event()
@@ -218,6 +242,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             "log_monitors": [],
             "threads": [],
             "container": container,
+            "pid_file": pid_file,
         })
 
     print(f"Anteumbra v{get_version()} - Web Perimeter Security")
@@ -275,7 +300,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         if not monitors:
             raise RuntimeError("No website monitor could be started")
 
-        _start_waf_poller(warnings)
+        _start_waf_poller(container.waf_poller, warnings)
 
         threat_graph = container.threat_graph
         _launcher_state["threat_graph"] = threat_graph
@@ -284,6 +309,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             threat_graph,
             runtime_logger,
             stop_event,
+            data_dir,
         )
         _launcher_state["threads"].extend(profile_threads)
 
@@ -426,15 +452,18 @@ def _start_site_monitors(
     return monitors, log_monitors, warnings
 
 
-def _start_profile_workers(threat_graph, runtime_logger, stop_event) -> list[threading.Thread]:
-    from anteumbra.infrastructure.utils.path_utils import normalize_path
-
-    cache_path = normalize_path("data/waf_events.jsonl")
+def _start_profile_workers(
+    threat_graph,
+    runtime_logger,
+    stop_event,
+    data_dir: Path,
+) -> list[threading.Thread]:
+    cache_path = data_dir / "waf_events.jsonl"
     tailer = JsonlEventTailer(
         cache_path,
         threat_graph.ingest_waf_event,
         logger=runtime_logger,
-        dead_letter_path=normalize_path("data/waf_events.deadletter.jsonl"),
+        dead_letter_path=data_dir / "waf_events.deadletter.jsonl",
     )
     _launcher_state["profile_tailer"] = tailer
 
@@ -539,14 +568,10 @@ def _build_builtin_plugin_factories(
     }
 
 
-def _start_waf_poller(warnings: list[str]) -> None:
+def _start_waf_poller(poller, warnings: list[str]) -> None:
     try:
-        from anteumbra.infrastructure.waf_client import get_waf_poller
-
-        poller = get_waf_poller()
         if poller:
             poller.start()
-            _launcher_state["waf_poller"] = poller
             print(f"[OK] WAF poller: {poller.source.get_name()}")
     except Exception as exc:
         logger.exception("WAF poller startup failed")
@@ -620,11 +645,11 @@ def stop_all() -> None:
     for monitor in reversed(state.get("monitors", [])):
         _stop_resource("file monitor", monitor.stop)
 
-    poller = state.get("waf_poller")
+    container = state.get("container")
+    poller = getattr(container, "waf_poller", None)
     if poller:
         _stop_resource("WAF poller", poller.stop)
 
-    container = state.get("container")
     ip_blocker = getattr(container, "ip_blocker", None)
     if ip_blocker:
         _stop_resource("IP blocker", ip_blocker.stop)
@@ -669,14 +694,19 @@ def stop_all() -> None:
     threat_graph = state.get("threat_graph")
     if threat_graph:
         _stop_resource("threat graph persistence", threat_graph.persist)
+        _stop_resource("threat graph", threat_graph.close)
 
     for thread in state.get("threads", []):
         if thread.is_alive():
             thread.join(timeout=2.0)
 
-    pid_file = Path("data/anteumbra.pid")
+    pid_file = state.get("pid_file")
     try:
-        if pid_file.exists() and pid_file.read_text(encoding="utf-8").strip() == str(os.getpid()):
+        if (
+            pid_file
+            and pid_file.exists()
+            and pid_file.read_text(encoding="utf-8").strip() == str(os.getpid())
+        ):
             pid_file.unlink()
     except OSError:
         logger.exception("Failed to remove PID file")

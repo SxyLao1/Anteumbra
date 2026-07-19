@@ -726,38 +726,6 @@ class Notifier:
         """Release the notifier worker owned by the application runtime."""
         self._stop_alert_worker()
 
-# 全局单例实例
-_notifier_instance: Optional[Notifier] = None
-
-
-def get_notifier(logger: logging.Logger) -> Notifier:
-    """Compatibility factory for callers not yet wired by RuntimeContainer."""
-    global _notifier_instance
-    if _notifier_instance is None:
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
-        from anteumbra.infrastructure.monitoring.metrics import get_metrics
-
-        config = ConfigRegistry.get_raw_config().get("notifier", {})
-        _notifier_instance = Notifier(config, logger, get_metrics())
-    return _notifier_instance
-
-def reset_notifier():
-    """重置notifier单例（配置热加载后调用，重置熔断器状态）"""
-    global _notifier_instance
-    if _notifier_instance:
-        _notifier_instance._stop_alert_worker()
-    _notifier_instance = None
-    logging.getLogger("webshell.notifier").info("[NOTIFIER] 实例已重置（熔断器状态清除）")
-
-    # 清理函数
-def shutdown_notifier():
-    """全局清理函数（测试用）"""
-    global _notifier_instance
-    if _notifier_instance:
-        _notifier_instance._stop_alert_worker()
-        _notifier_instance = None
-
-
 # ═══════════════════════════════════════════════════════════════
 # v1.8.4: 统一通知消息构建器（纯函数，不依赖实例状态）
 # ═══════════════════════════════════════════════════════════════

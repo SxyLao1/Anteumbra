@@ -1,6 +1,5 @@
 """Runtime worker and launcher lifecycle regression tests."""
 
-from pathlib import Path
 from types import SimpleNamespace
 
 
@@ -129,11 +128,15 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
             calls.append(self.name)
 
     manager = SimpleNamespace(shutdown=lambda: calls.append("plugins"))
-    graph = SimpleNamespace(persist=lambda: calls.append("graph"))
+    graph = SimpleNamespace(
+        persist=lambda: calls.append("graph"),
+        close=lambda: calls.append("graph-close"),
+    )
     stop_event = __import__("threading").Event()
     container = SimpleNamespace(
         metrics=SimpleNamespace(stop=lambda: calls.append("metrics")),
         sse=SimpleNamespace(stop=lambda: calls.append("sse")),
+        waf_poller=Resource("waf"),
     )
 
     launcher._launcher_state.clear()
@@ -144,7 +147,6 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         "websites": ["alpha"],
         "monitors": [Resource("file")],
         "log_monitors": [Resource("log")],
-        "waf_poller": Resource("waf"),
         "plugin_manager": manager,
         "threat_graph": graph,
         "sse_started": True,
@@ -156,7 +158,16 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     launcher.stop_all()
 
     assert stop_event.is_set()
-    assert calls == ["log", "file", "waf", "plugins", "sse", "metrics", "graph"]
+    assert calls == [
+        "log",
+        "file",
+        "waf",
+        "plugins",
+        "sse",
+        "metrics",
+        "graph",
+        "graph-close",
+    ]
     assert launcher.get_runtime_status() == {
         "running": False,
         "websites": ["alpha"],

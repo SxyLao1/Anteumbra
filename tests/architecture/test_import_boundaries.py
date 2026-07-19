@@ -134,6 +134,21 @@ def test_deprecated_global_service_modules_are_removed():
     )
 
 
+def test_persistence_instances_are_owned_by_the_composition_root():
+    persistence_init = PACKAGE_ROOT / "infrastructure" / "persistence" / "__init__.py"
+    source = persistence_init.read_text(encoding="utf-8")
+    assert "_repo_cache" not in source
+    assert "get_repository" not in source
+    assert "get_shadow_repository" not in source
+
+
+def test_notifier_has_no_process_global_factory():
+    notifier = PACKAGE_ROOT / "infrastructure" / "monitoring" / "notifier.py"
+    source = notifier.read_text(encoding="utf-8")
+    assert "_notifier_instance" not in source
+    assert "def get_notifier(" not in source
+
+
 def test_packaged_code_does_not_import_top_level_tools():
     violations = [
         edge

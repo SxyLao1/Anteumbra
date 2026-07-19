@@ -6,11 +6,7 @@ query_profile, get_active_profiles, get_cluster_level, merge_overlapping_profile
 decay_profiles, generate_profile_id, persist/load round-trip,
 _normalize_ua, _normalize_url, _is_management_ip, and edge cases.
 """
-import json
-import time
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -22,22 +18,17 @@ from anteumbra.infrastructure.threat_graph import ThreatGraph
 # ── Fixtures ──────────────────────────────────────────────────
 
 
-def _new_graph() -> ThreatGraph:
+def _new_graph(shadow_repository=None) -> ThreatGraph:
     return ThreatGraph(
         {"storage": {"backend": "json"}},
         FileClusterEngine(HashEngine()),
+        shadow_repository=shadow_repository,
     )
 
 
 @pytest.fixture
-def graph(monkeypatch):
+def graph():
     """Return a fresh ThreatGraph instance with no persistence."""
-    # Stub ConfigRegistry so load()/persist() use JSON backend (not SQLite)
-    from anteumbra.infrastructure.config import registry as cfg_reg
-    monkeypatch.setattr(
-        cfg_reg.ConfigRegistry, "get_raw_config",
-        lambda: {"storage": {"backend": "json"}},
-    )
     tg = _new_graph()
     tg._profiles = {}
     tg._ip_table = {}
@@ -219,7 +210,7 @@ class TestIngestRegistryEntry:
     """Test ingest_registry_entry() — link file detections to profiles."""
 
     def test_ingest_registry_creates_file_reputation(self, graph, sample_registry_entry):
-        pid = graph.ingest_registry_entry(sample_registry_entry)
+        graph.ingest_registry_entry(sample_registry_entry)
         # File reputation is always created in _file_table
         rep = graph.query_file("/var/www/html/shell.php")
         assert rep is not None
@@ -230,7 +221,7 @@ class TestIngestRegistryEntry:
         waf_pid = graph.ingest_waf_event(sample_waf_event)
         assert waf_pid is not None
         # Then, ingest a registry entry — creates file reputation
-        reg_pid = graph.ingest_registry_entry(sample_registry_entry)
+        graph.ingest_registry_entry(sample_registry_entry)
         # File reputation should exist
         rep = graph.query_file("/var/www/html/shell.php")
         assert rep is not None
@@ -390,25 +381,55 @@ class TestPersistLoad:
         assert len(tg2._profiles) == len(graph._profiles)
 
     def test_load_prefers_json_to_sqlite_shadow(
-        self, graph, sample_waf_event, tmp_path, monkeypatch
+        self, graph, sample_waf_event, tmp_path
     ):
-        from anteumbra.infrastructure import persistence
-
         graph.ingest_waf_event(sample_waf_event)
         persist_path = tmp_path / "authoritative_threat_graph.json"
         graph.set_persist_path(str(persist_path))
         graph.persist()
 
-        def unexpected_shadow_read(_namespace):
-            pytest.fail("a valid threat graph JSON file must not read SQLite")
+        shadow = type(
+            "Shadow",
+            (),
+            {"list_all": lambda *_args, **_kwargs: pytest.fail(
+                "a valid threat graph JSON file must not read SQLite"
+            )},
+        )()
 
-        monkeypatch.setattr(persistence, "get_shadow_repository", unexpected_shadow_read)
-
-        recovered = _new_graph()
+        recovered = _new_graph(shadow)
         recovered.set_persist_path(str(persist_path))
         recovered.load()
 
         assert len(recovered._profiles) == len(graph._profiles)
+
+    def test_shadow_is_injected_for_write_recovery_and_close(
+        self, sample_waf_event, tmp_path
+    ):
+        records = {}
+        closed = []
+
+        class Shadow:
+            def save(self, record_id, data):
+                records[record_id] = dict(data)
+
+            def list_all(self, **_kwargs):
+                return list(records.values())
+
+            def close(self):
+                closed.append(True)
+
+        graph = _new_graph(Shadow())
+        graph.ingest_waf_event(sample_waf_event)
+        graph.set_persist_path(tmp_path / "source.json")
+        graph.persist()
+
+        recovered = _new_graph(Shadow())
+        recovered.set_persist_path(tmp_path / "missing.json")
+        recovered.load()
+        recovered.close()
+
+        assert len(recovered._profiles) == 1
+        assert closed == [True]
 
     def test_load_nonexistent_file(self, graph, tmp_path):
         graph.set_persist_path(str(tmp_path / "nonexistent.json"))

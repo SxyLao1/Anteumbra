@@ -2,7 +2,24 @@
 """
 v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
 """
+import hashlib
+import json
 import logging
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Mapping, Optional, Tuple
+
+from anteumbra.domain import Repository
+from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
+from anteumbra.infrastructure.models import (
+    AttackEvent,
+    AttackerProfile,
+    FileReputation,
+    IPReputation,
+)
+from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+
 logger = logging.getLogger(__name__)
 
 """
@@ -18,18 +35,6 @@ v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
     IPReputation     — IP 信誉表（从 WAF 事件聚合）
     FileReputation   — 文件信誉表（从 Registry 聚合）
 """
-
-import hashlib, json, os, re, threading, time
-from collections import defaultdict
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Set, Tuple
-from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
-from anteumbra.infrastructure.models import (
-    AttackEvent, AttackerProfile, IPReputation, FileReputation
-)
-
 
 # ═══════════════════════════════════════════════════════════════
 # Threat Graph Engine
@@ -51,9 +56,12 @@ class ThreatGraph:
         self,
         config: Mapping[str, object],
         file_cluster_engine: FileClusterEngine,
+        *,
+        shadow_repository: Repository | None = None,
     ):
         self._lock = threading.RLock()
         self._file_cluster_engine = file_cluster_engine
+        self._shadow = shadow_repository
         self._profiles: Dict[str, AttackerProfile] = {}
         self._ip_table: Dict[str, IPReputation] = {}
         self._file_table: Dict[str, FileReputation] = {}
@@ -432,26 +440,21 @@ class ThreatGraph:
         tmp.replace(self._persist_path)
 
         # v2.0: Shadow-write to Repository for storage.backend = sqlite / both
-        self._repo_shadow_persist(data)
+        self._shadow_persist(data)
 
-    def _repo_shadow_persist(self, data: dict):
-        """v2.0: Shadow-write threat profiles to Repository interface.
-
-        Best-effort — failures are silently ignored.
-        """
-        try:
-            from anteumbra.infrastructure.persistence import get_shadow_repository
-
-            repo = get_shadow_repository("threat_profiles")
-            if repo is None:
-                return
-            for pid, pd in data.get("profiles", {}).items():
-                try:
-                    repo.save(pid, dict(pd))
-                except Exception:
-                    logger.debug("Repository shadow persist profile item failed", exc_info=True)
-        except Exception:
-            logger.debug("Repository shadow persist unavailable", exc_info=True)
+    def _shadow_persist(self, data: dict):
+        """Best-effort shadow write without affecting authoritative JSON."""
+        if self._shadow is None:
+            return
+        for pid, profile_data in data.get("profiles", {}).items():
+            try:
+                self._shadow.save(pid, dict(profile_data))
+            except Exception:
+                logger.warning(
+                    "Threat profile SQLite shadow write failed for %s",
+                    pid,
+                    exc_info=True,
+                )
 
     def load(self):
         """Load the JSON source of truth, with SQLite profile recovery."""
@@ -467,12 +470,9 @@ class ThreatGraph:
                     exc_info=True,
                 )
 
-        if data is None:
+        if data is None and self._shadow is not None:
             try:
-                from anteumbra.infrastructure.persistence import get_shadow_repository
-
-                repo = get_shadow_repository("threat_profiles")
-                profiles_list = repo.list_all(limit=999999) if repo else []
+                profiles_list = self._shadow.list_all(limit=999999)
                 if profiles_list:
                     profiles_dict = {}
                     for profile_data in profiles_list:
@@ -518,3 +518,9 @@ class ThreatGraph:
                 )
         except Exception as e:
             log_with_symbol("error_scan", "error", f"[THREAT_GRAPH] Load failed: {e}")
+
+    def close(self) -> None:
+        """Release the injected shadow repository."""
+        close = getattr(self._shadow, "close", None)
+        if callable(close):
+            close()

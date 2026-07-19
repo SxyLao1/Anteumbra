@@ -1,6 +1,5 @@
 """Tests for core/repositories/sqlite_repository.py"""
 import pytest
-from pathlib import Path
 from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository, DualWriteRepository
 from anteumbra.infrastructure.persistence.json_repository import JsonRepository
 
@@ -128,28 +127,9 @@ class TestDualWriteRepository:
         sql_repo.close()
 
 
-def test_shadow_repository_uses_sqlite_without_a_json_repository(monkeypatch):
+def test_persistence_package_has_no_process_global_repository_factory():
     from anteumbra.infrastructure import persistence
 
-    created = []
-
-    class ShadowRepository:
-        def __init__(self, *args, **kwargs):
-            created.append((args, kwargs))
-
-    monkeypatch.setattr(persistence, "SqliteRepository", ShadowRepository)
-    monkeypatch.setattr(
-        persistence,
-        "_storage_settings",
-        lambda: ("both", "data/test-shadow.db"),
-    )
-    persistence.clear_repository_cache()
-
-    repo = persistence.get_shadow_repository("registry")
-
-    assert isinstance(repo, ShadowRepository)
-    assert created[0][0][0] == "data/test-shadow.db"
-    assert created[0][1]["table_name"] == "registry"
-    assert persistence.get_shadow_repository("registry") is repo
-
-    persistence.clear_repository_cache()
+    assert not hasattr(persistence, "get_repository")
+    assert not hasattr(persistence, "get_shadow_repository")
+    assert not hasattr(persistence, "clear_repository_cache")
