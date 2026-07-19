@@ -50,8 +50,9 @@ anteumbra run
 
 `pip install` 将程序代码安装到当前 Python 环境；`anteumbra install INSTANCE_DIR`
 创建可明确指定位置的运行实例，其中保存 `config.toml`、`.env`、数据、日志、规则和
-隔离文件。两者不是两套产品。生产或日常使用建议把程序装入专用虚拟环境，而不是与
-其他 Python 工具共用全局环境。
+隔离文件。两者不是两套产品。Anteumbra 不会创建虚拟环境或修改 `PATH`；请安装到
+自己管理的 Python 环境。无法直接找到 `anteumbra` 命令时，使用参数完全相同的
+`python -m anteumbra`。
 
 在任何工作目录都可以显式选择运行实例：
 

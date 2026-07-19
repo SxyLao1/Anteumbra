@@ -51,9 +51,10 @@ anteumbra run
 `pip install` places package code in the active Python environment, while
 `anteumbra install INSTANCE_DIR` creates an explicitly located mutable runtime
 containing `config.toml`, `.env`, data, logs, rules, and quarantine files. They
-are two locations for one product. Use a dedicated virtual environment for
-normal deployments instead of sharing a global Python environment with other
-tools.
+are two locations for one product. Anteumbra neither creates a virtual
+environment nor modifies `PATH`; install it into the Python environment you
+already manage. If the `anteumbra` console command is not discoverable, use
+`python -m anteumbra` with the same arguments.
 
 Select the runtime explicitly from any working directory:
 

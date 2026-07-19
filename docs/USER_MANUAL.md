@@ -83,15 +83,16 @@ Treat package code and runtime data as separate locations:
 - `anteumbra install INSTANCE_DIR` creates the one default mutable runtime at a chosen path.
 - The runtime owns `config.toml`, `.env`, `data/`, `logs/`, `rules/`, and quarantine state.
 
-Use a dedicated virtual environment rather than sharing a system Python with
-unrelated tools. A Windows example is:
+Install into the Python environment you already manage. Anteumbra does not
+create a virtual environment or modify the user or system `PATH`. When the
+Python Scripts directory is not already discoverable, the module form avoids
+any `PATH` change. A Windows example is:
 
 ```powershell
-py -3.12 -m venv E:\Software\.venvs\anteumbra
-E:\Software\.venvs\anteumbra\Scripts\python -m pip install anteumbra
-E:\Software\.venvs\anteumbra\Scripts\anteumbra install E:\Software\Anteumbra
-E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra config wizard
-E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra start
+py -3.12 -m pip install --upgrade anteumbra
+py -3.12 -m anteumbra install "$HOME\Anteumbra"
+py -3.12 -m anteumbra --home "$HOME\Anteumbra" config wizard
+py -3.12 -m anteumbra --home "$HOME\Anteumbra" start
 ```
 
 `INSTANCE_DIR` may be absolute or relative and defaults to the current

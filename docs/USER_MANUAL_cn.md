@@ -80,14 +80,15 @@ Anteumbra 适合单机或小规模 Web 负载，提供文件完整性监控、We
 - `anteumbra install INSTANCE_DIR` 在指定目录创建唯一的默认运行实例。
 - 运行实例保存 `config.toml`、`.env`、`data/`、`logs/`、`rules/` 和隔离状态。
 
-推荐在指定位置创建专用虚拟环境，避免污染装有其他工具的系统 Python：
+请安装到自己管理的 Python 环境。Anteumbra 不会创建虚拟环境，也不会修改用户或系统
+`PATH`。Python 的 Scripts 目录不在 `PATH` 中时，可以直接使用模块形式，无需改环境
+变量。Windows 示例：
 
 ```powershell
-py -3.12 -m venv E:\Software\.venvs\anteumbra
-E:\Software\.venvs\anteumbra\Scripts\python -m pip install anteumbra
-E:\Software\.venvs\anteumbra\Scripts\anteumbra install E:\Software\Anteumbra
-E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra config wizard
-E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra start
+py -3.12 -m pip install --upgrade anteumbra
+py -3.12 -m anteumbra install "$HOME\Anteumbra"
+py -3.12 -m anteumbra --home "$HOME\Anteumbra" config wizard
+py -3.12 -m anteumbra --home "$HOME\Anteumbra" start
 ```
 
 `INSTANCE_DIR` 可以是绝对或相对路径；省略时使用当前目录。`--home INSTANCE_DIR`

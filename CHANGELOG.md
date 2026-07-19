@@ -8,7 +8,10 @@
 
 ## [Unreleased]
 
-No changes yet.
+### Documentation
+- Removed the machine-specific virtual-environment layout from installation
+  examples and clarified that Anteumbra never creates a virtual environment or
+  modifies `PATH`; `python -m anteumbra` is the no-PATH fallback.
 
 ---
 
