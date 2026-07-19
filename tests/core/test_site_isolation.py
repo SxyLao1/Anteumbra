@@ -1,5 +1,6 @@
 """Focused regression tests for the site-isolation architecture boundary."""
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -158,6 +159,7 @@ def test_quarantine_batch_alert_carries_one_site_identity(monkeypatch):
         recently_restored=lambda _path: False,
         events=Events(),
         runtime_config={},
+        log=logging.getLogger("test.quarantine_handler"),
     )
     plugin.activate({"batch_threshold": 2})
     plugin._batch_state["alpha"] = {

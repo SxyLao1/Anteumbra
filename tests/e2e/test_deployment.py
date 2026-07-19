@@ -739,9 +739,12 @@ class TestCliInstall:
         assert cfg["website"]["log_config"]["log_monitor_enabled"] is False
         assert cfg["waf_source"]["enabled"] is False
 
-    def test_launcher_handles_missing_website_path_without_traceback(self, tmp_path, monkeypatch, capsys):
+    def test_launcher_rejects_missing_website_path_before_building_runtime(
+        self, tmp_path, monkeypatch
+    ):
         """Bad user config should fail cleanly before starting background services."""
         from anteumbra.application import launcher
+        from anteumbra.infrastructure.config import provider as provider_module
 
         missing = tmp_path / "missing-site"
         website = SimpleNamespace(name="Missing Site", path=missing)
@@ -752,16 +755,21 @@ class TestCliInstall:
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
+            provider_module,
+            "TomlConfigProvider",
+            lambda: provider,
+        )
+        monkeypatch.setattr(
             launcher,
             "build_runtime_container",
-            lambda: SimpleNamespace(config=provider),
+            lambda **_kwargs: pytest.fail("runtime must not be built before validation"),
         )
 
-        launcher.start_all(host="127.0.0.1", port=8765)
+        with pytest.raises(launcher.RuntimeStartupError) as exc_info:
+            launcher.start_all(host="127.0.0.1", port=8765)
 
-        output = capsys.readouterr().out
-        assert "[FATAL] Website path does not exist" in output
-        assert str(missing.resolve()) in output
+        assert "Website path does not exist" in str(exc_info.value)
+        assert str(missing.resolve()) in str(exc_info.value)
 
     def test_start_uses_package_entrypoint_not_source_run_py(self, tmp_path, monkeypatch):
         """Background start must work from a deployment dir without run.py."""

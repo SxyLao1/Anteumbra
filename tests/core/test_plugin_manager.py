@@ -1,8 +1,9 @@
-"""Tests for core/plugin_manager.py"""
-import pytest
 import queue
+import threading
+import time
+
 from anteumbra.domain.plugin import Plugin, DomainEvent
-from anteumbra.domain.notifier import Notifier, AlertMessage, AlertLevel
+from anteumbra.domain.notifier import Notifier
 from anteumbra.application.plugin_manager import PluginManager
 
 
@@ -84,6 +85,46 @@ class TestPluginManager:
         new_events = pm.dispatch(event)
         assert len(new_events) == 1
         assert new_events[0].event_type == "test.response"
+
+    def test_timed_out_handlers_keep_result_containers_isolated(self):
+        class BlockingPlugin(_TestPlugin):
+            def __init__(self, name, started, release):
+                super().__init__(name)
+                self.started = started
+                self.release = release
+
+            def on_event(self, event):
+                self.started.set()
+                assert self.release.wait(timeout=2.0)
+                return [DomainEvent("test.response", 0, self.name, {})]
+
+        slow_started = threading.Event()
+        slow_release = threading.Event()
+        fast_started = threading.Event()
+        fast_release = threading.Event()
+        manager = PluginManager()
+        manager._enabled = True
+        manager._dispatch_timeout = 0.2
+        manager.register(BlockingPlugin("slow", slow_started, slow_release))
+        manager.register(BlockingPlugin("fast", fast_started, fast_release))
+        result = {}
+
+        worker = threading.Thread(
+            target=lambda: result.setdefault(
+                "events", manager.dispatch(DomainEvent("test.event", 0, "test", {}))
+            )
+        )
+        worker.start()
+
+        assert slow_started.wait(timeout=1.0)
+        assert fast_started.wait(timeout=1.0)
+        slow_release.set()
+        time.sleep(0.02)
+        fast_release.set()
+        worker.join(timeout=1.0)
+
+        assert not worker.is_alive()
+        assert [event.source for event in result["events"]] == ["fast"]
 
     def test_emit_convenience(self):
         """v2.0: emit() is Fire-and-Forget — returns None, events go to queue."""

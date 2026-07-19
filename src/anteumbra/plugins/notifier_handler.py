@@ -10,30 +10,10 @@ This plugin replaces the inline ``self.notifier._safe_notify()`` calls that
 were previously scattered across FileMonitorHandler.
 """
 import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from collections.abc import Callable, Mapping
 from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import Plugin, DomainEvent
-
-logger = logging.getLogger(__name__)
-
-# v1.0.10: Ensure plugin log messages are captured to a file
-if not logger.handlers:
-    _log_dir = Path("logs/Anteumbra")
-    _log_dir.mkdir(parents=True, exist_ok=True)
-    _fh = RotatingFileHandler(
-        _log_dir / "plugins.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    _fh.setLevel(logging.DEBUG)
-    _fh.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s - [%(name)s] %(message)s'))
-    logger.addHandler(_fh)
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
 
 
 class NotifierHandlerPlugin(Plugin):
@@ -44,12 +24,14 @@ class NotifierHandlerPlugin(Plugin):
         notifier: object,
         formatter: Callable[[dict[str, Any]], str],
         runtime_config: Mapping[str, Any],
+        *,
+        log: logging.Logger,
     ) -> None:
         super().__init__()
         self._notifier = notifier
         self._formatter = formatter
         self._runtime_config = runtime_config
-        self._logger = None
+        self._logger = log
 
     @property
     def name(self) -> str:
@@ -64,11 +46,10 @@ class NotifierHandlerPlugin(Plugin):
         return ["alert_requested"]
 
     def activate(self, config: Dict[str, Any]) -> None:
-        logger.info("NotifierHandler: 已激活")
-        self._logger = logger
+        self._logger.info("NotifierHandler: 已激活")
 
     def deactivate(self) -> None:
-        logger.info("NotifierHandler: 已停用")
+        self._logger.info("NotifierHandler: 已停用")
         shutdown = getattr(self._notifier, "shutdown", None)
         if callable(shutdown):
             shutdown()
@@ -78,7 +59,7 @@ class NotifierHandlerPlugin(Plugin):
         payload = event.payload or {}
         alert_type = payload.get("alert_type", "unknown")
         level = payload.get("level", "WARNING")
-        logger.info(
+        self._logger.info(
             "NotifierHandler: received alert_requested type=%s level=%s source=%s file=%s",
             alert_type, level, event.source, payload.get("file_path", ""),
         )
@@ -98,7 +79,7 @@ class NotifierHandlerPlugin(Plugin):
         try:
             message = self._formatter(ctx)
         except Exception as e:
-            logger.warning("NotifierHandler: format_alert_message 失败: %s", e)
+            self._logger.warning("NotifierHandler: format_alert_message 失败: %s", e)
             message = f"[Anteumbra {level}] {alert_type}"
 
         # Send via concrete Notifier
@@ -112,6 +93,6 @@ class NotifierHandlerPlugin(Plugin):
         """Send alert through concrete Notifier instance (best-effort)."""
         try:
             self._notifier._safe_notify(message, level=level, site_id=site_id)
-            logger.info("NotifierHandler: queued alert level=%s", level)
+            self._logger.info("NotifierHandler: queued alert level=%s", level)
         except Exception as e:
-            logger.warning("NotifierHandler: _safe_notify 失败: %s", e)
+            self._logger.warning("NotifierHandler: _safe_notify 失败: %s", e)

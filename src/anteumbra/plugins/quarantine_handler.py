@@ -15,30 +15,10 @@ embedded in FileMonitorHandler._do_scan().
 import logging
 import time
 from collections.abc import Callable, Mapping
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.runtime import EventPublisherPort
-
-logger = logging.getLogger(__name__)
-
-# v1.0.10: Ensure plugin log messages are captured to a file
-if not logger.handlers:
-    _log_dir = Path("logs/Anteumbra")
-    _log_dir.mkdir(parents=True, exist_ok=True)
-    _fh = RotatingFileHandler(
-        _log_dir / "plugins.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    _fh.setLevel(logging.DEBUG)
-    _fh.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s - [%(name)s] %(message)s'))
-    logger.addHandler(_fh)
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
 
 
 class QuarantineHandlerPlugin(Plugin):
@@ -51,6 +31,7 @@ class QuarantineHandlerPlugin(Plugin):
         recently_restored: Callable[[str], bool],
         events: EventPublisherPort,
         runtime_config: Mapping[str, Any],
+        log: logging.Logger,
     ) -> None:
         self._batch_threshold = 50
         self._batch_state: Dict[str, Dict[str, Any]] = {}
@@ -58,6 +39,7 @@ class QuarantineHandlerPlugin(Plugin):
         self._recently_restored = recently_restored
         self._events = events
         self._runtime_config = runtime_config
+        self._logger = log
 
     @property
     def name(self) -> str:
@@ -77,13 +59,15 @@ class QuarantineHandlerPlugin(Plugin):
         except (TypeError, ValueError):
             self._batch_threshold = 50
         self._batch_state = {}
-        logger.info("QuarantineHandler: 已激活 (batch_threshold=%d)", self._batch_threshold)
+        self._logger.info(
+            "QuarantineHandler: 已激活 (batch_threshold=%d)", self._batch_threshold
+        )
 
     def deactivate(self) -> None:
         # Flush any pending batch notifications on shutdown
         for site_id in tuple(self._batch_state):
             self._flush_batch(site_id)
-        logger.info("QuarantineHandler: 已停用")
+        self._logger.info("QuarantineHandler: 已停用")
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
         """Handle file_quarantined event — perform quarantine + bookkeeping."""
@@ -107,10 +91,10 @@ class QuarantineHandlerPlugin(Plugin):
         # -- Check recently-restored whitelist --
         try:
             if self._recently_restored(file_path):
-                logger.info("[QUARANTINE] 跳过刚恢复文件: %s", file_path)
+                self._logger.info("[QUARANTINE] 跳过刚恢复文件: %s", file_path)
                 return None
         except Exception as exc:
-            logger.warning(
+            self._logger.warning(
                 "[QUARANTINE] unable to check recently restored files; skipping %s: %s",
                 file_path,
                 exc,
@@ -148,7 +132,7 @@ class QuarantineHandlerPlugin(Plugin):
                 site_name=site_name,
             )
         except Exception as e:
-            logger.warning("[QUARANTINE] quarantine_file() 调用失败: %s", e)
+            self._logger.warning("[QUARANTINE] quarantine_file() 调用失败: %s", e)
             self._emit_alert("quarantine_failed", ts, file_path,
                              first_seen_ip, features, "WARNING",
                              reason=f"quarantine_file exception: {e}",
@@ -205,7 +189,7 @@ class QuarantineHandlerPlugin(Plugin):
                 **extra,
             })
         except Exception:
-            logger.warning(
+            self._logger.warning(
                 "[QUARANTINE] failed to emit alert type=%s for %s",
                 alert_type,
                 file_path,
@@ -230,7 +214,7 @@ class QuarantineHandlerPlugin(Plugin):
                 "site_name": state["site_name"],
             })
         except Exception:
-            logger.warning(
+            self._logger.warning(
                 "[QUARANTINE] failed to emit batch alert for %d files at site %s",
                 count,
                 site_id,

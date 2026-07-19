@@ -14,8 +14,6 @@ from typing import List, Optional, Dict, Any
 from anteumbra.domain import Plugin, DomainEvent
 from anteumbra.domain import Notifier, AlertMessage, AlertLevel
 
-logger = logging.getLogger(__name__)
-
 # 终端颜色
 _COLORS = {
     AlertLevel.CRITICAL: "\033[1;31m",  # 红色加粗
@@ -29,6 +27,9 @@ _COLORS = {
 
 class StdoutLoggerPlugin(Plugin, Notifier):
     """终端输出插件 — 将告警彩色输出到 stdout"""
+
+    def __init__(self, *, log: logging.Logger | None = None) -> None:
+        self._logger = log or logging.getLogger(__name__)
 
     @property
     def name(self) -> str:
@@ -45,10 +46,14 @@ class StdoutLoggerPlugin(Plugin, Notifier):
     def activate(self, config: Dict[str, Any]) -> None:
         self._color = config.get("color", True)
         self._verbose = config.get("verbose", False)
-        logger.info("StdoutLogger: 已激活 (color=%s, verbose=%s)", self._color, self._verbose)
+        self._logger.info(
+            "StdoutLogger: 已激活 (color=%s, verbose=%s)",
+            self._color,
+            self._verbose,
+        )
 
     def deactivate(self) -> None:
-        logger.info("StdoutLogger: 已停用")
+        self._logger.info("StdoutLogger: 已停用")
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
         ts = datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S")

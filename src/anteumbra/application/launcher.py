@@ -11,6 +11,7 @@ from typing import Any, Callable
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.application.runtime_health_service import assess_runtime_capabilities
+from anteumbra.domain.runtime import ConfigProviderPort
 
 
 logger = logging.getLogger(__name__)
@@ -18,10 +19,15 @@ _launcher_state: dict[str, Any] = {}
 _state_lock = threading.RLock()
 
 
+class RuntimeStartupError(RuntimeError):
+    """Raised when the complete runtime cannot be started safely."""
+
+
 def build_runtime_container(
     config_path: str | Path | None = None,
     *,
     plugin_manager: Any | None = None,
+    config_provider: ConfigProviderPort | None = None,
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
     from anteumbra.application.config_history_service import ConfigHistoryLogger
@@ -50,7 +56,9 @@ def build_runtime_container(
     from anteumbra.infrastructure.waf_client import build_waf_poller
     from anteumbra.infrastructure.wal_manager import WalManager
 
-    provider = TomlConfigProvider(config_path)
+    if config_path is not None and config_provider is not None:
+        raise ValueError("config_path and config_provider are mutually exclusive")
+    provider = config_provider or TomlConfigProvider(config_path)
     runtime_logging = RuntimeLoggerFactory(provider)
     passwords = PasswordService(provider)
     config = provider.get()
@@ -219,16 +227,16 @@ def build_runtime_container(
 
 def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     """Start all runtime components and block until interrupted."""
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.config.version import get_version
     from anteumbra.infrastructure.utils.path_utils import normalize_path
 
-    container = build_runtime_container()
-    config = container.config.get()
+    provider = TomlConfigProvider()
+    config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
-    websites = container.config.get_enabled_websites()
+    websites = provider.get_enabled_websites()
     if not websites:
-        print("[FATAL] No enabled websites in config.toml")
-        return
+        raise RuntimeStartupError("No enabled websites in config.toml")
 
     missing_paths: list[Path] = []
     for website in websites:
@@ -236,18 +244,18 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         if not website.path.exists():
             missing_paths.append(website.path)
     if missing_paths:
-        for missing_path in missing_paths:
-            print(f"[FATAL] Website path does not exist: {missing_path}")
-        print("        Create the directories or update website.path in config.toml.")
-        return
+        details = "\n".join(
+            f"Website path does not exist: {missing_path}" for missing_path in missing_paths
+        )
+        raise RuntimeStartupError(
+            f"{details}\nCreate the directories or update website.path in config.toml."
+        )
 
-    data_dir.mkdir(parents=True, exist_ok=True)
+    container = build_runtime_container(config_provider=provider)
     pid_file = data_dir / "anteumbra.pid"
-    pid_file.write_text(str(os.getpid()), encoding="utf-8")
-
     runtime_logger = container.logging.get_logger("Anteumbra")
     stop_event = threading.Event()
-    warnings = [item["message"] for item in assess_runtime_capabilities(config)["warnings"]]
+    warnings: list[str] = []
 
     with _state_lock:
         _launcher_state.clear()
@@ -263,15 +271,21 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             "pid_file": pid_file,
         })
 
-    print(f"Anteumbra v{get_version()} - Web Perimeter Security")
-    for website in websites:
-        print(f"  Website: {website.name}")
-        print(f"  Watch:   {website.path}")
-    print(f"  Admin:   http://{host}:{port}/admin")
-    print(f"  Health:  http://{host}:{port}/api/v1/health")
-    print("-" * 50)
-
     try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        warnings.extend(
+            item["message"] for item in assess_runtime_capabilities(config)["warnings"]
+        )
+
+        print(f"Anteumbra v{get_version()} - Web Perimeter Security")
+        for website in websites:
+            print(f"  Website: {website.name}")
+            print(f"  Watch:   {website.path}")
+        print(f"  Admin:   http://{host}:{port}/admin")
+        print(f"  Health:  http://{host}:{port}/api/v1/health")
+        print("-" * 50)
+
         plugin_manager = _start_plugins(
             config,
             warnings,
@@ -280,6 +294,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
             container.siem_exporter,
             container.threat_graph,
             container.quarantine,
+            container.logging.get_logger,
         )
         container.plugin_manager = plugin_manager
         container.events.bind(plugin_manager)
@@ -362,9 +377,11 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
                 pass
         except KeyboardInterrupt:
             print("\nShutting down...")
-    except Exception:
+    except Exception as exc:
         runtime_logger.exception("Anteumbra startup failed")
-        print("[FATAL] Runtime startup failed. Check the runtime logs for details.")
+        raise RuntimeStartupError(
+            "Runtime startup failed. Check the runtime logs for details."
+        ) from exc
     finally:
         stop_all()
 
@@ -519,11 +536,13 @@ def _start_plugins(
     siem_exporter,
     threat_graph,
     quarantine,
+    logger_factory: Callable[[str], logging.Logger],
 ):
     try:
         from anteumbra.application.plugin_manager import PluginManager
         manager = PluginManager(
             metric_recorder=lambda name: metrics.increment(name),
+            log=logger_factory("plugin_manager"),
         )
         manager.set_plugin_factories(
             _build_builtin_plugin_factories(
@@ -533,6 +552,7 @@ def _start_plugins(
                 siem_exporter,
                 threat_graph,
                 quarantine,
+                logger_factory,
             )
         )
         manager.init_from_config(config)
@@ -557,30 +577,41 @@ def _build_builtin_plugin_factories(
     siem_exporter,
     threat_graph,
     quarantine,
+    logger_factory: Callable[[str], logging.Logger],
 ) -> dict[str, Callable[[], Any]]:
     """Wire official plugins without allowing them to locate runtime services."""
     from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.plugins.notifier_handler import NotifierHandlerPlugin
     from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
+    from anteumbra.plugins.stdout_logger import StdoutLoggerPlugin
     from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
 
     return {
+        "stdout_logger": lambda: StdoutLoggerPlugin(
+            log=logger_factory("plugin.stdout_logger"),
+        ),
         "notifier_handler": lambda: NotifierHandlerPlugin(
             notifier,
             format_alert_message,
             config,
+            log=logger_factory("plugin.notifier_handler"),
         ),
         "quarantine_handler": lambda: QuarantineHandlerPlugin(
             quarantine_file=quarantine.quarantine_file,
             recently_restored=quarantine.is_recently_restored,
             events=event_publisher,
             runtime_config=config,
+            log=logger_factory("plugin.quarantine_handler"),
         ),
-        "siem_handler": lambda: SIEMHandlerPlugin(siem_exporter),
+        "siem_handler": lambda: SIEMHandlerPlugin(
+            siem_exporter,
+            log=logger_factory("plugin.siem_handler"),
+        ),
         "threat_graph_handler": lambda: ThreatGraphHandlerPlugin(
             threat_graph,
             event_publisher,
+            log=logger_factory("plugin.threat_graph_handler"),
         ),
     }
 

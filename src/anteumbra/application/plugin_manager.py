@@ -6,7 +6,7 @@ Anteumbra Plugin Manager
 通过 config.toml [plugins] 控制启停。
 
 架构：
-  PluginManager (单例)
+  PluginManager (每个 RuntimeContainer 独立拥有)
     ├── 内置插件 (plugins/ 目录)
     │   ├── stdout_logger    — 将事件输出到终端
     │   └── ...              — 更多内置插件
@@ -19,13 +19,7 @@ import threading
 from collections.abc import Callable, Mapping
 from typing import Dict, List, Optional, Any
 
-from anteumbra.domain import Plugin, DomainEvent
-from anteumbra.domain import Detector
-from anteumbra.domain import Notifier, AlertMessage
-from anteumbra.domain import EventSource
-from anteumbra.domain import Repository
-
-logger = logging.getLogger(__name__)
+from anteumbra.domain import Detector, DomainEvent, EventSource, Notifier, Plugin
 
 
 class PluginManager:
@@ -36,6 +30,7 @@ class PluginManager:
         *,
         metric_recorder: Callable[[str], None] | None = None,
         plugin_factories: Mapping[str, Callable[[], Plugin]] | None = None,
+        log: logging.Logger | None = None,
     ) -> None:
         self._rwlock = threading.RLock()                 # Thread-safe access to all dicts
         self._plugins: Dict[str, Plugin] = {}           # name → Plugin 实例
@@ -54,6 +49,7 @@ class PluginManager:
         self._abandoned_threads: List[tuple[str, threading.Thread]] = []
         self._metric_recorder = metric_recorder
         self._plugin_factories = dict(plugin_factories or {})
+        self._logger = log or logging.getLogger(__name__)
 
     def set_plugin_factories(
         self,
@@ -91,7 +87,7 @@ class PluginManager:
             self._event_queue = queue.Queue(maxsize=queue_size)
 
         if not self._enabled:
-            logger.info("PluginManager: 插件系统已关闭（设置 [plugins] enabled = true 启用）")
+            self._logger.info("PluginManager: 插件系统已关闭（设置 [plugins] enabled = true 启用）")
             return
 
         # 加载内置插件
@@ -99,7 +95,7 @@ class PluginManager:
         for name in builtin_plugins:
             self._load_builtin(name)
 
-        logger.info(
+        self._logger.info(
             "PluginManager: 初始化完成 — %d 插件已加载 (%d detector, %d notifier, %d event_source)",
             len(self._plugins), len(self._detectors),
             len(self._notifiers), len(self._event_sources),
@@ -121,7 +117,7 @@ class PluginManager:
             daemon=True,
         )
         self._worker_thread.start()
-        logger.info("PluginManager: emit worker thread started")
+        self._logger.info("PluginManager: emit worker thread started")
 
     def _event_worker(self) -> None:
         """Background worker: consume emit queue and dispatch to handlers."""
@@ -135,7 +131,9 @@ class PluginManager:
                     break
                 self.dispatch(event)
             except Exception as e:
-                logger.error("PluginManager: emit worker dispatch error: %s", e, exc_info=True)
+                self._logger.error(
+                    "PluginManager: emit worker dispatch error: %s", e, exc_info=True
+                )
             finally:
                 self._event_queue.task_done()
 
@@ -148,7 +146,7 @@ class PluginManager:
         with self._rwlock:
             name = plugin.name
             if name in self._plugins:
-                logger.warning("PluginManager: 插件 '%s' 已注册，跳过", name)
+                self._logger.warning("PluginManager: 插件 '%s' 已注册，跳过", name)
                 return False
 
             try:
@@ -166,10 +164,12 @@ class PluginManager:
                 for event_type in plugin.supported_events:
                     self._event_handlers.setdefault(event_type, []).append(plugin)
 
-                logger.info("PluginManager: 插件 '%s' v%s 已注册", name, plugin.version)
+                self._logger.info(
+                    "PluginManager: 插件 '%s' v%s 已注册", name, plugin.version
+                )
                 return True
             except Exception as e:
-                logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
+                self._logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
                 return False
 
     def unregister(self, name: str) -> bool:
@@ -181,13 +181,13 @@ class PluginManager:
             try:
                 plugin.deactivate()
             except Exception as e:
-                logger.error("PluginManager: 插件 '%s' 停用失败: %s", name, e)
+                self._logger.error("PluginManager: 插件 '%s' 停用失败: %s", name, e)
             self._detectors.pop(name, None)
             self._notifiers.pop(name, None)
             self._event_sources.pop(name, None)
             for handlers in self._event_handlers.values():
                 handlers[:] = [h for h in handlers if h.name != name]
-            logger.info("PluginManager: 插件 '%s' 已卸载", name)
+            self._logger.info("PluginManager: 插件 '%s' 已卸载", name)
             return True
 
     # ── 事件分发 ────────────────────────────────────────
@@ -210,7 +210,7 @@ class PluginManager:
             handlers = list(self._event_handlers.get(event.event_type, []))
         for plugin in handlers:
             if self._has_abandoned_handler(plugin.name):
-                logger.error(
+                self._logger.error(
                     "PluginManager: plugin '%s' remains unhealthy; skipping event '%s'",
                     plugin.name,
                     event.event_type,
@@ -218,7 +218,7 @@ class PluginManager:
                 self._record_metric("plugin_handler_skipped")
                 continue
             if len(self._abandoned_threads) >= self._max_abandoned_threads:
-                logger.error(
+                self._logger.error(
                     "PluginManager: abandoned handler limit reached; skipping plugin '%s'",
                     plugin.name,
                 )
@@ -227,17 +227,22 @@ class PluginManager:
             result_container = []
             exc_container = []
 
-            def _call(pl=plugin, ev=event):
+            def _call(
+                pl=plugin,
+                ev=event,
+                results=result_container,
+                errors=exc_container,
+            ):
                 try:
-                    result_container.append(pl.on_event(ev))
+                    results.append(pl.on_event(ev))
                 except Exception as e:
-                    exc_container.append(e)
+                    errors.append(e)
 
             t = threading.Thread(target=_call, daemon=True)
             t.start()
             t.join(timeout=self._dispatch_timeout)
             if t.is_alive():
-                logger.error(
+                self._logger.error(
                     "PluginManager: 插件 '%s' 处理事件 '%s' 超时 (%ss)，跳过",
                     plugin.name, event.event_type, self._dispatch_timeout,
                 )
@@ -245,7 +250,7 @@ class PluginManager:
                 self._record_metric("plugin_handler_timeout")
                 continue
             if exc_container:
-                logger.error(
+                self._logger.error(
                     "PluginManager: 插件 '%s' 处理事件 '%s' 失败: %s",
                     plugin.name, event.event_type, exc_container[0],
                 )
@@ -261,7 +266,7 @@ class PluginManager:
             if thread.is_alive()
         ]
         if self._abandoned_threads:
-            logger.warning(
+            self._logger.warning(
                 "PluginManager: %d abandoned plugin threads still alive",
                 len(self._abandoned_threads),
             )
@@ -280,7 +285,7 @@ class PluginManager:
         try:
             self._event_queue.put(event, timeout=self._event_enqueue_timeout)
         except queue.Full:
-            logger.error(
+            self._logger.error(
                 "PluginManager: event queue full; dispatching '%s' synchronously",
                 event_type,
             )
@@ -346,13 +351,13 @@ class PluginManager:
                 pass
             if self._worker_thread and self._worker_thread.is_alive():
                 self._worker_thread.join(timeout=3.0)
-            logger.info("PluginManager: emit worker thread stopped")
+            self._logger.info("PluginManager: emit worker thread stopped")
 
         with self._rwlock:
             names = list(self._plugins.keys())
         for name in names:
             self.unregister(name)
-        logger.info("PluginManager: 所有插件已停用")
+        self._logger.info("PluginManager: 所有插件已停用")
 
     # ── 内部 ────────────────────────────────────────────
 
@@ -376,16 +381,18 @@ class PluginManager:
                     plugin_cls = attr
                     break
             if plugin_cls is None:
-                logger.warning("PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name)
+                self._logger.warning(
+                    "PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name
+                )
                 return None
             instance = plugin_cls()
             self.register(instance)
             return instance
         except ImportError:
-            logger.info("PluginManager: 内置插件 '%s' 未安装或不可用", name)
+            self._logger.info("PluginManager: 内置插件 '%s' 未安装或不可用", name)
             return None
         except Exception as e:
-            logger.error("PluginManager: 加载内置插件 '%s' 失败: %s", name, e)
+            self._logger.error("PluginManager: 加载内置插件 '%s' 失败: %s", name, e)
             return None
 
     def _record_metric(self, name: str) -> None:
@@ -394,7 +401,9 @@ class PluginManager:
         try:
             self._metric_recorder(name)
         except Exception:
-            logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)
+            self._logger.debug(
+                "PluginManager: failed to record metric %s", name, exc_info=True
+            )
 
 
 def _positive_int(value: Any, *, default: int) -> int:

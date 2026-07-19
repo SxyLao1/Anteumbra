@@ -73,7 +73,7 @@ def test_log_history_uses_configured_website_logs_with_default_fallbacks():
     assert "logs/Anteumbra/monitor.log" in monitor_bp
 
 
-def test_notifier_internal_logs_use_plugin_log_handler():
+def test_notifier_internal_logs_use_runtime_logger():
     notifier_handler = read_source(
         "src",
         "anteumbra",
@@ -81,8 +81,10 @@ def test_notifier_internal_logs_use_plugin_log_handler():
         "notifier_handler.py",
     )
 
-    assert "self._logger = logger" in notifier_handler
-    assert 'logging.getLogger("monitor.notifier_handler")' not in notifier_handler
+    assert "log: logging.Logger" in notifier_handler
+    assert "self._logger = log" in notifier_handler
+    assert "RotatingFileHandler" not in notifier_handler
+    assert "plugins.log" not in notifier_handler
 
 
 def test_notifier_log_masking_hides_secrets():

@@ -17,15 +17,20 @@ from typing import List, Optional, Dict, Any
 from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.runtime import EventPublisherPort
 
-logger = logging.getLogger(__name__)
-
 
 class ThreatGraphHandlerPlugin(Plugin):
     """Bridge plugin: subscribes to registry events and updates ThreatGraph."""
 
-    def __init__(self, graph: object, events: EventPublisherPort) -> None:
+    def __init__(
+        self,
+        graph: object,
+        events: EventPublisherPort,
+        *,
+        log: logging.Logger,
+    ) -> None:
         self._graph = graph
         self._events = events
+        self._logger = log
 
     @property
     def name(self) -> str:
@@ -41,10 +46,10 @@ class ThreatGraphHandlerPlugin(Plugin):
 
     def activate(self, config: Dict[str, Any]) -> None:
         self._profile_count_before = 0
-        logger.info("ThreatGraphHandler: 已激活")
+        self._logger.info("ThreatGraphHandler: 已激活")
 
     def deactivate(self) -> None:
-        logger.info("ThreatGraphHandler: 已停用")
+        self._logger.info("ThreatGraphHandler: 已停用")
 
     def on_event(self, event: DomainEvent) -> Optional[List[DomainEvent]]:
         """Forward record_added / registry_changed to ThreatGraph."""
@@ -73,7 +78,7 @@ class ThreatGraphHandlerPlugin(Plugin):
             if new_count > old_count:
                 self._emit_updated(graph)
         except Exception as e:
-            logger.warning("ThreatGraphHandler: ingest_registry_entry 失败: %s", e)
+            self._logger.warning("ThreatGraphHandler: ingest_registry_entry 失败: %s", e)
 
         return None
 
@@ -89,4 +94,4 @@ class ThreatGraphHandlerPlugin(Plugin):
                 "top_risk_score": active[0].risk_score if active else 0,
             })
         except Exception:
-            logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)
+            self._logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)

@@ -1,7 +1,7 @@
 """Tests for core/siem_exporter.py and utils/siem_formatter.py"""
 import json
+import logging
 import pytest
-from pathlib import Path
 from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter, format_event
 from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
 from anteumbra.domain import DomainEvent
@@ -120,7 +120,9 @@ def test_siem_handler_exports_registry_events():
         def emit_detection(self, payload):
             emitted.append(payload)
 
-    plugin = SIEMHandlerPlugin(Exporter())
+    plugin = SIEMHandlerPlugin(
+        Exporter(), log=logging.getLogger("test.siem_handler")
+    )
     plugin.activate({"enabled": True})
 
     plugin.on_event(DomainEvent(

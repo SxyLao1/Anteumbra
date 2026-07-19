@@ -108,6 +108,7 @@ DEPRECATED_GLOBAL_SERVICE_MODULES = {
     PACKAGE_ROOT / "application" / "sse_service.py",
     PACKAGE_ROOT / "application" / "wal_service.py",
     PACKAGE_ROOT / "application" / "logging_service.py",
+    PACKAGE_ROOT / "application" / "metrics_service.py",
     PACKAGE_ROOT / "infrastructure" / "config" / "registry.py",
     PACKAGE_ROOT / "infrastructure" / "utils" / "password_utils.py",
     PACKAGE_ROOT / "infrastructure" / "registry_adapter.py",
@@ -136,6 +137,30 @@ def test_deprecated_global_service_modules_are_removed():
         "runtime-owned services must not regain module-global compatibility facades:\n"
         + "\n".join(remaining)
     )
+
+
+def test_application_exports_are_importable():
+    import importlib
+
+    from anteumbra import application
+
+    failures = []
+    for module_name in application.__all__:
+        try:
+            importlib.import_module(f"anteumbra.application.{module_name}")
+        except Exception as exc:
+            failures.append(f"{module_name}: {type(exc).__name__}: {exc}")
+
+    assert not failures, "public Application modules must import cleanly:\n" + "\n".join(
+        failures
+    )
+
+
+def test_official_plugins_do_not_create_log_files_at_import_time():
+    for filename in ("notifier_handler.py", "quarantine_handler.py"):
+        source = (PACKAGE_ROOT / "plugins" / filename).read_text(encoding="utf-8")
+        assert "RotatingFileHandler" not in source
+        assert "plugins.log" not in source
 
 
 def test_persistence_instances_are_owned_by_the_composition_root():
