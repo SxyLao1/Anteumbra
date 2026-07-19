@@ -63,9 +63,11 @@ git push origin vX.Y.Z
 ```
 
 Before the tag, also rebuild and run the Docker image, wait for
-`/api/v1/health` to return HTTP `200`, and exercise one harmless detection file
-through Registry and quarantine/restore. A passing source test suite does not
-replace wheel or container validation.
+`/api/v1/health` to return HTTP `200`, log in through the published host port,
+and exercise one harmless detection file through Registry and
+quarantine/restore. The host login verifies that Docker gateway discovery and
+the admin IP allowlist agree. A passing source test suite does not replace
+wheel or container validation.
 
 Wait for `.github/workflows/publish.yml`, then verify both the GitHub release
 workflow and `pip index versions anteumbra` report the tagged version. Do not

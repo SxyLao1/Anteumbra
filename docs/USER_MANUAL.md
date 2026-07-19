@@ -112,14 +112,18 @@ Source install is for development and testing only. It uses the same runtime ins
 docker build -t anteumbra .
 docker run -d \
   --name anteumbra \
-  -p 18080:8080 \
+  -p 127.0.0.1:18080:8080 \
   -v $(pwd)/anteumbra-data:/app/data \
   -v $(pwd)/anteumbra-logs:/app/logs \
   anteumbra
 docker logs anteumbra
 ```
 
-On first start, the container creates `.env`, uses `/app/sites/default` as the default monitored directory, disables the demo MockWAF poller to avoid noisy connection errors, and prints the initial admin password in `docker logs`. The admin UI is available at `http://127.0.0.1:18080/admin`.
+On first start, the container creates `.env`, uses `/app/sites/default` as the
+default monitored directory, disables the demo MockWAF poller to avoid noisy
+connection errors, adds the local Docker gateway to the admin IP allowlist, and
+prints the initial admin password in `docker logs`. The admin UI is available at
+`http://127.0.0.1:18080/admin`.
 
 The Docker image installs `yara-python` and attempts to build optional fuzzy hash engines (`py-tlsh`, `ssdeep`). If an optional engine is incompatible with the current Python base image, Anteumbra logs the skip and continues with the available engines.
 
@@ -778,7 +782,7 @@ WantedBy=multi-user.target
 services:
   anteumbra:
     build: .
-    ports: ["18080:8080"]
+    ports: ["127.0.0.1:18080:8080"]
     volumes:
       - ./anteumbra-data:/app/data
       - ./anteumbra-logs:/app/logs

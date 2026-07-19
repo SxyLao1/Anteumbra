@@ -269,6 +269,32 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(
         handler.shutdown()
 
 
+def test_stale_delete_event_does_not_hide_a_restored_file(tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    restored = tmp_path / "restored.php"
+    restored.write_text("<?php", encoding="utf-8")
+    registry = SimpleNamespace(
+        get=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("stale deletes must not read Registry state")
+        ),
+        remove=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("stale deletes must not hide restored files")
+        ),
+    )
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.stale-delete-guard"),
+        services=_services(tmp_path, registry=registry),
+    )
+    try:
+        handler.on_deleted(SimpleNamespace(src_path=str(restored)))
+    finally:
+        handler.shutdown()
+
+
 def test_recently_restored_moved_file_is_not_scanned(monkeypatch, tmp_path):
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 

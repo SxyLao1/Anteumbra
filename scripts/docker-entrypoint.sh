@@ -67,6 +67,51 @@ then
   anteumbra config set waf_source.enabled false --config config.toml
 fi
 
+python - <<'PY'
+import socket
+import struct
+from pathlib import Path
+
+import tomli_w
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+
+def default_gateway() -> str | None:
+    try:
+        routes = Path("/proc/net/route").read_text(encoding="ascii").splitlines()[1:]
+    except OSError:
+        return None
+
+    for route in routes:
+        fields = route.split()
+        if len(fields) < 4 or fields[1] != "00000000":
+            continue
+        try:
+            flags = int(fields[3], 16)
+            gateway = socket.inet_ntoa(struct.pack("<I", int(fields[2], 16)))
+        except (OSError, ValueError, struct.error):
+            continue
+        if flags & 0x2:
+            return gateway
+    return None
+
+
+config_path = Path("config.toml")
+gateway = default_gateway()
+if gateway and config_path.exists():
+    data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    web_admin = data.get("web_admin", {})
+    allowed_ips = web_admin.get("allowed_ips")
+    if allowed_ips == ["127.0.0.1"] and gateway != "127.0.0.1":
+        web_admin["allowed_ips"] = ["127.0.0.1", gateway]
+        config_path.write_text(tomli_w.dumps(data), encoding="utf-8")
+        print(f"[Docker] Allowed the local Docker gateway {gateway} to access the admin UI.")
+PY
+
 if [ ! -f .env ]; then
   python - <<'PY'
 import os

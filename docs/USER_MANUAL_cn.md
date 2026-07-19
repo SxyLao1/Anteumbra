@@ -105,14 +105,17 @@ anteumbra run
 docker build -t anteumbra .
 docker run -d \
   --name anteumbra \
-  -p 18080:8080 \
+  -p 127.0.0.1:18080:8080 \
   -v $(pwd)/anteumbra-data:/app/data \
   -v $(pwd)/anteumbra-logs:/app/logs \
   anteumbra
 docker logs anteumbra
 ```
 
-首次启动时，容器会创建 `.env`，将 `/app/sites/default` 作为默认监控目录，关闭演示用 MockWAF 轮询以避免连接失败噪音，并在 `docker logs` 中打印初始管理员密码。管理后台地址为 `http://127.0.0.1:18080/admin`。
+首次启动时，容器会创建 `.env`，将 `/app/sites/default` 作为默认监控目录，关闭演示用
+MockWAF 轮询以避免连接失败噪音，将本机 Docker 网关加入后台 IP 白名单，并在
+`docker logs` 中打印初始管理员密码。管理后台地址为
+`http://127.0.0.1:18080/admin`。
 
 Docker 镜像会安装 `yara-python`，并尝试构建可选模糊哈希引擎（`py-tlsh`、`ssdeep`）。如果某个可选引擎与当前 Python 基础镜像不兼容，Anteumbra 会记录跳过并使用可用引擎继续运行。
 
@@ -742,7 +745,7 @@ WantedBy=multi-user.target
 services:
   anteumbra:
     build: .
-    ports: ["18080:8080"]
+    ports: ["127.0.0.1:18080:8080"]
     volumes:
       - ./anteumbra-data:/app/data
       - ./anteumbra-logs:/app/logs

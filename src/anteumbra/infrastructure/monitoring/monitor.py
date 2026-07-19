@@ -912,6 +912,17 @@ class FileMonitorHandler(FileSystemEventHandler):
         # 正确判断: 检查缓存中是否存在该路径键
         is_directory = path_key in self._dir_cache
 
+        # Quarantine/restore can complete before a queued delete event arrives.
+        # Current filesystem state wins over that stale notification.
+        if event_path.exists():
+            log_with_symbol(
+                "skip_duplicate",
+                "info",
+                f"Stale delete ignored; path exists: {event_path.name}",
+                self.logger,
+            )
+            return
+
         if is_directory:
             log_with_symbol("delete_dir", "info", f"{event_path.name}", self.logger)
 

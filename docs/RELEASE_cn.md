@@ -57,8 +57,9 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-打 Tag 前还必须重建并运行 Docker 镜像，等待 `/api/v1/health` 返回 HTTP `200`，并用一个
-无害检测样本走通 Registry、隔离和还原。源码测试通过不能替代 Wheel 或容器验证。
+打 Tag 前还必须重建并运行 Docker 镜像，等待 `/api/v1/health` 返回 HTTP `200`，从宿主机
+映射端口登录后台，并用一个无害检测样本走通 Registry、隔离和还原。宿主机登录用于验证
+Docker 网关发现结果与后台 IP 白名单一致。源码测试通过不能替代 Wheel 或容器验证。
 
 等待 `.github/workflows/publish.yml` 完成，再核对 GitHub 工作流与
 `pip index versions anteumbra` 都显示新版本。PyPI 上传失败后不得复用同一版本号；修复

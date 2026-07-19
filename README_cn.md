@@ -131,14 +131,16 @@ python -m pytest
 ```bash
 docker build -t anteumbra .
 docker run -d --name anteumbra \
-  -p 18080:8080 \
+  -p 127.0.0.1:18080:8080 \
   -v $(pwd)/anteumbra-data:/app/data \
   -v $(pwd)/anteumbra-logs:/app/logs \
   anteumbra
 docker logs anteumbra
 ```
 
-容器会启动与 `anteumbra run` 相同的完整运行时，首次启动自动生成 Docker 友好的默认配置，并在 `docker logs` 中打印初始管理员密码。打开 `http://127.0.0.1:18080/admin`。
+容器会启动与 `anteumbra run` 相同的完整运行时，首次启动自动生成 Docker 友好的默认配置，
+将本机 Docker 网关加入后台 IP 白名单，并在 `docker logs` 中打印初始管理员密码。打开
+`http://127.0.0.1:18080/admin`。
 
 ## 架构
 

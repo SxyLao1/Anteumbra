@@ -303,6 +303,20 @@ class TestVersionSource:
         assert b"\r\n" not in entrypoint.read_bytes()
         assert entrypoint.read_bytes().startswith(b"#!/bin/sh\n")
 
+        entrypoint_source = entrypoint.read_text(encoding="utf-8")
+        assert 'Path("/proc/net/route")' in entrypoint_source
+        assert 'allowed_ips == ["127.0.0.1"]' in entrypoint_source
+        assert "Allowed the local Docker gateway" in entrypoint_source
+
+        for relative_path in (
+            "README.md",
+            "README_cn.md",
+            "docs/USER_MANUAL.md",
+            "docs/USER_MANUAL_cn.md",
+        ):
+            documentation = (project_root / relative_path).read_text(encoding="utf-8")
+            assert "-p 127.0.0.1:18080:8080" in documentation
+
 
 class TestCliInstall:
     """Verify CLI deployment setup works for packaged and editable installs."""

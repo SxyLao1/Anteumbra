@@ -15,6 +15,13 @@ No changes yet.
 ## [1.0.29] - 2026-07-19
 
 ### Fixed
+- Discovered the container's exact local gateway during Docker startup and
+  added it only when the admin allowlist still has its localhost default; the
+  documented loopback port mapping can now log in from the host without opening
+  the dashboard to a wildcard network.
+- Ignored delayed filesystem delete events when the same path already exists,
+  so a quick quarantine/restore cycle cannot overwrite the restored Registry
+  state with `file_exists=false`.
 - Forced POSIX line endings for shell assets and normalized the Docker
   entrypoint during image construction, so images built from Windows clones no
   longer fail at startup with a misleading "no such file" error.
@@ -68,7 +75,7 @@ No changes yet.
   `site-packages` copy, so source regressions cannot pass against an old Wheel.
 
 ### Tests
-- Current source passes `497` non-browser tests, all `41` Playwright UI tests,
+- Current source passes `498` non-browser tests, all `41` Playwright UI tests,
   Ruff, `git diff --check`, and an import sweep of `116` package modules.
 - Added regressions for instance-owned lifecycle shutdown, service boundaries,
   site-qualified file/profile lookup, immutable cluster views, notification API,
@@ -81,7 +88,9 @@ No changes yet.
 - Added regressions for stable site log paths, legacy migration conflicts,
   multi-site history attribution/order, escaped rendering, and an absent
   production `Server` header; deployment tests also enforce Docker's POSIX
-  entrypoint contract.
+  entrypoint, loopback port binding, and gateway allowlist contracts.
+- Added a monitor regression proving that delayed delete events cannot hide a
+  file which quarantine restore has already put back.
 
 ---
 
