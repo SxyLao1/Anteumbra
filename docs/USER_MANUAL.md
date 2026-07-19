@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.30
+# Anteumbra User Manual v1.0.31
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -77,6 +77,28 @@ Your Web Server (Nginx/Apache/IIS)
 
 ### 2.2 From PyPI
 
+Treat package code and runtime data as separate locations:
+
+- `python -m pip install anteumbra` installs code into the active Python environment.
+- `anteumbra install INSTANCE_DIR` creates the one default mutable runtime at a chosen path.
+- The runtime owns `config.toml`, `.env`, `data/`, `logs/`, `rules/`, and quarantine state.
+
+Use a dedicated virtual environment rather than sharing a system Python with
+unrelated tools. A Windows example is:
+
+```powershell
+py -3.12 -m venv E:\Software\.venvs\anteumbra
+E:\Software\.venvs\anteumbra\Scripts\python -m pip install anteumbra
+E:\Software\.venvs\anteumbra\Scripts\anteumbra install E:\Software\Anteumbra
+E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra config wizard
+E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra start
+```
+
+`INSTANCE_DIR` may be absolute or relative and defaults to the current
+directory. `--home INSTANCE_DIR` lets `run/start/stop/status/config` address a
+specific runtime from any working directory. After registering a default
+instance, entering that directory or omitting `--home` also works.
+
 ```bash
 pip install anteumbra
 anteumbra install ./anteumbra-instance
@@ -91,6 +113,11 @@ PyPI install is the normal path for users and deployments. The `install` command
 The base package includes compiled YARA rule validation and scanning. Install
 `anteumbra[full]` only when the optional `ssdeep` and `py-tlsh` similarity
 engines are required. `anteumbra[yara]` remains an empty compatibility alias.
+
+`anteumbra install --force` only permits replacing the default-instance
+registration or using a non-empty target; it does not replace an existing
+`config.toml` or `.env`. An intentional reset requires the explicit
+`anteumbra config init --force` command.
 
 ### 2.3 From Source
 
@@ -345,10 +372,27 @@ anteumbra run             # Start in foreground
 anteumbra start           # Start as daemon (background)
 anteumbra stop            # Stop running instance
 anteumbra status          # Check if running
-anteumbra config          # Generate config.toml template (compatibility alias)
+anteumbra config          # Show config subcommand help; never write files
+anteumbra config init     # Explicitly create config, env, rules, default site
 anteumbra config wizard   # Interactive first-run setup
 anteumbra config validate # Validate paths, ports, .env, enabled integrations
 ```
+
+### Global Options
+```
+  --home DIRECTORY   Select a runtime instance explicitly
+  -h, --help         Show help
+  --version          Show version
+```
+
+For example: `anteumbra --home E:\Software\Anteumbra config validate`.
+Global options must appear before the subcommand.
+
+### `anteumbra install [INSTANCE_DIR]`
+Creates a runtime instance; it does not install the Python package. The path
+is explicit and defaults to the current directory. `--force` allows replacing
+the default registration or using a non-empty target while preserving config
+and secrets.
 
 ### `anteumbra run`
 ```
@@ -379,11 +423,8 @@ non-zero and preserves the PID for diagnosis or retry.
 
 ### `anteumbra config`
 ```
-Options:
-  -o, --output TEXT   Output path (default: ./config.toml)
-
 Subcommands:
-  init                  Create config.toml, .env, default site dir, rules
+  init [-o PATH]         Create config.toml, .env, default site dir, rules
   wizard                Interactive setup for website path, admin port, logs, WAF
   access-log TYPE       Configure access-log analysis presets
   set KEY VALUE         Set a dotted config key, e.g. web_admin.port 8080
@@ -391,6 +432,10 @@ Subcommands:
   validate              Validate runnable paths and integration settings
   reload                Parse and validate the resolved deployment config
 ```
+
+Bare `anteumbra config` only prints this help. `config init` confirms before
+replacing existing files; `config init --force` replaces config and secrets
+without prompting and is intended only for an explicit reset.
 
 `anteumbra config reload` loads `.env`, resolves placeholders, parses every
 site, and reports the enabled-site count. It does not reach into an already
@@ -894,5 +939,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.30 — MIT License</sub>
+  <sub>Anteumbra v1.0.31 — MIT License</sub>
 </div>

@@ -37,8 +37,8 @@ Anteumbra 采用 **领域驱动设计 (DDD) 四层架构** + **事件驱动架�
 │       ▼             ▼               ▼              │
 │              APPLICATION 层                         │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────┐  │
-│  │PluginManager │ │ 16 Services  │ │ Event Bus │  │
-│  │ (singleton)  │ │ (thin facade)│ │ (emit/dis)│  │
+│  │Runtime       │ │ Use-case     │ │Event Router│  │
+│  │ Container    │ │ Services     │ │ (injected) │  │
 │  └──────┬───────┘ └──────┬───────┘ └─────┬─────┘  │
 │         │                │               │         │
 ├─────────┼────────────────┼───────────────┼─────────┤
@@ -64,11 +64,11 @@ Anteumbra 采用 **领域驱动设计 (DDD) 四层架构** + **事件驱动架�
 
 ### 核心设计原则
 
-1. **依赖方向**：Interfaces → Application → Infrastructure，所有层可依赖 Domain
-2. **Domain 零外部依赖**：Domain 层不 import 任何 Anteumbra 模块
-3. **Application 是编排层**：不包含业务逻辑，只做模块编排和事件路由
-4. **Infrastructure 实现 Domain 接口**：Repository、Detector、Notifier 都是 Domain 中 ABC 的实现
-5. **事件总线解耦**：基础设施模块通过 EDA 事件相互通信，不直接调用
+1. **依赖方向**：Interfaces 依赖 Application/Domain；组合根组装 Infrastructure 实现
+2. **Domain 无向外依赖**：Domain 不导入 Application、Infrastructure、Interfaces 或 CLI
+3. **Application 管理用例**：负责运行时编排、事务边界和跨领域工作流
+4. **Infrastructure 实现 Domain Port**：存储、检测、通知和外部集成都通过显式协议接入
+5. **同步与事件并存**：需要返回值的调用走注入 Port，广播事件走注入 Event Publisher
 
 ---
 
@@ -307,8 +307,9 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 ```
 
 Registry、隔离、封禁台账和威胁画像模块自行维护 JSON 格式，因为兼容、原子写入和
-磁盘恢复都属于其领域行为。它们通过 `get_shadow_repository()` 写入 SQLite，不能使用
-通用双写 Repository；否则带站点前缀的 Registry 键可能被写回 JSON 的 `file_path`。
+磁盘恢复都属于其领域行为。`launcher.py` 为每个存储创建独立的 `SqliteRepository`，
+并通过构造参数 `shadow_repository` 注入；不存在全局 Repository 工厂。核心存储不能使用
+通用双写 Repository，否则带站点前缀的 Registry 键可能被写回 JSON 的 `file_path`。
 
 这些核心存储中，只要 JSON 有效就以 JSON 为准；SQLite 仅在 JSON 缺失或不可读时
 参与恢复。威胁画像影子库只保存画像记录，不保存完整 IP 信誉表，因此该恢复是明确的

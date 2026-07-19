@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.30
+# Anteumbra 用户手册 v1.0.31
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -74,6 +74,26 @@ Anteumbra 适合单机或小规模 Web 负载，提供文件完整性监控、We
 
 ### 2.2 从 PyPI 安装
 
+程序代码和运行数据应分开理解：
+
+- `python -m pip install anteumbra` 把程序代码安装到当前 Python 环境。
+- `anteumbra install INSTANCE_DIR` 在指定目录创建唯一的默认运行实例。
+- 运行实例保存 `config.toml`、`.env`、`data/`、`logs/`、`rules/` 和隔离状态。
+
+推荐在指定位置创建专用虚拟环境，避免污染装有其他工具的系统 Python：
+
+```powershell
+py -3.12 -m venv E:\Software\.venvs\anteumbra
+E:\Software\.venvs\anteumbra\Scripts\python -m pip install anteumbra
+E:\Software\.venvs\anteumbra\Scripts\anteumbra install E:\Software\Anteumbra
+E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra config wizard
+E:\Software\.venvs\anteumbra\Scripts\anteumbra --home E:\Software\Anteumbra start
+```
+
+`INSTANCE_DIR` 可以是绝对或相对路径；省略时使用当前目录。`--home INSTANCE_DIR`
+可以让 `run/start/stop/status/config` 在任意工作目录操作指定实例。首次安装已注册的默认
+实例时也可以进入实例目录后省略 `--home`。
+
 ```bash
 pip install anteumbra
 anteumbra install ./anteumbra-instance
@@ -86,6 +106,10 @@ anteumbra run
 基础包已包含编译型 YARA 规则校验和扫描。只有需要可选的 `ssdeep`、
 `py-tlsh` 相似度引擎时才安装 `anteumbra[full]`。`anteumbra[yara]` 作为
 兼容旧命令的空别名保留。
+
+`anteumbra install --force` 只允许替换主机默认实例注册或使用非空目标，不会覆盖已有
+`config.toml` 和 `.env`。有意重置配置时必须显式运行
+`anteumbra config init --force`。
 
 ### 2.3 从源码安装
 
@@ -325,10 +349,25 @@ anteumbra run             # 前台启动
 anteumbra start           # 以守护进程方式启动（后台）
 anteumbra stop            # 停止运行中的实例
 anteumbra status          # 检查是否在运行
-anteumbra config          # 生成 config.toml 模板
+anteumbra config          # 仅显示配置子命令帮助，不写文件
+anteumbra config init     # 显式创建 config.toml、.env、规则和默认站点
 anteumbra config wizard   # 交互式首次配置
 anteumbra config validate # 校验路径、端口、.env 和已启用集成
 ```
+
+### 全局选项
+```
+  --home DIRECTORY   显式选择运行实例目录
+  -h, --help         显示帮助
+  --version          显示版本
+```
+
+例如：`anteumbra --home E:\Software\Anteumbra config validate`。全局选项应写在
+子命令之前。
+
+### `anteumbra install [INSTANCE_DIR]`
+创建运行实例，不负责安装 Python 包。目录可以明确指定；省略时使用当前目录。
+`--force` 允许移动默认注册或使用非空目标，但保留已有配置和密钥。
 
 ### `anteumbra run`
 ```
@@ -355,11 +394,8 @@ HTTP 监听端口检查成功。它使用无缓冲输出，启动进度和失败
 
 ### `anteumbra config`
 ```
-选项：
-  -o, --output TEXT   输出路径（默认：./config.toml）
-
 常用子命令：
-  init                  创建 config.toml、.env、默认站点目录和规则
+  init [-o PATH]         创建 config.toml、.env、默认站点目录和规则
   wizard                交互式配置网站路径、管理端口、日志和 WAF
   access-log TYPE       使用预设配置访问日志分析
   set KEY VALUE         设置一个点分隔配置项，例如 web_admin.port 8080
@@ -367,6 +403,9 @@ HTTP 监听端口检查成功。它使用无缓冲输出，启动进度和失败
   validate              校验可运行路径和集成配置
   reload                解析并校验当前部署配置
 ```
+
+裸 `anteumbra config` 只显示以上帮助。`config init` 遇到已有文件时逐项确认；
+`config init --force` 会无提示替换配置与密钥，应只用于明确的重置操作。
 
 `anteumbra config reload` 会加载 `.env`、解析占位符、解析全部站点并报告启用站点数；
 它不会修改正在运行的服务。请使用 Web 系统页的重载动作，或重启服务。
@@ -851,5 +890,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.30 — MIT License</sub>
+  <sub>Anteumbra v1.0.31 — MIT License</sub>
 </div>

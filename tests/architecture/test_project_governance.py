@@ -58,6 +58,20 @@ def test_obsolete_windows_launchers_are_absent():
     )
 
 
+def test_architecture_docs_describe_runtime_owned_services():
+    stale_claims = ("(singleton)", "(thin facade)", "get_shadow_repository()")
+    violations = []
+    for relative_path in ("docs/ARCHITECTURE.md", "docs/ARCHITECTURE_cn.md"):
+        source = (PROJECT_ROOT / relative_path).read_text(encoding="utf-8")
+        for claim in stale_claims:
+            if claim in source:
+                violations.append(f"{relative_path}: {claim}")
+    assert not violations, (
+        "architecture docs must match runtime-owned dependency injection:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_local_markdown_links_resolve():
     broken: list[str] = []
     for document in _documentation_files():

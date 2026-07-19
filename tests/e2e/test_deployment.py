@@ -483,22 +483,47 @@ class TestCliInstall:
 
         assert install_registry.get_install_info() is None
 
-    def test_config_command_creates_runnable_default_site(self, tmp_path):
-        """anteumbra config should create a config plus the default monitored directory."""
+    def test_config_without_subcommand_only_shows_help(self, tmp_path, monkeypatch):
+        """Bare config must never create or replace deployment files."""
         from anteumbra.cli.main import cli
 
-        target = tmp_path / "instance" / "config.toml"
-        result = CliRunner().invoke(cli, ["config", "--output", str(target)])
+        monkeypatch.chdir(tmp_path)
+        result = CliRunner().invoke(cli, ["config"])
 
         assert result.exit_code == 0, result.output
-        assert target.exists()
-        assert (target.parent / ".env").exists()
-        assert (target.parent / "sites" / "default").is_dir()
-        assert 'path = "sites/default"' in target.read_text(encoding="utf-8")
-        assert (target.parent / "rules" / "webshell").is_dir()
-        assert "ANTEUMBRA_SECRET_KEY=change_this" not in (
-            target.parent / ".env"
-        ).read_text(encoding="utf-8")
+        assert "Commands:" in result.output
+        assert "init" in result.output
+        assert not (tmp_path / "config.toml").exists()
+        assert not (tmp_path / ".env").exists()
+
+    def test_force_install_preserves_existing_config_and_env(self, tmp_path, monkeypatch):
+        """Registration replacement must not reset operator config or secrets."""
+        from anteumbra.infrastructure.config import install_registry
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance"
+        target.mkdir()
+        config_path = target / "config.toml"
+        env_path = target / ".env"
+        config_path.write_text("[web_admin]\nport = 9123\n", encoding="utf-8")
+        env_path.write_text("ANTEUMBRA_SECRET_KEY=keep-me\n", encoding="utf-8")
+        monkeypatch.setattr(
+            install_registry,
+            "get_install_info",
+            lambda: {"install_path": str(target), "version": "old"},
+        )
+        monkeypatch.setattr(install_registry, "register_install", lambda *_args: None)
+
+        result = CliRunner().invoke(cli, ["install", str(target), "--force"])
+
+        assert result.exit_code == 0, result.output
+        assert config_path.read_text(encoding="utf-8") == "[web_admin]\nport = 9123\n"
+        assert env_path.read_text(encoding="utf-8") == "ANTEUMBRA_SECRET_KEY=keep-me\n"
+        assert "Existing config preserved" in result.output
+        assert "Existing .env preserved" in result.output
+        assert "Admin:    http://127.0.0.1:9123/admin" in result.output
+        assert f'anteumbra --home "{target.resolve()}" start' in result.output
+        assert f'anteumbra --home "{target.resolve()}" config wizard' in result.output
 
     def test_config_subcommands_update_config_and_env(self, tmp_path):
         """CLI config subcommands should support scripted first-run setup."""

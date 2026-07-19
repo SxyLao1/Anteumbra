@@ -17,3 +17,39 @@ def test_local_runtime_config_precedes_registered_install(monkeypatch, tmp_path)
     )
 
     assert cli_main._find_project_root() == local_runtime.resolve()
+
+
+def test_explicit_runtime_home_precedes_current_directory(monkeypatch, tmp_path):
+    from anteumbra.cli import main as cli_main
+
+    local_runtime = tmp_path / "local-runtime"
+    local_runtime.mkdir()
+    (local_runtime / "config.toml").write_text("[web_admin]\n", encoding="utf-8")
+    explicit_runtime = tmp_path / "explicit-runtime"
+
+    monkeypatch.chdir(local_runtime)
+    monkeypatch.setenv("ANTEUMBRA_HOME", str(explicit_runtime))
+
+    assert cli_main._find_project_root() == explicit_runtime.resolve()
+
+
+def test_registered_runtime_precedes_unmarked_source_checkout(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.config import install_registry
+    from anteumbra.cli import main as cli_main
+
+    checkout = tmp_path / "checkout"
+    (checkout / "src" / "anteumbra").mkdir(parents=True)
+    (checkout / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    (checkout / "config.toml").write_text("[web_admin]\n", encoding="utf-8")
+    registered = tmp_path / "registered-runtime"
+    registered.mkdir()
+
+    monkeypatch.chdir(checkout)
+    monkeypatch.delenv("ANTEUMBRA_HOME", raising=False)
+    monkeypatch.setattr(
+        install_registry,
+        "get_install_info",
+        lambda: {"install_path": str(registered)},
+    )
+
+    assert cli_main._find_project_root() == registered.resolve()

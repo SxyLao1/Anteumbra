@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.30-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.31-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -47,6 +47,23 @@ anteumbra config wizard
 anteumbra config validate
 anteumbra run
 ```
+
+`pip install` places package code in the active Python environment, while
+`anteumbra install INSTANCE_DIR` creates an explicitly located mutable runtime
+containing `config.toml`, `.env`, data, logs, rules, and quarantine files. They
+are two locations for one product. Use a dedicated virtual environment for
+normal deployments instead of sharing a global Python environment with other
+tools.
+
+Select the runtime explicitly from any working directory:
+
+```bash
+anteumbra --home /opt/anteumbra config wizard
+anteumbra --home /opt/anteumbra start
+```
+
+Windows paths are accepted directly, for example
+`anteumbra install E:\Software\Anteumbra`.
 
 Open `http://127.0.0.1:8080/admin`. The default username is `admin`; the initial password is printed by `anteumbra install`. You can set a new password in `anteumbra config wizard`.
 
@@ -91,6 +108,11 @@ anteumbra config reload
 
 `config reload` fully parses the selected deployment config but does not
 mutate a running service. Apply runtime changes from Web System or restart it.
+
+Running `anteumbra config` by itself only displays subcommand help and never
+creates or overwrites files. Initialization requires `anteumbra config init`;
+only `config init --force` replaces an existing `config.toml` and `.env`
+without prompting.
 
 For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-commands).
 
@@ -170,5 +192,5 @@ MIT License. Third-party tools bundled under `tools/` retain their original lice
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.30 · MIT License</sub>
+  <sub>Anteumbra v1.0.31 · MIT License</sub>
 </div>

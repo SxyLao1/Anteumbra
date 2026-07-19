@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.30-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.31-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -48,6 +48,21 @@ anteumbra config validate
 anteumbra run
 ```
 
+`pip install` 将程序代码安装到当前 Python 环境；`anteumbra install INSTANCE_DIR`
+创建可明确指定位置的运行实例，其中保存 `config.toml`、`.env`、数据、日志、规则和
+隔离文件。两者不是两套产品。生产或日常使用建议把程序装入专用虚拟环境，而不是与
+其他 Python 工具共用全局环境。
+
+在任何工作目录都可以显式选择运行实例：
+
+```bash
+anteumbra --home /opt/anteumbra config wizard
+anteumbra --home /opt/anteumbra start
+```
+
+Windows 路径同样可直接指定，例如
+`anteumbra install E:\Software\Anteumbra`。
+
 打开 `http://127.0.0.1:8080/admin`。默认用户名是 `admin`；初始密码由 `anteumbra install` 打印。也可以在 `anteumbra config wizard` 中输入新密码。
 
 基础安装已包含 YARA 扫描。需要相似度引擎时安装 `full` 扩展：
@@ -89,6 +104,10 @@ anteumbra config reload
 
 `config reload` 会完整解析所选部署配置，但不会修改正在运行的服务。
 需要从 Web 系统页应用运行时配置，或重启服务。
+
+直接运行 `anteumbra config` 只显示子命令帮助，不会创建或覆盖文件。初始化必须显式
+使用 `anteumbra config init`；只有 `config init --force` 才会无提示替换现有
+`config.toml` 和 `.env`。
 
 完整命令参考见 [CLI 命令](docs/USER_MANUAL_cn.md#4-cli-命令)。
 
@@ -167,5 +186,5 @@ MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.30 · MIT License</sub>
+  <sub>Anteumbra v1.0.31 · MIT License</sub>
 </div>

@@ -64,24 +64,32 @@ def _find_project_root() -> Path:
 
     Priority:
     1. ANTEUMBRA_HOME environment variable
-    2. CWD upward walk (config.toml / pyproject.toml / PID file)
+    2. CWD runtime upward walk (installation marker / config / PID file)
     3. Global install registry (~/.anteumbra/installs.json)
+    4. Source checkout or current directory fallback
     """
     # 1. 环境变量
     env_home = os.environ.get("ANTEUMBRA_HOME")
     if env_home:
-        p = Path(env_home).resolve()
-        if p.exists():
-            return p
+        return Path(env_home).expanduser().resolve()
 
-    # 2. CWD 向上遍历. A local config always owns its runtime even when a
-    # machine-wide PyPI installation is registered elsewhere.
-    d = Path.cwd().resolve()
+    # 2. CWD upward walk. A real local runtime wins, while an unmarked source
+    # checkout remains only a fallback behind the registered deployment.
+    cwd = Path.cwd().resolve()
+    d = cwd
+    source_checkout = None
     for _ in range(6):
-        if ((d / "config.toml").exists()
-            or (d / "pyproject.toml").exists()
-            or (d / "data" / "anteumbra.pid").exists()):
-            return d
+        has_pid = (d / "data" / "anteumbra.pid").exists()
+        has_runtime_file = (d / "config.toml").exists() or has_pid
+        if has_runtime_file:
+            is_source_checkout = (
+                (d / "pyproject.toml").is_file()
+                and (d / "src" / "anteumbra").is_dir()
+            )
+            is_runtime_checkout = (d / ".anteumbra_install").is_file() or has_pid
+            if not is_source_checkout or is_runtime_checkout:
+                return d
+            source_checkout = d
         if d.parent == d:
             break
         d = d.parent
@@ -100,7 +108,7 @@ def _find_project_root() -> Path:
             exc_info=True,
         )
 
-    return Path.cwd().resolve()
+    return source_checkout or cwd
 
 
 def _read_pid() -> int | None:
@@ -189,11 +197,35 @@ def _resolve_bind_options(root: Path, host: str | None, port: int | None) -> tup
     return resolved_host or DEFAULT_HOST, resolved_port or DEFAULT_PORT
 
 
-@click.group(invoke_without_command=True)
+@click.group(
+    invoke_without_command=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog=(
+        "\b\nExamples:\n"
+        "  anteumbra install E:\\Software\\Anteumbra\n"
+        "  anteumbra --home E:\\Software\\Anteumbra config wizard\n"
+        "  anteumbra --home E:\\Software\\Anteumbra start\n\n"
+        "Run 'anteumbra COMMAND --help' for command-specific options."
+    ),
+)
 @click.version_option(__version__, prog_name="anteumbra")
+@click.option(
+    "--home",
+    type=click.Path(file_okay=False, path_type=Path, resolve_path=True),
+    envvar="ANTEUMBRA_HOME",
+    help="Runtime instance directory used by run, start, stop, status, and config.",
+)
 @click.pass_context
-def cli(ctx):
-    """Anteumbra - Lightweight Web Perimeter Security Platform."""
+def cli(ctx, home):
+    """Anteumbra - Lightweight Web Perimeter Security Platform.
+
+    Install package code with pip (preferably in an isolated environment),
+    then create one mutable runtime with `anteumbra install INSTANCE_DIR`.
+    The runtime directory owns config.toml, .env, data, logs, rules, and
+    quarantine state; it is separate from the Python package location.
+    """
+    if home is not None:
+        os.environ["ANTEUMBRA_HOME"] = str(home)
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         # Show quick status
@@ -873,21 +905,40 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
-@cli.group(invoke_without_command=True)
-@click.option("--output", "-o", default=None, help="Output path (default: ./config.toml)")
+@cli.group(
+    invoke_without_command=True,
+    epilog=(
+        "\b\nExamples:\n"
+        "  anteumbra config init\n"
+        "  anteumbra config wizard\n"
+        "  anteumbra config set web_admin.port 8080\n"
+        "  anteumbra config validate"
+    ),
+)
 @click.pass_context
-def config(ctx, output):
-    """Manage config.toml and .env files."""
+def config(ctx):
+    """Inspect or modify runtime configuration.
+
+    Running this group without a subcommand only displays help and never
+    creates or overwrites files. Use `config init` for explicit initialization.
+    """
     if ctx.invoked_subcommand is None:
-        target = Path(output).expanduser().resolve() if output else _config_target()
-        _create_config_template(target)
+        click.echo(ctx.get_help())
 
 
 @config.command("init")
 @click.option("--output", "-o", default=None, help="Output path (default: ./config.toml)")
-@click.option("--force", is_flag=True, help="Overwrite existing files without prompting")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Replace existing config.toml and .env without prompting.",
+)
 def config_init(output, force):
-    """Create config.toml, .env, default site dir, and bundled rules."""
+    """Create config.toml, .env, default site directory, and bundled rules.
+
+    Existing config and secrets are preserved unless you confirm replacement
+    interactively or pass --force.
+    """
     target = Path(output).expanduser().resolve() if output else _config_target()
     _create_config_template(target, overwrite=True if force else None)
 
@@ -1143,15 +1194,23 @@ def config_wizard(config_path):
 # ── Install ────────────────────────────────────────
 
 @cli.command()
-@click.argument("path", required=False)
-@click.option("--force", is_flag=True, help="Force reinstall even if already installed")
+@click.argument("path", required=False, metavar="[INSTANCE_DIR]")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Allow registration replacement or a non-empty target; preserve config and .env.",
+)
 def install(path, force):
-    """Set up an Anteumbra deployment instance.
+    """Create a mutable runtime in INSTANCE_DIR.
 
-    Copies config template, YARA rules, generates admin password,
-    and registers this as the single machine-wide installation.
+    This command does not install Python package code. Install that first with
+    `pip install anteumbra` inside an isolated environment. It then creates the
+    runtime config, secrets, rules, data, logs, and quarantine directories and
+    registers this as the single default instance for the current user.
 
-    PATH defaults to the current working directory.
+    INSTANCE_DIR accepts an absolute or relative path and defaults to the
+    current directory. Existing config.toml and .env files are always preserved;
+    use `anteumbra config init --force` only when an intentional reset is needed.
     """
     import shutil
     import secrets as _sec
@@ -1215,8 +1274,11 @@ def install(path, force):
     pkg_dir = _package_dir()
 
     if config_src and config_src != config_dst:
-        shutil.copy(config_src, config_dst)
-        click.echo(f"Config template -> {config_dst}")
+        if config_dst.exists():
+            click.echo(f"Existing config preserved at {config_dst}")
+        else:
+            shutil.copy(config_src, config_dst)
+            click.echo(f"Config template -> {config_dst}")
     elif not config_src:
         click.echo("Error: bundled config.toml template not found. Reinstall the anteumbra package.", err=True)
 
@@ -1245,11 +1307,11 @@ def install(path, force):
 
     # ── 生成 .env ─────────────────────────────────
     env_file = target / ".env"
-    if not env_file.exists() or force:
+    if not env_file.exists():
         pwd = _write_generated_env(env_file)
         click.echo(f".env written to {env_file}")
     else:
-        click.echo(f".env already exists at {env_file} (skipped)")
+        click.echo(f"Existing .env preserved at {env_file}")
         pwd = None
 
     # ── 写安装锁 ──────────────────────────────────
@@ -1277,18 +1339,23 @@ def install(path, force):
         )
 
     # ── 完成 ──────────────────────────────────────
+    admin_host, admin_port = _resolve_bind_options(target, None, None)
+    display_host = "127.0.0.1" if admin_host in {"0.0.0.0", "::", "[::]"} else admin_host
+    if ":" in display_host and not display_host.startswith("["):
+        display_host = f"[{display_host}]"
+    quoted_target = f'"{target}"'
     click.echo(f"\n{'='*60}")
     click.echo(f"  Anteumbra v{__version__} installed successfully!")
     click.echo(f"  Location: {target}")
-    click.echo(f"  Admin:    http://127.0.0.1:8080/admin")
+    click.echo(f"  Admin:    http://{display_host}:{admin_port}/admin")
     click.echo(f"  Username: admin")
     if pwd:
         click.echo(f"  Password: {pwd}")
     else:
         click.echo(f"  Password: (see {env_file})")
-    click.echo(f"\n  Start:    cd {target} && anteumbra run")
-    click.echo(f"  Status:   anteumbra status")
-    click.echo(f"  Config:   edit {target / 'config.toml'}")
+    click.echo(f"\n  Start:    anteumbra --home {quoted_target} start")
+    click.echo(f"  Status:   anteumbra --home {quoted_target} status")
+    click.echo(f"  Config:   anteumbra --home {quoted_target} config wizard")
     click.echo(f"{'='*60}\n")
 
 

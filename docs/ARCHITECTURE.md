@@ -37,8 +37,8 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 │       ▼             ▼               ▼              │
 │              APPLICATION Layer                       │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────┐  │
-│  │PluginManager │ │ 16 Services  │ │ Event Bus │  │
-│  │ (singleton)  │ │ (thin facade)│ │ (emit/dis)│  │
+│  │Runtime       │ │ Use-case     │ │Event Router│  │
+│  │ Container    │ │ Services     │ │ (injected) │  │
 │  └──────┬───────┘ └──────┬───────┘ └─────┬─────┘  │
 │         │                │               │         │
 ├─────────┼────────────────┼───────────────┼─────────┤
@@ -64,11 +64,11 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 
 ### Core Design Principles
 
-1. **Dependency direction**: Interfaces → Application → Infrastructure; all layers may depend on Domain
-2. **Domain has zero external dependencies**: The Domain layer does not import any Anteumbra modules
-3. **Application is the orchestration layer**: Contains no business logic, only module orchestration and event routing
-4. **Infrastructure implements Domain interfaces**: Repository, Detector, Notifier are all implementations of ABCs defined in Domain
-5. **Event bus decoupling**: Infrastructure modules communicate with each other via EDA events, never through direct calls
+1. **Dependency direction**: Interfaces depend on Application/Domain; the composition root wires Infrastructure implementations
+2. **Domain has no outward dependencies**: Domain does not import Application, Infrastructure, Interfaces, or CLI
+3. **Application owns use cases**: It coordinates runtime lifecycle, transaction boundaries, and cross-domain workflows
+4. **Infrastructure implements Domain ports**: Storage, detection, notification, and external integrations enter through explicit protocols
+5. **Calls and events coexist**: Return-value dependencies use injected ports; broadcast events use an injected event publisher
 
 ### Current Refactoring Boundary
 
@@ -325,9 +325,11 @@ Core state stores
 
 Registry, quarantine, block-ledger, and threat-graph modules own their JSON
 format because compatibility, atomic writes, and disk recovery are part of
-their domain behavior. They use `get_shadow_repository()` for SQLite, rather
-than a generic dual-write repository. This prevents a site-qualified Registry
-key from being written into JSON as a replacement `file_path`.
+their domain behavior. `launcher.py` creates a dedicated `SqliteRepository` for
+each store and injects it through the `shadow_repository` constructor argument;
+there is no global repository factory. Core stores do not use a generic
+dual-write repository, preventing a site-qualified Registry key from being
+written into JSON as a replacement `file_path`.
 
 For these core stores, valid JSON always wins. SQLite is read only when the
 JSON source is missing or unreadable. The threat-graph shadow contains profile

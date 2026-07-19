@@ -12,6 +12,39 @@ No changes yet.
 
 ---
 
+## [1.0.31] - 2026-07-19
+
+### Fixed
+- Made bare `anteumbra config` display subcommand help without entering the
+  template-creation flow, preventing an accepted prompt from replacing a
+  runtime's `config.toml` and `.env`.
+- Limited `anteumbra install --force` to registration and non-empty-directory
+  checks while always preserving existing config and secrets. Intentional
+  resets now require `anteumbra config init --force`.
+- Prevented an unmarked Git source checkout from shadowing the host's registered
+  runtime when using the installed CLI. Explicit `--home` remains the highest
+  priority.
+
+### Changed
+- Added `-h` and `--home INSTANCE_DIR` at the top-level CLI. Help now separates
+  Python package installation from the explicitly located runtime and includes
+  complete first-install examples.
+- Removed the legacy `start.bat` and `stop.bat`, which hard-coded a local Python
+  path and killed processes by port. Governance tests prevent them from
+  returning; `anteumbra start/stop` is the only supported lifecycle CLI.
+
+### Tests
+- Added regressions for CLI help, side-effect-free bare config, explicit
+  runtime-home precedence, force-install config preservation, and architecture
+  documentation accuracy.
+- Final source passes 507 non-browser tests, all 41 Playwright UI tests, Ruff,
+  a 116-module import sweep, and Wheel/source parity. Clean Wheel and editable
+  source installs both passed instance startup checks.
+- The 1.0.31 Docker image passed health, admin login, file-monitor detection,
+  site-qualified Registry, Web quarantine, and restore checks.
+
+---
+
 ## [1.0.30] - 2026-07-19
 
 ### Fixed
