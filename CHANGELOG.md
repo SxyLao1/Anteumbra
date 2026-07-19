@@ -12,6 +12,23 @@ No changes yet.
 
 ---
 
+## [1.0.32] - 2026-07-19
+
+### Fixed
+- Made the existing-instance install summary read the actual
+  `web_admin.username` instead of always displaying `admin`.
+- Stopped telling operators to find plaintext credentials in `.env`, which
+  stores only a one-way password hash. The summary now states that the password
+  is unchanged and points to `config wizard` for a reset.
+- Made the package summary ASCII-safe so it renders correctly in legacy
+  Windows terminals.
+
+### Tests
+- Extended force-install preservation coverage for a custom username, resolved
+  admin port, and truthful password messaging.
+
+---
+
 ## [1.0.31] - 2026-07-19
 
 ### Fixed

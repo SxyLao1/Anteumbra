@@ -2,9 +2,9 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.31 (release validation completed, 2026-07-19)
+> **Latest Release**: v1.0.32 (release validation completed, 2026-07-19)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` matches the validated v1.0.31 source: 507 non-browser tests, 41 browser tests, Ruff, and a 116-module import sweep pass. Clean Wheel, editable-source, Windows runtime, and Docker health/login/detection/quarantine/restore checks are complete.
+> **Source Status**: `main` matches the validated v1.0.32 source: 507 non-browser tests, 41 browser tests, Ruff, and a 116-module import sweep pass. Clean Wheel, editable-source, Windows runtime, and Docker health/login/detection/quarantine/restore checks are complete.
 
 ---
 
@@ -40,7 +40,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 ---
 
-## v1.0.20 - v1.0.31 Cleanup Line
+## v1.0.20 - v1.0.32 Cleanup Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
@@ -56,6 +56,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.29 | Stable site identity across renames, instance-owned lifecycle/login throttling, site-isolated ThreatGraph, stable log ownership/history, focused service Protocols, deterministic Waitress shutdown, Docker/CI hardening | Released to PyPI |
 | 1.0.30 | Clean Registry recovery boundaries and exact reconciliation of legacy SQLite shadow keys | Released to PyPI |
 | 1.0.31 | Safe CLI runtime selection, non-destructive config/install behavior, complete help, and local environment convergence | Released to PyPI |
+| 1.0.32 | Truthful configured-admin identity and password preservation/reset semantics in the install summary | Release-validated |
 
 ---
 
@@ -65,14 +66,14 @@ Before a wider user push or PyPI release, complete this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.31 |
+| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.32 |
 | P0 | Verify release wheel clean install in a fresh runtime directory | Done: 117 Python / 204 package files; install and detection passed |
 | P0 | Verify source editable install in a fresh runtime directory | Done: instance, config preservation, startup, and health passed |
 | P0 | Verify Docker build/run/health/detection path | Done: health, login, detection, quarantine, and restore passed |
 | P0 | Confirm README commands match real CLI output | Done in Wheel/source/dedicated-venv smoke |
 | P1 | Run deployment, architecture, and relevant web regression tests | Done: 507 non-browser; 41 UI |
-| P1 | Tag release only after every check above passes from a clean tree | v1.0.31 release gate complete |
-| P1 | Verify trusted PyPI publishing and install the published artifact | v1.0.31 official Wheel digest, contents, and clean install confirmed |
+| P1 | Tag release only after every check above passes from a clean tree | v1.0.32 release gate in progress |
+| P1 | Verify trusted PyPI publishing and install the published artifact | v1.0.31 confirmed; verify v1.0.32 after tag |
 
 ---
 

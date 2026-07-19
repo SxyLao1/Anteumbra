@@ -1343,16 +1343,27 @@ def install(path, force):
     display_host = "127.0.0.1" if admin_host in {"0.0.0.0", "::", "[::]"} else admin_host
     if ":" in display_host and not display_host.startswith("["):
         display_host = f"[{display_host}]"
+    username = "admin"
+    try:
+        summary_config = _load_toml_file(config_dst)
+        web_admin = summary_config.get("web_admin", {})
+        if isinstance(web_admin, dict):
+            username = str(web_admin.get("username") or username).strip() or username
+    except (OSError, TypeError, ValueError):
+        logging.getLogger(__name__).debug(
+            "Failed to resolve the configured admin username for install summary",
+            exc_info=True,
+        )
     quoted_target = f'"{target}"'
     click.echo(f"\n{'='*60}")
     click.echo(f"  Anteumbra v{__version__} installed successfully!")
     click.echo(f"  Location: {target}")
     click.echo(f"  Admin:    http://{display_host}:{admin_port}/admin")
-    click.echo(f"  Username: admin")
+    click.echo(f"  Username: {username}")
     if pwd:
         click.echo(f"  Password: {pwd}")
     else:
-        click.echo(f"  Password: (see {env_file})")
+        click.echo("  Password: unchanged (use the Config command below to reset)")
     click.echo(f"\n  Start:    anteumbra --home {quoted_target} start")
     click.echo(f"  Status:   anteumbra --home {quoted_target} status")
     click.echo(f"  Config:   anteumbra --home {quoted_target} config wizard")

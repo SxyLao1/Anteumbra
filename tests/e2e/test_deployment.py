@@ -505,7 +505,10 @@ class TestCliInstall:
         target.mkdir()
         config_path = target / "config.toml"
         env_path = target / ".env"
-        config_path.write_text("[web_admin]\nport = 9123\n", encoding="utf-8")
+        config_path.write_text(
+            '[web_admin]\nport = 9123\nusername = "operator"\n',
+            encoding="utf-8",
+        )
         env_path.write_text("ANTEUMBRA_SECRET_KEY=keep-me\n", encoding="utf-8")
         monkeypatch.setattr(
             install_registry,
@@ -517,11 +520,16 @@ class TestCliInstall:
         result = CliRunner().invoke(cli, ["install", str(target), "--force"])
 
         assert result.exit_code == 0, result.output
-        assert config_path.read_text(encoding="utf-8") == "[web_admin]\nport = 9123\n"
+        assert config_path.read_text(encoding="utf-8") == (
+            '[web_admin]\nport = 9123\nusername = "operator"\n'
+        )
         assert env_path.read_text(encoding="utf-8") == "ANTEUMBRA_SECRET_KEY=keep-me\n"
         assert "Existing config preserved" in result.output
         assert "Existing .env preserved" in result.output
         assert "Admin:    http://127.0.0.1:9123/admin" in result.output
+        assert "Username: operator" in result.output
+        assert "Password: unchanged" in result.output
+        assert "see " not in result.output
         assert f'anteumbra --home "{target.resolve()}" start' in result.output
         assert f'anteumbra --home "{target.resolve()}" config wizard' in result.output
 

@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.31
+# Anteumbra User Manual v1.0.32
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -118,6 +118,9 @@ engines are required. `anteumbra[yara]` remains an empty compatibility alias.
 registration or using a non-empty target; it does not replace an existing
 `config.toml` or `.env`. An intentional reset requires the explicit
 `anteumbra config init --force` command.
+The install summary displays the configured administrator username. It reports
+an existing password only as unchanged because `.env` stores a one-way hash;
+use `anteumbra config wizard` to set a new password when it is unknown.
 
 ### 2.3 From Source
 
@@ -939,5 +942,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.31 — MIT License</sub>
+  <sub>Anteumbra v1.0.32 — MIT License</sub>
 </div>

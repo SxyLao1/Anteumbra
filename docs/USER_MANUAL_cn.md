@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.31
+# Anteumbra 用户手册 v1.0.32
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -110,6 +110,8 @@ anteumbra run
 `anteumbra install --force` 只允许替换主机默认实例注册或使用非空目标，不会覆盖已有
 `config.toml` 和 `.env`。有意重置配置时必须显式运行
 `anteumbra config init --force`。
+安装摘要会显示配置中的真实管理员用户名；已有密码只报告为保持不变，因为 `.env`
+保存的是不可逆 Hash。忘记密码时使用 `anteumbra config wizard` 设置新密码。
 
 ### 2.3 从源码安装
 
@@ -890,5 +892,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.31 — MIT License</sub>
+  <sub>Anteumbra v1.0.32 — MIT License</sub>
 </div>
