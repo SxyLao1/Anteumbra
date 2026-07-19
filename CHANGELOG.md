@@ -42,6 +42,9 @@ No changes yet.
   source installs both passed instance startup checks.
 - The 1.0.31 Docker image passed health, admin login, file-monitor detection,
   site-qualified Registry, Web quarantine, and restore checks.
+- The official PyPI Wheel matches its published SHA-256 metadata and passed
+  the 204-file package inventory, clean dependency install, 116-module import,
+  config-preservation, and independent-port startup checks.
 
 ---
 

@@ -55,7 +55,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Released to PyPI |
 | 1.0.29 | Stable site identity across renames, instance-owned lifecycle/login throttling, site-isolated ThreatGraph, stable log ownership/history, focused service Protocols, deterministic Waitress shutdown, Docker/CI hardening | Released to PyPI |
 | 1.0.30 | Clean Registry recovery boundaries and exact reconciliation of legacy SQLite shadow keys | Released to PyPI |
-| 1.0.31 | Safe CLI runtime selection, non-destructive config/install behavior, complete help, and local environment convergence | Release-validated |
+| 1.0.31 | Safe CLI runtime selection, non-destructive config/install behavior, complete help, and local environment convergence | Released to PyPI |
 
 ---
 
@@ -72,7 +72,7 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Confirm README commands match real CLI output | Done in Wheel/source/dedicated-venv smoke |
 | P1 | Run deployment, architecture, and relevant web regression tests | Done: 507 non-browser; 41 UI |
 | P1 | Tag release only after every check above passes from a clean tree | v1.0.31 release gate complete |
-| P1 | Verify trusted PyPI publishing and install the published artifact | Verify after tag; v1.0.30 confirmed |
+| P1 | Verify trusted PyPI publishing and install the published artifact | v1.0.31 official Wheel digest, contents, and clean install confirmed |
 
 ---
 
