@@ -21,10 +21,10 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
 
-from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.path_service import normalize_path
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.application.password_service import check_password_strength, update_password_hash_in_config
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
     is_ip_allowed,
@@ -312,11 +312,21 @@ def login():
     # V-006: 速率限制检查
     allowed, rate_msg = _check_login_rate(client_ip)
     if not allowed:
-        log_with_symbol("critical_permission", "critical", f"登录频率限制触发: {client_ip}")
+        log_with_symbol(
+            "critical_permission",
+            "critical",
+            f"登录频率限制触发: {client_ip}",
+            current_app.logger,
+        )
         return render_template('admin/login.html', error=rate_msg), 429
 
     if not is_ip_allowed(client_ip, allowed_ips):
-        log_with_symbol("critical_permission", "critical", f"登录IP被拒绝: {client_ip}")
+        log_with_symbol(
+            "critical_permission",
+            "critical",
+            f"登录IP被拒绝: {client_ip}",
+            current_app.logger,
+        )
         return render_template('admin/login.html', error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
         # 登录成功：清除该IP的速率计数
@@ -326,9 +336,13 @@ def login():
         session['username'] = username
         session.permanent = current_app.config.get('SESSION_PERMANENT', False)
         session['sse_token'] = generate_secure_sse_token(username)
-        log_with_symbol("success", "info", f"用户 {username} 登录成功")
+        log_with_symbol(
+            "success", "info", f"用户 {username} 登录成功", current_app.logger
+        )
         return redirect(url_for('admin.dashboard_index'))
-    log_with_symbol("critical_permission", "critical", f"登录失败: {username}")
+    log_with_symbol(
+        "critical_permission", "critical", f"登录失败: {username}", current_app.logger
+    )
     return render_template('admin/login.html', error="用户名或密码错误"), 401
 
 
@@ -342,7 +356,7 @@ def logout():
     session.clear()
     response = redirect(url_for('admin.login'))
     response.set_cookie('session', '', expires=0)
-    log_with_symbol("success", "info", f"用户 {username} 已登出")
+    log_with_symbol("success", "info", f"用户 {username} 已登出", current_app.logger)
     return response
 @admin_bp.route('/dashboard')
 @require_auth

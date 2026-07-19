@@ -42,7 +42,7 @@ def build_runtime_container(
     from anteumbra.infrastructure.runtime_adapters import EventPublisherRouter
     from anteumbra.infrastructure.suspicious_registry import SuspiciousRegistry
     from anteumbra.infrastructure.threat_graph import ThreatGraph
-    from anteumbra.infrastructure.utils.logger_factory import get_logger
+    from anteumbra.infrastructure.utils.logger_factory import RuntimeLoggerFactory
     from anteumbra.infrastructure.utils.path_utils import normalize_path
     from anteumbra.infrastructure.utils.sse_manager import SSEManager
     from anteumbra.infrastructure.waf_client import build_waf_poller
@@ -50,6 +50,7 @@ def build_runtime_container(
 
     provider = TomlConfigProvider(config_path)
     ConfigRegistry.bind(provider)
+    runtime_logging = RuntimeLoggerFactory(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     events = EventPublisherRouter(plugin_manager)
@@ -57,12 +58,12 @@ def build_runtime_container(
         data_dir / "registry_wal.log",
         settings_loader=lambda: provider.get().get("filesizes", {}),
         event_publisher=events,
-        logger=get_logger("wal_manager"),
+        logger=runtime_logging.get_logger("wal_manager"),
     )
     sse = SSEManager(
         provider,
         data_dir / "sse_log_buffer.json",
-        logger=get_logger("sse"),
+        logger=runtime_logging.get_logger("sse"),
     )
     shadow_ledger = None
     shadow_quarantine = None
@@ -81,7 +82,7 @@ def build_runtime_container(
                 sort_column="blocked_at",
             )
         except Exception:
-            get_logger("block_ledger").exception(
+            runtime_logging.get_logger("block_ledger").exception(
                 "Block ledger SQLite shadow initialization failed; JSON remains authoritative"
             )
         try:
@@ -92,7 +93,7 @@ def build_runtime_container(
                 sort_column="created_at",
             )
         except Exception:
-            get_logger("quarantine").exception(
+            runtime_logging.get_logger("quarantine").exception(
                 "Quarantine SQLite shadow initialization failed; JSON remains authoritative"
             )
         try:
@@ -103,7 +104,7 @@ def build_runtime_container(
                 sort_column="detected_at",
             )
         except Exception:
-            get_logger("suspicious_registry").exception(
+            runtime_logging.get_logger("suspicious_registry").exception(
                 "Registry SQLite shadow initialization failed; JSON remains authoritative"
             )
         try:
@@ -114,7 +115,7 @@ def build_runtime_container(
                 sort_column="updated_at",
             )
         except Exception:
-            get_logger("threat_graph").exception(
+            runtime_logging.get_logger("threat_graph").exception(
                 "Threat profile SQLite shadow initialization failed; JSON remains authoritative"
             )
     block_ledger = BlockLedger(
@@ -126,7 +127,7 @@ def build_runtime_container(
         data_dir / "quarantine",
         site_resolver=provider.resolve_site_identity,
         shadow_repository=shadow_quarantine,
-        logger=get_logger("quarantine"),
+        logger=runtime_logging.get_logger("quarantine"),
     )
     registry = SuspiciousRegistry(
         data_dir / "suspicious_registry.json",
@@ -135,14 +136,14 @@ def build_runtime_container(
         event_publisher=events,
         change_callback=sse.trigger_registry_update,
         shadow_repository=shadow_registry,
-        logger=get_logger("suspicious_registry"),
+        logger=runtime_logging.get_logger("suspicious_registry"),
     )
     registry.replay_wal()
     quarantine = QuarantineService(
         quarantine_store,
         registry,
         site_resolver=provider.resolve_site_identity,
-        logger=get_logger("quarantine_service"),
+        logger=runtime_logging.get_logger("quarantine_service"),
     )
     memory_shell_tracer = MemoryShellTracer(
         registry_reader=registry.get_all,
@@ -151,18 +152,22 @@ def build_runtime_container(
     waf_poller = build_waf_poller(
         provider,
         data_dir / "waf_events.jsonl",
-        log=get_logger("waf_client"),
+        log=runtime_logging.get_logger("waf_client"),
     )
     ip_blocker = IPBlocker.from_config(
         config.get("ip_blocker", {}),
         retry_path=data_dir / "block_retry_queue.json",
-        log=get_logger("ip_blocker"),
+        log=runtime_logging.get_logger("ip_blocker"),
     )
     metrics = MetricsCollector(
         data_dir / "metrics.json",
         registry_reader=registry.get_all,
     )
-    notifier = Notifier(config.get("notifier", {}), get_logger("monitor.notifier"), metrics)
+    notifier = Notifier(
+        config.get("notifier", {}),
+        runtime_logging.get_logger("monitor.notifier"),
+        metrics,
+    )
     siem_exporter = SIEMExporter(config.get("siem", {}))
     hash_engine = HashEngine()
     file_cluster_engine = FileClusterEngine(hash_engine)
@@ -170,14 +175,16 @@ def build_runtime_container(
         config,
         file_cluster_engine,
         shadow_repository=shadow_threat_profiles,
+        log=runtime_logging.get_logger("threat_graph"),
     )
     threat_graph.set_persist_path(data_dir / "threat_intel" / "threat_graph.json")
     threat_graph.load()
-    yara_engine = build_yara_engine(provider, get_logger("yara"))
+    yara_engine = build_yara_engine(provider, runtime_logging.get_logger("yara"))
     scanner = ScannerService(provider, yara_engine, metrics)
     return RuntimeContainer(
         config=provider,
         events=events,
+        logging=runtime_logging,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,
@@ -201,7 +208,6 @@ def build_runtime_container(
 def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     """Start all runtime components and block until interrupted."""
     from anteumbra.infrastructure.config.version import get_version
-    from anteumbra.infrastructure.utils.logger_factory import get_logger
     from anteumbra.infrastructure.utils.path_utils import normalize_path
 
     container = build_runtime_container()
@@ -227,7 +233,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
     pid_file = data_dir / "anteumbra.pid"
     pid_file.write_text(str(os.getpid()), encoding="utf-8")
 
-    runtime_logger = get_logger("Anteumbra")
+    runtime_logger = container.logging.get_logger("Anteumbra")
     stop_event = threading.Event()
     warnings = [item["message"] for item in assess_runtime_capabilities(config)["warnings"]]
 
@@ -289,6 +295,7 @@ def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
         monitors, log_monitors, site_warnings = _start_site_monitors(
             websites,
             runtime_services=runtime_services,
+            logger_factory=container.logging.get_logger,
             config_provider=container.config,
             notifier=container.notifier,
             registry=container.registry,
@@ -383,9 +390,7 @@ def _start_site_monitors(
 
         monitor_factory = WebsiteMonitor
     if logger_factory is None:
-        from anteumbra.infrastructure.utils.logger_factory import get_logger
-
-        logger_factory = get_logger
+        raise ValueError("logger_factory must be supplied by the composition root")
     if scan_callback is None:
         raise ValueError("scan_callback must be supplied by the composition root")
     if analyzer_factory is None:
@@ -710,6 +715,10 @@ def stop_all() -> None:
             pid_file.unlink()
     except OSError:
         logger.exception("Failed to remove PID file")
+
+    runtime_logging = getattr(container, "logging", None)
+    if runtime_logging:
+        _stop_resource("runtime logging", runtime_logging.close)
 
     with _state_lock:
         _launcher_state.clear()

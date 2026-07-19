@@ -107,6 +107,7 @@ DEPRECATED_GLOBAL_SERVICE_MODULES = {
     PACKAGE_ROOT / "application" / "registry_service.py",
     PACKAGE_ROOT / "application" / "sse_service.py",
     PACKAGE_ROOT / "application" / "wal_service.py",
+    PACKAGE_ROOT / "application" / "logging_service.py",
     PACKAGE_ROOT / "infrastructure" / "registry_adapter.py",
 }
 
@@ -147,6 +148,53 @@ def test_notifier_has_no_process_global_factory():
     source = notifier.read_text(encoding="utf-8")
     assert "_notifier_instance" not in source
     assert "def get_notifier(" not in source
+
+
+def test_logging_is_owned_by_runtime_container():
+    factory = PACKAGE_ROOT / "infrastructure" / "utils" / "logger_factory.py"
+    source = factory.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(factory))
+    module_functions = {
+        node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+
+    assert "ConfigRegistry" not in source
+    assert {
+        "get_logger",
+        "get_access_logger",
+        "get_application_logger",
+        "close",
+    }.isdisjoint(module_functions)
+    assert "class RuntimeLoggerFactory" in source
+
+
+def test_symbol_logs_always_receive_an_explicit_logger():
+    violations: list[str] = []
+    for path in _python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            is_symbol_log = (
+                isinstance(function, ast.Name)
+                and function.id == "log_with_symbol"
+            ) or (
+                isinstance(function, ast.Attribute)
+                and function.attr == "log_with_symbol"
+            )
+            if not is_symbol_log:
+                continue
+            has_logger = len(node.args) >= 4 or any(
+                keyword.arg == "logger" for keyword in node.keywords
+            )
+            if not has_logger:
+                rel = path.relative_to(PACKAGE_ROOT).as_posix()
+                violations.append(f"{rel}:{node.lineno}")
+
+    assert not violations, (
+        "symbol logging must use a runtime-owned logger:\n" + "\n".join(violations)
+    )
 
 
 def test_packaged_code_does_not_import_top_level_tools():

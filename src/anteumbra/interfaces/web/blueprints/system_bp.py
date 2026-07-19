@@ -13,9 +13,9 @@ from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.config_history_service import get_config_history_logger
 from anteumbra.application.session_service import cleanup_sessions
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
@@ -43,6 +44,22 @@ class ConfigProviderPort(Protocol):
 
     def reload(self, config_path: str | Path | None = None) -> dict[str, Any]:
         """Atomically publish a newly loaded valid configuration."""
+
+
+class RuntimeLoggingPort(Protocol):
+    """Create and release loggers owned by one application runtime."""
+
+    def get_logger(self, component: str) -> logging.Logger:
+        """Return a component logger."""
+
+    def get_access_logger(self) -> logging.Logger:
+        """Return the HTTP access logger."""
+
+    def get_application_logger(self) -> logging.Logger:
+        """Return the web application logger."""
+
+    def close(self) -> None:
+        """Flush and close all handlers owned by the runtime."""
 
 
 class DetectionRegistryPort(Protocol):

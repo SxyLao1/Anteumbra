@@ -22,8 +22,8 @@ from werkzeug.utils import secure_filename
 from anteumbra.application.yara_service import (
     resolve_yara_rules_path,
 )
-from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.path_service import normalize_path
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
 from anteumbra.interfaces.web.runtime import get_runtime
 
@@ -111,7 +111,12 @@ def get_rule_files() -> List[Dict[str, str]]:
         rules_path = _get_rules_path()
 
         if not rules_path.exists():
-            log_with_symbol("warning_config_reload", "warning", f"规则目录不存在: {rules_path}")
+            log_with_symbol(
+                "warning_config_reload",
+                "warning",
+                f"规则目录不存在: {rules_path}",
+                current_app.logger,
+            )
             return []
 
         rule_files = []
@@ -146,12 +151,19 @@ def get_rule_files() -> List[Dict[str, str]]:
                     "error": error_msg
                 })
             except Exception as e:
-                log_with_symbol("error_scan_fail", "error", f"读取规则文件失败 {yar_file.name}: {e}")
+                log_with_symbol(
+                    "error_scan_fail",
+                    "error",
+                    f"读取规则文件失败 {yar_file.name}: {e}",
+                    current_app.logger,
+                )
 
         return sorted(rule_files, key=lambda x: x["modified"], reverse=True)  # 按修改时间倒序
 
     except Exception as e:
-        log_with_symbol("error_scan_fail", "error", f"扫描规则目录失败: {e}")
+        log_with_symbol(
+            "error_scan_fail", "error", f"扫描规则目录失败: {e}", current_app.logger
+        )
         return []
 
 
@@ -204,7 +216,9 @@ def list_rules():
     except ValueError:
         return jsonify({"error": "无效的分页参数"}), 400
     except Exception as e:
-        log_with_symbol("yara_error", "error", f"获取规则列表失败: {e}")
+        log_with_symbol(
+            "yara_error", "error", f"获取规则列表失败: {e}", current_app.logger
+        )
         return jsonify({"error": str(e)}), 500
 
 
@@ -231,7 +245,12 @@ def get_rule_content(filename):
 
     except Exception as e:
         logger = current_app.logger  # 确保在except中也有logger
-        log_with_symbol("error_scan_fail", "error", f"读取规则文件失败 {filename}: {e}")
+        log_with_symbol(
+            "error_scan_fail",
+            "error",
+            f"读取规则文件失败 {filename}: {e}",
+            current_app.logger,
+        )
         return jsonify({"error": str(e)}), 500
 
 
@@ -255,7 +274,12 @@ def update_rule(filename):
 
         is_valid, error_msg = validate_rule_syntax(rule_content)
         if not is_valid:
-            log_with_symbol("warning_config_reload", "warning", f"规则语法验证失败: {filename}")
+            log_with_symbol(
+                "warning_config_reload",
+                "warning",
+                f"规则语法验证失败: {filename}",
+                current_app.logger,
+            )
             return jsonify({
                 "error": "语法验证失败",
                 "details": error_msg
@@ -290,7 +314,12 @@ def update_rule(filename):
 
     except Exception as e:
         logger = current_app.logger  # 确保在except中也有logger
-        log_with_symbol("error_registry_save", "error", f"规则更新失败 {filename}: {e}")
+        log_with_symbol(
+            "error_registry_save",
+            "error",
+            f"规则更新失败 {filename}: {e}",
+            current_app.logger,
+        )
         return jsonify({"error": f"更新失败: {e}"}), 500
 
 @yara_bp.route('/rules/<path:filename>', methods=['DELETE'])
@@ -384,8 +413,12 @@ def upload_rule():
         # 验证3：语法检查
         is_valid, error_msg = validate_rule_syntax(content)
         if not is_valid:
-            log_with_symbol("warning_config_reload", "warning",
-                            f"Rule syntax validation failed: {safe_filename}")
+            log_with_symbol(
+                "warning_config_reload",
+                "warning",
+                f"Rule syntax validation failed: {safe_filename}",
+                current_app.logger,
+            )
             return jsonify({
                 "error": "语法验证失败",
                 "details": error_msg
@@ -503,7 +536,9 @@ def edit_rule_modal(filename):
         """ % (escaped_content, filename_arg)
         return html
     except Exception as e:
-        log_with_symbol("yara_error", "error", f"编辑弹窗失败: {e}")
+        log_with_symbol(
+            "yara_error", "error", f"编辑弹窗失败: {e}", current_app.logger
+        )
         abort(500)
 
 

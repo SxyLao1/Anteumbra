@@ -21,6 +21,7 @@ from anteumbra.domain.runtime import (
     DetectionRegistryPort,
     EventPublisherPort,
     MetricsPort,
+    RuntimeLoggingPort,
     RuntimeContext,
     RuntimeServices,
 )
@@ -37,6 +38,6 @@ __all__ = [
     "BlockDecision", "BlockLedgerEntry", "BlockLedgerPort", "BlockResult",
     "IPBlockerPort", "canonical_ip",
     "ConfigProviderPort", "BindableEventPublisherPort", "DetectionRegistryPort",
-    "EventPublisherPort", "MetricsPort",
+    "EventPublisherPort", "MetricsPort", "RuntimeLoggingPort",
     "RuntimeContext", "RuntimeServices",
 ]

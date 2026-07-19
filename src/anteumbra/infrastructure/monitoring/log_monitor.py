@@ -16,10 +16,10 @@ import os
 from pathlib import Path
 from threading import Thread
 from typing import Optional, Dict, List
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import ConfigProviderPort, DetectionRegistryPort
 from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
 from anteumbra.infrastructure.monitoring.notifier import format_alert_message
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 class LogMonitor:

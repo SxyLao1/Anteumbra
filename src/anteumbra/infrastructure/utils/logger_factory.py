@@ -1,319 +1,199 @@
-# -*- coding: utf-8 -*-
-"""
-@Time: 1/5/2026 3:25 PM
-@Auth: SxyLao1
-@File: logger_factory.py
-@IDE: PyCharm
-@Motto: HACK THE REAL
-v1.7.3-Final-Patch7：修复符号配置访问，重构三重加载策略逻辑
-"""
+"""Runtime-owned logger and handler construction."""
+
+from __future__ import annotations
+
 import logging
 import os
-import sys
-from pathlib import Path
+import re
+import threading
 from logging.handlers import RotatingFileHandler
-from typing import Optional
-from anteumbra.infrastructure.config.registry import ConfigRegistry
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from pathlib import Path
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from anteumbra.domain.logging import bind_symbols
+from anteumbra.domain.runtime import ConfigProviderPort
 
 
 def _is_tool_mode() -> bool:
-    """检测是否为工具脚本模式"""
-    return os.environ.get("ANTEUMBRA_TOOL_MODE", "false") == "true"
+    return os.environ.get("ANTEUMBRA_TOOL_MODE", "false").lower() == "true"
 
 
-def log_with_symbol(
-        symbol_key: str,
-        level: str,
-        message: str,
-        logger: Optional[logging.Logger] = None
-):
-    """
-    v1.7.3-Patch7：重构三重加载策略，确保符号配置正确加载
+class RuntimeLoggerFactory:
+    """Own all handlers created for one Anteumbra runtime."""
 
-    加载优先级：
-    1. ConfigRegistry单例（主应用，带状态污染自动修复）
-    2. 直接加载config.toml（工具脚本）
-    3. 硬编码fallback（确保不崩溃）
-    """
-    # ============================================================================
-    # 策略1：ConfigRegistry单例（增强版）
-    # ============================================================================
-    prefix = _load_from_registry(symbol_key)
+    def __init__(self, config: ConfigProviderPort) -> None:
+        self._config = config
+        self._lock = threading.RLock()
+        self._loggers: dict[str, logging.Logger] = {}
 
-    # ============================================================================
-    # 策略2：直接加载config.toml（工具脚本专用）
-    # ============================================================================
-    if prefix.startswith("[UNKNOWN]") and _is_tool_mode():
-        prefix = _load_directly(symbol_key)
+    def get_logger(self, site_name: str) -> logging.Logger:
+        """Return one monitor logger scoped to this factory instance."""
+        key = f"monitor:{site_name}"
+        with self._lock:
+            existing = self._loggers.get(key)
+            if existing is not None:
+                return existing
+            config = self._config.get()
+            filesizes = config.get("filesizes", {})
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(site_name)).strip("._")
+            safe_name = safe_name or "Anteumbra"
+            path = self._resolve_path(
+                config.get("paths", {}).get("log_base_dir", "logs")
+            ) / safe_name / "monitor.log"
+            logger = self._build_logger(
+                key,
+                path=path,
+                level=logging.DEBUG,
+                file_level=logging.DEBUG,
+                console_level=logging.WARNING if _is_tool_mode() else logging.INFO,
+                max_bytes=self._megabytes(
+                    filesizes.get("log_rotation_size_mb", 100), 100
+                ),
+                backup_count=self._positive_int(
+                    filesizes.get("log_backup_count", 5), 5
+                ),
+                formatter="[%(asctime)s] %(levelname)s - %(message)s",
+                config=config,
+            )
+            self._loggers[key] = logger
+            return logger
 
-    # ============================================================================
-    # 策略3：硬编码fallback（最后防线）
-    # ============================================================================
-    if prefix.startswith("[UNKNOWN]"):
-        prefix = _load_fallback(symbol_key)
+    def get_access_logger(self) -> logging.Logger:
+        """Return the HTTP access logger for this runtime."""
+        key = "access"
+        with self._lock:
+            existing = self._loggers.get(key)
+            if existing is not None:
+                return existing
+            config = self._config.get()
+            flask_config = config.get("logging", {}).get("flask", {})
+            logger = self._build_logger(
+                key,
+                path=self._resolve_path(
+                    flask_config.get("flask_log_path", "logs/Anteumbra/access.log")
+                ),
+                level=logging.INFO,
+                file_level=logging.INFO,
+                console_level=None,
+                max_bytes=self._megabytes(
+                    flask_config.get("flask_log_rotation_mb", 10), 10
+                ),
+                backup_count=self._positive_int(
+                    flask_config.get("flask_log_backup_count", 5), 5
+                ),
+                formatter="%(message)s",
+                config=config,
+            )
+            self._loggers[key] = logger
+            return logger
 
-    # ============================================================================
-    # 输出日志
-    # ============================================================================
-    if logger is None:
-        logger = logging.getLogger("monitor.default")
+    def get_application_logger(self) -> logging.Logger:
+        """Return the application logger for this runtime."""
+        key = "application"
+        with self._lock:
+            existing = self._loggers.get(key)
+            if existing is not None:
+                return existing
+            config = self._config.get()
+            filesizes = config.get("filesizes", {})
+            base = self._resolve_path(
+                config.get("paths", {}).get("log_base_dir", "logs")
+            )
+            logger = self._build_logger(
+                key,
+                path=base / "Anteumbra" / "flask_runtime.log",
+                level=logging.DEBUG,
+                file_level=logging.DEBUG,
+                console_level=logging.ERROR if _is_tool_mode() else logging.INFO,
+                max_bytes=self._megabytes(
+                    filesizes.get("log_rotation_size_mb", 100), 100
+                ),
+                backup_count=self._positive_int(
+                    filesizes.get("log_backup_count", 5), 5
+                ),
+                formatter="[%(asctime)s] %(levelname)s - [%(name)s] %(message)s",
+                config=config,
+            )
+            self._loggers[key] = logger
+            return logger
 
-    try:
-        level_method = getattr(logger, level.lower())
-        level_method(f"{prefix} {message}")
-    except AttributeError:
-        logger.error(f"{prefix} [INVALID_LEVEL:{level}] {message}")
+    def close(self) -> None:
+        """Flush and close every handler owned by this runtime."""
+        with self._lock:
+            loggers = list(self._loggers.values())
+            self._loggers.clear()
+        errors: list[Exception] = []
+        for logger in loggers:
+            for handler in list(logger.handlers):
+                logger.removeHandler(handler)
+                try:
+                    handler.flush()
+                except Exception as exc:
+                    errors.append(exc)
+                try:
+                    handler.close()
+                except Exception as exc:
+                    errors.append(exc)
+        if errors:
+            raise RuntimeError(
+                f"Failed to close {len(errors)} runtime logging handler operation(s)"
+            ) from errors[0]
 
-
-def _load_from_registry(symbol_key: str) -> str:
-    """Load a configured symbol while the compatibility facade still exists."""
-    try:
-        symbols_cfg = ConfigRegistry.get_raw_config().get("logging", {}).get("symbols", {})
-
-        if symbol_key in symbols_cfg:
-            return symbols_cfg[symbol_key]
+    def _build_logger(
+        self,
+        name: str,
+        *,
+        path: Path,
+        level: int,
+        file_level: int,
+        console_level: int | None,
+        max_bytes: int,
+        backup_count: int,
+        formatter: str,
+        config: dict[str, Any],
+    ) -> logging.Logger:
+        logger = logging.Logger(f"anteumbra.{id(self)}.{name}", level=level)
+        logger.propagate = False
+        bind_symbols(logger, config)
         if _is_tool_mode():
-            available = list(symbols_cfg.keys())
-            logger.debug("[CONFIG REGISTRY] Symbol %r not found", symbol_key)
-            logger.debug("[CONFIG REGISTRY] Available symbols: %s", available[:10])
-        return f"[UNKNOWN][{symbol_key}]"
+            logger.addHandler(logging.NullHandler())
+            return logger
 
-    except (RuntimeError, KeyError, TypeError) as exc:
-        if _is_tool_mode() or os.environ.get("ANTEUMBRA_DEBUG") == "true":
-            logger.debug("[CONFIG REGISTRY] Load failed: %s", exc)
-        return f"[UNKNOWN][{symbol_key}]"
-
-def _load_directly(symbol_key: str) -> str:
-    """直接加载config.toml（工具脚本模式）"""
-    try:
-        config_file = normalize_path("config.toml")
-        if not config_file.exists():
-            logger.warning(f"[CONFIG DIRECT] config.toml not found: {config_file}")
-            return f"[UNKNOWN][{symbol_key}]"
-
-        from anteumbra.infrastructure.config.loader import load_toml_config
-        config = load_toml_config(str(config_file))
-
-        symbols_cfg = config.get("logging", {}).get("symbols", {})
-        if symbol_key in symbols_cfg:
-            logger.info(f"[CONFIG DIRECT] Direct load OK: {symbol_key} = {symbols_cfg[symbol_key]}")
-            return symbols_cfg[symbol_key]
-        else:
-            logger.warning(f"[CONFIG DIRECT] Symbol '{symbol_key}' not found")
-            return f"[UNKNOWN][{symbol_key}]"
-
-    except Exception as e:
-        logger.warning(f"[CONFIG DIRECT] Load failed: {e}")
-        return f"[UNKNOWN][{symbol_key}]"
-
-
-def _load_fallback(symbol_key: str) -> str:
-    """硬编码fallback（内置常见符号）"""
-    logger.warning(f"[CONFIG FALLBACK] Using hardcoded symbol: {symbol_key}")
-
-    # 内置常见符号映射（与config.toml保持一致）
-    fallback_symbols = {
-        # 成功类
-        "success": "[MONITOR][START][SUCCESS]",
-        "critical_start": "[MONITOR][START][CRITICAL]",
-        "create_dir": "[MONITOR][DIR][CREATE]",
-        "create_file": "[MONITOR][FILE][CREATE]",
-        "scan_hit": "[SCAN][FILE][HIT]",
-        "scan_safe": "[SCAN][FILE][SAFE]",
-
-        # 跳过类
-        "skip_duplicate": "[MONITOR][SKIP][DUPLICATE]",
-        "skip_exclude": "[MONITOR][SKIP][EXCLUDE]",
-        "skip_size": "[MONITOR][SKIP][SIZE_LIMIT]",
-
-        # 警告类
-        "warning_config_reload": "[CONFIG][RELOAD][WARNING]",
-        "warning_wal_fail": "[REGISTRY][WAL][WARNING]",
-        "notice_yara_skip": "[SCAN][YARA][NOTICE]",
-
-        # 错误类
-        "error_notifier_email": "[NOTIFIER][EMAIL][ERROR]",
-        "error_scan_fail": "[SCAN][CHAIN][ERROR]",
-        "error_registry_save": "[REGISTRY][SAVE][ERROR]",
-
-        # 严重类
-        "critical_alert_apt": "[ALERT][APT][CRITICAL]",
-        "critical_alert_high": "[ALERT][HIGH_FREQ][CRITICAL]",
-        "critical_system_start": "[SYSTEM][START][CRITICAL]",
-    }
-
-    return fallback_symbols.get(symbol_key, f"[UNKNOWN][{symbol_key}]")
-
-
-def get_logger(site_name: str) -> logging.Logger:
-    """获取监控logger（修正命名空间为monitor.*）"""
-    config = ConfigRegistry.get_raw_config()
-    filesizes_cfg = config.get("filesizes", {})
-    paths_cfg = config.get("paths", {})
-
-    log_base_dir = normalize_path(paths_cfg.get("log_base_dir", "logs"))
-    log_dir = log_base_dir / site_name
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logger = logging.getLogger(f"monitor.{site_name}")
-    logger.setLevel(logging.DEBUG)
-
-    if not logger.handlers:
-        max_mb = filesizes_cfg.get("log_rotation_size_mb", 100)
-        max_bytes = max_mb * 1024 * 1024
-        backup_count = filesizes_cfg.get("log_backup_count", 5)
-
+        path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = RotatingFileHandler(
-            log_dir / "monitor.log",
+            path,
             maxBytes=max_bytes,
             backupCount=backup_count,
-            encoding="utf-8"
+            encoding="utf-8",
         )
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(levelname)s - %(message)s'
-        ))
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(logging.Formatter(formatter))
         logger.addHandler(file_handler)
 
-        console = logging.StreamHandler()
-        console.setLevel(logging.WARNING if _is_tool_mode() else logging.INFO)
-        console.setFormatter(logging.Formatter('%(message)s'))
-        logger.addHandler(console)
-
-    logger.propagate = False
-    return logger
-
-
-def get_access_logger() -> logging.Logger:
-    """Access Log - HTTP访问日志"""
-    if _is_tool_mode():
-        logger = logging.getLogger("access")
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
-        logger.handlers.clear()
+        if console_level is not None:
+            console = logging.StreamHandler()
+            console.setLevel(console_level)
+            console.setFormatter(logging.Formatter("%(message)s"))
+            logger.addHandler(console)
         return logger
 
-    config = ConfigRegistry.get_raw_config()
-    logging_cfg = config.get("logging", {})
-    flask_cfg = logging_cfg.get("flask", {})
+    def _resolve_path(self, value: str | Path) -> Path:
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = self._config.path.parent / path
+        return path.resolve()
 
-    flask_log_path = flask_cfg.get("flask_log_path", "logs/Anteumbra/access.log")
-    log_file = normalize_path(flask_log_path)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    @staticmethod
+    def _positive_int(value: Any, default: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
 
-    logger = logging.getLogger("access")
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    logger.handlers.clear()
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8"
-    )
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(logging.Formatter('%(message)s'))
-    logger.addHandler(file_handler)
-
-    return logger
+    @classmethod
+    def _megabytes(cls, value: Any, default: int) -> int:
+        return cls._positive_int(value, default) * 1024 * 1024
 
 
-def get_flask_runtime_logger() -> logging.Logger:
-    """Flask运行时日志"""
-    if _is_tool_mode():
-        logger = logging.getLogger("flask.runtime")
-        logger.setLevel(logging.ERROR)
-        logger.propagate = False
-        logger.handlers.clear()
-        return logger
-
-    config = ConfigRegistry.get_raw_config()
-    filesizes_cfg = config.get("filesizes", {})
-
-    log_dir = normalize_path("logs/Anteumbra")
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logger = logging.getLogger("flask.runtime")
-    logger.setLevel(logging.DEBUG)
-
-    if not logger.handlers:
-        max_mb = filesizes_cfg.get("log_rotation_size_mb", 100)
-        max_bytes = max_mb * 1024 * 1024
-        backup_count = filesizes_cfg.get("log_backup_count", 5)
-
-        file_handler = RotatingFileHandler(
-            log_dir / "flask_runtime.log",
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding="utf-8"
-        )
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(levelname)s - [%(name)s] %(message)s'
-        ))
-        logger.addHandler(file_handler)
-
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        console.setFormatter(logging.Formatter('[FLASK] %(message)s'))
-        logger.addHandler(console)
-
-    logger.propagate = False
-    return logger
-
-
-def get_system_logger() -> logging.Logger:
-    """系统级日志"""
-    if _is_tool_mode():
-        logger = logging.getLogger("system")
-        logger.setLevel(logging.ERROR)
-        logger.propagate = False
-        logger.handlers.clear()
-        return logger
-
-    log_dir = normalize_path("logs/Anteumbra")
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logger = logging.getLogger("system")
-    logger.setLevel(logging.INFO)
-
-    if not logger.handlers:
-        file_handler = RotatingFileHandler(
-            log_dir / "system.log",
-            maxBytes=100 * 1024 * 1024,
-            backupCount=10,
-            encoding="utf-8"
-        )
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(levelname)s - %(message)s'
-        ))
-        logger.addHandler(file_handler)
-
-        console = logging.StreamHandler()
-        console.setLevel(logging.CRITICAL)
-        console.setFormatter(logging.Formatter('%(message)s'))
-        logger.addHandler(console)
-
-    logger.propagate = False
-    return logger
-
-
-def silence_werkzeug():
-    """静默werkzeug横幅"""
-    import flask.cli
-    flask.cli.show_server_banner = lambda *args, **kwargs: None
-
-    werkzeug_logger = logging.getLogger('werkzeug')
-    werkzeug_logger.handlers.clear()
-    werkzeug_logger.propagate = True
-    werkzeug_logger.setLevel(logging.INFO)
-
-
-__all__ = ['log_with_symbol', 'get_logger', 'get_access_logger', 'get_flask_runtime_logger', 'get_system_logger',
-           'silence_werkzeug']
+__all__ = ["RuntimeLoggerFactory"]

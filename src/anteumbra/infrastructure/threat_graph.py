@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Tuple
 
 from anteumbra.domain import Repository
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
 from anteumbra.infrastructure.models import (
     AttackEvent,
@@ -18,7 +19,6 @@ from anteumbra.infrastructure.models import (
     FileReputation,
     IPReputation,
 )
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,12 @@ class ThreatGraph:
         file_cluster_engine: FileClusterEngine,
         *,
         shadow_repository: Repository | None = None,
+        log: logging.Logger | None = None,
     ):
         self._lock = threading.RLock()
         self._file_cluster_engine = file_cluster_engine
         self._shadow = shadow_repository
+        self._logger = log or logger
         self._profiles: Dict[str, AttackerProfile] = {}
         self._ip_table: Dict[str, IPReputation] = {}
         self._file_table: Dict[str, FileReputation] = {}
@@ -88,7 +90,9 @@ class ThreatGraph:
                     if ipaddress.ip_address(ip) in ipaddress.ip_network(entry, strict=False):
                         return True
                 except Exception:
-                    logger.debug("CIDR check failed for management IP entry", exc_info=True)
+                    self._logger.debug(
+                        "CIDR check failed for management IP entry", exc_info=True
+                    )
             if ip == entry:
                 return True
         return False
@@ -254,9 +258,13 @@ class ThreatGraph:
             try:
                 cluster_id, hash_val = self._file_cluster_engine.cluster_file(file_path)
                 if cluster_id:
-                    logger.info(f"[PROFILE] File {Path(file_path).name} -> cluster {cluster_id[:8]}")
+                    self._logger.info(
+                        "[PROFILE] File %s -> cluster %s",
+                        Path(file_path).name,
+                        cluster_id[:8],
+                    )
             except Exception as e:
-                logger.error(f"[PROFILE] Cluster failed for {file_path}: {e}")
+                self._logger.error("[PROFILE] Cluster failed for %s: %s", file_path, e)
 
             try:
                 ts = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
@@ -368,7 +376,12 @@ class ThreatGraph:
                     del self._profiles[pid2]
                     merged += 1
         if merged:
-            log_with_symbol("notice", "info", f"[THREAT_GRAPH] Merged {merged} profiles by IP overlap")
+            log_with_symbol(
+                "notice",
+                "info",
+                f"[THREAT_GRAPH] Merged {merged} profiles by IP overlap",
+                self._logger,
+            )
 
     # ── Basic Decay ───────────────────────────────────────────
 
@@ -450,7 +463,7 @@ class ThreatGraph:
             try:
                 self._shadow.save(pid, dict(profile_data))
             except Exception:
-                logger.warning(
+                self._logger.warning(
                     "Threat profile SQLite shadow write failed for %s",
                     pid,
                     exc_info=True,
@@ -464,7 +477,7 @@ class ThreatGraph:
                 with open(self._persist_path, "r", encoding="utf-8") as handle:
                     data = json.load(handle)
             except Exception:
-                logger.warning(
+                self._logger.warning(
                     "[THREAT_GRAPH] Failed to load persisted JSON from %s",
                     self._persist_path,
                     exc_info=True,
@@ -480,12 +493,12 @@ class ThreatGraph:
                         if profile_id:
                             profiles_dict[profile_id] = profile_data
                     data = {"profiles": profiles_dict, "ip_table": {}}
-                    logger.warning(
+                    self._logger.warning(
                         "[THREAT_GRAPH] Recovered profiles from SQLite shadow; "
                         "IP reputation data requires the JSON backup"
                     )
             except Exception:
-                logger.debug("SQLite shadow load failed", exc_info=True)
+                self._logger.debug("SQLite shadow load failed", exc_info=True)
 
         if data is None:
             return
@@ -517,7 +530,12 @@ class ThreatGraph:
                     cluster_level=rd.get("cluster_level", 0),
                 )
         except Exception as e:
-            log_with_symbol("error_scan", "error", f"[THREAT_GRAPH] Load failed: {e}")
+            log_with_symbol(
+                "error_scan",
+                "error",
+                f"[THREAT_GRAPH] Load failed: {e}",
+                self._logger,
+            )
 
     def close(self) -> None:
         """Release the injected shadow repository."""

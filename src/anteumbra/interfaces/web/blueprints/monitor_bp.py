@@ -20,9 +20,9 @@ from flask import (
     Response, current_app, stream_with_context, session,
 )
 
-from anteumbra.application.logging_service import log_with_symbol
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.application.path_service import normalize_path
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
     is_ip_allowed,

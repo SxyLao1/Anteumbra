@@ -137,6 +137,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         metrics=SimpleNamespace(stop=lambda: calls.append("metrics")),
         sse=SimpleNamespace(stop=lambda: calls.append("sse")),
         waf_poller=Resource("waf"),
+        logging=SimpleNamespace(close=lambda: calls.append("runtime-logging")),
     )
 
     launcher._launcher_state.clear()
@@ -167,6 +168,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         "metrics",
         "graph",
         "graph-close",
+        "runtime-logging",
     ]
     assert launcher.get_runtime_status() == {
         "running": False,

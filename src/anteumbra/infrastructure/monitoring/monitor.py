@@ -24,11 +24,11 @@ import fnmatch
 from pathlib import Path
 from typing import Callable, Dict, Set
 from watchdog.events import FileSystemEventHandler
+from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
 
 
 class FileMonitorHandler(FileSystemEventHandler):

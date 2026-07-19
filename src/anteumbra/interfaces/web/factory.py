@@ -18,11 +18,24 @@ from flask import Flask, request, session, jsonify
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from anteumbra.application.runtime_container import RuntimeContainer
+from anteumbra.domain.logging import bind_symbols
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.application.path_service import normalize_path
 from flask_wtf.csrf import generate_csrf
 
 logger = logging.getLogger(__name__)
+
+
+def _silence_werkzeug() -> None:
+    """Suppress Flask's development banner before attaching access logging."""
+    import flask.cli
+
+    flask.cli.show_server_banner = lambda *_args, **_kwargs: None
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.handlers.clear()
+    werkzeug_logger.propagate = True
+    werkzeug_logger.setLevel(logging.INFO)
+
 
 def _session_cookie_secure(web_admin_config: dict) -> bool:
     """Use secure sessions automatically when an HTTPS proxy is configured."""
@@ -121,8 +134,7 @@ def create_app(
     resolved_config = runtime.config.get()
 
     # 先静默werkzeug横幅
-    from anteumbra.application.logging_service import silence_werkzeug
-    silence_werkzeug()
+    _silence_werkzeug()
 
     # 创建主应用
     app = Flask(__name__)
@@ -222,9 +234,8 @@ def create_app(
     Session(app)
 
     # v1.7.3关键修复：获取access logger并挂载到werkzeug
-    from anteumbra.application.logging_service import get_access_logger, get_flask_runtime_logger
-    access_logger = get_access_logger()
-    flask_runtime_logger = get_flask_runtime_logger()
+    access_logger = runtime.logging.get_access_logger()
+    flask_runtime_logger = runtime.logging.get_application_logger()
 
     # 配置werkzeug logger将访问日志写入access.log
     werkzeug_logger = logging.getLogger('werkzeug')
@@ -236,6 +247,7 @@ def create_app(
     app.logger.handlers = flask_runtime_logger.handlers
     app.logger.setLevel(logging.DEBUG)
     app.logger.propagate = False
+    bind_symbols(app.logger, resolved_config)
 
     # CSRF保护
     _csrf = CSRFProtect()

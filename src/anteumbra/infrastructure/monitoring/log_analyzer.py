@@ -18,7 +18,7 @@ import glob
 from anteumbra.infrastructure.models import Website
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 # v1.7.4新增：导入符号化日志接口（铁律19）
-from anteumbra.infrastructure.utils.logger_factory import log_with_symbol
+from anteumbra.domain.logging import log_with_symbol
 
 
 def resolve_access_log_path(access_log_path_cfg: str) -> Optional[Path]:

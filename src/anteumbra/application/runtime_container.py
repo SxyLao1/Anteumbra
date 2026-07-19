@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from anteumbra.domain.blocking import BlockLedgerPort, IPBlockerPort
-from anteumbra.domain.runtime import BindableEventPublisherPort, ConfigProviderPort
+from anteumbra.domain.runtime import (
+    BindableEventPublisherPort,
+    ConfigProviderPort,
+    RuntimeLoggingPort,
+)
 
 if TYPE_CHECKING:
     from anteumbra.application.quarantine_service import QuarantineService
@@ -23,6 +27,7 @@ class RuntimeContainer:
 
     config: ConfigProviderPort
     events: BindableEventPublisherPort
+    logging: RuntimeLoggingPort
     plugin_manager: Any | None = None
     metrics: Any | None = None
     notifier: Any | None = None

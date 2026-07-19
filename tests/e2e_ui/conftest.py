@@ -117,6 +117,7 @@ def runtime_server(monkeypatch, tmp_path):
         (runtime.registry, "close"),
         (runtime.block_ledger, "close"),
         (runtime.notifier, "shutdown"),
+        (runtime.logging, "close"),
     ):
         callback = getattr(resource, method, None)
         if callable(callback):
