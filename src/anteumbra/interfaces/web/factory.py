@@ -10,6 +10,7 @@ Flask应用工厂：v1.7.3分离access.log与monitor.log
 import logging
 import os
 import secrets
+import threading
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -283,29 +284,67 @@ class WaitressRuntimeServer:
         )
         self._sse = sse_manager
         self._closed = False
+        self._shutdown_lock = threading.RLock()
 
     def serve_forever(self) -> None:
         self._server.run()
 
     def shutdown(self) -> None:
-        if self._closed:
-            return
-        try:
-            if self._sse is not None and self._sse.cleanup_connections():
-                # Give active generators a bounded chance to consume their
-                # sentinel before Waitress closes the underlying trigger.
-                time.sleep(0.15)
-        except Exception:
-            logger.debug("SSE client cleanup failed during server shutdown", exc_info=True)
-        self._server.close()
-        self._closed = True
+        with self._shutdown_lock:
+            if self._closed:
+                return
+            self._closed = True
+
+            try:
+                if self._sse is not None and self._sse.cleanup_connections():
+                    # Give active generators a bounded chance to consume their
+                    # sentinel before Waitress closes the underlying trigger.
+                    time.sleep(0.15)
+            except Exception:
+                logger.debug(
+                    "SSE client cleanup failed during server shutdown",
+                    exc_info=True,
+                )
+
+            pull_trigger = getattr(self._server, "pull_trigger", None)
+            if callable(pull_trigger):
+                try:
+                    pull_trigger()
+                except Exception:
+                    logger.debug("Waitress trigger wake-up failed", exc_info=True)
+
+            active_channels = getattr(self._server, "active_channels", {})
+            for channel in list(active_channels.values()):
+                try:
+                    channel.close()
+                except Exception:
+                    logger.debug("Waitress channel close failed", exc_info=True)
+
+            try:
+                self._server.close()
+            finally:
+                dispatcher = getattr(self._server, "task_dispatcher", None)
+                shutdown_dispatcher = getattr(dispatcher, "shutdown", None)
+                if callable(shutdown_dispatcher):
+                    try:
+                        shutdown_dispatcher(cancel_pending=True, timeout=2.0)
+                    except Exception:
+                        logger.debug(
+                            "Waitress task dispatcher shutdown failed",
+                            exc_info=True,
+                        )
 
     def server_close(self) -> None:
         """Compatibility alias for stdlib WSGI server lifecycle callers."""
         self.shutdown()
 
 
-def create_runtime_server(app: Flask, host: str, port: int, threaded: bool = True):
+def create_runtime_server(
+    app: Flask,
+    host: str,
+    port: int,
+    threaded: bool = True,
+) -> WaitressRuntimeServer:
     """Bind Waitress synchronously so startup failures are visible."""
     runtime = app.extensions.get("anteumbra.runtime")
     return WaitressRuntimeServer(
