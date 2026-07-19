@@ -9,6 +9,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Forced POSIX line endings for shell assets and normalized the Docker
+  entrypoint during image construction, so images built from Windows clones no
+  longer fail at startup with a misleading "no such file" error.
 - Disabled Waitress' `Server` identifier in addition to stripping application
   headers, preventing the production HTTP response from advertising Anteumbra.
 - Keyed monitor logger ownership, `[site=<id>]` attribution, and

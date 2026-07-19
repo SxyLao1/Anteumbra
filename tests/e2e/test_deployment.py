@@ -290,6 +290,19 @@ class TestVersionSource:
             f"version constraints are not treated as redirections: {missing}"
         )
 
+    def test_docker_entrypoint_is_posix_even_after_windows_checkout(self):
+        project_root = Path(__file__).parent.parent.parent
+        attributes = (project_root / ".gitattributes").read_text(encoding="utf-8")
+        dockerfile = (project_root / "Dockerfile").read_text(encoding="utf-8")
+        entrypoint = project_root / "scripts" / "docker-entrypoint.sh"
+
+        assert "*.sh text eol=lf" in attributes
+        assert "sed -i 's/\\r$//' /usr/local/bin/anteumbra-docker-entrypoint" in (
+            dockerfile
+        )
+        assert b"\r\n" not in entrypoint.read_bytes()
+        assert entrypoint.read_bytes().startswith(b"#!/bin/sh\n")
+
 
 class TestCliInstall:
     """Verify CLI deployment setup works for packaged and editable installs."""

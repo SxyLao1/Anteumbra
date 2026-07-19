@@ -9,6 +9,8 @@
 ## [未发布]
 
 ### 修复
+- Shell 资源固定使用 POSIX 换行，镜像构建时再次规范化 Docker Entrypoint；从 Windows
+  克隆构建的镜像不再因 CRLF 在启动时误报 `no such file`。
 - 在清除应用响应头之外禁用 Waitress 的 `Server` 标识，生产 HTTP 响应不再暴露
   Anteumbra 产品指纹。
 - Monitor Logger 所有权、`[site=<id>]` 归属标签与 `logs/<site_id>/monitor.log`

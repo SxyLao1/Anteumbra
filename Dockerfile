@@ -74,6 +74,7 @@ COPY scripts/docker-entrypoint.sh /usr/local/bin/anteumbra-docker-entrypoint
 RUN pip install --no-cache-dir --no-deps . \
     && mkdir -p data/registry data/quarantine data/wal data/sessions data/archives data/threat_intel data/siem logs sites/default rules \
     && cp -r src/anteumbra/rules/webshell rules/webshell \
+    && sed -i 's/\r$//' /usr/local/bin/anteumbra-docker-entrypoint \
     && chmod +x /usr/local/bin/anteumbra-docker-entrypoint \
     && useradd --create-home --shell /bin/bash anteumbra \
     && chown -R anteumbra:anteumbra /app /opt/venv
