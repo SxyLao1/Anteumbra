@@ -87,7 +87,7 @@ anteumbra = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py310"

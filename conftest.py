@@ -1,7 +1,15 @@
-# Anteumbra: inject project root into sys.path for all tests
-import sys
+"""Reject test sessions that resolve Anteumbra outside the source tree."""
+
 from pathlib import Path
 
-_root = Path(__file__).parent
-if str(_root) not in sys.path:
-    sys.path.insert(0, str(_root))
+import anteumbra
+
+
+SOURCE_PACKAGE = (Path(__file__).parent / "src" / "anteumbra").resolve()
+IMPORTED_PACKAGE = Path(anteumbra.__file__).resolve()
+
+if not IMPORTED_PACKAGE.is_relative_to(SOURCE_PACKAGE):
+    raise RuntimeError(
+        "Tests must import Anteumbra from the repository source tree, got "
+        f"{IMPORTED_PACKAGE}"
+    )

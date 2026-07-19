@@ -113,6 +113,9 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Verify wheel source parity
+        run: python scripts/verify_wheel_contents.py dist
+
       - name: Verify wheel
         run: |
           pip install dist/*.whl

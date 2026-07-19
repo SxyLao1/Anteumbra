@@ -11,7 +11,6 @@ import base64
 from flask_babel import gettext as _
 import json
 import logging
-import threading
 import time
 
 from flask import (
@@ -260,37 +259,6 @@ def monitor_content():
         current_app.logger.error(f"[ADMIN] monitor_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
-
-
-
-# v1.7.9: 登录速率限制（V-006修复）- 每IP每分钟最多5次尝试
-_login_attempts: dict = {}
-_login_lock = threading.Lock()
-
-def _check_login_rate(client_ip: str) -> tuple[bool, str]:
-    """检查登录速率限制。返回 (是否允许, 错误消息)"""
-    now = time.time()
-    window = 60  # 60秒窗口
-    max_attempts = 5  # 最多5次
-
-    with _login_lock:
-        # 清理过期记录
-        expired = [ip for ip, (_, ts) in _login_attempts.items() if now - ts > window]
-        for ip in expired:
-            del _login_attempts[ip]
-
-        count, first_ts = _login_attempts.get(client_ip, (0, now))
-        if now - first_ts > window:
-            # 窗口过期，重置
-            _login_attempts[client_ip] = (1, now)
-            return True, ""
-        elif count >= max_attempts:
-            remaining = int(window - (now - first_ts))
-            return False, f"登录尝试过于频繁，请 {remaining} 秒后重试"
-        else:
-            _login_attempts[client_ip] = (count + 1, first_ts)
-            return True, ""
-
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -299,23 +267,30 @@ def login():
         return render_template('admin/login.html')
     username = request.form.get('username')
     password = request.form.get('password')
-    expected_username, password_hash, allowed_ips = get_admin_credentials()
-    client_ip = request.remote_addr
+    client_ip = request.remote_addr or "unknown"
 
     # v1.7.9: 过滤空用户名的无效POST（浏览器/扩展自动请求等噪音）
     if not username:
         return render_template('admin/login.html', error="请输入用户名"), 400
+    if not password:
+        return render_template('admin/login.html', error="请输入密码"), 400
 
-    # V-006: 速率限制检查
-    allowed, rate_msg = _check_login_rate(client_ip)
-    if not allowed:
+    expected_username, password_hash, allowed_ips = get_admin_credentials()
+    login_rate_limiter = get_runtime().login_rate_limiter
+    rate_decision = login_rate_limiter.check_and_record(client_ip)
+    if not rate_decision.allowed:
         log_with_symbol(
             "critical_permission",
             "critical",
             f"登录频率限制触发: {client_ip}",
             current_app.logger,
         )
-        return render_template('admin/login.html', error=rate_msg), 429
+        error = f"登录尝试过于频繁，请 {rate_decision.retry_after_seconds} 秒后重试"
+        return (
+            render_template('admin/login.html', error=error),
+            429,
+            {"Retry-After": str(rate_decision.retry_after_seconds)},
+        )
 
     if not is_ip_allowed(client_ip, allowed_ips):
         log_with_symbol(
@@ -326,9 +301,7 @@ def login():
         )
         return render_template('admin/login.html', error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
-        # 登录成功：清除该IP的速率计数
-        with _login_lock:
-            _login_attempts.pop(client_ip, None)
+        login_rate_limiter.reset(client_ip)
         session['authenticated'] = True
         session['username'] = username
         session.permanent = current_app.config.get('SESSION_PERMANENT', False)
@@ -399,7 +372,7 @@ def get_metric(metric_name):
             label = _("Memory")
             color = "#00ff00"
         elif metric_name == 'uptime_hours':
-            value = (time.time() - metrics._start_time) / 3600
+            value = data.get("uptime_seconds", 0) / 3600
             label = _("Uptime")
             color = "#00ff00"
         else:

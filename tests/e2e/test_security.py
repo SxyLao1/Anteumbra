@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from werkzeug.security import generate_password_hash
 
 
 # ── Flask test client fixtures ──────────────────────────────────────────────
@@ -374,123 +375,123 @@ class TestServerHeaders:
 class TestRateLimiting:
     """Verify login rate limiting (V-006 fix)."""
 
-    def test_login_rate_limited_after_rapid_attempts(self, client):
-        """Rapid login attempts should eventually be rate limited (429).
+    @pytest.fixture(autouse=True)
+    def _reset_login_rate_limiter(self, client):
+        limiter = client.application.extensions["anteumbra.runtime"].login_rate_limiter
+        limiter.reset()
+        yield
+        limiter.reset()
 
-        The rate limiter allows 5 attempts per 60 seconds per IP.
-        After the 5th failed attempt, the 6th should return 429.
-        """
-        # Reset the rate limiter by importing and clearing
+    @staticmethod
+    def _configure_credentials(monkeypatch):
         import anteumbra.interfaces.web.blueprints.admin_bp as admin_mod
-        admin_mod._login_attempts.clear()
 
-        attempt_count = 0
-        rate_limited = False
+        password_hash = generate_password_hash("correct_password")
+        monkeypatch.setattr(
+            admin_mod,
+            "get_admin_credentials",
+            lambda: ("admin", password_hash, ["127.0.0.1"]),
+        )
 
-        for i in range(10):
+    def test_login_rate_limited_after_rapid_attempts(
+        self,
+        client,
+        monkeypatch,
+    ):
+        """The sixth rapid POST from one client is rejected with 429."""
+        self._configure_credentials(monkeypatch)
+
+        for attempt in range(5):
             resp = client.post(
                 "/admin/login",
                 data={"username": "admin", "password": "wrong_password_test"},
                 follow_redirects=False,
             )
-            attempt_count += 1
-
-            if resp.status_code == 429:
-                rate_limited = True
-                break
-
-            # Should be 401 (wrong password) or 400 (missing fields)
-            # before rate limit kicks in
-            assert resp.status_code in (401, 400, 403), (
-                f"Unexpected status {resp.status_code} on attempt {i + 1}"
+            assert resp.status_code == 401, (
+                f"Attempt {attempt + 1} should reach credential validation"
             )
 
-        # Clean up
-        admin_mod._login_attempts.clear()
-
-        if not rate_limited:
-            pytest.skip(
-                f"Rate limiting did not trigger after {attempt_count} attempts. "
-                f"The limiter may be configured differently or disabled in test mode."
-            )
-
-        assert rate_limited, (
-            f"After {attempt_count} rapid login attempts, expected a 429 "
-            f"rate-limit response but got none"
+        blocked = client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "wrong_password_test"},
+            follow_redirects=False,
         )
+        assert blocked.status_code == 429
+        assert int(blocked.headers["Retry-After"]) > 0
+        assert "秒后重试" in blocked.get_data(as_text=True)
 
-    def test_login_rate_limiter_resets_after_window(self, client):
-        """After the rate limit window expires, attempts should be allowed again.
+    def test_missing_password_is_rejected_without_consuming_attempts(self, client):
+        """Malformed login forms return 400 before rate accounting or hashing."""
+        for _ in range(6):
+            response = client.post(
+                "/admin/login",
+                data={"username": "admin"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 400
+            assert "请输入密码" in response.get_data(as_text=True)
 
-        This is a behavioral test: we verify that the rate limiter uses a
-        sliding window by checking that _login_attempts is keyed by IP + timestamp.
-        """
-        import anteumbra.interfaces.web.blueprints.admin_bp as admin_mod
+    def test_login_rate_limiter_clears_on_success(
+        self,
+        client,
+        monkeypatch,
+    ):
+        """A successful login resets earlier failures for that client."""
+        self._configure_credentials(monkeypatch)
 
-        # Clear state
-        admin_mod._login_attempts.clear()
-
-        # Make a few failed attempts
-        for _ in range(3):
-            client.post(
+        for _ in range(4):
+            response = client.post(
                 "/admin/login",
                 data={"username": "admin", "password": "wrong"},
                 follow_redirects=False,
             )
+            assert response.status_code == 401
 
-        # The rate limiter should have recorded these attempts
-        assert len(admin_mod._login_attempts) > 0, (
-            "Rate limiter should track login attempts"
+        success = client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "correct_password"},
+            follow_redirects=False,
         )
+        assert success.status_code == 302
 
-        # Verify the entry structure: {ip: (count, first_timestamp)}
-        for ip, (count, ts) in admin_mod._login_attempts.items():
-            assert isinstance(count, int), "Attempt count should be an integer"
-            assert count > 0, "Attempt count should be positive"
-            assert isinstance(ts, float), "Timestamp should be a float"
-
-        admin_mod._login_attempts.clear()
-
-    def test_login_rate_limiter_clears_on_success(self):
-        """After a successful login, the rate limiter should clear that IP's count.
-
-        This test verifies the behavior by examining the source code.
-
-        Note: We can't easily test the full login success flow without valid
-        credentials. Instead, we verify the cleanup logic exists in the source.
-        """
-        admin_bp_path = (
-            Path(__file__).parent.parent.parent
-            / "src" / "anteumbra" / "interfaces" / "web" / "blueprints"
-            / "admin_bp.py"
-        )
-        if not admin_bp_path.exists():
-            pytest.skip("admin_bp.py not found")
-
-        source = admin_bp_path.read_text(encoding="utf-8")
-        # The login success path should pop from _login_attempts
-        assert "_login_attempts.pop" in source, (
-            "Login success should clear rate limit counter: "
-            "_login_attempts.pop(client_ip, None)"
-        )
-        assert "_check_login_rate" in source, (
-            "Login should call _check_login_rate before authenticating"
-        )
-
-    def test_login_get_returns_form_not_blocked(self, client):
-        """GET /admin/login should always return the form (rate limit only applies to POST)."""
-        import anteumbra.interfaces.web.blueprints.admin_bp as admin_mod
-        admin_mod._login_attempts.clear()
-
-        # Make many GET requests — none should be rate limited
-        for _ in range(10):
-            resp = client.get("/admin/login")
-            assert resp.status_code == 200, (
-                "GET /admin/login should always return 200, "
-                "rate limiting is for POST only"
+        for attempt in range(5):
+            response = client.post(
+                "/admin/login",
+                data={"username": "admin", "password": "wrong"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 401, (
+                f"Post-reset attempt {attempt + 1} should be allowed"
             )
 
-        admin_mod._login_attempts.clear()
+        blocked = client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "wrong"},
+            follow_redirects=False,
+        )
+        assert blocked.status_code == 429
+
+    def test_login_get_returns_form_not_blocked(
+        self,
+        client,
+        monkeypatch,
+    ):
+        """GET requests do not consume the POST attempt allowance."""
+        self._configure_credentials(monkeypatch)
+
+        for _ in range(10):
+            resp = client.get("/admin/login")
+            assert resp.status_code == 200
+
+        for attempt in range(5):
+            response = client.post(
+                "/admin/login",
+                data={"username": "admin", "password": "wrong"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 401, (
+                f"POST attempt {attempt + 1} should retain the full allowance"
+            )
 
 
 class TestPentestRegressions:

@@ -91,6 +91,7 @@ def build_runtime_container(
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
     from anteumbra.application.config_history_service import ConfigHistoryLogger
+    from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_state_service import ScanRuntimeState
@@ -129,6 +130,7 @@ def build_runtime_container(
         ),
     )
     scan_state = ScanRuntimeState()
+    login_rate_limiter = LoginRateLimiter()
     events = EventPublisherRouter(plugin_manager)
     wal = WalManager(
         data_dir / "registry_wal.log",
@@ -260,6 +262,7 @@ def build_runtime_container(
         passwords=passwords,
         config_history=config_history,
         scan_state=scan_state,
+        login_rate_limiter=login_rate_limiter,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,

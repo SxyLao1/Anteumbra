@@ -6,6 +6,7 @@ __all__ = [
     "dashboard_service",
     "jsonl_consumer",
     "launcher",
+    "login_rate_service",
     "log_analysis_service",
     "password_service",
     "platform_service",

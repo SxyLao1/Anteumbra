@@ -21,7 +21,10 @@ PyPI 跟随最新已发布 Tag，而不是 GitHub `main` 的最新提交。打 T
 并在全新虚拟环境安装该产物；可编辑源码安装不能替代分发产物测试。
 
 ```powershell
+$cleanPaths = @("build", "dist", "src/anteumbra.egg-info")
+Remove-Item -Recurse -Force $cleanPaths -ErrorAction SilentlyContinue
 python -m build --wheel
+python scripts/verify_wheel_contents.py dist
 python -m venv .release-smoke
 .\.release-smoke\Scripts\python -m pip install dist\anteumbra-X.Y.Z-py3-none-any.whl
 .\.release-smoke\Scripts\anteumbra install .release-instance
@@ -33,6 +36,9 @@ Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
 .\.release-smoke\Scripts\anteumbra stop
 Remove-Item Env:ANTEUMBRA_HOME
 ```
+
+本地发布必须执行清理与 Wheel/源码一致性检查。否则 Setuptools 可能保留旧
+`build/lib` 中已删除的模块，并悄悄把它们重新装入新 Wheel。
 
 确认生成的 `.env` 包含非占位 Session Secret；基础安装可使用 YARA；禁用的通知通道不会
 访问外网；启动就绪失败时命令返回非零。

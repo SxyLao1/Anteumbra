@@ -9,6 +9,10 @@
 ## [未发布]
 
 ### 修复
+- 本地残留 `build/lib` 中已删除的模块不再悄悄混入 Wheel；CI 与发布流程会拒绝
+  源码中不存在的包文件。
+- 缺少密码的登录表单会在 Hash 校验与限流计数前返回 400，不再让畸形 POST 在
+  Werkzeug 中触发 500。
 - ThreatGraph 的画像、IP/文件信誉、持久化、WAF 摄入、Registry 关联和公开查询全部按
   `site_id` 隔离；跨站点歧义查询不再猜测站点。
 - 部分初始化的插件资源会被关闭；启动失败明确返回错误，不再泄漏 Worker 或让 CLI
@@ -21,6 +25,8 @@
 ### 变更
 - 用实例所有的 `RuntimeLifecycle` 与强类型 `RuntimeState` 替换 Launcher 模块全局状态及
   `start_all`/`stop_all` 门面。
+- 将登录失败限流从 Web 蓝图可变全局状态移入 `RuntimeContainer` 所有的
+  `LoginRateLimiter`；App/测试 Runtime 不再共享计数，登录成功只重置当前客户端。
 - 为插件、Scanner/YARA、文件聚类、ThreatGraph、Notifier、SIEM、SSE、WAL 和 WAF
   增加聚焦 Domain Protocol；`RuntimeContainer` 只对真正可禁用的能力保留 `None`。
 - 删除 Runtime 对 HashEngine 与 MemoryShellTracer 无效引用；FileClusterEngine 改为输出
@@ -28,12 +34,16 @@
 - 中文文档统一使用 `*_cn.md`，补齐中文路线图、更新日志、发布指南和内存马工具说明，
   并增加文档配对/链接治理测试。
 - CI 显式执行 Ruff，Wheel CLI 或 Docker 健康冒烟失败不再被放行。
+- Pytest 固定从 `src` 布局导入，测试启动时会拒绝已安装的 `site-packages` 副本，
+  源码回归不能再对旧 Wheel 产生假通过。
 
 ### 测试
-- 当前源码通过 477 项非浏览器测试、41 项 Playwright UI 测试、Ruff、
-  `git diff --check` 和 114 个包模块导入扫描。
+- 当前源码通过 486 项非浏览器测试、41 项 Playwright UI 测试、Ruff、
+  `git diff --check` 和 115 个包模块导入扫描。
 - 新增 Runtime 实例所有权、服务边界、站点文件/画像查询、不可变聚类快照、通知公开
   API、WAF 源信息、文档治理、严格 CI 和打开 keep-alive 时关闭 Waitress 的回归测试。
+- 新增确定性的登录限流单元与 HTTP 回归，覆盖窗口、单客户端重置、Runtime 隔离、
+  登录成功重置和 GET 不计数。
 
 ---
 

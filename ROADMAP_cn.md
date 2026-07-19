@@ -4,7 +4,7 @@
 
 > **最新发布版**：v1.0.28（2026-07-18 已打 Tag 并发布）
 > **产品愿景**：面向单机与小型 Web 业务的安全运营工具，覆盖被动文件检测、访问日志行为分析、攻击者画像、人工响应和标准 SIEM 输出。
-> **源码状态**：`main` 包含 1.0.28 之后尚未发布的架构收口。当前源码已通过 477 项非浏览器测试、41 项浏览器测试、Ruff 和 114 模块导入扫描；下一次 bug 修复版发布前仍须重新完成 Wheel、源码安装、Docker、Tag 与 PyPI 验证。
+> **源码状态**：`main` 包含 1.0.28 之后尚未发布的架构收口。当前源码已通过 486 项非浏览器测试、41 项浏览器测试、Ruff 和 115 模块导入扫描；下一次 bug 修复版发布前仍须重新完成 Wheel、源码安装、Docker、Tag 与 PyPI 验证。
 
 ---
 
@@ -26,8 +26,8 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | Docker | 容器运行完整 `anteumbra run`，创建 Docker 默认配置、输出首次密码并接受健康检查。 |
 | 运行可靠性 | 多站点资源具有明确所有权；毒 JSONL 消息进入死信；有界队列提供背压；基线扫描和降级能力可见。 |
 | YARA 治理 | 27 个内置规则文件独立编译；错误文件隔离；失败重载保留有效规则；THOR 分片可独立验证。 |
-| 架构守卫 | 分层与导入边界测试存在，已解决债务不再留在白名单。 |
-| 运行时所有权 | 单个 `RuntimeLifecycle` 管理启动、状态与反向关闭，不再使用 Launcher 模块全局状态。 |
+| 架构守卫 | 强制分层/导入边界、源码测试导入与 Wheel/源码一致性，已解决债务不会重新混入构建。 |
+| 运行时所有权 | 单个 `RuntimeLifecycle` 管理启动、状态、反向关闭与每 App 登录限流，不再使用 Web/Launcher 模块可变状态。 |
 | 接入契约 | `RuntimeContainer` 通过 Domain Protocol 暴露必需服务；Web 与插件不再读取 Metrics、聚类、ThreatGraph 或 Notifier 私有状态。 |
 | 文档 | README、用户手册、架构、路线图、更新日志、发布指南和内存马工具说明均提供中英文导航。 |
 
@@ -36,7 +36,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 - Anteumbra 可作为单机安全运营工具使用，但不能宣传为 WAF、EDR、SIEM、集中式主机管理或分布式高可用平台的替代品。
 - 当前架构是模块化单体：`launcher.py` 是唯一组合根，可替换服务实现 `domain/runtime.py` 与 `domain/service_ports.py` 中的契约。
 - Registry、指标、通知、隔离、扫描历史、仪表盘汇总、ThreatGraph 画像/信誉和 SQLite 影子键都已携带站点身份；无法归属的历史数据明确保留在 `legacy` 桶。
-- 登录失败限流仍是进程内状态。对当前单进程定位是有效的，但在声称多 Worker 或分布式部署前必须改为 App 所有的服务。
+- 登录失败限流由每个 App Runtime 的 `LoginRateLimiter` 所有。内存后端符合当前单进程定位；多 Worker 或分布式部署仍需共享后端。
 - Docker 中 `yara-python` 为必装能力；`py-tlsh` 与 `ssdeep` 受 Python/基础镜像兼容性影响，可按设计降级。
 
 ---
@@ -54,7 +54,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | 1.0.26 | 多站点生命周期、毒消息、事务隔离、真实 UI E2E | 已发布 PyPI |
 | 1.0.27 | 可观测性、背压、可信代理、SIEM、YARA 治理、还原去重 | 已发布 PyPI |
 | 1.0.28 | 站点隔离服务、JSON 主存储/SQLite 影子、架构守卫 | 已发布 PyPI |
-| `main`（未发布） | Launcher 实例所有权、ThreatGraph 站点隔离、服务 Protocol、公开模块 API、Waitress 确定性关闭、双语文档与严格 CI | 验证中 |
+| `main`（未发布） | Launcher 与登录限流实例所有权、ThreatGraph 站点隔离、服务 Protocol、公开模块 API、Waitress 确定性关闭、双语文档与严格 CI | 验证中 |
 
 ---
 
@@ -67,7 +67,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | P0 | 在全新虚拟环境验证可编辑源码安装 | 下一 Tag 前待执行 |
 | P0 | 验证 Docker build/run/health/检测链路 | 下一 Tag 前待执行 |
 | P0 | 核对 README 命令与真实 CLI 输出 | 最终安装冒烟时执行 |
-| P1 | 部署、架构与 Web 回归测试 | 源码已通过 477 项非浏览器测试、41 项 UI 测试 |
+| P1 | 部署、架构与 Web 回归测试 | 源码已通过 486 项非浏览器测试、41 项 UI 测试 |
 | P1 | 仅在以上检查全部通过且工作区干净后打 Tag | 待执行 |
 | P1 | 验证 Trusted Publishing 与已发布 PyPI 包安装 | 待执行 |
 
@@ -86,7 +86,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | P0 | Threat intelligence 与公开查询完成站点隔离 | `main` 完成 | 同 IP、路径和画像不会跨站串联。 |
 | P1 | 删除跨模块私有状态访问 | `main` 完成 | Interfaces 使用公开快照和查询 API。 |
 | P1 | 增加导入、公开 Port、文档配对和严格 CI 守卫 | `main` 完成 | 防止架构和工程治理倒退。 |
-| P1 | 将登录失败限流移入 App 所有服务 | 下一 Tag 前计划完成 | 清除最后一个可变 Interface 模块工作流状态。 |
+| P1 | 将登录失败限流移入 App 所有服务 | `main` 完成 | App 与测试 Runtime 不再共享 Interface 模块可变状态。 |
 | P1 | 仅在触碰旧模块时修复历史乱码/旧式注释 | 持续 | 避免无风险收益的全仓机械重写。 |
 
 ---

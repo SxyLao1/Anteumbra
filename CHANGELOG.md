@@ -9,6 +9,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Prevented deleted modules in a stale local `build/lib` tree from silently
+  re-entering Wheels; CI and publishing now reject files absent from `src`.
+- Rejected login forms with a missing password before hash verification and
+  rate accounting, preventing malformed POSTs from raising a Werkzeug 500.
 - Isolated ThreatGraph profiles, IP/file reputation, persistence, WAF ingestion,
   Registry linking, and public queries by `site_id`; ambiguous cross-site lookups
   no longer guess a site.
@@ -23,6 +27,9 @@
 ### Changed
 - Replaced module-global launcher lifecycle state and `start_all`/`stop_all`
   facades with one instance-owned `RuntimeLifecycle` and typed `RuntimeState`.
+- Moved login-attempt throttling from mutable Web blueprint globals into a
+  `RuntimeContainer`-owned `LoginRateLimiter`; independent app/test runtimes no
+  longer share counters, and successful authentication resets only that client.
 - Added focused Domain Protocols for plugins, scanner/YARA, file clusters,
   ThreatGraph, notifier, SIEM, SSE, WAL, and WAF; `RuntimeContainer` now marks
   required services as required and retains `None` only for disabled capabilities.
@@ -32,14 +39,18 @@
   roadmap/changelog/release/toolkit documents, and added documentation/link
   governance tests.
 - Made CI run Ruff and fail on broken wheel CLI or Docker health smoke checks.
+- Pinned pytest to the `src` layout and made test startup reject an installed
+  `site-packages` copy, so source regressions cannot pass against an old Wheel.
 
 ### Tests
-- Current source passes `477` non-browser tests, all `41` Playwright UI tests,
-  Ruff, `git diff --check`, and an import sweep of `114` package modules.
+- Current source passes `486` non-browser tests, all `41` Playwright UI tests,
+  Ruff, `git diff --check`, and an import sweep of `115` package modules.
 - Added regressions for instance-owned lifecycle shutdown, service boundaries,
   site-qualified file/profile lookup, immutable cluster views, notification API,
   WAF source metadata, documentation parity, strict CI, and Waitress shutdown
   with an open keep-alive connection.
+- Added deterministic unit and HTTP regressions for login attempt windows,
+  per-client reset, independent runtimes, successful-login reset, and GET bypass.
 
 ---
 

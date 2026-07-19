@@ -63,12 +63,18 @@ def test_local_markdown_links_resolve():
 
 
 def test_ci_does_not_hide_release_smoke_failures():
-    source = (
+    ci_source = (
         PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
     ).read_text(encoding="utf-8")
+    publish_source = (
+        PROJECT_ROOT / ".github" / "workflows" / "publish.yml"
+    ).read_text(encoding="utf-8")
 
-    assert "python -m ruff check src tests" in source
-    assert "anteumbra --version 2>&1 || true" not in source
-    assert not re.search(r"curl[^\n]*api/v1/health[^\n]*\|\| true", source)
-    assert "curl --fail --silent --show-error" in source
-    assert 'echo "Anteumbra health endpoint did not become ready"' in source
+    assert "python -m ruff check src tests" in ci_source
+    assert "anteumbra --version 2>&1 || true" not in ci_source
+    assert not re.search(r"curl[^\n]*api/v1/health[^\n]*\|\| true", ci_source)
+    assert "curl --fail --silent --show-error" in ci_source
+    assert 'echo "Anteumbra health endpoint did not become ready"' in ci_source
+    wheel_check = "python scripts/verify_wheel_contents.py dist"
+    assert wheel_check in ci_source
+    assert wheel_check in publish_source

@@ -4,7 +4,7 @@
 
 > **Latest Release**: v1.0.28 (tagged and published, 2026-07-18)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` contains an unreleased post-1.0.28 architecture-closure line. Source validation currently passes 477 non-browser tests, 41 browser tests, Ruff, and a 114-module import sweep. Wheel, editable-install, Docker, tag, and PyPI checks must be repeated before the next bugfix release.
+> **Source Status**: `main` contains an unreleased post-1.0.28 architecture-closure line. Source validation currently passes 486 non-browser tests, 41 browser tests, Ruff, and a 115-module import sweep. Wheel, editable-install, Docker, tag, and PyPI checks must be repeated before the next bugfix release.
 
 ---
 
@@ -25,8 +25,8 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Docker | Container now starts the full `anteumbra run` runtime, creates Docker-friendly defaults, prints first-start credentials, and passes health checks. |
 | Runtime reliability | Multi-site resources have explicit startup/shutdown ownership; poison JSONL events advance through a dead-letter path; bounded queues use backpressure rather than drops; startup baseline scans and degraded capabilities are visible. |
 | Rule governance | 27 bundled YARA files compile independently; invalid custom files are isolated, failed reloads retain valid rules, and THOR shards stay independently verifiable. |
-| Architecture guardrails | Layer/import boundary tests exist, and resolved debt has been removed from the allowlist. |
-| Runtime ownership | One `RuntimeLifecycle` owns startup, status, and reverse-order shutdown without module-global launcher state. |
+| Architecture guardrails | Layer/import boundaries, source-only test imports, and Wheel/source parity are enforced; resolved debt stays out of builds. |
+| Runtime ownership | One `RuntimeLifecycle` owns startup, status, reverse-order shutdown, and per-app login throttling without mutable Web/launcher module state. |
 | Integration contracts | `RuntimeContainer` exposes required services through focused Domain Protocols; Web routes and plugins no longer reach Metrics, cluster, ThreatGraph, or Notifier private state. |
 | Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. |
 
@@ -35,7 +35,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 - The project is usable as a single-host security operations tool, but should not be described as a replacement for a production WAF, EDR, SIEM, centralized fleet manager, or distributed HA platform.
 - The architecture is a modular monolith: `launcher.py` is the sole composition root, while independently replaceable services implement contracts from `domain/runtime.py` and `domain/service_ports.py`.
 - Site ownership is complete in Registry, metrics, notifications, quarantine, scanner history, dashboard summaries, ThreatGraph profiles/reputation, and SQLite shadow keys. Historical unassigned data remains explicitly `legacy`.
-- Login-attempt throttling is still process-local. That is valid for the current single-process product, but it must become an app-owned service before adding multi-worker or distributed deployment claims.
+- Login-attempt throttling is owned by each app runtime through `LoginRateLimiter`. Its in-memory backend fits the current single-process product; multi-worker or distributed deployment would require a shared backend.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
 
 ---
@@ -53,7 +53,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Released to PyPI |
 | 1.0.27 | Runtime observability, bounded backpressure, trusted proxies, SIEM bridge, YARA governance, restore de-duplication | Released to PyPI |
 | 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Released to PyPI |
-| `main` (unreleased) | Instance-owned launcher lifecycle, site-isolated ThreatGraph, focused service Protocols, public module APIs, deterministic Waitress shutdown, bilingual documentation and strict CI smoke checks | In validation |
+| `main` (unreleased) | Instance-owned launcher lifecycle and login throttling, site-isolated ThreatGraph, focused service Protocols, public module APIs, deterministic Waitress shutdown, bilingual documentation and strict CI smoke checks | In validation |
 
 ---
 
@@ -68,7 +68,7 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Verify source editable install in a fresh runtime directory | Pending for next tag |
 | P0 | Verify Docker build/run/health/detection path | Pending for next tag |
 | P0 | Confirm README commands match real CLI output | Pending final install smoke |
-| P1 | Run deployment, architecture, and relevant web regression tests | Source passed: 477 non-browser; 41 UI |
+| P1 | Run deployment, architecture, and relevant web regression tests | Source passed: 486 non-browser; 41 UI |
 | P1 | Tag release only after every check above passes from a clean tree | Pending |
 | P1 | Verify trusted PyPI publishing and install the published artifact | Pending |
 
@@ -87,7 +87,7 @@ Goal: make the project easier for one AI or one engineer to implement a module i
 | P0 | Complete site isolation through threat intelligence and public queries | Done on `main` | Same IP/path/profile data cannot bleed across sites. |
 | P1 | Remove cross-module private-state access | Done on `main` | Interfaces use public snapshots and query methods. |
 | P1 | Add tests that enforce imports, public ports, docs parity, and strict CI smoke checks | Done on `main` | Keep architecture and governance from drifting backward. |
-| P1 | Move login-attempt throttling into an app-owned service | Planned before next tag | Remove the remaining mutable interface-module workflow state. |
+| P1 | Move login-attempt throttling into an app-owned service | Done on `main` | Independent app/test runtimes no longer share mutable interface-module state. |
 | P1 | Normalize old mojibake comments in touched modules | Ongoing | Improve maintainability without risky broad rewrites. |
 
 ---

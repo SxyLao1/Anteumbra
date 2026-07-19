@@ -236,6 +236,12 @@ def test_runtime_workflow_state_has_no_module_global_factories():
             "_scan_jobs",
             "_scan_jobs_lock",
         ),
+        PACKAGE_ROOT / "interfaces" / "web" / "blueprints" / "admin_bp.py": (
+            "_login_attempts",
+            "_login_lock",
+            "_check_login_rate",
+            "metrics._start_time",
+        ),
     }
     violations: list[str] = []
     for path, forbidden in checks.items():
