@@ -84,6 +84,9 @@ anteumbra config env set ANTEUMBRA_WECHAT_API_KEY your-send-key
 anteumbra config reload
 ```
 
+`config reload` 会完整解析所选部署配置，但不会修改正在运行的服务。
+需要从 Web 系统页应用运行时配置，或重启服务。
+
 完整命令参考见 [CLI 命令](docs/USER_MANUAL_zh.md#4-cli-命令)。
 
 ## 核心能力

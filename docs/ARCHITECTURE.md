@@ -75,7 +75,7 @@ Anteumbra adopts a hybrid model of **Domain-Driven Design (DDD) four-layer archi
 The codebase is a modular monolith under active dependency inversion, not a
 claim of fully independent microservices. New work must respect these rules:
 
-- Domain contracts do not import Flask, `ConfigRegistry`, filesystems, or storage.
+- Domain contracts do not import Flask, process-global configuration, filesystems, or storage.
 - `launcher.py` is the composition root. It creates `RuntimeServices` once and
   gives monitors their registry, metrics, event publisher, and site resolver.
 - A monitor must not select a global or "first" website. It owns one explicit
@@ -200,9 +200,9 @@ monitor is fatal.
 |------------|-------|---------------|
 | **Detection** | scanner, yara_engine, file_cluster, hash_engine, manual_scanner, decoder, memory_shell_tracer | File scanning, YARA matching, similarity clustering |
 | **Monitoring** | monitor, log_monitor, log_analyzer, metrics, notifier, siem_exporter | File monitoring, log analysis, alerting, SIEM export |
-| **Persistence** | json_repository, sqlite_repository, `__init__` | Dual storage backends + factory |
-| **Config** | registry (ConfigRegistry), loader (TOML+env), version | Configuration management |
-| **Utils** | sse_manager, password_utils, platform_utils, logger_factory, path_utils | Utility library |
+| **Persistence** | json_repository, sqlite_repository, `__init__` | Explicit repository implementations |
+| **Config** | provider, loader (TOML+env), version | Runtime-owned configuration snapshots |
+| **Utils** | sse_manager, platform_utils, logger_factory, path_utils | Runtime and platform adapters |
 | **Core** | suspicious_registry, quarantine, threat_graph, block_ledger, wal_manager, ip_blocker, decay_engine | Core business modules |
 
 ### 2.4 Interfaces Layer
@@ -875,11 +875,12 @@ each enabled site. Monitors receive their site identity and runtime services as
 dependencies; they do not import a global website selection.
 
 ```
-config.toml -> ConfigRegistry -> SiteResolver -> launcher.py
-                                              -> RuntimeServices
-                                              -> monitor(site A)
-                                              -> monitor(site B)
-                                              -> log monitor(site N)
+config.toml -> TomlConfigProvider -> launcher.py -> RuntimeContainer
+                                   -> SiteResolver
+                                   -> RuntimeServices
+                                   -> monitor(site A)
+                                   -> monitor(site B)
+                                   -> log monitor(site N)
 ```
 
 The shutdown path follows the same ownership graph in reverse, so a failed or
@@ -899,8 +900,9 @@ An independently developed module must:
 
 - accept an explicit `SiteIdentity` or a site-aware application service;
 - publish and consume site-labelled event payloads;
-- avoid direct `ConfigRegistry`, private globals, and first-site selection in
-  normal operation;
+- accept runtime dependencies through constructor parameters or Domain ports;
+- avoid process-global service registries, private globals, and first-site
+  selection in normal operation;
 - use application services from web routes instead of mutating persistence
   modules directly; and
 - add an isolation test when it persists, aggregates, or mutates site data.

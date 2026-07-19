@@ -13,6 +13,7 @@ from anteumbra.domain.runtime import (
 )
 
 if TYPE_CHECKING:
+    from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
 
 
@@ -28,6 +29,7 @@ class RuntimeContainer:
     config: ConfigProviderPort
     events: BindableEventPublisherPort
     logging: RuntimeLoggingPort
+    passwords: PasswordService
     plugin_manager: Any | None = None
     metrics: Any | None = None
     notifier: Any | None = None

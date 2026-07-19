@@ -108,6 +108,8 @@ DEPRECATED_GLOBAL_SERVICE_MODULES = {
     PACKAGE_ROOT / "application" / "sse_service.py",
     PACKAGE_ROOT / "application" / "wal_service.py",
     PACKAGE_ROOT / "application" / "logging_service.py",
+    PACKAGE_ROOT / "infrastructure" / "config" / "registry.py",
+    PACKAGE_ROOT / "infrastructure" / "utils" / "password_utils.py",
     PACKAGE_ROOT / "infrastructure" / "registry_adapter.py",
 }
 
@@ -166,6 +168,19 @@ def test_logging_is_owned_by_runtime_container():
         "close",
     }.isdisjoint(module_functions)
     assert "class RuntimeLoggerFactory" in source
+
+
+def test_password_service_does_not_depend_on_infrastructure():
+    violations = [
+        edge
+        for edge in _internal_import_edges()
+        if edge.source == "application/password_service.py"
+        and edge.imported_layer == "infrastructure"
+    ]
+    assert not violations, (
+        "password operations must use the injected config port:\n"
+        + _format_edges(violations)
+    )
 
 
 def test_symbol_logs_always_receive_an_explicit_logger():

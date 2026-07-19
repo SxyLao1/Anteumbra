@@ -21,11 +21,11 @@ def test_site_identity_resolves_the_most_specific_root():
     assert resolver.resolve("C:/outside/shell.php").site_id == "legacy"
 
 
-def test_config_registry_rejects_duplicate_site_ids(tmp_path):
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
+def test_config_provider_rejects_duplicate_site_ids(tmp_path):
+    from anteumbra.infrastructure.config.provider import parse_websites
 
     with pytest.raises(ValueError, match="Duplicate website.id"):
-        ConfigRegistry._parse_websites(
+        parse_websites(
             {
                 "website": [
                     {"id": "same", "name": "Alpha", "path": str(tmp_path / "a"), "port": 80},

@@ -377,12 +377,12 @@ Subcommands:
   set KEY VALUE         Set a dotted config key, e.g. web_admin.port 8080
   env set KEY VALUE     Set one .env variable
   validate              Validate runnable paths and integration settings
-  reload                Reload config in the current CLI process
+  reload                Parse and validate the resolved deployment config
 ```
 
-`anteumbra config reload` does not reach into an already running background
-service. Use the web Settings/System reload action or restart the service for a
-running instance.
+`anteumbra config reload` loads `.env`, resolves placeholders, parses every
+site, and reports the enabled-site count. It does not reach into an already
+running service. Use the Web System reload action or restart the service.
 
 ---
 
@@ -826,8 +826,8 @@ cookie behavior.
 
 ### 12.1 Common Issues
 
-**"ConfigRegistry not initialized"**
-→ Ensure `config.toml` exists. Run `anteumbra config` to generate a template.
+**"No config.toml was found"**
+→ Run `anteumbra config init`, or pass `--config` with the deployment path.
 
 **"Port already in use"**
 → Another Anteumbra instance is running. Use `anteumbra stop` or change the port in `config.toml`.

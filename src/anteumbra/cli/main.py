@@ -947,7 +947,7 @@ def config_validate(config_path):
 @config.command("reload")
 @click.option("--config", "config_path", default=None, help="Path to config.toml")
 def config_reload(config_path):
-    """Reload config in the current CLI process after validation."""
+    """Fully parse config without mutating a running service."""
     target = _config_target(config_path)
     errors, warnings = _validate_config_file(target)
     for warning in warnings:
@@ -957,11 +957,18 @@ def config_reload(config_path):
             click.echo(f"Error: {error}", err=True)
         raise SystemExit(1)
 
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
 
-    ConfigRegistry.initialize(str(target), force=True)
-    click.echo("Config registry reloaded in this process.")
-    click.echo("A running Anteumbra service still needs the web reload action or a restart.")
+    try:
+        provider = TomlConfigProvider(target)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise click.ClickException(f"Config parse failed: {exc}") from exc
+    click.echo(f"Config parsed successfully: {provider.path}")
+    click.echo(f"Enabled websites: {len(provider.get_enabled_websites())}")
+    click.echo(
+        "The running Anteumbra service is unchanged; "
+        "reload it in Web System or restart it."
+    )
 
 
 @config.command("wizard")

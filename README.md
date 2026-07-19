@@ -86,6 +86,9 @@ anteumbra config env set ANTEUMBRA_WECHAT_API_KEY your-send-key
 anteumbra config reload
 ```
 
+`config reload` fully parses the selected deployment config but does not
+mutate a running service. Apply runtime changes from Web System or restart it.
+
 For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-commands).
 
 ## Core Capabilities

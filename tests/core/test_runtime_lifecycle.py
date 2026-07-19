@@ -84,10 +84,10 @@ def test_site_monitors_start_for_every_enabled_website(tmp_path):
     assert warnings == []
 
 
-def test_config_registry_parses_per_site_log_configuration(tmp_path):
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
+def test_config_provider_parses_per_site_log_configuration(tmp_path):
+    from anteumbra.infrastructure.config.provider import parse_websites
 
-    websites = ConfigRegistry._parse_websites({
+    websites = parse_websites({
         "website": [
             {
                 "name": "Alpha",

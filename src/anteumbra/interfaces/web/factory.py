@@ -19,7 +19,6 @@ from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.logging import bind_symbols
-from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.application.path_service import normalize_path
 from flask_wtf.csrf import generate_csrf
 
@@ -54,53 +53,15 @@ def _trusted_proxy_hops(web_admin_config: dict) -> int:
         return 1
 
 
-def _ensure_password_configured(config_provider: ConfigProviderPort) -> None:
-    """Ensure first-run admin and session secrets exist in the deployment .env."""
-    cfg_path = config_provider.path
-    root = cfg_path.parent
-
-    cfg = config_provider.get()
-    pw_hash = cfg.get("web_admin", {}).get("password_hash", "")
-    secret_key = cfg.get("security", {}).get("secret_key", "")
-    env_file = root / ".env"
-    generated_password = None
-    updates = {}
-
-    if not pw_hash or str(pw_hash).startswith("${"):
-        import string
-        from werkzeug.security import generate_password_hash
-
-        generated_password = "".join(
-            secrets.choice(string.ascii_letters + string.digits) for _ in range(16)
-        )
-        updates["ANTEUMBRA_PASSWORD_HASH"] = generate_password_hash(generated_password)
-
-    invalid_secrets = {
-        "",
-        "change_this_to_a_random_32_char_string",
-        "YOUR_SECRET_KEY_HERE",
-    }
-    if str(secret_key).strip() in invalid_secrets or str(secret_key).startswith("${"):
-        updates["ANTEUMBRA_SECRET_KEY"] = secrets.token_urlsafe(48)
-
-    if not updates:
-        return
-
-    from dotenv import set_key
-
-    env_file.touch(exist_ok=True)
-    for key, value in updates.items():
-        set_key(str(env_file), key, value, quote_mode="auto")
-        os.environ[key] = value
-
-    config_provider.reload()
-
+def _initialize_credentials(runtime: RuntimeContainer) -> None:
+    """Persist and display credentials generated for a first-run runtime."""
+    generated_password = runtime.passwords.ensure_initial_secrets()
     if generated_password:
         print(f"\n{'=' * 60}")
         print("  Anteumbra first-run credentials")
         print("  Admin username: admin")
         print(f"  Admin password: {generated_password}")
-        print(f"  Stored in: {env_file}")
+        print(f"  Stored in: {runtime.passwords.env_path}")
         print(f"{'=' * 60}\n")
 
 
@@ -130,7 +91,7 @@ def create_app(
                 raise ValueError("plugin_manager conflicts with the supplied RuntimeContainer")
             runtime.plugin_manager = plugin_manager
 
-    _ensure_password_configured(runtime.config)
+    _initialize_credentials(runtime)
     resolved_config = runtime.config.get()
 
     # 先静默werkzeug横幅

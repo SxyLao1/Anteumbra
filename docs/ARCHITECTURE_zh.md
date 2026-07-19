@@ -181,9 +181,9 @@ __all__ = ["register_sse_client", ...]
 |--------|------|------|
 | **Detection** | scanner, yara_engine, file_cluster, hash_engine, manual_scanner, decoder, memory_shell_tracer | 文件扫描、YARA 匹配、相似度聚类 |
 | **Monitoring** | monitor, log_monitor, log_analyzer, metrics, notifier, siem_exporter | 文件监控、日志分析、告警、SIEM 导出 |
-| **Persistence** | json_repository, sqlite_repository, `__init__` | 双存储后端 + 工厂 |
-| **Config** | registry (ConfigRegistry), loader (TOML+env), version | 配置管理 |
-| **Utils** | sse_manager, password_utils, platform_utils, logger_factory, path_utils | 工具库 |
+| **Persistence** | json_repository, sqlite_repository, `__init__` | 显式 Repository 实现 |
+| **Config** | provider, loader (TOML+env), version | Runtime 独享的配置快照 |
+| **Utils** | sse_manager, platform_utils, logger_factory, path_utils | 运行时与平台适配器 |
 | **Core** | suspicious_registry, quarantine, threat_graph, block_ledger, wal_manager, ip_blocker, decay_engine | 核心业务模块 |
 
 ### 2.4 Interfaces 层（接口层）
@@ -838,11 +838,12 @@ decay_factor:
 身份和运行时服务，不会导入全局网站选择。
 
 ```
-config.toml -> ConfigRegistry -> SiteResolver -> launcher.py
-                                              -> RuntimeServices
-                                              -> monitor(site A)
-                                              -> monitor(site B)
-                                              -> log monitor(site N)
+config.toml -> TomlConfigProvider -> launcher.py -> RuntimeContainer
+                                   -> SiteResolver
+                                   -> RuntimeServices
+                                   -> monitor(site A)
+                                   -> monitor(site B)
+                                   -> log monitor(site N)
 ```
 
 关闭顺序沿同一所有权图反向执行，因此单个站点启动失败或被禁用不会阻止其他站点独立
@@ -860,7 +861,8 @@ config.toml -> ConfigRegistry -> SiteResolver -> launcher.py
 
 - 接受显式 `SiteIdentity` 或具备站点意识的应用服务；
 - 发布和消费带站点标记的事件负载；
-- 在正常流程中避免直接使用 `ConfigRegistry`、私有全局变量或“第一个站点”选择；
+- 通过构造参数或 Domain Port 接收运行时依赖；
+- 在正常流程中避免进程级服务注册表、私有全局变量或“第一个站点”选择；
 - 让 Web 路由调用应用服务，而非直接修改持久化模块；以及
 - 只要持久化、汇总或修改站点数据，就增加隔离回归测试。
 

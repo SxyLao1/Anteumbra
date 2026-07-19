@@ -18,12 +18,11 @@ from flask import (
     Blueprint, render_template, request, jsonify, current_app, session, redirect, url_for
 )
 from flask_wtf.csrf import generate_csrf
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 import secrets
 
 from anteumbra.application.path_service import normalize_path
 from anteumbra.application.platform_service import check_port_reachable
-from anteumbra.application.password_service import check_password_strength, update_password_hash_in_config
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
@@ -614,20 +613,25 @@ def change_password():
             return jsonify({"success": False, "error": "当前密码错误"}), 401
 
         # 验证新密码强度
-        is_strong, msg = check_password_strength(new_password)
+        passwords = get_runtime().passwords
+        is_strong, msg = passwords.check_strength(new_password)
         if not is_strong:
             return jsonify({"success": False, "error": msg}), 400
 
         # 生成新哈希并更新
-        new_hash = generate_password_hash(new_password)
-        success, msg = update_password_hash_in_config(new_hash)
+        success, msg = passwords.set_password(new_password)
+        if not success:
+            return jsonify({"success": False, "error": msg}), 500
 
-        if success:
-            # 强制用户重新登录
-            session.pop('authenticated', None)
-            log_with_symbol("success", "info", f"用户 {session.get('username')} 修改密码成功", current_app.logger)
-
-        return jsonify({"success": success, "message": msg})
+        username = session.get("username", "admin")
+        log_with_symbol(
+            "success",
+            "info",
+            f"用户 {username} 修改密码成功",
+            current_app.logger,
+        )
+        session.pop("authenticated", None)
+        return jsonify({"success": True, "message": msg})
 
     except Exception as e:
         current_app.logger.error(f"[ACCOUNT] 密码修改失败: {e}", exc_info=True)

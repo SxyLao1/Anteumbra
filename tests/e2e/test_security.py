@@ -518,11 +518,11 @@ class TestPentestRegressions:
     def test_yara_upload_rejects_traversal_filename(self, client):
         self._authenticate(client)
 
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
         from anteumbra.infrastructure.utils.path_utils import normalize_path
 
+        runtime = client.application.extensions["anteumbra.runtime"]
         rules_path = normalize_path(
-            ConfigRegistry.get_raw_config()
+            runtime.config.get()
             .get("paths", {})
             .get("yara_rules_path", "rules/webshell")
         )
@@ -551,11 +551,11 @@ class TestPentestRegressions:
     def test_yara_edit_modal_escapes_rule_content(self, client):
         self._authenticate(client)
 
-        from anteumbra.infrastructure.config.registry import ConfigRegistry
         from anteumbra.infrastructure.utils.path_utils import normalize_path
 
+        runtime = client.application.extensions["anteumbra.runtime"]
         rules_path = normalize_path(
-            ConfigRegistry.get_raw_config()
+            runtime.config.get()
             .get("paths", {})
             .get("yara_rules_path", "rules/webshell")
         )

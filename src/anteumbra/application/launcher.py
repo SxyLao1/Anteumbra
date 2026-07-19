@@ -24,9 +24,9 @@ def build_runtime_container(
     plugin_manager: Any | None = None,
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
+    from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
-    from anteumbra.infrastructure.config.registry import ConfigRegistry
     from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
@@ -49,8 +49,8 @@ def build_runtime_container(
     from anteumbra.infrastructure.wal_manager import WalManager
 
     provider = TomlConfigProvider(config_path)
-    ConfigRegistry.bind(provider)
     runtime_logging = RuntimeLoggerFactory(provider)
+    passwords = PasswordService(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     events = EventPublisherRouter(plugin_manager)
@@ -185,6 +185,7 @@ def build_runtime_container(
         config=provider,
         events=events,
         logging=runtime_logging,
+        passwords=passwords,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,

@@ -356,10 +356,11 @@ HTTP 监听端口检查成功。它使用无缓冲输出，启动进度和失败
   set KEY VALUE         设置一个点分隔配置项，例如 web_admin.port 8080
   env set KEY VALUE     设置一个 .env 变量
   validate              校验可运行路径和集成配置
-  reload                重载当前 CLI 进程中的配置
+  reload                解析并校验当前部署配置
 ```
 
-`anteumbra config reload` 只会重载当前 CLI 进程的配置；已经运行的后台服务请使用 Web 系统页的重载动作，或重启服务。
+`anteumbra config reload` 会加载 `.env`、解析占位符、解析全部站点并报告启用站点数；
+它不会修改正在运行的服务。请使用 Web 系统页的重载动作，或重启服务。
 
 ---
 
@@ -788,8 +789,8 @@ server {
 
 ### 12.1 常见问题
 
-**"ConfigRegistry not initialized"**
-→ 确保 `config.toml` 存在。运行 `anteumbra config` 生成模板。
+**"No config.toml was found"**
+→ 运行 `anteumbra config init`，或通过 `--config` 指定部署配置路径。
 
 **"端口已被占用"**
 → 另一个 Anteumbra 实例正在运行。使用 `anteumbra stop` 或在 `config.toml` 中更改端口。
