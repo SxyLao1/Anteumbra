@@ -10,7 +10,6 @@ import json
 import logging
 import queue
 import re
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,12 +20,16 @@ from flask import (
 )
 
 from anteumbra.application.session_service import cleanup_sessions
-from anteumbra.application.path_service import normalize_path
 from anteumbra.domain.logging import log_with_symbol
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
     is_ip_allowed,
     require_auth,
+)
+from anteumbra.interfaces.web.log_history import (
+    collect_log_history,
+    render_log_history,
 )
 from anteumbra.interfaces.web.runtime import get_runtime
 
@@ -82,26 +85,38 @@ def stream_logs():
         expected_username, password_hash, allowed_ips = get_admin_credentials()
         if username != expected_username or not is_ip_allowed(client_ip, allowed_ips):
             abort(403)
-    except Exception as e:
+    except Exception:
         abort(403)
 
     logger = current_app.logger
-    requested_site = request.args.get('site')
+    requested_site = request.args.get('site_id') or request.args.get('site')
     try:
-        websites = get_runtime().config.get_enabled_websites()
+        websites = runtime.config.get_enabled_websites()
     except Exception:
-        websites = []
+        logger.warning("[SSE] Failed to resolve configured sites", exc_info=True)
+        abort(503)
     if requested_site:
-        websites = [site for site in websites if site.name == requested_site]
+        requested_id = requested_site.strip().lower()
+        websites = [
+            site
+            for site in websites
+            if site.site_id == requested_id or site.name == requested_site
+        ]
         if not websites:
             abort(404)
-    site_names = [site.name for site in websites] or ["Default Website"]
-    log_files = [normalize_path(f"logs/{name}/monitor.log") for name in site_names]
+    if not websites:
+        abort(503)
+    log_files = [
+        runtime.logging.get_site_log_path(
+            SiteIdentity.from_values(site.site_id, site.name)
+        )
+        for site in websites
+    ]
     show_all_levels = request.args.get('levels', '') == 'all'
 
     if not show_all_levels:
         try:
-            config = get_runtime().config.get()
+            config = runtime.config.get()
             web_admin_cfg = config.get("web_admin", {})
             allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
             allowed_levels_set = set(level.upper() for level in allowed_levels)
@@ -206,75 +221,21 @@ def stream_logs():
 @monitor_bp.route('/logs/history')
 @require_auth
 def logs_history():
-    """Return last 1000 log lines as HTML fragment for LIVE LOG STREAM init.
-    v1.8.2: prefer data/sse_log_buffer.json, fallback to monitor.log"""
+    """Return escaped runtime-owned history for LIVE LOG STREAM initialization."""
     try:
-        lines = []
-        buffer_file = normalize_path("data/sse_log_buffer.json")
-        if buffer_file.exists():
-            try:
-                with open(buffer_file, 'r', encoding='utf-8') as f:
-                    buffer_data = json.load(f)
-                if isinstance(buffer_data, list):
-                    lines = buffer_data[-1000:]
-            except Exception as e:
-                current_app.logger.warning(f"[LOGS_HISTORY] Buffer read failed: {e}")
-
-        log_candidates = []
-        try:
-            websites = get_runtime().config.get_enabled_websites()
-            for website in websites:
-                log_candidates.append(normalize_path(f"logs/{website.name}/monitor.log"))
-        except Exception:
-            current_app.logger.debug("Failed to resolve website log candidates", exc_info=True)
-        log_candidates.extend([
-            normalize_path("logs/Default Website/monitor.log"),
-            normalize_path("logs/Website-PhpStudy/monitor.log"),
-            normalize_path("logs/Anteumbra/monitor.log"),
-        ])
-
-        seen_paths = set()
-        for log_file in log_candidates:
-            key = str(log_file)
-            if key in seen_paths or not log_file.exists():
-                continue
-            seen_paths.add(key)
-            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                f.seek(0, 2)
-                size = f.tell()
-                buf_size = min(size, 500 * 1024)
-                f.seek(max(0, size - buf_size))
-                lines.extend(f.read().splitlines()[-1000:])
-
-        lines = sorted(dict.fromkeys(lines))[-1000:]
-
-        if not lines:
-            return "<div class='log-line info'>[INFO] No log history found</div>"
-
-        html_parts = []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            log_class = 'info'
-            upper = line.upper()
-            if '[CRITICAL]' in upper or 'CRITICAL' in upper:
-                log_class = 'critical'
-            elif '[ERROR]' in upper or 'ERROR' in upper:
-                log_class = 'error'
-            elif '[WARNING]' in upper or 'WARN' in upper:
-                log_class = 'warn'
-            elif '[DEBUG]' in upper or 'DEBUG' in upper:
-                log_class = 'debug'
-            if line.startswith('[SSE]'):
-                continue
-            safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            html_parts.append(f'<div class="log-line {log_class}">{safe_line}</div>')
-
-        return ''.join(html_parts) if html_parts else "<div class='log-line info'>[INFO] No recent logs</div>"
+        lines = collect_log_history(
+            get_runtime(),
+            limit=1000,
+            log=current_app.logger,
+        )
+        return render_log_history(
+            lines,
+            empty_message="[INFO] No log history found",
+        )
     except Exception as e:
         current_app.logger.error(f"[LOGS_HISTORY] Read failed: {e}", exc_info=True)
-        return f"<div class='log-line error'>[ERROR] Failed to load history: {str(e)[:50]}</div>"
+        message = html.escape(str(e)[:50])
+        return f'<div class="log-line error">[ERROR] Failed to load history: {message}</div>'
 
 
 @monitor_bp.route('/logs/access-analysis')
@@ -452,7 +413,6 @@ def session_manager():
 @require_auth
 def session_list():
     """Return session list (paginated)"""
-    from flask_session import Session
     session_dir = current_app.config.get('SESSION_FILE_DIR')
     if not session_dir:
         return "<p style='color: #888;'>Session storage not configured</p>"

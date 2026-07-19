@@ -12,6 +12,10 @@ from typing import Any
 
 from anteumbra.domain.logging import bind_symbols
 from anteumbra.domain.runtime import ConfigProviderPort
+from anteumbra.domain.site import SiteIdentity
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_tool_mode() -> bool:
@@ -26,37 +30,52 @@ class RuntimeLoggerFactory:
         self._lock = threading.RLock()
         self._loggers: dict[str, logging.Logger] = {}
 
-    def get_logger(self, site_name: str) -> logging.Logger:
-        """Return one monitor logger scoped to this factory instance."""
-        key = f"monitor:{site_name}"
+    def get_logger(self, component: str) -> logging.Logger:
+        """Return one component logger scoped to this factory instance."""
+        return self._get_monitor_logger(
+            key=f"component:{component}",
+            path=self._monitor_log_path(component),
+            formatter="[%(asctime)s] %(levelname)s - %(message)s",
+        )
+
+    def get_site_logger(self, site: SiteIdentity) -> logging.Logger:
+        """Return a monitor logger keyed and stored by stable site ID."""
+        key = f"site:{site.site_id}"
         with self._lock:
             existing = self._loggers.get(key)
             if existing is not None:
                 return existing
-            config = self._config.get()
-            filesizes = config.get("filesizes", {})
-            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(site_name)).strip("._")
-            safe_name = safe_name or "Anteumbra"
-            path = self._resolve_path(
-                config.get("paths", {}).get("log_base_dir", "logs")
-            ) / safe_name / "monitor.log"
-            logger = self._build_logger(
-                key,
-                path=path,
-                level=logging.DEBUG,
-                file_level=logging.DEBUG,
-                console_level=logging.WARNING if _is_tool_mode() else logging.INFO,
-                max_bytes=self._megabytes(
-                    filesizes.get("log_rotation_size_mb", 100), 100
+            if not _is_tool_mode():
+                self._migrate_legacy_site_logs(site)
+            return self._get_monitor_logger(
+                key=key,
+                path=self.get_site_log_path(site),
+                formatter=(
+                    "[%(asctime)s] %(levelname)s - "
+                    f"[site={site.site_id}] %(message)s"
                 ),
-                backup_count=self._positive_int(
-                    filesizes.get("log_backup_count", 5), 5
-                ),
-                formatter="[%(asctime)s] %(levelname)s - %(message)s",
-                config=config,
             )
-            self._loggers[key] = logger
-            return logger
+
+    def get_site_log_path(self, site: SiteIdentity) -> Path:
+        """Return the stable active monitor log path for one site."""
+        return self._monitor_log_path(site.site_id)
+
+    def get_site_history_paths(self, site: SiteIdentity) -> tuple[Path, ...]:
+        """Return stable logs plus legacy display-name log files."""
+        primary_dir = self.get_site_log_path(site).parent
+        legacy_dir = self._monitor_log_path(site.site_name).parent
+        directories = (primary_dir, legacy_dir)
+        paths: list[Path] = []
+        seen: set[str] = set()
+        for directory in directories:
+            directory_key = str(directory).casefold()
+            if directory_key in seen or not directory.is_dir():
+                continue
+            seen.add(directory_key)
+            paths.extend(
+                path for path in directory.glob("monitor.log*") if path.is_file()
+            )
+        return tuple(sorted(paths, key=self._history_sort_key))
 
     def get_access_logger(self) -> logging.Logger:
         """Return the HTTP access logger for this runtime."""
@@ -116,6 +135,96 @@ class RuntimeLoggerFactory:
             )
             self._loggers[key] = logger
             return logger
+
+    def _get_monitor_logger(
+        self,
+        *,
+        key: str,
+        path: Path,
+        formatter: str,
+    ) -> logging.Logger:
+        with self._lock:
+            existing = self._loggers.get(key)
+            if existing is not None:
+                return existing
+            config = self._config.get()
+            filesizes = config.get("filesizes", {})
+            runtime_logger = self._build_logger(
+                key,
+                path=path,
+                level=logging.DEBUG,
+                file_level=logging.DEBUG,
+                console_level=logging.WARNING if _is_tool_mode() else logging.INFO,
+                max_bytes=self._megabytes(
+                    filesizes.get("log_rotation_size_mb", 100), 100
+                ),
+                backup_count=self._positive_int(
+                    filesizes.get("log_backup_count", 5), 5
+                ),
+                formatter=formatter,
+                config=config,
+            )
+            self._loggers[key] = runtime_logger
+            return runtime_logger
+
+    def _monitor_log_path(self, scope: str) -> Path:
+        config = self._config.get()
+        base = self._resolve_path(
+            config.get("paths", {}).get("log_base_dir", "logs")
+        )
+        return base / self._safe_scope(scope) / "monitor.log"
+
+    def _migrate_legacy_site_logs(self, site: SiteIdentity) -> None:
+        primary_dir = self.get_site_log_path(site).parent
+        legacy_dir = self._monitor_log_path(site.site_name).parent
+        if str(primary_dir).casefold() == str(legacy_dir).casefold():
+            return
+        if not legacy_dir.is_dir():
+            return
+
+        primary_dir.mkdir(parents=True, exist_ok=True)
+        for source in sorted(legacy_dir.glob("monitor.log*")):
+            if not source.is_file():
+                continue
+            target = primary_dir / source.name
+            if target.exists():
+                target = self._next_legacy_archive(target, site.site_name)
+            try:
+                source.replace(target)
+            except OSError:
+                logger.warning(
+                    "Could not migrate legacy site log %s to %s",
+                    source,
+                    target,
+                    exc_info=True,
+                )
+        try:
+            legacy_dir.rmdir()
+        except OSError:
+            pass
+
+    @classmethod
+    def _next_legacy_archive(cls, target: Path, site_name: str) -> Path:
+        suffix = f"legacy-{cls._safe_scope(site_name)}"
+        candidate = target.with_name(f"{target.name}.{suffix}")
+        index = 2
+        while candidate.exists():
+            candidate = target.with_name(f"{target.name}.{suffix}-{index}")
+            index += 1
+        return candidate
+
+    @staticmethod
+    def _history_sort_key(path: Path) -> tuple[int, str]:
+        try:
+            modified = path.stat().st_mtime_ns
+        except OSError:
+            modified = 0
+        return modified, path.name
+
+    @staticmethod
+    def _safe_scope(value: str) -> str:
+        safe_value = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("._")
+        return safe_value or "Anteumbra"
 
     def close(self) -> None:
         """Flush and close every handler owned by this runtime."""

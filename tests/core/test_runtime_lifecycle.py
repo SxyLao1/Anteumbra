@@ -48,12 +48,19 @@ def test_site_monitors_start_for_every_enabled_website(tmp_path):
 
     websites = [
         SimpleNamespace(
-            name="alpha", path=tmp_path / "alpha", log_config={"log_monitor_enabled": False}
+            site_id="alpha",
+            name="Alpha Display",
+            path=tmp_path / "alpha",
+            log_config={"log_monitor_enabled": False},
         ),
         SimpleNamespace(
-            name="beta", path=tmp_path / "beta", log_config={"log_monitor_enabled": True}
+            site_id="beta",
+            name="Beta Display",
+            path=tmp_path / "beta",
+            log_config={"log_monitor_enabled": True},
         ),
     ]
+    logger_sites = []
 
     class FakeMonitor:
         def __init__(self, website, _scan, _logger):
@@ -71,17 +78,25 @@ def test_site_monitors_start_for_every_enabled_website(tmp_path):
         def start(self):
             self.is_running = True
 
+    def site_logger_factory(site):
+        logger_sites.append(site)
+        return SimpleNamespace(name=site.site_id, exception=lambda *_a: None)
+
     monitors, log_monitors, warnings = _start_site_monitors(
         websites,
         monitor_factory=FakeMonitor,
-        logger_factory=lambda name: SimpleNamespace(name=name, exception=lambda *_a: None),
+        logger_factory=site_logger_factory,
         scan_callback=lambda *_args: None,
         analyzer_factory=lambda website, _logger: website.name,
         log_monitor_factory=FakeLogMonitor,
     )
 
-    assert [monitor.website.name for monitor in monitors] == ["alpha", "beta"]
-    assert [monitor.analyzer for monitor in log_monitors] == ["beta"]
+    assert [site.site_id for site in logger_sites] == ["alpha", "beta"]
+    assert [monitor.website.name for monitor in monitors] == [
+        "Alpha Display",
+        "Beta Display",
+    ]
+    assert [monitor.analyzer for monitor in log_monitors] == ["Beta Display"]
     assert warnings == []
 
 

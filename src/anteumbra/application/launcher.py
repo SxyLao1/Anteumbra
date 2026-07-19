@@ -18,6 +18,7 @@ from anteumbra.domain.runtime import (
     EventPublisherPort,
     RuntimeMetricsPort,
 )
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.domain.service_ports import (
     NotifierPort,
     PluginManagerPort,
@@ -398,7 +399,7 @@ class RuntimeLifecycle:
             monitors, log_monitors, site_warnings = _start_site_monitors(
                 websites,
                 runtime_services=runtime_services,
-                logger_factory=container.logging.get_logger,
+                logger_factory=container.logging.get_site_logger,
                 config_provider=container.config,
                 notifier=container.notifier,
                 registry=container.registry,
@@ -608,7 +609,7 @@ def _start_site_monitors(
     *,
     runtime_services: Any | None = None,
     monitor_factory: Callable[..., MonitorResourcePort] | None = None,
-    logger_factory: Callable[[str], logging.Logger] | None = None,
+    logger_factory: Callable[[SiteIdentity], logging.Logger] | None = None,
     scan_callback: Callable[..., Any] | None = None,
     analyzer_factory: Callable[..., Any] | None = None,
     log_monitor_factory: Callable[..., MonitorResourcePort] | None = None,
@@ -637,7 +638,8 @@ def _start_site_monitors(
     log_monitors: list[MonitorResourcePort] = []
     warnings: list[str] = []
     for website in websites:
-        site_logger = logger_factory(website.name)
+        site = SiteIdentity.from_values(website.site_id, website.name)
+        site_logger = logger_factory(site)
         try:
             if runtime_services is None:
                 monitor = monitor_factory(website, scan_callback, site_logger)

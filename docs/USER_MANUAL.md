@@ -159,11 +159,19 @@ password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"  # Generate with werkzeug
 allowed_ips = ["127.0.0.1", "192.168.1.0/24"]   # IP whitelist
 
 [website]
+id = "primary"             # Stable identity; do not change when renaming
 name = "My Website"
 path = "/var/www/html"     # Web root to monitor
 port = 80
 enabled = true
 ```
+
+`website.id` is the persistent ownership key used by Registry, quarantine,
+metrics, profiles, and audit operations. You may rename `website.name` at any
+time while keeping the same ID. Changing the ID creates a separate site and
+leaves historical records under the previous ID. `legacy` is reserved and
+cannot be used. `anteumbra config validate` warns when an older config omits
+the ID and derives it from the display name.
 
 When placing the dashboard behind Nginx, Caddy, or another reverse proxy,
 trust only that proxy peer. `trusted_proxy_ips` accepts IPs or CIDRs;
@@ -850,9 +858,13 @@ unbounded log-client retention.
 
 | Log | Path | Content |
 |-----|------|---------|
-| Monitor | `logs/{site}/monitor.log` | File change events, scan results, alerts |
+| Monitor | `logs/{site_id}/monitor.log` | File change events, scan results, alerts |
 | Access | `logs/Anteumbra/access.log` | Flask HTTP access log |
 | System | `logs/Anteumbra/system.log` | Startup, config reloads, errors |
+
+Monitor log directories use immutable `website.id`, not the display name.
+Anteumbra migrates legacy display-name logs when that site's monitor starts.
+Aggregated history and new monitor lines include `[site=<id>]` attribution.
 
 ### 12.3 Health Check
 

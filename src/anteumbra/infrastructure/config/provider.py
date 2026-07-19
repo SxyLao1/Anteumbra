@@ -17,6 +17,7 @@ from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 
 logger = logging.getLogger(__name__)
+_RESERVED_CONFIG_SITE_IDS = {"legacy"}
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,10 @@ def parse_websites(config: Mapping[str, Any]) -> tuple[Website, ...]:
         if not isinstance(entry, Mapping):
             raise ValueError("Every [[website]] entry must be a table")
         website = _create_website(entry)
+        if website.site_id in _RESERVED_CONFIG_SITE_IDS:
+            raise ValueError(
+                f"website.id {website.site_id!r} is reserved for unassigned records"
+            )
         if website.site_id in site_ids:
             raise ValueError(f"Duplicate website.id: {website.site_id}")
         site_ids.add(website.site_id)
@@ -179,7 +184,7 @@ class TomlConfigProvider:
                 identity = snapshot.resolver.get(site_id)
                 return SiteIdentity.from_values(
                     site_id,
-                    site_name or (identity.site_name if identity else str(site_id)),
+                    identity.site_name if identity else (site_name or str(site_id)),
                 )
             return snapshot.resolver.resolve(str(file_path))
 

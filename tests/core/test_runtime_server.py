@@ -57,6 +57,7 @@ def test_runtime_server_uses_waitress_and_exposes_launcher_lifecycle(monkeypatch
     assert calls["host"] == "127.0.0.1"
     assert calls["port"] == 18080
     assert calls["threads"] == 8
+    assert calls["ident"] == ""
     assert calls["run"] is True
     assert calls["pull_trigger"] is True
     assert calls["channel_close"] == 1
@@ -86,6 +87,7 @@ def test_waitress_runtime_server_serves_and_stops_cleanly():
     thread.start()
     try:
         body = None
+        server_header = None
         for _ in range(30):
             try:
                 with urllib.request.urlopen(
@@ -93,10 +95,12 @@ def test_waitress_runtime_server_serves_and_stops_cleanly():
                     timeout=0.5,
                 ) as response:
                     body = response.read()
+                    server_header = response.headers.get("Server")
                 break
             except OSError:
                 time.sleep(0.05)
         assert body == b'{"status":"ok"}\n'
+        assert server_header is None
     finally:
         server.shutdown()
         thread.join(timeout=3.0)

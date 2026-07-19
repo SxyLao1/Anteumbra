@@ -6,7 +6,6 @@ Uses go() with wait_until="commit" to avoid blocking
 on unpkg.com CDN <script> tags. Fresh Flask server per test.
 """
 import pytest
-from pathlib import Path
 from playwright.sync_api import expect
 
 
@@ -47,14 +46,9 @@ class TestDashboard:
         expect(capability_band).to_contain_text("Detection")
         expect(capability_band).to_contain_text("Notifications")
 
-    def test_overview_loads_existing_monitor_history(self, page, server_url):
+    def test_overview_loads_existing_monitor_history(self, page, server_url, runtime):
         marker = "CODEX-HISTORY-MARKER"
-        log_file = Path("logs") / "Default Website" / "monitor.log"
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_file.write_text(
-            f"[2026-07-17 12:00:00] INFO - {marker}\n",
-            encoding="utf-8",
-        )
+        runtime.sse.persist_log_line(f"[2026-07-17 12:00:00] INFO - {marker}")
 
         go(page, f"{server_url}/admin/")
         page.click("a.nav-link[data-path='overview']")
@@ -147,13 +141,11 @@ class TestSettings:
 class TestSecurityHeaders:
     """Security-related HTTP checks."""
 
-    def test_no_server_header(self, page, server_url):
-        """Server header should be stripped (V-005 fix)."""
+    def test_server_header_absent(self, page, server_url):
+        """The production server must not advertise an implementation."""
         response = page.request.get(f"{server_url}/admin/login")
-        # Werkzeug dev server may still add Server header
-        # Our middleware attempts to strip it
         server_header = response.headers.get("server", "")
-        # Not assert-failing because dev server behavior varies
+        assert server_header == ""
 
     def test_login_has_csrf(self, unauthenticated_page, server_url):
         """Login form should contain CSRF token (hidden input)."""

@@ -13,12 +13,18 @@ from anteumbra.infrastructure.config.provider import (
 )
 
 
-def _write_config(path: Path, *, name: str, enabled: bool = True) -> None:
+def _write_config(
+    path: Path,
+    *,
+    name: str,
+    site_id: str | None = None,
+    enabled: bool = True,
+) -> None:
     path.write_text(
         "\n".join(
             (
                 "[[website]]",
-                f'id = "{name.lower()}"',
+                f'id = "{site_id or name.lower()}"',
                 f'name = "{name}"',
                 f'path = "{path.parent.as_posix()}/{name.lower()}"',
                 "port = 8080",
@@ -119,5 +125,36 @@ def test_duplicate_site_ids_are_rejected(tmp_path):
                     {"id": "same", "name": "Alpha", "path": tmp_path / "a", "port": 80},
                     {"id": "same", "name": "Beta", "path": tmp_path / "b", "port": 81},
                 ]
+            }
+        )
+
+
+def test_site_rename_preserves_id_and_uses_current_configured_name(tmp_path):
+    config_path = tmp_path / "config.toml"
+    _write_config(config_path, name="Old Name", site_id="primary")
+    provider = TomlConfigProvider(config_path)
+
+    _write_config(config_path, name="New Name", site_id="primary")
+    provider.reload()
+    identity = provider.resolve_site_identity(
+        tmp_path / "old-record.php",
+        site_id="primary",
+        site_name="Old Name",
+    )
+
+    assert identity.site_id == "primary"
+    assert identity.site_name == "New Name"
+
+
+def test_legacy_site_id_is_reserved_for_unassigned_records(tmp_path):
+    with pytest.raises(ValueError, match="reserved for unassigned"):
+        parse_websites(
+            {
+                "website": {
+                    "id": "legacy",
+                    "name": "Legacy Site",
+                    "path": tmp_path / "legacy",
+                    "port": 80,
+                }
             }
         )

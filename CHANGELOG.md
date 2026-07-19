@@ -9,6 +9,16 @@
 ## [Unreleased]
 
 ### Fixed
+- Disabled Waitress' `Server` identifier in addition to stripping application
+  headers, preventing the production HTTP response from advertising Anteumbra.
+- Keyed monitor logger ownership, `[site=<id>]` attribution, and
+  `logs/<site_id>/monitor.log` paths by stable site ID; display-name log
+  directories are migrated and retained as history, so renaming a site no
+  longer hides logs or creates a second stream.
+- Canonicalized configured site display names by stable `website.id`, so a
+  rename refreshes Registry/quarantine metadata without changing ownership.
+- Reserved the `legacy` site ID for unassigned records and made config
+  validation warn when an older config derives a rename-sensitive ID from name.
 - Prevented deleted modules in a stale local `build/lib` tree from silently
   re-entering Wheels; CI and publishing now reject files absent from `src`.
 - Rejected login forms with a missing password before hash verification and
@@ -25,6 +35,11 @@
   access to Metrics, cluster, ThreatGraph, and Notifier private state.
 
 ### Changed
+- Routed dashboard and SSE history through runtime logging/SSE ports instead
+  of hard-coded `logs/` and `data/` paths.
+- Guarded scripted `website.id` changes behind an explicit acknowledgement;
+  legacy `website.site_id` aliases are canonicalized, and changing
+  `website.name` remains the supported rename operation.
 - Replaced module-global launcher lifecycle state and `start_all`/`stop_all`
   facades with one instance-owned `RuntimeLifecycle` and typed `RuntimeState`.
 - Moved login-attempt throttling from mutable Web blueprint globals into a
@@ -43,14 +58,19 @@
   `site-packages` copy, so source regressions cannot pass against an old Wheel.
 
 ### Tests
-- Current source passes `486` non-browser tests, all `41` Playwright UI tests,
-  Ruff, `git diff --check`, and an import sweep of `115` package modules.
+- Current source passes `496` non-browser tests, all `41` Playwright UI tests,
+  Ruff, `git diff --check`, and an import sweep of `116` package modules.
 - Added regressions for instance-owned lifecycle shutdown, service boundaries,
   site-qualified file/profile lookup, immutable cluster views, notification API,
   WAF source metadata, documentation parity, strict CI, and Waitress shutdown
   with an open keep-alive connection.
 - Added deterministic unit and HTTP regressions for login attempt windows,
   per-client reset, independent runtimes, successful-login reset, and GET bypass.
+- Added regressions for stable-ID site renames, canonical historical display
+  names, reserved/derived ID validation, and explicit CLI identity changes.
+- Added regressions for stable site log paths, legacy migration conflicts,
+  multi-site history attribution/order, escaped rendering, and an absent
+  production `Server` header.
 
 ---
 

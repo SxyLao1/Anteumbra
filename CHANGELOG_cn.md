@@ -9,6 +9,15 @@
 ## [未发布]
 
 ### 修复
+- 在清除应用响应头之外禁用 Waitress 的 `Server` 标识，生产 HTTP 响应不再暴露
+  Anteumbra 产品指纹。
+- Monitor Logger 所有权、`[site=<id>]` 归属标签与 `logs/<site_id>/monitor.log`
+  路径改用稳定站点 ID；旧显示名日志目录会迁移并保留为历史，站点改名不再隐藏日志或
+  创建第二条日志流。
+- 配置中的站点显示名按稳定 `website.id` 规范化；站点改名会刷新 Registry/隔离元数据，
+  但不会改变数据归属。
+- `legacy` 仅保留给未归属记录；旧配置缺少 ID、从名称推导易受改名影响时，配置校验会
+  明确警告。
 - 本地残留 `build/lib` 中已删除的模块不再悄悄混入 Wheel；CI 与发布流程会拒绝
   源码中不存在的包文件。
 - 缺少密码的登录表单会在 Hash 校验与限流计数前返回 400，不再让畸形 POST 在
@@ -23,6 +32,10 @@
   Notifier 私有状态。
 
 ### 变更
+- 仪表盘与 SSE 历史统一通过 Runtime Logging/SSE Port 读取，不再硬编码 `logs/` 和
+  `data/` 路径。
+- CLI 脚本修改 `website.id` 必须显式确认，并会规范化旧 `website.site_id` 别名；正常
+  站点改名只修改 `website.name`。
 - 用实例所有的 `RuntimeLifecycle` 与强类型 `RuntimeState` 替换 Launcher 模块全局状态及
   `start_all`/`stop_all` 门面。
 - 将登录失败限流从 Web 蓝图可变全局状态移入 `RuntimeContainer` 所有的
@@ -38,12 +51,15 @@
   源码回归不能再对旧 Wheel 产生假通过。
 
 ### 测试
-- 当前源码通过 486 项非浏览器测试、41 项 Playwright UI 测试、Ruff、
-  `git diff --check` 和 115 个包模块导入扫描。
+- 当前源码通过 496 项非浏览器测试、41 项 Playwright UI 测试、Ruff、
+  `git diff --check` 和 116 个包模块导入扫描。
 - 新增 Runtime 实例所有权、服务边界、站点文件/画像查询、不可变聚类快照、通知公开
   API、WAF 源信息、文档治理、严格 CI 和打开 keep-alive 时关闭 Waitress 的回归测试。
 - 新增确定性的登录限流单元与 HTTP 回归，覆盖窗口、单客户端重置、Runtime 隔离、
   登录成功重置和 GET 不计数。
+- 新增稳定 ID 站点改名、历史显示名规范化、保留/派生 ID 校验和 CLI 显式身份变更回归。
+- 新增稳定站点日志路径、旧日志迁移冲突、多站点历史归属与顺序、转义渲染及生产环境
+  不返回 `Server` 头的回归。
 
 ---
 

@@ -763,9 +763,9 @@ Merge conditions:
 | **CSRF** | Flask-WTF CSRFProtect, all POST requests carry token |
 | **Path Traversal** | Whitelist validation, `resolve()` + `relative_to()` double check |
 | **File Read** | 512KB cap, registry/quarantine validation, null byte filtering |
-| **Server Fingerprint** | WSGI middleware removes Server header, Werkzeug version set to empty |
+| **Server Fingerprint** | WSGI middleware removes application headers and Waitress runs with an empty identifier |
 | **Environment Variables** | `${VAR:-default}` syntax, `.env` file loading |
-| **Log Injection** | HTML-escape all user input before writing to log streams |
+| **Log Injection** | HTML-escape log content before rendering it in Web streams |
 
 ---
 
@@ -855,6 +855,21 @@ Merge conditions:
 file path is not globally unique: two sites can legitimately record the same
 path. Registry identity is therefore `(site_id, file_path)` in SQLite and
 site-aware in JSON, application services, and emitted events.
+
+`website.id` is immutable identity, not a label. `default` is a valid ID for a
+single initial site; changing `website.name` keeps ownership intact and the
+configured name becomes the current display name for that ID. Changing the ID
+creates a new site identity and does not rewrite historical records. The
+`legacy` ID is reserved for unassigned data. Configurations without an explicit
+ID remain readable for compatibility, but derive the ID from the name and must
+set a stable ID before any rename.
+
+Runtime monitor loggers follow the same rule: their cache key and active path
+are based on `site_id` (`logs/<site_id>/monitor.log`). The runtime logging port
+owns path resolution and migrates pre-existing display-name log files; Web
+interfaces consume that port and never reconstruct log paths from `site_name`.
+New site log lines carry `[site=<id>]`; history collection adds that attribution
+to legacy lines before aggregating multiple sites.
 
 Records created before this model are assigned the explicit `legacy` identity.
 No module may silently choose the first configured site to reinterpret them.

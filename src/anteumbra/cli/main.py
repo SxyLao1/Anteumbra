@@ -710,6 +710,7 @@ def _create_config_template(target: Path, overwrite: bool | None = None) -> str 
 
 
 def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
+    from anteumbra.domain.site import SiteIdentity
     from anteumbra.infrastructure.config.loader import load_toml_config
 
     errors: list[str] = []
@@ -735,20 +736,47 @@ def _validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
         websites = []
 
     enabled_websites = 0
+    site_ids: set[str] = set()
     for index, website in enumerate(websites, start=1):
         label = "[website]" if len(websites) == 1 else f"[[website]] #{index}"
-        if not website.get("enabled", True):
-            continue
-        enabled_websites += 1
-
         site_name = str(website.get("name", "")).strip()
-        if (
+        valid_site_name = not (
             not site_name
             or site_name in {".", ".."}
             or "/" in site_name
             or "\\" in site_name
-        ):
+        )
+        if not valid_site_name:
             errors.append(f"{label}.name is required and must not contain path separators.")
+
+        raw_site_id = website.get("id")
+        if raw_site_id is None or not str(raw_site_id).strip():
+            raw_site_id = website.get("site_id")
+        explicit_site_id = raw_site_id is not None and bool(str(raw_site_id).strip())
+        try:
+            identity = SiteIdentity.from_values(
+                str(raw_site_id) if explicit_site_id else None,
+                site_name if valid_site_name else str(raw_site_id or "site"),
+            )
+        except ValueError as exc:
+            errors.append(f"{label}.id is invalid: {exc}")
+        else:
+            if not explicit_site_id:
+                warnings.append(
+                    f"{label}.id is missing; it is currently derived as "
+                    f"{identity.site_id!r} from name. Add an explicit stable ID "
+                    "before renaming the site."
+                )
+            if identity.site_id == "legacy":
+                errors.append(f"{label}.id 'legacy' is reserved for unassigned records.")
+            elif identity.site_id in site_ids:
+                errors.append(f"Duplicate website.id: {identity.site_id}")
+            else:
+                site_ids.add(identity.site_id)
+
+        if not website.get("enabled", True):
+            continue
+        enabled_websites += 1
 
         site_path = str(website.get("path", "")).strip()
         if not site_path:
@@ -868,7 +896,12 @@ def config_init(output, force):
 @click.argument("key")
 @click.argument("value", nargs=-1, required=True)
 @click.option("--config", "config_path", default=None, help="Path to config.toml")
-def config_set(key, value, config_path):
+@click.option(
+    "--allow-site-id-change",
+    is_flag=True,
+    help="Acknowledge that changing website.id creates a new site identity.",
+)
+def config_set(key, value, config_path, allow_site_id_change):
     """Set a dotted config key, for example website.path or web_admin.port."""
     target = _config_target(config_path)
     if not target.exists():
@@ -877,10 +910,48 @@ def config_set(key, value, config_path):
     data = _load_toml_file(target)
     raw_value, note = _normalize_config_set_value(key, value)
     parsed = _parse_config_value(raw_value)
+    site_id_changed = False
+    if allow_site_id_change and key != "website.id":
+        raise click.ClickException(
+            "--allow-site-id-change is only valid with website.id."
+        )
+    if key == "website.id":
+        from anteumbra.domain.site import SiteIdentity
+
+        site_name = str(_get_dotted_value(data, "website.name", parsed)).strip()
+        try:
+            requested = SiteIdentity.from_values(str(parsed), site_name or str(parsed))
+        except ValueError as exc:
+            raise click.ClickException(f"Invalid website.id: {exc}") from exc
+        if requested.site_id == "legacy":
+            raise click.ClickException(
+                "website.id 'legacy' is reserved for unassigned records."
+            )
+        current_raw = _get_dotted_value(data, key)
+        if current_raw is None or not str(current_raw).strip():
+            current_raw = _get_dotted_value(data, "website.site_id")
+        if current_raw is not None and str(current_raw).strip():
+            current = SiteIdentity.from_values(
+                str(current_raw),
+                site_name or str(current_raw),
+            )
+            site_id_changed = current.site_id != requested.site_id
+        if site_id_changed and not allow_site_id_change:
+            raise click.ClickException(
+                "website.id is a stable ownership key. Rename website.name instead, "
+                "or pass --allow-site-id-change to create a new site identity."
+            )
+        parsed = requested.site_id
     _set_dotted_value(data, key, parsed)
+    if key == "website.id" and isinstance(data.get("website"), dict):
+        data["website"].pop("site_id", None)
     _write_toml_file(target, data)
     if note:
         click.echo(f"Note: {note}")
+    if site_id_changed:
+        click.echo(
+            "Warning: website.id changed; existing records keep the previous site ID."
+        )
     click.echo(f"Set {key} = {parsed!r} in {target}")
 
 

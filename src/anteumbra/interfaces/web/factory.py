@@ -15,7 +15,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, request, session, jsonify
+from flask import Flask, request, jsonify
 from flask_session import Session
 from flask_wtf.csrf import CSRFProtect
 from anteumbra.application.runtime_container import RuntimeContainer
@@ -130,7 +130,7 @@ def create_app(
             return best or 'en'
 
         from flask_babel import Babel
-        babel = Babel(app, locale_selector=_select_locale)
+        Babel(app, locale_selector=_select_locale)
 
         # v2.0: After-request hook to set lang cookie based on detected locale
         @app.after_request
@@ -280,7 +280,7 @@ class WaitressRuntimeServer:
             host=host,
             port=port,
             threads=threads,
-            ident="Anteumbra",
+            ident="",
         )
         self._sse = sse_manager
         self._closed = False

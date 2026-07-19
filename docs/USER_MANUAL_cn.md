@@ -150,11 +150,17 @@ password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"  # 使用 werkzeug 生成
 allowed_ips = ["127.0.0.1", "192.168.1.0/24"]   # IP 白名单
 
 [website]
+id = "primary"             # 稳定身份主键；站点改名时不要修改
 name = "My Website"
 path = "/var/www/html"     # 要监控的 Web 根目录
 port = 80
 enabled = true
 ```
+
+`website.id` 是 Registry、隔离、指标、画像和审计操作使用的持久所有权主键。可以随时
+修改 `website.name`，但应保持 ID 不变；修改 ID 等同于创建独立新站点，历史记录仍留在
+旧 ID 下。`legacy` 是保留值，不能配置给真实站点。旧配置未写 ID 时，
+`anteumbra config validate` 会提示其 ID 正从显示名推导，应在改名前补齐。
 
 管理后台位于 Nginx、Caddy 或其他反向代理之后时，只信任该代理对端。`trusted_proxy_ips` 接受 IP 或 CIDR；当配置了可信代理时，`session_cookie_secure = "auto"` 会自动启用安全 Cookie。
 
@@ -811,9 +817,13 @@ server {
 
 | 日志 | 路径 | 内容 |
 |-----|------|---------|
-| Monitor | `logs/{site}/monitor.log` | 文件变更事件、扫描结果、告警 |
+| Monitor | `logs/{site_id}/monitor.log` | 文件变更事件、扫描结果、告警 |
 | Access | `logs/Anteumbra/access.log` | Flask HTTP 访问日志 |
 | System | `logs/Anteumbra/system.log` | 启动、配置热加载、错误 |
+
+Monitor 日志目录使用不可变的 `website.id`，不使用显示名称。站点 Monitor 启动时，
+Anteumbra 会迁移旧版按显示名存放的日志。
+聚合历史和新 Monitor 日志行都会包含 `[site=<id>]` 归属标签。
 
 ### 12.3 健康检查
 

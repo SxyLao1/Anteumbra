@@ -4,7 +4,7 @@
 
 > **Latest Release**: v1.0.28 (tagged and published, 2026-07-18)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` contains an unreleased post-1.0.28 architecture-closure line. Source validation currently passes 486 non-browser tests, 41 browser tests, Ruff, and a 115-module import sweep. Wheel, editable-install, Docker, tag, and PyPI checks must be repeated before the next bugfix release.
+> **Source Status**: `main` contains an unreleased post-1.0.28 architecture-closure line. Source validation currently passes 493 non-browser tests, 41 browser tests, Ruff, and a 115-module import sweep. Wheel, editable-install, Docker, tag, and PyPI checks must be repeated before the next bugfix release.
 
 ---
 
@@ -34,7 +34,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 - The project is usable as a single-host security operations tool, but should not be described as a replacement for a production WAF, EDR, SIEM, centralized fleet manager, or distributed HA platform.
 - The architecture is a modular monolith: `launcher.py` is the sole composition root, while independently replaceable services implement contracts from `domain/runtime.py` and `domain/service_ports.py`.
-- Site ownership is complete in Registry, metrics, notifications, quarantine, scanner history, dashboard summaries, ThreatGraph profiles/reputation, and SQLite shadow keys. Historical unassigned data remains explicitly `legacy`.
+- Site ownership is complete in Registry, metrics, notifications, quarantine, scanner history, dashboard summaries, ThreatGraph profiles/reputation, and SQLite shadow keys. Stable `website.id` ownership survives display-name changes; historical unassigned data remains explicitly `legacy`.
 - Login-attempt throttling is owned by each app runtime through `LoginRateLimiter`. Its in-memory backend fits the current single-process product; multi-worker or distributed deployment would require a shared backend.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
 
@@ -68,7 +68,7 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Verify source editable install in a fresh runtime directory | Pending for next tag |
 | P0 | Verify Docker build/run/health/detection path | Pending for next tag |
 | P0 | Confirm README commands match real CLI output | Pending final install smoke |
-| P1 | Run deployment, architecture, and relevant web regression tests | Source passed: 486 non-browser; 41 UI |
+| P1 | Run deployment, architecture, and relevant web regression tests | Source passed: 493 non-browser; 41 UI |
 | P1 | Tag release only after every check above passes from a clean tree | Pending |
 | P1 | Verify trusted PyPI publishing and install the published artifact | Pending |
 

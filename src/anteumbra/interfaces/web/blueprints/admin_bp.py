@@ -9,7 +9,6 @@ v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 """
 import base64
 from flask_babel import gettext as _
-import json
 import logging
 import time
 
@@ -20,13 +19,16 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash
 import secrets
 
-from anteumbra.application.path_service import normalize_path
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
     is_ip_allowed,
     require_auth,
+)
+from anteumbra.interfaces.web.log_history import (
+    collect_log_history,
+    render_log_history,
 )
 from anteumbra.interfaces.web.runtime import get_runtime
 
@@ -85,27 +87,6 @@ def _website_info(websites):
     }
 
 
-def _monitor_log_history(websites, limit: int = 500) -> str:
-    """Read recent monitor logs from every enabled site for aggregate views."""
-    lines = []
-    for website in websites:
-        log_file = normalize_path(f"logs/{website.name}/monitor.log")
-        if not log_file.exists():
-            continue
-        try:
-            lines.extend(log_file.read_text(encoding="utf-8", errors="ignore").splitlines())
-        except OSError:
-            logger.debug("Failed to read site monitor log %s", log_file, exc_info=True)
-    html_parts = []
-    for line in lines[-limit:]:
-        line = line.strip()
-        if not line or "[SSE]" in line:
-            continue
-        safe_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        html_parts.append(f'<div class="log-line">{safe_line}</div>')
-    return "".join(html_parts)
-
-
 @admin_bp.route('/')
 @require_auth
 def dashboard_index():
@@ -144,13 +125,14 @@ def overview():
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
 
-        log_history_html = _monitor_log_history(get_runtime().config.get_enabled_websites())
+        runtime = get_runtime()
+        log_history_html = render_log_history(
+            collect_log_history(runtime, limit=500, log=current_app.logger)
+        )
 
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
-        runtime_capabilities = assess_runtime_capabilities(
-            get_runtime().config.get()
-        )
+        runtime_capabilities = assess_runtime_capabilities(runtime.config.get())
         return render_template('admin/overview.html',
             auth_header=auth_header, username=username,
             client_ip=request.remote_addr, log_history=log_history_html,
@@ -212,38 +194,11 @@ def monitor_content():
             username = session.get('username', 'admin')
             auth_header = generate_secure_sse_token(username)
             session['sse_token'] = auth_header
-        websites = get_runtime().config.get_enabled_websites()
-
-        log_history_html = ""
-        try:
-            buffer_file = normalize_path("data/sse_log_buffer.json")
-            if buffer_file.exists():
-                with open(buffer_file, 'r', encoding='utf-8') as f:
-                    buffer_data = json.load(f)
-                if isinstance(buffer_data, list):
-                    lines = buffer_data[-1000:]
-                    html_parts = []
-                    for line in lines:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        log_class = 'info'
-                        upper = line.upper()
-                        if '[CRITICAL]' in upper or 'CRITICAL' in upper:
-                            log_class = 'critical'
-                        elif '[ERROR]' in upper or 'ERROR' in upper:
-                            log_class = 'error'
-                        elif '[WARNING]' in upper or 'WARN' in upper:
-                            log_class = 'warn'
-                        elif '[DEBUG]' in upper or 'DEBUG' in upper:
-                            log_class = 'debug'
-                        if line.startswith('[SSE]') and ('连接' in line or '监控' in line):
-                            continue
-                        safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                        html_parts.append(f'<div class="log-line {log_class}">{safe_line}</div>')
-                    log_history_html = ''.join(html_parts)
-        except Exception as e:
-            current_app.logger.warning(f"[MONITOR_CONTENT] 历史日志加载失败: {e}")
+        runtime = get_runtime()
+        websites = runtime.config.get_enabled_websites()
+        log_history_html = render_log_history(
+            collect_log_history(runtime, websites=websites, log=current_app.logger)
+        )
 
         website_info = _website_info(websites)
         return render_template(

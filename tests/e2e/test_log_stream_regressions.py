@@ -55,7 +55,7 @@ def test_sse_responses_do_not_set_wsgi_hop_by_hop_connection_headers():
     assert "'Connection': 'keep-alive'" not in scanner_bp
 
 
-def test_log_history_uses_configured_website_logs_with_default_fallbacks():
+def test_log_stream_uses_runtime_owned_site_paths_without_name_fallbacks():
     monitor_bp = read_source(
         "src",
         "anteumbra",
@@ -64,13 +64,24 @@ def test_log_history_uses_configured_website_logs_with_default_fallbacks():
         "blueprints",
         "monitor_bp.py",
     )
+    admin_bp = read_source(
+        "src",
+        "anteumbra",
+        "interfaces",
+        "web",
+        "blueprints",
+        "admin_bp.py",
+    )
 
     assert "get_enabled_websites()" in monitor_bp
     assert "anteumbra.infrastructure.config.registry" not in monitor_bp
-    assert "logs/{website.name}/monitor.log" in monitor_bp
-    assert "logs/Default Website/monitor.log" in monitor_bp
-    assert "logs/Website-PhpStudy/monitor.log" in monitor_bp
-    assert "logs/Anteumbra/monitor.log" in monitor_bp
+    assert "runtime.logging.get_site_log_path" in monitor_bp
+    assert "collect_log_history" in monitor_bp
+    assert "logs/{website.name}/monitor.log" not in monitor_bp
+    assert "logs/Default Website/monitor.log" not in monitor_bp
+    assert "logs/Website-PhpStudy/monitor.log" not in monitor_bp
+    assert "collect_log_history" in admin_bp
+    assert "sse_log_buffer.json" not in admin_bp
 
 
 def test_notifier_internal_logs_use_runtime_logger():

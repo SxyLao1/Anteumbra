@@ -52,6 +52,15 @@ class RuntimeLoggingPort(Protocol):
     def get_logger(self, component: str) -> logging.Logger:
         """Return a component logger."""
 
+    def get_site_logger(self, site: SiteIdentity) -> logging.Logger:
+        """Return the monitor logger owned by one stable site identity."""
+
+    def get_site_log_path(self, site: SiteIdentity) -> Path:
+        """Return the active monitor log path for one site."""
+
+    def get_site_history_paths(self, site: SiteIdentity) -> tuple[Path, ...]:
+        """Return existing active and archived monitor logs for one site."""
+
     def get_access_logger(self) -> logging.Logger:
         """Return the HTTP access logger."""
 

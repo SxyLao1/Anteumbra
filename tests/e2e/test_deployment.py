@@ -522,6 +522,100 @@ class TestCliInstall:
         assert result.exit_code != 0
         assert "Website path does not exist" in result.output
 
+    def test_config_validate_warns_when_site_id_is_derived(self, tmp_path):
+        """Legacy configs remain valid but explain rename-sensitive derived IDs."""
+        import tomli
+        import tomli_w
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+        data = tomli.loads(target.read_text(encoding="utf-8"))
+        data["website"].pop("id")
+        target.write_text(tomli_w.dumps(data), encoding="utf-8")
+
+        result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
+
+        assert result.exit_code == 0, result.output
+        assert "id is missing" in result.output
+        assert "before renaming the site" in result.output
+
+    def test_config_set_requires_acknowledgement_to_change_site_id(self, tmp_path):
+        """The scripted config path must not accidentally split site history."""
+        import tomli
+        import tomli_w
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+
+        renamed = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "website.name",
+                "Renamed Website",
+                "--config",
+                str(target),
+            ],
+        )
+        renamed_config = tomli.loads(target.read_text(encoding="utf-8"))["website"]
+        assert renamed.exit_code == 0, renamed.output
+        assert renamed_config["name"] == "Renamed Website"
+        assert renamed_config["id"] == "default"
+
+        legacy_config = tomli.loads(target.read_text(encoding="utf-8"))
+        legacy_config["website"]["site_id"] = legacy_config["website"].pop("id")
+        target.write_text(tomli_w.dumps(legacy_config), encoding="utf-8")
+
+        refused = runner.invoke(
+            cli,
+            ["config", "set", "website.id", "renamed", "--config", str(target)],
+        )
+        accepted = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "website.id",
+                "renamed",
+                "--config",
+                str(target),
+                "--allow-site-id-change",
+            ],
+        )
+
+        assert refused.exit_code != 0
+        assert "stable ownership key" in refused.output
+        assert accepted.exit_code == 0, accepted.output
+        assert "existing records keep the previous site ID" in accepted.output
+        accepted_config = tomli.loads(target.read_text(encoding="utf-8"))["website"]
+        assert accepted_config["id"] == "renamed"
+        assert "site_id" not in accepted_config
+
+    def test_config_validate_rejects_reserved_legacy_site_id(self, tmp_path):
+        import tomli
+        import tomli_w
+        from anteumbra.cli.main import cli
+
+        target = tmp_path / "instance" / "config.toml"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
+        assert result.exit_code == 0, result.output
+        data = tomli.loads(target.read_text(encoding="utf-8"))
+        data["website"]["id"] = "legacy"
+        target.write_text(tomli_w.dumps(data), encoding="utf-8")
+
+        result = runner.invoke(cli, ["config", "validate", "--config", str(target)])
+
+        assert result.exit_code != 0
+        assert "reserved for unassigned records" in result.output
+
     def test_config_validate_supports_multiple_websites(self, tmp_path):
         """Every enabled [[website]] entry should be validated independently."""
         import tomli_w

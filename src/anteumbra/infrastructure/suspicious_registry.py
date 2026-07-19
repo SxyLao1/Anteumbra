@@ -589,7 +589,10 @@ class SuspiciousRegistry:
                 site_name=record.get("site_name"),
             )
             record["file_path"] = key
-            record.update(identity.as_dict())
+            identity_values = identity.as_dict()
+            if any(record.get(field) != value for field, value in identity_values.items()):
+                normalized = True
+            record.update(identity_values)
             record["features"] = self._normalize_features(record.get("features"))
             for field, default in (
                 ("alerted", False),

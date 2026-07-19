@@ -730,9 +730,9 @@ decay_factor:
 | **CSRF** | Flask-WTF CSRFProtect，所有 POST 请求带 token |
 | **路径穿越** | 白名单验证，`resolve()` + `relative_to()` 双重检查 |
 | **文件读取** | 512KB 上限，注册表/隔离验证，null byte 过滤 |
-| **服务器指纹** | WSGI 中间件移除 Server 头，Werkzeug version 置空 |
+| **服务器指纹** | WSGI 中间件移除应用 Server 头，Waitress 使用空标识 |
 | **环境变量** | `${VAR:-default}` 语法，`.env` 文件加载 |
-| **日志注入** | HTML 转义所有用户输入后再写入日志流 |
+| **日志注入** | Web 日志流渲染前统一执行 HTML 转义 |
 
 ---
 
@@ -821,6 +821,17 @@ decay_factor:
 `site_name` 仅用于展示。文件路径不是全局唯一的，两个站点可以合法地记录同一路径；
 因此 SQLite 中的 Registry 身份为 `(site_id, file_path)`，JSON、应用服务和事件也都
 携带站点信息。
+
+`website.id` 是不可随显示名变化的身份主键，不是标签。单个初始站点使用 `default`
+是合法的；只修改 `website.name` 不会改变数据归属，配置中的名称会成为该 ID 的当前
+显示名。修改 ID 等同于创建新站点，不会重写历史记录。`legacy` 专用于未归属数据，
+不能配置给真实站点。未显式设置 ID 的旧配置仍可兼容读取，但 ID 会从名称推导，因此
+必须在改名前补上稳定 ID。
+
+Runtime Monitor Logger 遵循同一规则：缓存键和活动路径均基于 `site_id`
+（`logs/<site_id>/monitor.log`）。路径解析和旧显示名日志迁移由 Runtime Logging Port
+负责；Web 接口只消费该 Port，不再根据 `site_name` 自行拼接日志路径。新站点日志行
+携带 `[site=<id>]`，聚合多站点历史前也会为旧日志补上该归属标签。
 
 早于该模型的记录会被显式标为 `legacy`。任何模块都不得通过“取第一个已配置站点”的
 方式重新解释这些记录。

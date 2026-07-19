@@ -20,6 +20,7 @@ from anteumbra.infrastructure.wal_manager import WalManager
 class ConfigStub:
     def __init__(self):
         self.compact_days = 30
+        self.site_names = {"alpha": "Alpha", "beta": "Beta"}
 
     def get(self):
         return {"filesizes": {"registry_compact_days": self.compact_days}}
@@ -31,7 +32,10 @@ class ConfigStub:
         site_name=None,
     ):
         if site_id:
-            return SiteIdentity.from_values(site_id, site_name or site_id)
+            return SiteIdentity.from_values(
+                site_id,
+                self.site_names.get(site_id, site_name or site_id),
+            )
         normalized = str(file_path).replace("\\", "/").lower()
         if "/alpha/" in normalized:
             return SiteIdentity("alpha", "Alpha")
@@ -148,6 +152,37 @@ def test_returned_records_are_defensive_copies(registry_bundle):
     persisted = registry.get(path)
     assert persisted["features"] == ["eval"]
     assert persisted["site_name"] == "Alpha"
+
+
+def test_site_metadata_migration_refreshes_name_without_changing_id(registry_bundle):
+    registry, _, config, _, _ = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+    registry.add(path, ["eval"])
+    config.site_names["alpha"] = "Renamed Alpha"
+
+    assert registry.migrate_site_metadata() == 1
+    record = registry.get(path, "alpha")
+    assert record["site_id"] == "alpha"
+    assert record["site_name"] == "Renamed Alpha"
+
+
+def test_reload_persists_canonical_configured_site_name(registry_bundle):
+    registry, _, config, events, _ = registry_bundle
+    path = Path("/srv/alpha/shell.php")
+    registry.add(path, ["eval"])
+    config.site_names["alpha"] = "Renamed Alpha"
+
+    reloaded = SuspiciousRegistry(
+        registry.path,
+        config=config,
+        wal=WalManager(registry.path.with_name("reload_wal.log")),
+        event_publisher=events,
+    )
+
+    assert reloaded.get(path, "alpha")["site_name"] == "Renamed Alpha"
+    persisted = json.loads(registry.path.read_text(encoding="utf-8"))
+    assert persisted[0]["site_id"] == "alpha"
+    assert persisted[0]["site_name"] == "Renamed Alpha"
 
 
 def test_remove_and_soft_delete_preserve_audit_records(registry_bundle):

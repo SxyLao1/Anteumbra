@@ -4,6 +4,8 @@ release_date = "2026-07-17"
 project_root = "."
 
 [website]
+# Stable ownership key: keep this unchanged when renaming the website.
+# 稳定站点主键：修改站点显示名称时不要更改此值。
 id = "default"
 name = "Default Website"
 path = "sites/default"

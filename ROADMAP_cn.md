@@ -4,7 +4,7 @@
 
 > **最新发布版**：v1.0.28（2026-07-18 已打 Tag 并发布）
 > **产品愿景**：面向单机与小型 Web 业务的安全运营工具，覆盖被动文件检测、访问日志行为分析、攻击者画像、人工响应和标准 SIEM 输出。
-> **源码状态**：`main` 包含 1.0.28 之后尚未发布的架构收口。当前源码已通过 486 项非浏览器测试、41 项浏览器测试、Ruff 和 115 模块导入扫描；下一次 bug 修复版发布前仍须重新完成 Wheel、源码安装、Docker、Tag 与 PyPI 验证。
+> **源码状态**：`main` 包含 1.0.28 之后尚未发布的架构收口。当前源码已通过 493 项非浏览器测试、41 项浏览器测试、Ruff 和 115 模块导入扫描；下一次 bug 修复版发布前仍须重新完成 Wheel、源码安装、Docker、Tag 与 PyPI 验证。
 
 ---
 
@@ -35,7 +35,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 
 - Anteumbra 可作为单机安全运营工具使用，但不能宣传为 WAF、EDR、SIEM、集中式主机管理或分布式高可用平台的替代品。
 - 当前架构是模块化单体：`launcher.py` 是唯一组合根，可替换服务实现 `domain/runtime.py` 与 `domain/service_ports.py` 中的契约。
-- Registry、指标、通知、隔离、扫描历史、仪表盘汇总、ThreatGraph 画像/信誉和 SQLite 影子键都已携带站点身份；无法归属的历史数据明确保留在 `legacy` 桶。
+- Registry、指标、通知、隔离、扫描历史、仪表盘汇总、ThreatGraph 画像/信誉和 SQLite 影子键都已携带站点身份；稳定 `website.id` 在显示名变化时保持归属，无法归属的历史数据明确保留在 `legacy` 桶。
 - 登录失败限流由每个 App Runtime 的 `LoginRateLimiter` 所有。内存后端符合当前单进程定位；多 Worker 或分布式部署仍需共享后端。
 - Docker 中 `yara-python` 为必装能力；`py-tlsh` 与 `ssdeep` 受 Python/基础镜像兼容性影响，可按设计降级。
 
@@ -67,7 +67,7 @@ Anteumbra 已经完成最初的 Trident 改名和打包修复。当前 1.0.x 的
 | P0 | 在全新虚拟环境验证可编辑源码安装 | 下一 Tag 前待执行 |
 | P0 | 验证 Docker build/run/health/检测链路 | 下一 Tag 前待执行 |
 | P0 | 核对 README 命令与真实 CLI 输出 | 最终安装冒烟时执行 |
-| P1 | 部署、架构与 Web 回归测试 | 源码已通过 486 项非浏览器测试、41 项 UI 测试 |
+| P1 | 部署、架构与 Web 回归测试 | 源码已通过 493 项非浏览器测试、41 项 UI 测试 |
 | P1 | 仅在以上检查全部通过且工作区干净后打 Tag | 待执行 |
 | P1 | 验证 Trusted Publishing 与已发布 PyPI 包安装 | 待执行 |
 
