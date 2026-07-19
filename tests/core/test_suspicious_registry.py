@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from anteumbra.domain.site import SiteIdentity
+from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository
 from anteumbra.infrastructure.suspicious_registry import (
     RegistryDataError,
     RegistryPersistenceError,
@@ -318,6 +319,43 @@ def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
 
     assert registry.get(Path("/srv/alpha/json.php")) is not None
     assert registry.get(Path("/srv/beta/shadow.php")) is None
+
+
+def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(
+    tmp_path, caplog
+):
+    old_record_id = "/srv/alpha/recovered.php"
+    shadow = SqliteRepository(str(tmp_path / "anteumbra.db"))
+    shadow.save(
+        old_record_id,
+        {
+            "file_path": old_record_id,
+            "detected_at": "2026-07-19T01:00:00+00:00",
+            "features": ["recovered"],
+            "site_id": "alpha",
+            "site_name": "Alpha",
+        },
+    )
+
+    registry = SuspiciousRegistry(
+        tmp_path / "registry.json",
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+    try:
+        authoritative = json.loads(registry.path.read_text(encoding="utf-8"))
+        recovered = authoritative[0]
+        canonical_record_id = f"alpha:{recovered['file_path']}"
+
+        assert recovered["features"] == ["recovered"]
+        assert not SuspiciousRegistry._SHADOW_STORAGE_FIELDS.intersection(recovered)
+        assert shadow.get(old_record_id) is None
+        assert shadow.get(canonical_record_id)["site_id"] == "alpha"
+        assert "SQLite shadow synchronization failed" not in caplog.text
+    finally:
+        registry.close()
 
 
 def test_shadow_failure_does_not_undo_authoritative_json(tmp_path):

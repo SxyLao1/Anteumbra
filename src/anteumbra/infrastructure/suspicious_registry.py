@@ -35,6 +35,10 @@ class RegistryPersistenceError(RegistryError):
 class SuspiciousRegistry:
     """Own one Registry dataset and all of its persistence dependencies."""
 
+    _SHADOW_STORAGE_FIELDS = frozenset(
+        {"id", "record_id", "raw_json", "created_at", "updated_at"}
+    )
+
     def __init__(
         self,
         path: str | Path,
@@ -514,10 +518,21 @@ class SuspiciousRegistry:
         current_ids = {self._record_id(record) for record in records}
         previous_ids = {self._record_id(record) for record in previous}
         try:
+            shadow_ids: set[str] = set()
+            for shadow_record in self._shadow.list_all(limit=1_000_000):
+                if not isinstance(shadow_record, Mapping):
+                    continue
+                shadow_id = str(shadow_record.get("record_id") or "").strip()
+                if not shadow_id:
+                    try:
+                        shadow_id = self._record_id(shadow_record)
+                    except (KeyError, TypeError):
+                        continue
+                shadow_ids.add(shadow_id)
+            for stale_id in (previous_ids | shadow_ids) - current_ids:
+                self._shadow.delete(stale_id)
             for record in records:
                 self._shadow.save(self._record_id(record), copy.deepcopy(record))
-            for stale_id in previous_ids - current_ids:
-                self._shadow.delete(stale_id)
         except Exception:
             self._logger.warning(
                 "Registry SQLite shadow synchronization failed; JSON remains authoritative",
@@ -582,6 +597,11 @@ class SuspiciousRegistry:
             if not str(value.get("file_path") or "").strip():
                 raise RegistryDataError(f"record {index} has no file_path")
             record = copy.deepcopy(value)
+            storage_fields = self._SHADOW_STORAGE_FIELDS.intersection(record)
+            if storage_fields:
+                normalized = True
+                for field in storage_fields:
+                    record.pop(field, None)
             key = path_to_key(record["file_path"])
             identity = self._config.resolve_site_identity(
                 key,
