@@ -13,8 +13,10 @@ from anteumbra.domain.runtime import (
 )
 
 if TYPE_CHECKING:
+    from anteumbra.application.config_history_service import ConfigHistoryLogger
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
+    from anteumbra.application.scan_state_service import ScanRuntimeState
 
 
 @dataclass
@@ -30,6 +32,8 @@ class RuntimeContainer:
     events: BindableEventPublisherPort
     logging: RuntimeLoggingPort
     passwords: PasswordService
+    config_history: ConfigHistoryLogger
+    scan_state: ScanRuntimeState
     plugin_manager: Any | None = None
     metrics: Any | None = None
     notifier: Any | None = None
@@ -40,7 +44,6 @@ class RuntimeContainer:
     ip_blocker: IPBlockerPort | None = None
     hash_engine: Any | None = None
     file_cluster_engine: Any | None = None
-    log_heuristic_engine: Any | None = None
     registry: Any | None = None
     quarantine: QuarantineService | None = None
     memory_shell_tracer: Any | None = None

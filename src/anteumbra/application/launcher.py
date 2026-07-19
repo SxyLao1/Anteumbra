@@ -24,8 +24,10 @@ def build_runtime_container(
     plugin_manager: Any | None = None,
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
+    from anteumbra.application.config_history_service import ConfigHistoryLogger
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
+    from anteumbra.application.scan_state_service import ScanRuntimeState
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
@@ -53,6 +55,13 @@ def build_runtime_container(
     passwords = PasswordService(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
+    config_history = ConfigHistoryLogger(
+        data_dir / "config_history.json",
+        rules_dir=normalize_path(
+            config.get("paths", {}).get("yara_rules_path", "rules/webshell")
+        ),
+    )
+    scan_state = ScanRuntimeState()
     events = EventPublisherRouter(plugin_manager)
     wal = WalManager(
         data_dir / "registry_wal.log",
@@ -186,6 +195,8 @@ def build_runtime_container(
         events=events,
         logging=runtime_logging,
         passwords=passwords,
+        config_history=config_history,
+        scan_state=scan_state,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,
@@ -652,6 +663,10 @@ def stop_all() -> None:
         _stop_resource("file monitor", monitor.stop)
 
     container = state.get("container")
+    scan_state = getattr(container, "scan_state", None)
+    if scan_state:
+        _stop_resource("manual scan state", scan_state.shutdown)
+
     poller = getattr(container, "waf_poller", None)
     if poller:
         _stop_resource("WAF poller", poller.stop)

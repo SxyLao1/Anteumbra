@@ -121,8 +121,7 @@ DomainEvent (frozen)
 
 ```python
 class PluginManager:
-    """单例，线程安全"""
-    _instance: Optional[PluginManager]
+    """Runtime 独享、线程安全的事件路由器"""
     _rwlock: threading.RLock         # 保护所有 dict
     _plugins: Dict[str, Plugin]      # 所有已注册插件
     _detectors: Dict[str, Detector]  # 检测器
@@ -140,18 +139,7 @@ class PluginManager:
 
 #### Application 编排与 Service 模块
 
-部分 service 仍是薄外观，从 infrastructure 重导出稳定的公共 API：
-
-```python
-# application/sse_service.py（示例）
-from anteumbra.infrastructure.utils.sse_manager import (
-    register_sse_client, unregister_sse_client,
-    trigger_registry_update, persist_log_line, ...
-)
-__all__ = ["register_sse_client", ...]
-```
-
-另一些模块已经承担真实用例和跨资源行为：
+Application 模块拥有真实用例与运行时工作流状态：
 
 | 模块 | 职责 |
 |------|------|
@@ -159,16 +147,20 @@ __all__ = ["register_sse_client", ...]
 | `jsonl_consumer.py` | JSONL 逐条确认、截断/轮转处理和死信 |
 | `quarantine_service.py` | 带文件系统与 Registry 补偿的隔离/恢复事务 |
 | `log_analysis_service.py` | 按站点分析访问日志，Web 路由不直接导入解析器 |
+| `password_service.py` | Runtime 级凭据校验与 `.env` 原子更新 |
+| `scan_state_service.py` | 手动扫描任务、结果保留、取消与关闭 |
+| `config_history_service.py` | Runtime 级配置重载审计历史 |
 | `runtime_health_service.py` | CLI/Web 共用的可选能力与配置/WAL/Registry 关键健康评估 |
 
-**目的**：Interfaces 通过 Application API 访问具体解析器和存储。该边界正在
-改善，但仍有历史 facade 和全局单例；目录位置本身不代表依赖已经完全倒置。
+**目的**：Interfaces 通过 Application API 访问具体解析器和存储。有状态服务由
+`launcher.py` 构造并通过强类型 `RuntimeContainer` 暴露；Application 模块不会
+自行查找进程级服务实例。
 
 #### 运行生命周期
 
 `launcher.start_all()` 是进程组合根：先绑定 Web 监听器和激活插件，再为每个
 启用站点创建文件监控器与访问日志监控器，随后启动画像、SSE、Metrics 等后台
-资源，并记录所有资源所有权。`stop_all()` 按该清单幂等关闭。可选能力失败会
+资源，并记录所有资源所有权。`stop_all()` 先取消手动扫描，再按该清单幂等关闭。可选能力失败会
 形成明确告警；一个文件监控器都无法启动则视为致命错误。
 
 ### 2.3 Infrastructure 层（基础设施层）

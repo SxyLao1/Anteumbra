@@ -304,18 +304,3 @@ class LogHeuristicEngine:
                     stale.append(ip)
             for ip in stale:
                 del self._states[ip]
-
-
-# ── Singleton ──────────────────────────────────────────
-
-_engine_instance: Optional[LogHeuristicEngine] = None
-_engine_lock = threading.Lock()
-
-
-def get_log_heuristic_engine() -> LogHeuristicEngine:
-    global _engine_instance
-    if _engine_instance is None:
-        with _engine_lock:
-            if _engine_instance is None:
-                _engine_instance = LogHeuristicEngine()
-    return _engine_instance

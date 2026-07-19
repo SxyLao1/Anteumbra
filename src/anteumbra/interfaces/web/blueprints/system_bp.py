@@ -8,12 +8,12 @@ import hashlib
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 
-from anteumbra.application.config_history_service import get_config_history_logger
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
@@ -217,52 +217,76 @@ def system_session_panel():
         )
 
 
+def _config_panel_context(
+    runtime,
+    *,
+    page: int,
+    message: str | None = None,
+    message_type: str | None = None,
+) -> dict:
+    config = runtime.config.get()
+    config_data = json.dumps(config, sort_keys=True)
+    config_signature = hashlib.md5(
+        config_data.encode(), usedforsecurity=False
+    ).hexdigest()[:8]
+    try:
+        per_page = max(
+            1,
+            int(config.get("web_admin", {}).get("config_items_per_page", 10)),
+        )
+    except (TypeError, ValueError):
+        per_page = 10
+
+    formatted_history = []
+    for record in runtime.config_history.get_history(limit=1000):
+        item = f"[{record.get('timestamp_display', '')}] Hot reload complete"
+        changed_keys = record.get("changed_keys", [])
+        if changed_keys:
+            item += " | Changes: " + ", ".join(
+                str(key) for key in changed_keys[:5]
+            )
+        duration_ms = record.get("duration_ms")
+        if duration_ms is not None:
+            item += f" | Duration: {duration_ms}ms"
+        formatted_history.append(item)
+
+    total = len(formatted_history)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(max(1, page), total_pages)
+    start = (page - 1) * per_page
+    engine = runtime.yara_engine
+    if engine is None:
+        raise RuntimeError("YaraEngine is not configured")
+    rule_stats = (
+        engine.get_rule_stats()
+        if hasattr(engine, "get_rule_stats")
+        else {}
+    )
+    return {
+        "config_signature": config_signature,
+        "config_path": str(runtime.config.path),
+        "history": formatted_history[start : start + per_page],
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "rule_stats": rule_stats,
+        "yara_enabled": len(rule_stats) > 0,
+        "message": message,
+        "message_type": message_type,
+        "error": None,
+    }
+
+
 @system_bp.route('/system/config_panel')
 @require_auth
 def system_config_panel():
     """Config hot-reload monitoring data"""
     try:
-        config = get_runtime().config.get()
-        config_data = json.dumps(config, sort_keys=True)
-        config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
-
-        page = max(1, request.args.get('page', 1, type=int))
-        per_page = config.get("web_admin", {}).get("config_items_per_page", 10)
-
-        history_logger = get_config_history_logger()
-        raw_history = history_logger.get_history(limit=1000)
-        formatted_history = []
-        for record in raw_history:
-            item = f"[{record['timestamp_display']}] Hot reload complete"
-            if record['changed_keys']:
-                changes = ', '.join(record['changed_keys'][:5])
-                item += f" | Changes: {changes}"
-            if record['duration_ms']:
-                item += f" | Duration: {record['duration_ms']}ms"
-            formatted_history.append(item)
-
-        total = len(formatted_history)
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        page = min(page, total_pages)
-
-        start = (page - 1) * per_page
-        end = start + per_page
-        paginated_history = formatted_history[start:end]
-
-        engine = get_runtime().yara_engine
-        if engine is None:
-            raise RuntimeError("YaraEngine is not configured")
-        rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
-
-        return render_template(
-            'admin/panels/config_panel.html',
-            config_signature=config_signature,
-            config_path=str(get_runtime().config.path),
-            history=paginated_history,
-            page=page, total_pages=total_pages, total=total,
-            rule_stats=rule_stats,
-            yara_enabled=len(rule_stats) > 0
+        context = _config_panel_context(
+            get_runtime(),
+            page=request.args.get("page", 1, type=int),
         )
+        return render_template("admin/panels/config_panel.html", **context)
     except Exception as e:
         current_app.logger.error(f"[CONFIG_PANEL] Load failed: {e}", exc_info=True)
         return f'<div style="color: #ff4444; padding: 20px;">Load failed: {str(e)}</div>', 500
@@ -456,44 +480,43 @@ def system_session_cleanup():
 def system_config_reload():
     """Manual config hot-reload (returns rendered panel HTML)"""
     try:
-        get_runtime().config.reload()
-
-        config_data = json.dumps(get_runtime().config.get(), sort_keys=True)
-        config_signature = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
-
-        history_logger = get_config_history_logger()
-        raw_history = history_logger.get_history(limit=10)
-        formatted_history = []
-        for record in raw_history:
-            item = f"[{record['timestamp_display']}] Hot reload complete"
-            if record['changed_keys']:
-                changes = ', '.join(record['changed_keys'][:5])
-                item += f" | Changes: {changes}"
-            if record['duration_ms']:
-                item += f" | Duration: {record['duration_ms']}ms"
-            formatted_history.append(item)
-
-        engine = get_runtime().yara_engine
-        if engine is None:
-            raise RuntimeError("YaraEngine is not configured")
-        rule_stats = engine.get_rule_stats() if hasattr(engine, 'get_rule_stats') else {}
+        runtime = get_runtime()
+        previous_config = runtime.config.get()
+        started_at = time.perf_counter()
+        current_config = runtime.config.reload()
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        changed_keys = sorted(
+            key
+            for key in set(previous_config) | set(current_config)
+            if previous_config.get(key) != current_config.get(key)
+        )
+        runtime.config_history.log_reload(
+            current_config,
+            changed_keys,
+            duration_ms,
+        )
 
         log_with_symbol("notice", "info", "Config hot-reload triggered", current_app.logger)
-
-        return render_template(
-            'admin/panels/config_panel.html',
-            config_signature=config_signature,
-            config_path=str(get_runtime().config.path),
-            history=formatted_history,
-            rule_stats=rule_stats,
-            yara_enabled=len(rule_stats) > 0,
+        context = _config_panel_context(
+            runtime,
+            page=1,
             message="Config hot-reload triggered",
-            message_type="success"
+            message_type="success",
         )
+        return render_template("admin/panels/config_panel.html", **context)
     except Exception as e:
         current_app.logger.error(f"[CONFIG_RELOAD] Failed: {e}", exc_info=True)
         return render_template(
-            'admin/panels/config_panel.html',
+            "admin/panels/config_panel.html",
+            config_signature="unavailable",
+            config_path=str(get_runtime().config.path),
+            history=[],
+            page=1,
+            total_pages=1,
+            total=0,
+            rule_stats={},
+            yara_enabled=False,
+            message=None,
             error=f"Hot reload failed: {str(e)}",
-            message_type="error"
-        )
+            message_type="error",
+        ), 500

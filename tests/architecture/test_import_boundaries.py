@@ -111,6 +111,7 @@ DEPRECATED_GLOBAL_SERVICE_MODULES = {
     PACKAGE_ROOT / "infrastructure" / "config" / "registry.py",
     PACKAGE_ROOT / "infrastructure" / "utils" / "password_utils.py",
     PACKAGE_ROOT / "infrastructure" / "registry_adapter.py",
+    PROJECT_ROOT / "tools" / "config_watcher_logger.py",
 }
 
 
@@ -180,6 +181,42 @@ def test_password_service_does_not_depend_on_infrastructure():
     assert not violations, (
         "password operations must use the injected config port:\n"
         + _format_edges(violations)
+    )
+
+
+def test_runtime_workflow_state_has_no_module_global_factories():
+    checks = {
+        PACKAGE_ROOT / "application" / "config_history_service.py": (
+            "_history_logger",
+            "get_config_history_logger",
+            "get_config_watcher_logger",
+        ),
+        PACKAGE_ROOT / "infrastructure" / "detection" / "log_heuristic.py": (
+            "_engine_instance",
+            "get_log_heuristic_engine",
+        ),
+        PACKAGE_ROOT / "interfaces" / "web" / "blueprints" / "_shared.py": (
+            "_scan_results_cache",
+            "_cache_put",
+            "_cache_get",
+        ),
+        PACKAGE_ROOT / "interfaces" / "web" / "blueprints" / "scanner_bp.py": (
+            "_scan_jobs",
+            "_scan_jobs_lock",
+        ),
+    }
+    violations: list[str] = []
+    for path, forbidden in checks.items():
+        source = path.read_text(encoding="utf-8")
+        for token in forbidden:
+            if token in source:
+                violations.append(
+                    f"{path.relative_to(PROJECT_ROOT).as_posix()}: {token}"
+                )
+
+    assert not violations, (
+        "runtime workflow state must stay in RuntimeContainer-owned services:\n"
+        + "\n".join(violations)
     )
 
 

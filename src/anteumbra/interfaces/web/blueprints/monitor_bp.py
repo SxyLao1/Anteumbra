@@ -535,21 +535,17 @@ def config_watcher_status():
 @require_auth
 def config_history():
     """Return config reload history (paginated)"""
-    log_file = normalize_path("logs/Anteumbra/system.log")
-    if not log_file.exists():
-        return "<p style='color: #888;'>No config reload history</p>"
-
+    runtime = get_runtime()
     page = max(1, request.args.get('page', 1, type=int))
-    config = get_runtime().config.get()
-    per_page = config.get("web_admin", {}).get("config_items_per_page", 10)
-
-    history = []
+    config = runtime.config.get()
     try:
-        for line in log_file.read_text(encoding='utf-8').splitlines():
-            if '[CONFIG][RELOAD]' in line or '[CONFIG][START]' in line:
-                history.append(line)
-    except Exception:
-        logger.debug("Failed to read config reload history from system.log", exc_info=True)
+        per_page = max(
+            1,
+            int(config.get("web_admin", {}).get("config_items_per_page", 10)),
+        )
+    except (TypeError, ValueError):
+        per_page = 10
+    history = runtime.config_history.get_history(limit=1000)
 
     if not history:
         return "<p style='color: #888;'>No config reload records</p>"
@@ -561,20 +557,33 @@ def config_history():
     end = start + per_page
     paginated = history[start:end]
 
-    html = ""
-    for h in paginated:
-        html += f"<div style='background: #1a1a1a; padding: 5px; margin: 3px 0; font-size: 11px;'>{h}</div>"
+    output = ""
+    for record in paginated:
+        text = f"[{record.get('timestamp_display', '')}] Hot reload complete"
+        changed_keys = record.get("changed_keys", [])
+        if changed_keys:
+            text += (
+                " | Changes: "
+                + ", ".join(str(key) for key in changed_keys[:5])
+            )
+        duration_ms = record.get("duration_ms")
+        if duration_ms is not None:
+            text += f" | Duration: {duration_ms}ms"
+        output += (
+            "<div style='background: #1a1a1a; padding: 5px; margin: 3px 0; "
+            f"font-size: 11px;'>{html.escape(text)}</div>"
+        )
 
     if total_pages > 1:
         prev_disabled = "disabled" if page <= 1 else ""
         next_disabled = "disabled" if page >= total_pages else ""
-        html += '<div class="pagination-bar" style="margin-top: 10px;">'
-        html += f'<button class="btn btn-ghost btn-sm" {prev_disabled} hx-get="/admin/config/history?page={page - 1}" hx-target="#config-history" hx-swap="innerHTML">Prev</button>'
-        html += f'<span class="page-info">Page {page} / {total_pages} ({total} total)</span>'
-        html += f'<div class="page-jump"><input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{total_pages}" value="{page}" onkeydown="if(event.key===&quot;Enter&quot;){{var p=this.value;htmx.ajax(&quot;GET&quot;,&quot;/admin/config/history?page=&quot;+p,{{target:&quot;#config-history&quot;,swap:&quot;innerHTML&quot;}})}}"></div>'
-        html += f'<button class="btn btn-ghost btn-sm" {next_disabled} hx-get="/admin/config/history?page={page + 1}" hx-target="#config-history" hx-swap="innerHTML">Next</button>'
-        html += '</div>'
-    return html
+        output += '<div class="pagination-bar" style="margin-top: 10px;">'
+        output += f'<button class="btn btn-ghost btn-sm" {prev_disabled} hx-get="/admin/config/history?page={page - 1}" hx-target="#config-history" hx-swap="innerHTML">Prev</button>'
+        output += f'<span class="page-info">Page {page} / {total_pages} ({total} total)</span>'
+        output += f'<div class="page-jump"><input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{total_pages}" value="{page}" onkeydown="if(event.key===&quot;Enter&quot;){{var p=this.value;htmx.ajax(&quot;GET&quot;,&quot;/admin/config/history?page=&quot;+p,{{target:&quot;#config-history&quot;,swap:&quot;innerHTML&quot;}})}}"></div>'
+        output += f'<button class="btn btn-ghost btn-sm" {next_disabled} hx-get="/admin/config/history?page={page + 1}" hx-target="#config-history" hx-swap="innerHTML">Next</button>'
+        output += '</div>'
+    return output
 
 
 @monitor_bp.route('/config/signature')

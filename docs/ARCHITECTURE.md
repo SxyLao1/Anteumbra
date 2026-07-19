@@ -135,8 +135,7 @@ DomainEvent (frozen)
 
 ```python
 class PluginManager:
-    """Singleton, thread-safe"""
-    _instance: Optional[PluginManager]
+    """Runtime-owned, thread-safe event router"""
     _rwlock: threading.RLock         # protects all dicts
     _plugins: Dict[str, Plugin]      # all registered plugins
     _detectors: Dict[str, Detector]  # detectors
@@ -154,19 +153,7 @@ class PluginManager:
 
 #### Application Orchestration and Service Modules
 
-Some services remain thin facades that re-export stable public APIs from
-infrastructure:
-
-```python
-# application/sse_service.py (example)
-from anteumbra.infrastructure.utils.sse_manager import (
-    register_sse_client, unregister_sse_client,
-    trigger_registry_update, persist_log_line, ...
-)
-__all__ = ["register_sse_client", ...]
-```
-
-Other modules now own real use cases and cross-resource behavior:
+Application modules own use cases and runtime workflow state:
 
 | Module | Responsibility |
 |--------|----------------|
@@ -174,19 +161,23 @@ Other modules now own real use cases and cross-resource behavior:
 | `jsonl_consumer.py` | Incremental JSONL acknowledgement, truncation/rotation handling, and dead letters |
 | `quarantine_service.py` | Quarantine/restore transactions with filesystem and Registry compensation |
 | `log_analysis_service.py` | Per-site access-log analysis without parser imports in web routes |
+| `password_service.py` | Runtime-scoped credential validation and atomic `.env` updates |
+| `scan_state_service.py` | Manual-scan jobs, result retention, cancellation, and shutdown |
+| `config_history_service.py` | Runtime-scoped config reload audit history |
 | `runtime_health_service.py` | Shared optional capabilities and critical config/WAL/Registry health assessment for CLI and web APIs |
 
 **Purpose**: Interfaces call Application APIs rather than concrete parsers and
-stores. This boundary is improving, but several legacy facades and global
-singletons remain; directory placement alone does not mean full dependency
-inversion.
+stores. Stateful services are constructed in `launcher.py` and exposed through
+the typed `RuntimeContainer`; Application modules do not locate process-global
+service instances.
 
 #### Runtime Lifecycle
 
 `launcher.start_all()` is the process composition root. It binds the web
 listener, activates plugins, creates file and access-log monitors for every
 enabled site, starts profiling/SSE/metrics workers, and records each owned
-resource. `stop_all()` uses that ownership list for idempotent shutdown. Optional
+resource. `stop_all()` cancels manual scans and uses that ownership list for
+idempotent shutdown. Optional
 capability failures become explicit warnings; inability to start any file
 monitor is fatal.
 

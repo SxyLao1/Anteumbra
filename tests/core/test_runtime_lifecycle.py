@@ -138,6 +138,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         sse=SimpleNamespace(stop=lambda: calls.append("sse")),
         waf_poller=Resource("waf"),
         logging=SimpleNamespace(close=lambda: calls.append("runtime-logging")),
+        scan_state=SimpleNamespace(shutdown=lambda: calls.append("scan-state")),
     )
 
     launcher._launcher_state.clear()
@@ -162,6 +163,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     assert calls == [
         "log",
         "file",
+        "scan-state",
         "waf",
         "plugins",
         "sse",

@@ -8,8 +8,6 @@ import base64
 import json as _stdlib_json
 import logging
 import secrets
-import threading
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -121,32 +119,3 @@ def generate_secure_sse_token(username: str) -> str:
     random_part = secrets.token_urlsafe(16)
     token_str = f"{username}:{random_part}"
     return base64.b64encode(token_str.encode()).decode()
-
-
-
-
-# ── 扫描结果内存缓存 ────────────────────────────────────
-
-_scan_results_cache: dict = {}
-_scan_results_lock = threading.Lock()
-
-
-def _cache_put(key: str, value) -> None:
-    """Thread-safe cache write."""
-    with _scan_results_lock:
-        _scan_results_cache[key] = value
-
-
-def _cache_get(key: str):
-    """Thread-safe cache read."""
-    with _scan_results_lock:
-        return _scan_results_cache.get(key)
-
-
-def _cache_cleanup_stale(max_age: float = 3600) -> None:
-    """Thread-safe removal of entries older than max_age seconds."""
-    with _scan_results_lock:
-        stale = [k for k, v in _scan_results_cache.items()
-                 if time.time() - v.end_time > max_age]
-        for k in stale:
-            del _scan_results_cache[k]

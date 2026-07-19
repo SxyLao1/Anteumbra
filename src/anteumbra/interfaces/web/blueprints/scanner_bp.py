@@ -6,7 +6,6 @@ v1.9.0: Scanner Blueprint — 手动扫描器路由
 路由前缀: /admin/scanner/*
 """
 import json as _json
-import logging
 import queue
 import threading
 import time
@@ -22,8 +21,8 @@ from flask import (
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.blueprints._shared import (
-    save_scan_to_disk, load_scans_from_disk,
-    _cache_put, _cache_get, _cache_cleanup_stale,
+    save_scan_to_disk,
+    load_scans_from_disk,
 )
 from anteumbra.interfaces.web.runtime import get_runtime
 
@@ -31,9 +30,6 @@ from anteumbra.interfaces.web.runtime import get_runtime
 
 scanner_bp = Blueprint('scanner', __name__, url_prefix='/admin')
 
-_scan_logger = logging.getLogger("monitor.scanner_sse")
-_scan_jobs: dict = {}
-_scan_jobs_lock = threading.Lock()
 _SCAN_JOB_TTL = 3600
 
 
@@ -70,17 +66,6 @@ def scanner_page():
     except Exception as e:
         current_app.logger.error(f"[SCANNER] page error: {e}", exc_info=True)
         return render_template('admin/error.html', error=str(e)), 500
-
-
-def _cleanup_scan_jobs() -> None:
-    now = time.time()
-    with _scan_jobs_lock:
-        stale = [
-            job_id for job_id, job in _scan_jobs.items()
-            if job.get("completed_at") and now - job["completed_at"] > _SCAN_JOB_TTL
-        ]
-        for job_id in stale:
-            del _scan_jobs[job_id]
 
 
 def _request_data():
@@ -126,9 +111,9 @@ def _parse_extensions(value) -> list[str] | None:
     return extensions or None
 
 
-def _run_scan_job(scan_id: str) -> None:
-    with _scan_jobs_lock:
-        job = _scan_jobs.get(scan_id)
+def _run_scan_job(scan_id: str, runtime) -> None:
+    state = runtime.scan_state
+    job = state.get_job(scan_id)
     if not job:
         return
 
@@ -139,13 +124,13 @@ def _run_scan_job(scan_id: str) -> None:
     site_name = job["site_name"]
     progress_queue = job["queue"]
     cancel_flag = job["cancel_flag"]
-    runtime = job["runtime"]
+    scan_logger = runtime.logging.get_logger("scanner_sse")
 
     from anteumbra.application.scanner_service import ManualScanner
 
     try:
         scanner = ManualScanner(
-            _scan_logger,
+            scan_logger,
             site_id=site_id,
             site_name=site_name,
             config_provider=runtime.config,
@@ -180,18 +165,22 @@ def _run_scan_job(scan_id: str) -> None:
             site_id=site_id,
             site_name=site_name,
         )
-        with _scan_jobs_lock:
-            job["result"] = result
-            job["completed_at"] = time.time()
-        _cache_put(result.scan_id, result)
-        _cache_cleanup_stale()
+        state.update_job(
+            scan_id,
+            result=result,
+            completed_at=time.time(),
+        )
+        state.put_result(result.scan_id, result)
+        state.cleanup_results(_SCAN_JOB_TTL)
         save_scan_to_disk(result)
         progress_queue.put(('complete', result))
     except Exception as e:
-        _scan_logger.error(f"scanner failed: {e}", exc_info=True)
-        with _scan_jobs_lock:
-            job["error"] = str(e)
-            job["completed_at"] = time.time()
+        scan_logger.error("scanner failed: %s", e, exc_info=True)
+        state.update_job(
+            scan_id,
+            error=str(e),
+            completed_at=time.time(),
+        )
         progress_queue.put(('error', str(e)))
 
 
@@ -218,7 +207,7 @@ def scanner_run():
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
-    _cleanup_scan_jobs()
+    runtime.scan_state.cleanup_jobs(_SCAN_JOB_TTL)
     scan_id = uuid.uuid4().hex
     job = {
         "scan_id": scan_id,
@@ -234,12 +223,15 @@ def scanner_run():
         "thread": None,
         "result": None,
         "error": None,
-        "runtime": runtime,
     }
-    thread = threading.Thread(target=_run_scan_job, args=(scan_id,), daemon=True)
+    thread = threading.Thread(
+        target=_run_scan_job,
+        args=(scan_id, runtime),
+        daemon=True,
+        name=f"ManualScan-{scan_id[:8]}",
+    )
     job["thread"] = thread
-    with _scan_jobs_lock:
-        _scan_jobs[scan_id] = job
+    runtime.scan_state.register_job(scan_id, job)
     thread.start()
     return jsonify({
         "success": True,
@@ -254,8 +246,7 @@ def scanner_run():
 def scanner_stream_sse():
     """SSE stream for an already-created scanner job."""
     scan_id = request.args.get('scan_id', '')
-    with _scan_jobs_lock:
-        job = _scan_jobs.get(scan_id)
+    job = get_runtime().scan_state.get_job(scan_id)
 
     if not job:
         def _err():
@@ -329,13 +320,7 @@ def scanner_cancel():
     """Cancel one active scanner job, or all active jobs if no scan_id is sent."""
     data = _request_data()
     scan_id = str(data.get("scan_id", "")).strip()
-    cancelled = 0
-    with _scan_jobs_lock:
-        jobs = [_scan_jobs.get(scan_id)] if scan_id else list(_scan_jobs.values())
-        for job in jobs:
-            if job and not job.get("completed_at"):
-                job["cancel_flag"]["cancelled"] = True
-                cancelled += 1
+    cancelled = get_runtime().scan_state.cancel(scan_id or None)
     return jsonify({"success": True, "cancelled": cancelled, "message": "cancel signal sent"})
 
 
@@ -474,7 +459,7 @@ def scanner_results_json():
 def scanner_report():
     """生成可打印扫描报告"""
     scan_id = request.args.get('scan_id', '')
-    result = _cache_get(scan_id)
+    result = get_runtime().scan_state.get_result(scan_id)
 
     if not result:
         disk_file = Path("data") / "scans" / f"{scan_id}.json"

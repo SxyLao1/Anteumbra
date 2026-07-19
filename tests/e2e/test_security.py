@@ -503,6 +503,22 @@ class TestPentestRegressions:
             if sse_token:
                 sess["sse_token"] = sse_token
 
+    def test_config_reload_records_runtime_history(self, client):
+        self._authenticate(client)
+        runtime = client.application.extensions["anteumbra.runtime"]
+        before = len(runtime.config_history.get_history(limit=1000))
+
+        response = client.post("/admin/system/config/reload")
+
+        assert response.status_code == 200
+        history = runtime.config_history.get_history(limit=1000)
+        assert len(history) == before + 1
+        assert history[0]["duration_ms"] >= 0
+        assert isinstance(history[0]["changed_keys"], list)
+        history_response = client.get("/admin/config/history")
+        assert history_response.status_code == 200
+        assert "Hot reload complete" in history_response.get_data(as_text=True)
+
     def test_stream_logs_rejects_forged_sse_token(self, client):
         forged = base64.b64encode(b"admin:not-the-session-secret").decode()
 

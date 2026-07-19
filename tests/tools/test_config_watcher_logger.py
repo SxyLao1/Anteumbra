@@ -1,31 +1,45 @@
+"""Runtime-owned configuration history tests."""
+
 from pathlib import Path
 
 
-def test_config_history_logger_imports_with_package_paths(monkeypatch, tmp_path):
-    """Config panel helper must work from package paths."""
-    monkeypatch.chdir(tmp_path)
+def test_config_history_uses_explicit_runtime_paths(tmp_path):
+    from anteumbra.application.config_history_service import ConfigHistoryLogger
 
-    from anteumbra.application import config_history_service as logger_mod
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    (rules_dir / "one.yar").write_text("rule one { condition: true }", encoding="utf-8")
+    (rules_dir / "two.yar").write_text("rule two { condition: true }", encoding="utf-8")
+    history_file = tmp_path / "data" / "config_history.json"
+    history = ConfigHistoryLogger(history_file, rules_dir=rules_dir)
 
-    monkeypatch.setattr(logger_mod, "_history_logger", None)
+    assert history.log_reload(
+        {
+            "website": [{"name": "Alpha"}, {"name": "Beta"}],
+            "notifier": {"enabled": True},
+        },
+        ["website", "notifier.enabled"],
+        12.345,
+    )
 
-    logger = logger_mod.get_config_history_logger()
+    record = history.get_history()[0]
+    assert history.history_file == history_file.resolve()
+    assert record["changed_keys"] == ["website", "notifier.enabled"]
+    assert record["duration_ms"] == 12.35
+    assert record["config_summary"]["websites_count"] == 2
+    assert record["config_summary"]["yara_rules_count"] == 2
 
-    assert logger.history_file == Path("data/config_history.json").resolve()
-    assert logger.get_history() == []
-    assert logger.history_file.exists()
 
+def test_config_history_instances_do_not_share_state(tmp_path):
+    from anteumbra.application.config_history_service import ConfigHistoryLogger
 
-def test_config_watcher_logger_legacy_wrapper(monkeypatch, tmp_path):
-    """Legacy tools import remains available for local scripts."""
-    monkeypatch.chdir(tmp_path)
+    first = ConfigHistoryLogger(tmp_path / "first" / "history.json")
+    second = ConfigHistoryLogger(tmp_path / "second" / "history.json")
 
-    from anteumbra.application import config_history_service as service_mod
-    from tools import config_watcher_logger as wrapper_mod
+    assert first.log_reload({"website": {"name": "Alpha"}}, ["website"], 1.0)
 
-    monkeypatch.setattr(service_mod, "_history_logger", None)
-
-    logger = wrapper_mod.get_config_watcher_logger()
-
-    assert isinstance(logger, service_mod.ConfigHistoryLogger)
-    assert logger.history_file == Path("data/config_history.json").resolve()
+    assert len(first.get_history()) == 1
+    assert first.get_history()[0]["config_summary"]["websites_count"] == 1
+    assert second.get_history() == []
+    assert second.clear_history() is True
+    assert Path(second.history_file).exists()

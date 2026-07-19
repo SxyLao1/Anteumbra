@@ -113,6 +113,7 @@ def runtime_server(monkeypatch, tmp_path):
     server.server_close()
     auth_mod.get_admin_credentials = original_get_creds
     for resource, method in (
+        (runtime.scan_state, "shutdown"),
         (runtime.quarantine, "close"),
         (runtime.registry, "close"),
         (runtime.block_ledger, "close"),

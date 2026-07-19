@@ -15,6 +15,7 @@ __all__ = [
     "runtime_adapters",
     "runtime_container",
     "runtime_health_service",
+    "scan_state_service",
     "scanner_service",
     "session_service",
     "yara_service",
