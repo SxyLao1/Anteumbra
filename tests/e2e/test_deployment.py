@@ -744,7 +744,6 @@ class TestCliInstall:
     ):
         """Bad user config should fail cleanly before starting background services."""
         from anteumbra.application import launcher
-        from anteumbra.infrastructure.config import provider as provider_module
 
         missing = tmp_path / "missing-site"
         website = SimpleNamespace(name="Missing Site", path=missing)
@@ -755,18 +754,17 @@ class TestCliInstall:
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
-            provider_module,
-            "TomlConfigProvider",
-            lambda: provider,
-        )
-        monkeypatch.setattr(
             launcher,
             "build_runtime_container",
             lambda **_kwargs: pytest.fail("runtime must not be built before validation"),
         )
 
         with pytest.raises(launcher.RuntimeStartupError) as exc_info:
-            launcher.start_all(host="127.0.0.1", port=8765)
+            launcher.RuntimeLifecycle(
+                host="127.0.0.1",
+                port=8765,
+                config_provider=provider,
+            ).run()
 
         assert "Website path does not exist" in str(exc_info.value)
         assert str(missing.resolve()) in str(exc_info.value)
@@ -1090,14 +1088,14 @@ class TestProcessLifecycle:
         project_root = Path(__file__).parent.parent.parent
         pid_file = project_root / "data" / "anteumbra.pid"
 
-        # v1.0.10: PID writing moved from run.py to launcher.start_all()
+        # PID writing is owned by RuntimeLifecycle instead of source-tree run.py.
         # Verify the launcher contains the PID file logic
         launcher_path = project_root / "src" / "anteumbra" / "application" / "launcher.py"
         assert launcher_path.exists(), "launcher.py not found"
 
         source = launcher_path.read_text(encoding="utf-8")
         assert "anteumbra.pid" in source, (
-            "launcher.start_all() should write a PID file (data/anteumbra.pid) at startup"
+            "RuntimeLifecycle should write a PID file (data/anteumbra.pid) at startup"
         )
         assert "os.getpid()" in source, (
             "PID file should contain the actual process ID"

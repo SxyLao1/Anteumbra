@@ -211,6 +211,13 @@ def test_password_service_does_not_depend_on_infrastructure():
 
 def test_runtime_workflow_state_has_no_module_global_factories():
     checks = {
+        PACKAGE_ROOT / "application" / "launcher.py": (
+            "_launcher_state",
+            "_state_lock",
+            "def start_all(",
+            "def stop_all(",
+            "def get_runtime_status(",
+        ),
         PACKAGE_ROOT / "application" / "config_history_service.py": (
             "_history_logger",
             "get_config_history_logger",

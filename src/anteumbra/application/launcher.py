@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,12 +16,31 @@ from anteumbra.domain.runtime import ConfigProviderPort
 
 
 logger = logging.getLogger(__name__)
-_launcher_state: dict[str, Any] = {}
-_state_lock = threading.RLock()
 
 
 class RuntimeStartupError(RuntimeError):
     """Raised when the complete runtime cannot be started safely."""
+
+
+@dataclass(slots=True)
+class RuntimeState:
+    """Resources and observable state owned by one runtime lifecycle."""
+
+    running: bool = False
+    stopping: bool = False
+    stopped: bool = False
+    warnings: list[str] = field(default_factory=list)
+    websites: list[str] = field(default_factory=list)
+    monitors: list[Any] = field(default_factory=list)
+    log_monitors: list[Any] = field(default_factory=list)
+    threads: list[threading.Thread] = field(default_factory=list)
+    stop_event: threading.Event = field(default_factory=threading.Event)
+    container: RuntimeContainer | None = None
+    pid_file: Path | None = None
+    web_server: Any | None = None
+    web_thread: threading.Thread | None = None
+    profile_tailer: JsonlEventTailer | None = None
+    sse_started: bool = False
 
 
 def build_runtime_container(
@@ -225,165 +245,311 @@ def build_runtime_container(
     )
 
 
-def start_all(host: str = "127.0.0.1", port: int = 8080) -> None:
-    """Start all runtime components and block until interrupted."""
-    from anteumbra.infrastructure.config.provider import TomlConfigProvider
-    from anteumbra.infrastructure.config.version import get_version
-    from anteumbra.infrastructure.utils.path_utils import normalize_path
+class RuntimeLifecycle:
+    """Start and stop one complete Anteumbra runtime without global state."""
 
-    provider = TomlConfigProvider()
-    config = provider.get()
-    data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
-    websites = provider.get_enabled_websites()
-    if not websites:
-        raise RuntimeStartupError("No enabled websites in config.toml")
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8080,
+        *,
+        config_provider: ConfigProviderPort | None = None,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self._config_provider = config_provider
+        self._lock = threading.RLock()
+        self._state = RuntimeState()
 
-    missing_paths: list[Path] = []
-    for website in websites:
-        website.path = normalize_path(website.path)
-        if not website.path.exists():
-            missing_paths.append(website.path)
-    if missing_paths:
-        details = "\n".join(
-            f"Website path does not exist: {missing_path}" for missing_path in missing_paths
-        )
-        raise RuntimeStartupError(
-            f"{details}\nCreate the directories or update website.path in config.toml."
-        )
+    def run(self) -> None:
+        """Start all runtime components and block until interrupted."""
+        from anteumbra.infrastructure.config.provider import TomlConfigProvider
+        from anteumbra.infrastructure.config.version import get_version
+        from anteumbra.infrastructure.utils.path_utils import normalize_path
 
-    container = build_runtime_container(config_provider=provider)
-    pid_file = data_dir / "anteumbra.pid"
-    runtime_logger = container.logging.get_logger("Anteumbra")
-    stop_event = threading.Event()
-    warnings: list[str] = []
+        with self._lock:
+            if self._state.running or self._state.stopping:
+                raise RuntimeError("Runtime lifecycle is already active")
 
-    with _state_lock:
-        _launcher_state.clear()
-        _launcher_state.update({
-            "running": False,
-            "stop_event": stop_event,
-            "warnings": warnings,
-            "websites": [website.name for website in websites],
-            "monitors": [],
-            "log_monitors": [],
-            "threads": [],
-            "container": container,
-            "pid_file": pid_file,
-        })
+        provider = self._config_provider or TomlConfigProvider()
+        config = provider.get()
+        data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
+        websites = provider.get_enabled_websites()
+        if not websites:
+            raise RuntimeStartupError("No enabled websites in config.toml")
 
-    try:
-        data_dir.mkdir(parents=True, exist_ok=True)
-        pid_file.write_text(str(os.getpid()), encoding="utf-8")
-        warnings.extend(
-            item["message"] for item in assess_runtime_capabilities(config)["warnings"]
-        )
-
-        print(f"Anteumbra v{get_version()} - Web Perimeter Security")
+        missing_paths: list[Path] = []
         for website in websites:
-            print(f"  Website: {website.name}")
-            print(f"  Watch:   {website.path}")
-        print(f"  Admin:   http://{host}:{port}/admin")
-        print(f"  Health:  http://{host}:{port}/api/v1/health")
-        print("-" * 50)
-
-        plugin_manager = _start_plugins(
-            config,
-            warnings,
-            container.metrics,
-            container.notifier,
-            container.siem_exporter,
-            container.threat_graph,
-            container.quarantine,
-            container.logging.get_logger,
-        )
-        container.plugin_manager = plugin_manager
-        container.events.bind(plugin_manager)
-        if container.ip_blocker is not None:
-            container.ip_blocker.start()
-
-        from anteumbra.application.runtime_adapters import build_runtime_services
-
-        runtime_services = build_runtime_services(
-            config,
-            websites,
-            event_publisher=container.events,
-            registry=container.registry,
-            metrics=container.metrics,
-            quarantine=container.quarantine,
-        )
-
-        from anteumbra.interfaces.web.factory import create_app, create_runtime_server
-
-        app = create_app(runtime=container)
-        web_server = create_runtime_server(app, host, port)
-        _launcher_state["web_server"] = web_server
-
-        _migrate_site_metadata(container, warnings)
-        monitors, log_monitors, site_warnings = _start_site_monitors(
-            websites,
-            runtime_services=runtime_services,
-            logger_factory=container.logging.get_logger,
-            config_provider=container.config,
-            notifier=container.notifier,
-            registry=container.registry,
-            scan_callback=container.scanner.scan,
-        )
-        warnings.extend(site_warnings)
-        _launcher_state["monitors"] = monitors
-        _launcher_state["log_monitors"] = log_monitors
-        if not monitors:
-            raise RuntimeError("No website monitor could be started")
-
-        _start_waf_poller(container.waf_poller, warnings)
-
-        threat_graph = container.threat_graph
-        _launcher_state["threat_graph"] = threat_graph
-        print("[OK] ThreatGraph initialized")
-        profile_threads = _start_profile_workers(
-            threat_graph,
-            runtime_logger,
-            stop_event,
-            data_dir,
-        )
-        _launcher_state["threads"].extend(profile_threads)
-
-        _start_sse(container.sse, warnings)
-        _start_metrics(container.metrics, warnings)
-        _start_siem(container.siem_exporter, warnings)
-
-        web_thread = threading.Thread(
-            target=web_server.serve_forever,
-            daemon=True,
-            name="AnteumbraWebServer",
-        )
-        web_thread.start()
-        _launcher_state["web_thread"] = web_thread
-        _launcher_state["running"] = True
-        print("[OK] Web server started")
-
-        print("=" * 50)
-        if warnings:
-            print("  STARTED WITH WARNINGS")
-            for warning in dict.fromkeys(warnings):
-                print(f"  [WARN] {warning}")
-        else:
-            print("  ALL SYSTEMS OPERATIONAL")
-        print(f"  Dashboard: http://{host}:{port}/admin")
-        print(f"  Health:    http://{host}:{port}/api/v1/health")
-        print("=" * 50)
+            website.path = normalize_path(website.path)
+            if not website.path.exists():
+                missing_paths.append(website.path)
+        if missing_paths:
+            details = "\n".join(
+                f"Website path does not exist: {missing_path}"
+                for missing_path in missing_paths
+            )
+            raise RuntimeStartupError(
+                f"{details}\nCreate the directories or update website.path in config.toml."
+            )
 
         try:
-            while not stop_event.wait(1.0):
-                pass
-        except KeyboardInterrupt:
-            print("\nShutting down...")
-    except Exception as exc:
-        runtime_logger.exception("Anteumbra startup failed")
-        raise RuntimeStartupError(
-            "Runtime startup failed. Check the runtime logs for details."
-        ) from exc
-    finally:
-        stop_all()
+            container = build_runtime_container(config_provider=provider)
+        except Exception as exc:
+            logger.exception("Anteumbra runtime initialization failed")
+            raise RuntimeStartupError(
+                "Runtime initialization failed. Check the runtime logs for details."
+            ) from exc
+
+        pid_file = data_dir / "anteumbra.pid"
+        state = RuntimeState(
+            warnings=[],
+            websites=[website.name for website in websites],
+            container=container,
+            pid_file=pid_file,
+        )
+        with self._lock:
+            self._state = state
+
+        runtime_logger = container.logging.get_logger("Anteumbra")
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            pid_file.write_text(str(os.getpid()), encoding="utf-8")
+            state.warnings.extend(
+                item["message"]
+                for item in assess_runtime_capabilities(config)["warnings"]
+            )
+
+            print(f"Anteumbra v{get_version()} - Web Perimeter Security")
+            for website in websites:
+                print(f"  Website: {website.name}")
+                print(f"  Watch:   {website.path}")
+            print(f"  Admin:   http://{self.host}:{self.port}/admin")
+            print(f"  Health:  http://{self.host}:{self.port}/api/v1/health")
+            print("-" * 50)
+
+            plugin_manager = _start_plugins(
+                config,
+                state.warnings,
+                container.metrics,
+                container.notifier,
+                container.siem_exporter,
+                container.threat_graph,
+                container.quarantine,
+                container.logging.get_logger,
+            )
+            container.plugin_manager = plugin_manager
+            container.events.bind(plugin_manager)
+            if container.ip_blocker is not None:
+                container.ip_blocker.start()
+
+            from anteumbra.application.runtime_adapters import build_runtime_services
+
+            runtime_services = build_runtime_services(
+                config,
+                websites,
+                event_publisher=container.events,
+                registry=container.registry,
+                metrics=container.metrics,
+                quarantine=container.quarantine,
+            )
+
+            from anteumbra.interfaces.web.factory import create_app, create_runtime_server
+
+            app = create_app(runtime=container)
+            state.web_server = create_runtime_server(app, self.host, self.port)
+
+            _migrate_site_metadata(container, state.warnings)
+            monitors, log_monitors, site_warnings = _start_site_monitors(
+                websites,
+                runtime_services=runtime_services,
+                logger_factory=container.logging.get_logger,
+                config_provider=container.config,
+                notifier=container.notifier,
+                registry=container.registry,
+                scan_callback=container.scanner.scan,
+            )
+            state.monitors = monitors
+            state.log_monitors = log_monitors
+            state.warnings.extend(site_warnings)
+            if not state.monitors:
+                raise RuntimeError("No website monitor could be started")
+
+            _start_waf_poller(container.waf_poller, state.warnings)
+
+            print("[OK] ThreatGraph initialized")
+            profile_threads, profile_tailer = _start_profile_workers(
+                container.threat_graph,
+                runtime_logger,
+                state.stop_event,
+                data_dir,
+            )
+            state.threads.extend(profile_threads)
+            state.profile_tailer = profile_tailer
+
+            state.sse_started = _start_sse(container.sse, state.warnings)
+            _start_metrics(container.metrics, state.warnings)
+            _start_siem(container.siem_exporter, state.warnings)
+
+            state.web_thread = threading.Thread(
+                target=state.web_server.serve_forever,
+                daemon=True,
+                name="AnteumbraWebServer",
+            )
+            state.web_thread.start()
+            with self._lock:
+                state.running = True
+            print("[OK] Web server started")
+
+            print("=" * 50)
+            if state.warnings:
+                print("  STARTED WITH WARNINGS")
+                for warning in dict.fromkeys(state.warnings):
+                    print(f"  [WARN] {warning}")
+            else:
+                print("  ALL SYSTEMS OPERATIONAL")
+            print(f"  Dashboard: http://{self.host}:{self.port}/admin")
+            print(f"  Health:    http://{self.host}:{self.port}/api/v1/health")
+            print("=" * 50)
+
+            try:
+                while not state.stop_event.wait(1.0):
+                    pass
+            except KeyboardInterrupt:
+                print("\nShutting down...")
+        except Exception as exc:
+            runtime_logger.exception("Anteumbra startup failed")
+            raise RuntimeStartupError(
+                "Runtime startup failed. Check the runtime logs for details."
+            ) from exc
+        finally:
+            self.stop()
+
+    def status(self) -> dict[str, Any]:
+        """Return a stable snapshot suitable for status APIs and diagnostics."""
+        with self._lock:
+            state = self._state
+            return {
+                "running": state.running,
+                "websites": list(state.websites),
+                "warnings": list(dict.fromkeys(state.warnings)),
+                "monitor_count": len(state.monitors),
+                "log_monitor_count": len(state.log_monitors),
+            }
+
+    def stop(self) -> None:
+        """Stop every runtime resource that was successfully started."""
+        with self._lock:
+            state = self._state
+            if state.stopping or state.stopped:
+                return
+            if state.container is None:
+                state.stopped = True
+                return
+            state.running = False
+            state.stopping = True
+            state.stop_event.set()
+
+        container = state.container
+        web_server = state.web_server
+        web_thread = state.web_thread
+        if web_server is not None:
+            if web_thread is not None and web_thread.is_alive():
+                _stop_resource("web server", web_server.shutdown)
+                web_thread.join(timeout=5.0)
+            close_server = getattr(web_server, "server_close", None)
+            if callable(close_server):
+                _stop_resource("web server socket", close_server)
+
+        for log_monitor in reversed(state.log_monitors):
+            _stop_resource("log monitor", log_monitor.stop)
+        for monitor in reversed(state.monitors):
+            _stop_resource("file monitor", monitor.stop)
+
+        scan_state = getattr(container, "scan_state", None)
+        if scan_state:
+            _stop_resource("manual scan state", scan_state.shutdown)
+
+        poller = getattr(container, "waf_poller", None)
+        if poller:
+            _stop_resource("WAF poller", poller.stop)
+
+        ip_blocker = getattr(container, "ip_blocker", None)
+        if ip_blocker:
+            _stop_resource("IP blocker", ip_blocker.stop)
+
+        manager = getattr(container, "plugin_manager", None)
+        shutdown_manager = getattr(manager, "shutdown", None)
+        if callable(shutdown_manager):
+            _stop_resource("plugin manager", shutdown_manager)
+
+        events = getattr(container, "events", None)
+        if events:
+            events.bind(None)
+
+        block_ledger = getattr(container, "block_ledger", None)
+        if block_ledger:
+            _stop_resource("block ledger", block_ledger.close)
+
+        quarantine = getattr(container, "quarantine", None)
+        if quarantine:
+            _stop_resource("quarantine", quarantine.close)
+
+        registry = getattr(container, "registry", None)
+        if registry:
+            _stop_resource("Registry", registry.close)
+
+        notifier = getattr(container, "notifier", None)
+        if notifier:
+            _stop_resource("notifier", notifier.shutdown)
+
+        siem_exporter = getattr(container, "siem_exporter", None)
+        if siem_exporter:
+            _stop_resource("SIEM exporter", siem_exporter.close)
+
+        if state.sse_started:
+            sse = getattr(container, "sse", None)
+            if sse:
+                _stop_resource("SSE worker", sse.stop)
+
+        metrics = getattr(container, "metrics", None)
+        if metrics:
+            _stop_resource("metrics", metrics.stop)
+
+        for thread in state.threads:
+            if thread.is_alive():
+                thread.join(timeout=2.0)
+
+        threat_graph = getattr(container, "threat_graph", None)
+        if threat_graph:
+            _stop_resource("threat graph persistence", threat_graph.persist)
+            _stop_resource("threat graph", threat_graph.close)
+
+        try:
+            if (
+                state.pid_file
+                and state.pid_file.exists()
+                and state.pid_file.read_text(encoding="utf-8").strip()
+                == str(os.getpid())
+            ):
+                state.pid_file.unlink()
+        except OSError:
+            logger.exception("Failed to remove PID file")
+
+        runtime_logging = getattr(container, "logging", None)
+        if runtime_logging:
+            _stop_resource("runtime logging", runtime_logging.close)
+
+        with self._lock:
+            state.monitors.clear()
+            state.log_monitors.clear()
+            state.threads.clear()
+            state.web_server = None
+            state.web_thread = None
+            state.profile_tailer = None
+            state.stopping = False
+            state.stopped = True
+
+        print("Anteumbra stopped.")
 
 
 def _migrate_site_metadata(container: RuntimeContainer, warnings: list[str]) -> None:
@@ -491,7 +657,7 @@ def _start_profile_workers(
     runtime_logger,
     stop_event,
     data_dir: Path,
-) -> list[threading.Thread]:
+) -> tuple[list[threading.Thread], JsonlEventTailer]:
     cache_path = data_dir / "waf_events.jsonl"
     tailer = JsonlEventTailer(
         cache_path,
@@ -499,8 +665,6 @@ def _start_profile_workers(
         logger=runtime_logger,
         dead_letter_path=data_dir / "waf_events.deadletter.jsonl",
     )
-    _launcher_state["profile_tailer"] = tailer
-
     def consume() -> None:
         while not stop_event.is_set():
             try:
@@ -525,7 +689,7 @@ def _start_profile_workers(
     for thread in threads:
         thread.start()
     print("[OK] Profile workers started")
-    return threads
+    return threads, tailer
 
 
 def _start_plugins(
@@ -537,7 +701,8 @@ def _start_plugins(
     threat_graph,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
-):
+) -> Any | None:
+    manager = None
     try:
         from anteumbra.application.plugin_manager import PluginManager
         manager = PluginManager(
@@ -556,7 +721,6 @@ def _start_plugins(
             )
         )
         manager.init_from_config(config)
-        _launcher_state["plugin_manager"] = manager
         if manager.is_enabled:
             plugins = manager.list_all()
             names = ", ".join(plugin["name"] for plugin in plugins)
@@ -565,9 +729,12 @@ def _start_plugins(
     except Exception as exc:
         logger.exception("Plugin startup failed")
         warnings.append(f"Plugin system failed: {exc}")
-        from anteumbra.infrastructure.runtime_adapters import NullEventPublisher
-
-        return NullEventPublisher()
+        if manager is not None:
+            try:
+                manager.shutdown()
+            except Exception:
+                logger.exception("Partially initialized plugin manager shutdown failed")
+        return None
 
 
 def _build_builtin_plugin_factories(
@@ -626,15 +793,16 @@ def _start_waf_poller(poller, warnings: list[str]) -> None:
         warnings.append(f"WAF poller failed: {exc}")
 
 
-def _start_sse(sse, warnings: list[str]) -> None:
+def _start_sse(sse, warnings: list[str]) -> bool:
     try:
         if sse is None:
             raise RuntimeError("SSEManager is not configured")
         sse.start()
-        _launcher_state["sse_started"] = True
+        return True
     except Exception as exc:
         logger.exception("SSE worker startup failed")
         warnings.append(f"SSE worker failed: {exc}")
+        return False
 
 
 def _start_metrics(metrics, warnings: list[str]) -> None:
@@ -652,133 +820,6 @@ def _start_siem(exporter, warnings: list[str]) -> None:
     except Exception as exc:
         logger.exception("SIEM startup failed")
         warnings.append(f"SIEM exporter failed: {exc}")
-
-
-def get_runtime_status() -> dict[str, Any]:
-    with _state_lock:
-        return {
-            "running": bool(_launcher_state.get("running", False)),
-            "websites": list(_launcher_state.get("websites", [])),
-            "warnings": list(dict.fromkeys(_launcher_state.get("warnings", []))),
-            "monitor_count": len(_launcher_state.get("monitors", [])),
-            "log_monitor_count": len(_launcher_state.get("log_monitors", [])),
-        }
-
-
-def stop_all() -> None:
-    """Stop every runtime resource that was successfully started."""
-    with _state_lock:
-        if (
-            not _launcher_state
-            or _launcher_state.get("stopping")
-            or _launcher_state.get("stopped")
-        ):
-            return
-        _launcher_state["running"] = False
-        _launcher_state["stopping"] = True
-        state = dict(_launcher_state)
-
-    stop_event = state.get("stop_event")
-    if stop_event:
-        stop_event.set()
-
-    web_server = state.get("web_server")
-    web_thread = state.get("web_thread")
-    if web_server and web_thread and web_thread.is_alive():
-        _stop_resource("web server", web_server.shutdown)
-        web_thread.join(timeout=5.0)
-
-    for log_monitor in reversed(state.get("log_monitors", [])):
-        _stop_resource("log monitor", log_monitor.stop)
-    for monitor in reversed(state.get("monitors", [])):
-        _stop_resource("file monitor", monitor.stop)
-
-    container = state.get("container")
-    scan_state = getattr(container, "scan_state", None)
-    if scan_state:
-        _stop_resource("manual scan state", scan_state.shutdown)
-
-    poller = getattr(container, "waf_poller", None)
-    if poller:
-        _stop_resource("WAF poller", poller.stop)
-
-    ip_blocker = getattr(container, "ip_blocker", None)
-    if ip_blocker:
-        _stop_resource("IP blocker", ip_blocker.stop)
-
-    manager = state.get("plugin_manager")
-    if manager:
-        _stop_resource("plugin manager", manager.shutdown)
-
-    events = getattr(container, "events", None)
-    if events:
-        events.bind(None)
-
-    block_ledger = getattr(container, "block_ledger", None)
-    if block_ledger:
-        _stop_resource("block ledger", block_ledger.close)
-
-    registry = getattr(container, "registry", None)
-    quarantine = getattr(container, "quarantine", None)
-    if quarantine:
-        _stop_resource("quarantine", quarantine.close)
-
-    if registry:
-        _stop_resource("Registry", registry.close)
-
-    notifier = getattr(container, "notifier", None)
-    if notifier:
-        _stop_resource("notifier", notifier.shutdown)
-
-    siem_exporter = getattr(container, "siem_exporter", None)
-    if siem_exporter:
-        _stop_resource("SIEM exporter", siem_exporter.close)
-
-    if state.get("sse_started"):
-        sse = getattr(container, "sse", None)
-        if sse:
-            _stop_resource("SSE worker", sse.stop)
-
-    metrics = getattr(container, "metrics", None)
-    if metrics:
-        _stop_resource("metrics", metrics.stop)
-
-    threat_graph = state.get("threat_graph")
-    if threat_graph:
-        _stop_resource("threat graph persistence", threat_graph.persist)
-        _stop_resource("threat graph", threat_graph.close)
-
-    for thread in state.get("threads", []):
-        if thread.is_alive():
-            thread.join(timeout=2.0)
-
-    pid_file = state.get("pid_file")
-    try:
-        if (
-            pid_file
-            and pid_file.exists()
-            and pid_file.read_text(encoding="utf-8").strip() == str(os.getpid())
-        ):
-            pid_file.unlink()
-    except OSError:
-        logger.exception("Failed to remove PID file")
-
-    runtime_logging = getattr(container, "logging", None)
-    if runtime_logging:
-        _stop_resource("runtime logging", runtime_logging.close)
-
-    with _state_lock:
-        _launcher_state.clear()
-        _launcher_state.update({
-            "running": False,
-            "stopped": True,
-            "warnings": list(state.get("warnings", [])),
-            "websites": list(state.get("websites", [])),
-            "monitors": [],
-            "log_monitors": [],
-        })
-
-    print("Anteumbra stopped.")
 
 
 def _stop_resource(name: str, callback: Callable[[], Any]) -> None:

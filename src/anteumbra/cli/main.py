@@ -227,11 +227,10 @@ def run(host, port, debug):
     click.echo(f"  Address: {host}:{port}")
     click.echo(f"  PID:     {os.getpid()}")
 
-    # v1.0.10: 使用包内 launcher 启动全部子系统（不再依赖 run.py）
-    from anteumbra.application.launcher import RuntimeStartupError, start_all
+    from anteumbra.application.launcher import RuntimeLifecycle, RuntimeStartupError
 
     try:
-        start_all(host=host, port=port)
+        RuntimeLifecycle(host=host, port=port).run()
     except RuntimeStartupError as exc:
         raise click.ClickException(str(exc)) from exc
 

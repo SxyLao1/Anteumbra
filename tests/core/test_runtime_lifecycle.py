@@ -1,5 +1,6 @@
 """Runtime worker and launcher lifecycle regression tests."""
 
+import threading
 from types import SimpleNamespace
 
 
@@ -114,7 +115,9 @@ def test_config_provider_parses_per_site_log_configuration(tmp_path):
     assert websites[0].scan_options.access_log_path == str(tmp_path / "alpha.log")
 
 
-def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
+def test_runtime_lifecycle_stop_is_idempotent_and_releases_resources(
+    tmp_path, monkeypatch
+):
     from anteumbra.application import launcher
 
     monkeypatch.chdir(tmp_path)
@@ -132,8 +135,10 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         persist=lambda: calls.append("graph"),
         close=lambda: calls.append("graph-close"),
     )
-    stop_event = __import__("threading").Event()
+    stop_event = threading.Event()
     container = SimpleNamespace(
+        plugin_manager=manager,
+        threat_graph=graph,
         metrics=SimpleNamespace(stop=lambda: calls.append("metrics")),
         sse=SimpleNamespace(stop=lambda: calls.append("sse")),
         waf_poller=Resource("waf"),
@@ -141,23 +146,20 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         scan_state=SimpleNamespace(shutdown=lambda: calls.append("scan-state")),
     )
 
-    launcher._launcher_state.clear()
-    launcher._launcher_state.update({
-        "running": True,
-        "stop_event": stop_event,
-        "warnings": ["degraded"],
-        "websites": ["alpha"],
-        "monitors": [Resource("file")],
-        "log_monitors": [Resource("log")],
-        "plugin_manager": manager,
-        "threat_graph": graph,
-        "sse_started": True,
-        "threads": [],
-        "container": container,
-    })
+    lifecycle = launcher.RuntimeLifecycle()
+    lifecycle._state = launcher.RuntimeState(
+        running=True,
+        stop_event=stop_event,
+        warnings=["degraded"],
+        websites=["alpha"],
+        monitors=[Resource("file")],
+        log_monitors=[Resource("log")],
+        sse_started=True,
+        container=container,
+    )
 
-    launcher.stop_all()
-    launcher.stop_all()
+    lifecycle.stop()
+    lifecycle.stop()
 
     assert stop_event.is_set()
     assert calls == [
@@ -172,7 +174,7 @@ def test_stop_all_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
         "graph-close",
         "runtime-logging",
     ]
-    assert launcher.get_runtime_status() == {
+    assert lifecycle.status() == {
         "running": False,
         "websites": ["alpha"],
         "warnings": ["degraded"],
