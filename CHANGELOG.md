@@ -12,6 +12,25 @@ No changes yet.
 
 ---
 
+## [1.0.30] - 2026-07-19
+
+### Fixed
+- Removed SQLite-only identity and serialization fields while normalizing
+  Registry recovery records, so adapter metadata can no longer leak into the
+  authoritative JSON dataset.
+- Reconciled the SQLite shadow's actual stored keys before writing current
+  site-qualified Registry identities. Upgrades from path-only keys no longer
+  collide on the shadow table's auto-increment `id` or leave stale recovery
+  rows behind.
+
+### Tests
+- Current source passes `499` non-browser tests, all `41` Playwright UI tests,
+  Ruff, `git diff --check`, and an import sweep of `116` package modules.
+- Added a real SQLite recovery regression covering legacy-key deletion,
+  canonical site-key creation, clean JSON output, and warning-free shadow sync.
+
+---
+
 ## [1.0.29] - 2026-07-19
 
 ### Fixed

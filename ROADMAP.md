@@ -2,9 +2,9 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.29 (release validation completed, 2026-07-19)
+> **Latest Release**: v1.0.30 (release validation completed, 2026-07-19)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` matches the validated v1.0.29 candidate: 497 non-browser tests, 41 browser tests, Ruff, and a 116-module import sweep pass. Clean Wheel, editable-source, Windows runtime, Docker health/detection, and GitHub CI checks are complete.
+> **Source Status**: `main` matches the validated v1.0.30 source: 499 non-browser tests, 41 browser tests, Ruff, and a 116-module import sweep pass. Clean Wheel, editable-source, Windows runtime, Docker health/detection, and GitHub CI checks are complete.
 
 ---
 
@@ -40,7 +40,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 ---
 
-## v1.0.20 - v1.0.29 Cleanup Line
+## v1.0.20 - v1.0.30 Cleanup Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
@@ -53,7 +53,8 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Released to PyPI |
 | 1.0.27 | Runtime observability, bounded backpressure, trusted proxies, SIEM bridge, YARA governance, restore de-duplication | Released to PyPI |
 | 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Released to PyPI |
-| 1.0.29 | Stable site identity across renames, instance-owned lifecycle/login throttling, site-isolated ThreatGraph, stable log ownership/history, focused service Protocols, deterministic Waitress shutdown, Docker/CI hardening | Validated for release |
+| 1.0.29 | Stable site identity across renames, instance-owned lifecycle/login throttling, site-isolated ThreatGraph, stable log ownership/history, focused service Protocols, deterministic Waitress shutdown, Docker/CI hardening | Released to PyPI |
+| 1.0.30 | Clean Registry recovery boundaries and exact reconciliation of legacy SQLite shadow keys | Released to PyPI |
 
 ---
 
@@ -63,14 +64,14 @@ Before a wider user push or PyPI release, complete this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.29 |
+| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.30 |
 | P0 | Verify release wheel clean install in a fresh runtime directory | Done: 117 Python / 204 package files; install and detection passed |
 | P0 | Verify source editable install in a fresh runtime directory | Done from clean commit clone |
 | P0 | Verify Docker build/run/health/detection path | Done: healthy container and site-qualified detection |
 | P0 | Confirm README commands match real CLI output | Done during Wheel/source install smoke |
-| P1 | Run deployment, architecture, and relevant web regression tests | Done: 497 non-browser; 41 UI; CI #205 passed |
-| P1 | Tag release only after every check above passes from a clean tree | Pending |
-| P1 | Verify trusted PyPI publishing and install the published artifact | Pending |
+| P1 | Run deployment, architecture, and relevant web regression tests | Done: 499 non-browser; 41 UI; GitHub CI passed |
+| P1 | Tag release only after every check above passes from a clean tree | Done for v1.0.30 |
+| P1 | Verify trusted PyPI publishing and install the published artifact | Done for v1.0.30 |
 
 ---
 

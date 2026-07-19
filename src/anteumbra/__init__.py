@@ -1,3 +1,3 @@
 """Anteumbra lightweight web perimeter security platform."""
 
-__version__ = "1.0.29"
+__version__ = "1.0.30"

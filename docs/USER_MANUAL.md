@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.29
+# Anteumbra User Manual v1.0.30
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -894,5 +894,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.29 — MIT License</sub>
+  <sub>Anteumbra v1.0.30 — MIT License</sub>
 </div>
