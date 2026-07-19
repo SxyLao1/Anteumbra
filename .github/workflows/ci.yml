@@ -50,6 +50,9 @@ jobs:
           python -c "import anteumbra; print('Version:', anteumbra.__version__)"
           python -c "from anteumbra.infrastructure.config.version import get_version; print('get_version():', get_version())"
 
+      - name: Run Ruff
+        run: python -m ruff check src tests
+
       - name: Run tests
         run: |
           python -m pytest tests/ \
@@ -114,7 +117,7 @@ jobs:
         run: |
           pip install dist/*.whl
           python -c "import anteumbra; print('Installed version:', anteumbra.__version__)"
-          anteumbra --version 2>&1 || true
+          anteumbra --version
 
   # ── Docker Build Check ────────────────────────────────────
   docker:
@@ -128,7 +131,20 @@ jobs:
 
       - name: Smoke test
         run: |
+          set -euo pipefail
           docker run --rm -d --name anteumbra-ci -p 8080:8080 anteumbra:ci
-          sleep 3
-          curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/v1/health || true
-          docker stop anteumbra-ci || true
+          cleanup() {
+            docker logs anteumbra-ci || true
+            docker rm -f anteumbra-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://localhost:8080/api/v1/health > /tmp/anteumbra-health.json; then
+              cat /tmp/anteumbra-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Anteumbra health endpoint did not become ready" >&2
+          exit 1

@@ -1,4 +1,4 @@
-# Anteumbra 技术白皮书 v1.0.28
+# Anteumbra 技术架构
 
 > **面向受众**：开发者、架构师、安全工程师。本文档描述 Anteumbra 的内部架构、设计决策、数据模型和扩展指南。
 
@@ -144,6 +144,7 @@ Application 模块拥有真实用例与运行时工作流状态：
 | 模块 | 职责 |
 |------|------|
 | `launcher.py` | 组合根、多站点资源启动、运行状态和确定性关闭 |
+| `runtime_container.py` | 通过 Domain Port 强类型声明必需的运行时服务清单 |
 | `jsonl_consumer.py` | JSONL 逐条确认、截断/轮转处理和死信 |
 | `quarantine_service.py` | 带文件系统与 Registry 补偿的隔离/恢复事务 |
 | `log_analysis_service.py` | 按站点分析访问日志，Web 路由不直接导入解析器 |
@@ -158,10 +159,12 @@ Application 模块拥有真实用例与运行时工作流状态：
 
 #### 运行生命周期
 
-`launcher.start_all()` 是进程组合根：先绑定 Web 监听器和激活插件，再为每个
-启用站点创建文件监控器与访问日志监控器，随后启动画像、SSE、Metrics 等后台
-资源，并记录所有资源所有权。`stop_all()` 先取消手动扫描，再按该清单幂等关闭。可选能力失败会
-形成明确告警；一个文件监控器都无法启动则视为致命错误。
+`launcher.py` 中的 `RuntimeLifecycle` 是进程组装与资源所有者。CLI 为每个进程创建
+一个生命周期实例并调用 `run()`；实例持有强类型 `RuntimeState`，通过 `status()` 暴露
+状态，并由 `stop()` 按反向顺序幂等关闭。项目不再保留模块级 Launcher 状态或兼容门面。
+可选能力失败会形成明确告警；一个文件监控器都无法启动则视为致命错误。
+`domain/service_ports.py` 定义 Scanner、文件聚类、ThreatGraph、Notifier、SIEM、SSE、
+WAL、WAF 和插件系统等可替换服务的接入契约。
 
 ### 2.3 Infrastructure 层（基础设施层）
 
@@ -240,14 +243,13 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 ### 3.3 事件流
 
 ```
-1. 基础设施模块检测到事件
-   monitor.py: _emit_alert()
+1. 组合根注入事件端口
+   RuntimeServices.events: EventPublisherPort
         │
-2. 惰性导入 PluginManager（避免循环导入）
-   from anteumbra.application.plugin_manager import get_plugin_manager
+2. 基础设施模块检测并发布事件
+   services.events.publish("alert_requested", "monitor", {...})
         │
-3. 发射事件
-   pm.emit("alert_requested", "monitor", {...})
+3. Runtime 所有的 EventPublisherRouter 转发到已绑定 PluginManager
         │
 4. 事件入队
    DomainEvent → 有界 `_event_queue`
@@ -786,10 +788,10 @@ decay_factor:
 
 ```
 1. 如果现有 infrastructure 模块已经发射事件：
-   - 当前兼容路径会惰性导入 PluginManager
-   - 不要把该模式扩散到无关模块
-   - 优先通过 Application 用例或注入的 Domain 事件发布端口
-   - 现有反向导入作为 v1.1.0 架构债务跟踪
+   - 由组合根注入 `EventPublisherPort`
+   - Infrastructure 不得导入或自行定位 `PluginManager`
+   - 同步依赖继续使用显式 Application 调用
+   - 事件负载必须携带站点信息并有隔离回归测试
 
 2. 如果新增事件类型：
    - 确保至少一个插件在 supported_events 中声明
@@ -807,7 +809,7 @@ decay_factor:
 |---------|:------:|------|
 | 新里程碑或不兼容产品架构 | 里程碑 | 2.0.0 |
 | 面向用户的新功能线 | 功能 | 1.1.0 |
-| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.28 |
+| Bug 修复、清理、可靠性改进、兼容重构 | bug 修复 | 1.0.x -> 1.0.(x+1) |
 
 ---
 
@@ -825,17 +827,18 @@ decay_factor:
 
 ### 10.2 运行时组装
 
-`launcher.py` 是组合根。它只解析一次站点，创建共享的 `RuntimeServices`，再为每个
-启用站点启动一个文件监控器和可选的日志监控器。监控器通过依赖注入得到自身的站点
-身份和运行时服务，不会导入全局网站选择。
+`launcher.py` 是组合根。单个 `RuntimeLifecycle` 只解析一次站点，创建必需的
+`RuntimeContainer` 与共享 `RuntimeServices`，再为每个启用站点启动一个文件监控器和
+可选的日志监控器。监控器通过依赖注入得到自身的站点身份和运行时服务，不会导入
+全局网站选择。
 
 ```
-config.toml -> TomlConfigProvider -> launcher.py -> RuntimeContainer
-                                   -> SiteResolver
-                                   -> RuntimeServices
-                                   -> monitor(site A)
-                                   -> monitor(site B)
-                                   -> log monitor(site N)
+config.toml -> TomlConfigProvider -> RuntimeLifecycle -> RuntimeContainer
+                                                      -> SiteResolver
+                                                      -> RuntimeServices
+                                                      -> monitor(site A)
+                                                      -> monitor(site B)
+                                                      -> log monitor(site N)
 ```
 
 关闭顺序沿同一所有权图反向执行，因此单个站点启动失败或被禁用不会阻止其他站点独立
@@ -887,14 +890,14 @@ config.toml -> TomlConfigProvider -> launcher.py -> RuntimeContainer
 |---------|------|
 | 版本号 | `src/anteumbra/__init__.py:__version__` |
 | 静默宽泛异常 | `rg -U "except Exception.*\\n\\s+pass" src/anteumbra`（必须无匹配） |
-| 所有事件发射点 | grep `pm.emit(` |
-| 所有线程锁 | grep `Lock()` |
-| 所有数据库表 | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
-| 所有蓝图路由 | grep `@.*_bp.route(` |
-| 所有配置键 | `config.toml` (130+ keys, 27 sections) |
+| 所有事件发射点 | `rg "events\\.publish|\\.emit\\(" src/anteumbra` |
+| 所有线程锁 | `rg "Lock\\(" src/anteumbra` |
+| 所有数据库表 | `src/anteumbra/infrastructure/persistence/sqlite_repository.py` |
+| 所有蓝图路由 | `rg "@.*_bp\\.route\\(" src/anteumbra/interfaces/web` |
+| 所有配置键 | `src/anteumbra/config.toml` |
 
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.28 — 随代码一起演进</sub>
+  <sub>Anteumbra 技术架构 — 随代码一起演进</sub>
 </div>

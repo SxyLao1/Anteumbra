@@ -1,8 +1,10 @@
 # Anteumbra Roadmap
 
-> **Current Version**: v1.0.28 (released, 2026-07-18)
+[中文](ROADMAP_cn.md)
+
+> **Latest Release**: v1.0.28 (tagged and published, 2026-07-18)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Current Status**: v1.0.28 completes the site-isolation and JSON-authoritative persistence cleanup. Non-browser, browser, clean-wheel, editable-source, CI, tag/push, and trusted PyPI publishing validation pass. It is not positioned as a replacement for WAF, EDR, SIEM, centralized fleet management, or distributed HA.
+> **Source Status**: `main` contains an unreleased post-1.0.28 architecture-closure line. Source validation currently passes 477 non-browser tests, 41 browser tests, Ruff, and a 114-module import sweep. Wheel, editable-install, Docker, tag, and PyPI checks must be repeated before the next bugfix release.
 
 ---
 
@@ -24,19 +26,21 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Runtime reliability | Multi-site resources have explicit startup/shutdown ownership; poison JSONL events advance through a dead-letter path; bounded queues use backpressure rather than drops; startup baseline scans and degraded capabilities are visible. |
 | Rule governance | 27 bundled YARA files compile independently; invalid custom files are isolated, failed reloads retain valid rules, and THOR shards stay independently verifiable. |
 | Architecture guardrails | Layer/import boundary tests exist, and resolved debt has been removed from the allowlist. |
-| Documentation | README, user manual, architecture docs, and release guide reflect the current install model. |
+| Runtime ownership | One `RuntimeLifecycle` owns startup, status, and reverse-order shutdown without module-global launcher state. |
+| Integration contracts | `RuntimeContainer` exposes required services through focused Domain Protocols; Web routes and plugins no longer reach Metrics, cluster, ThreatGraph, or Notifier private state. |
+| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. |
 
 ### Known Truths
 
 - The project is usable as a single-host security operations tool, but should not be described as a replacement for a production WAF, EDR, SIEM, centralized fleet manager, or distributed HA platform.
-- The architecture is significantly cleaner than the inherited Trident shape; `launcher.py` is the composition root and injects site-aware runtime services into monitoring components.
-- Compatibility globals still exist at selected interface boundaries, but core monitoring, Registry, metrics, notifications, quarantine, and dashboard read models now use explicit site identity and injected services.
+- The architecture is a modular monolith: `launcher.py` is the sole composition root, while independently replaceable services implement contracts from `domain/runtime.py` and `domain/service_ports.py`.
+- Site ownership is complete in Registry, metrics, notifications, quarantine, scanner history, dashboard summaries, ThreatGraph profiles/reputation, and SQLite shadow keys. Historical unassigned data remains explicitly `legacy`.
+- Login-attempt throttling is still process-local. That is valid for the current single-process product, but it must become an app-owned service before adding multi-worker or distributed deployment claims.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
-- Some historical comments and older modules still contain encoding damage from earlier development; they do not block runtime, but they hurt maintainability.
 
 ---
 
-## v1.0.20 - v1.0.28 Cleanup Line
+## v1.0.20 - Post-1.0.28 Cleanup Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
@@ -49,6 +53,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.26 | Multi-site lifecycle, poison-event handling, transactional quarantine, truthful UI E2E | Released to PyPI |
 | 1.0.27 | Runtime observability, bounded backpressure, trusted proxies, SIEM bridge, YARA governance, restore de-duplication | Released to PyPI |
 | 1.0.28 | Site-isolated runtime services, site-aware records/metrics/notifications, JSON-authoritative SQLite shadows, architecture guardrails | Released to PyPI |
+| `main` (unreleased) | Instance-owned launcher lifecycle, site-isolated ThreatGraph, focused service Protocols, public module APIs, deterministic Waitress shutdown, bilingual documentation and strict CI smoke checks | In validation |
 
 ---
 
@@ -58,30 +63,47 @@ Before a wider user push or PyPI release, complete this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P0 | Update CHANGELOG through the current version | Done for 1.0.28 |
-| P0 | Verify release wheel clean install in a fresh runtime directory | Done for 1.0.28 |
-| P0 | Verify source editable install in a fresh runtime directory | Done for 1.0.28 |
-| P0 | Verify Docker build/run/health/detection path | Done for 1.0.28 |
-| P0 | Confirm README commands match real output | Done for 1.0.28 |
-| P1 | Run deployment, architecture, and relevant web regression tests | Done: 488 non-browser passed, 1 explicit skip; 41 UI passed |
-| P1 | Tag release and push only after the final clean install check | Done for 1.0.28 |
-| P1 | Publish to PyPI from tag using the release workflow | Done for 1.0.28 |
+| P0 | Update English and Chinese changelog/docs for unreleased source | Done on `main`; final version number pending |
+| P0 | Verify release wheel clean install in a fresh runtime directory | Pending for next tag |
+| P0 | Verify source editable install in a fresh runtime directory | Pending for next tag |
+| P0 | Verify Docker build/run/health/detection path | Pending for next tag |
+| P0 | Confirm README commands match real CLI output | Pending final install smoke |
+| P1 | Run deployment, architecture, and relevant web regression tests | Source passed: 477 non-browser; 41 UI |
+| P1 | Tag release only after every check above passes from a clean tree | Pending |
+| P1 | Verify trusted PyPI publishing and install the published artifact | Pending |
 
 ---
 
-## v1.1.0 - Configuration And Runtime Decoupling
+## Architecture Closure Before v1.1.0
 
 Goal: make the project easier for one AI or one engineer to implement a module independently, without accidentally coupling to global process state.
 
 | Priority | Work Item | Status | Why |
 |----------|-----------|--------|-----|
-| P0 | Introduce an application/runtime context object | Done in 1.0.28 | Replace scattered global lookups with explicit dependencies. |
-| P0 | Reduce direct `ConfigRegistry` imports outside infrastructure/config and composition roots | In progress | Keep feature modules easier to test and reuse. |
-| P0 | Define stable module integration contracts for scanner, monitor, log analyzer, notifier, quarantine, and WAF adapters | In progress | Let independent module work plug in without hidden side effects. |
-| P1 | Separate startup resource allocation from request handlers | Done in 1.0.28 | Make web, CLI, Docker, and tests share the same runtime composition path. |
-| P1 | Add tests that enforce no new cross-layer imports | Done in 1.0.28 | Keep the architecture from drifting backward. |
+| P0 | Introduce an application/runtime context object | Done | Replace scattered global lookups with explicit dependencies. |
+| P0 | Remove the global configuration registry | Done | One `TomlConfigProvider` is owned by each runtime. |
+| P0 | Define stable integration contracts for scanner, clusters, ThreatGraph, notifier, SIEM, SSE, WAL, WAF, and plugins | Done on `main` | Independent modules plug in through focused Protocols. |
+| P0 | Own launcher resources per runtime and remove module lifecycle facades | Done on `main` | Multiple app/test runtimes no longer share launcher state. |
+| P0 | Complete site isolation through threat intelligence and public queries | Done on `main` | Same IP/path/profile data cannot bleed across sites. |
+| P1 | Remove cross-module private-state access | Done on `main` | Interfaces use public snapshots and query methods. |
+| P1 | Add tests that enforce imports, public ports, docs parity, and strict CI smoke checks | Done on `main` | Keep architecture and governance from drifting backward. |
+| P1 | Move login-attempt throttling into an app-owned service | Planned before next tag | Remove the remaining mutable interface-module workflow state. |
 | P1 | Normalize old mojibake comments in touched modules | Ongoing | Improve maintainability without risky broad rewrites. |
-| P2 | Create developer module templates for plugins/analyzers/adapters | Planned | Make extension work repeatable for humans and AIs. |
+
+---
+
+## v1.1.0 - Multi-Site Operations And Extension SDK
+
+Feature work starts only after the architecture-closure release passes the full
+wheel/source/Docker/PyPI checklist.
+
+| Priority | Work Item |
+|----------|-----------|
+| P0 | Add a site selector and complete site-scoped dashboard/navigation state without changing the underlying isolation model. |
+| P0 | Publish developer templates for plugins, log analyzers, scanners, and adapters against the existing Protocols. |
+| P1 | Add contract tests for third-party modules and validate plugin metadata/configuration before activation. |
+| P1 | Add explicit operator-facing migration and backup flows for multi-site instances. |
+| P2 | Introduce typed event payload schemas while preserving the current in-process event bus. |
 
 ---
 

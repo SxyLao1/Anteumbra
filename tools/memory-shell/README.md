@@ -1,61 +1,61 @@
-# Trident Memory Shell Detection Toolkit
+# Anteumbra Memory-Shell Incident Response References
 
-> **v1.9.5**: Reference implementations and integration adapters for memory shell detection.
+[中文](README_cn.md)
 
-This directory contains third-party memory shell detection tools bundled as reference implementations. These are standalone diagnostic scripts (JSP/ASPX) that can be deployed to suspect web servers for incident response.
+This directory preserves third-party JSP/ASPX memory-shell scanners for manual
+incident response and research. They are not imported, deployed, or executed by
+the Anteumbra runtime, and no current plugin automatically orchestrates them.
 
-## Directory Structure
+## Contents
 
-```
+```text
 tools/memory-shell/
-├── README.md                          ← This file
-├── java/
-│   ├── tomcat-memshell-scanner.jsp    ← c0ny1/java-memshell-scanner (JSP script)
-│   └── README_upstream.md            ← Original README
-└── aspnet/
-    ├── aspx-memshell-scanner.aspx     ← yzddmr6/As-Exploits (ASPX script)
-    └── README_upstream.md            ← Original README
+|-- README.md
+|-- README_cn.md
+|-- java/
+|   |-- tomcat-memshell-scanner.jsp
+|   `-- README_upstream.md
+`-- aspnet/
+    |-- aspx-memshell-scanner.aspx
+    `-- README_upstream.md
 ```
 
-## Upstream Sources
+| Tool | Upstream author | Repository |
+|------|-----------------|------------|
+| `tomcat-memshell-scanner.jsp` | c0ny1 | [java-memshell-scanner](https://github.com/c0ny1/java-memshell-scanner) |
+| `aspx-memshell-scanner.aspx` | yzddmr6 | [As-Exploits](https://github.com/yzddmr6/As-Exploits) |
 
-| Tool | Author | Repository | License |
-|------|--------|------------|---------|
-| tomcat-memshell-scanner.jsp | c0ny1 | https://github.com/c0ny1/java-memshell-scanner | Open Source |
-| aspx-memshell-scanner.aspx | yzddmr6 | https://github.com/yzddmr6/As-Exploits | Open Source |
+The original Chinese documentation and attribution are retained in each
+`README_upstream.md`.
 
-## Recommended Additional Tools
+## Operational Safety
 
-These tools are NOT bundled but are recommended for production incident response:
+These are executable diagnostic pages. Uploading one changes the web root and
+creates a powerful administrative endpoint. Before use:
 
-| Tool | Description | License |
-|------|-------------|---------|
-| [private-xss/memory-shell-detector](https://github.com/private-xss/memory-shell-detector) | GUI + CLI Java memshell detector, Tomcat/Jetty/WebLogic/Spring | MIT ✅ |
-| [4ra1n/shell-analyzer](https://github.com/4ra1n/shell-analyzer) | GUI JVM monitor with one-click decompile & kill | Open Source |
-| [y1shiny1shin/KMBA](https://github.com/y1shiny1shin/KMBA) | Arthas-based memshell killer, 12 types, Web UI + CLI | Open Source |
+1. Review the exact source and upstream revision.
+2. Test against an isolated copy of the affected server whenever possible.
+3. Restrict access by network ACL and authentication controls.
+4. Record hashes, deployment time, operator, and target as incident evidence.
+5. Remove the page immediately after collection and verify that removal.
+6. Do not treat a clean result as proof that the host is uncompromised.
 
-## Usage with Trident
+Anteumbra's normal file monitor may detect the diagnostic page itself. Use an
+explicit, time-bounded maintenance procedure; do not add a permanent broad
+allowlist for these files.
 
-Trident's `plugins/memory_shell_scanner.py` plugin can orchestrate these tools:
-1. Auto-deploy the appropriate scanner script to the target web server
-2. Fetch scan results via HTTP
-3. Parse and ingest findings into Trident's detection pipeline
-4. Correlate memory shell findings with file-system WebShell detections
+## Additional Tools
 
-### Manual Usage
+The following projects are not bundled:
 
-```bash
-# Deploy to Tomcat
-cp tomcat-memshell-scanner.jsp /path/to/tomcat/webapps/ROOT/
-curl http://target:8080/tomcat-memshell-scanner.jsp
+| Tool | Scope |
+|------|-------|
+| [private-xss/memory-shell-detector](https://github.com/private-xss/memory-shell-detector) | Java GUI/CLI detector for Tomcat, Jetty, WebLogic, and Spring |
+| [4ra1n/shell-analyzer](https://github.com/4ra1n/shell-analyzer) | JVM monitor with decompile and removal workflows |
+| [y1shiny1shin/KMBA](https://github.com/y1shiny1shin/KMBA) | Arthas-based memory-shell analysis and removal |
 
-# Deploy to IIS/ASP.NET
-copy aspx-memshell-scanner.aspx C:\inetpub\wwwroot\
-curl http://target/aspx-memshell-scanner.aspx
-```
+## License And Attribution
 
-## License & Attribution
-
-These tools are distributed under their original licenses. Trident does not claim authorship of any files in this directory except this README. See each subdirectory's `README_upstream.md` for original documentation and authorship.
-
-If you use Trident in academic or commercial work, please cite the original tool authors in addition to Trident.
+The scanner files remain under their upstream terms. Anteumbra does not claim
+authorship. Review each upstream repository and `README_upstream.md` before
+redistribution or production use.

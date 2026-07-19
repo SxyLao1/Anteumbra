@@ -1,5 +1,7 @@
 # Release Process
 
+[中文](RELEASE_cn.md)
+
 Anteumbra does not publish to PyPI from every `main` push. The GitHub workflow
 `.github/workflows/publish.yml` publishes only when a version tag is pushed or
 when the workflow is triggered manually.
@@ -43,13 +45,20 @@ Then publish a version:
 
 ```powershell
 cd F:\Home\Github\Anteumbra
+python -m ruff check src tests
 python -m pytest -q -rs --ignore=tests\e2e_ui
 python -m pytest tests\e2e_ui -q
+git diff --check
 git status --short
 git push origin main
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
+
+Before the tag, also rebuild and run the Docker image, wait for
+`/api/v1/health` to return HTTP `200`, and exercise one harmless detection file
+through Registry and quarantine/restore. A passing source test suite does not
+replace wheel or container validation.
 
 Wait for `.github/workflows/publish.yml`, then verify both the GitHub release
 workflow and `pip index versions anteumbra` report the tagged version. Do not

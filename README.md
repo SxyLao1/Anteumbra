@@ -12,7 +12,7 @@
 **Lightweight Web Perimeter Security**<br>
 Passive detection, semi-active response, file-level forensics, and attacker profiling.
 
-[中文](README_zh.md) | [User Manual](docs/USER_MANUAL.md) | [Architecture](docs/ARCHITECTURE.md) | [Release Guide](docs/RELEASE.md) | [PyPI](https://pypi.org/project/anteumbra/) | [Issues](https://github.com/SxyLao1/Anteumbra/issues)
+[中文](README_cn.md) | [User Manual](docs/USER_MANUAL.md) | [Architecture](docs/ARCHITECTURE.md) | [Roadmap](ROADMAP.md) | [Release Guide](docs/RELEASE.md) | [PyPI](https://pypi.org/project/anteumbra/) | [Issues](https://github.com/SxyLao1/Anteumbra/issues)
 
 </div>
 
@@ -30,9 +30,12 @@ Anteumbra is designed for one host or a small web workload: filesystem integrity
 
 | Need | English | Chinese |
 | --- | --- | --- |
-| Install, configure, operate | [User Manual](docs/USER_MANUAL.md) | [用户手册](docs/USER_MANUAL_zh.md) |
-| Internal architecture and extension points | [Architecture](docs/ARCHITECTURE.md) | [架构文档](docs/ARCHITECTURE_zh.md) |
-| Release and PyPI publishing | [Release Guide](docs/RELEASE.md) | - |
+| Install, configure, operate | [User Manual](docs/USER_MANUAL.md) | [用户手册](docs/USER_MANUAL_cn.md) |
+| Internal architecture and extension points | [Architecture](docs/ARCHITECTURE.md) | [架构文档](docs/ARCHITECTURE_cn.md) |
+| Current status and planned work | [Roadmap](ROADMAP.md) | [路线图](ROADMAP_cn.md) |
+| Release history | [Changelog](CHANGELOG.md) | [更新日志](CHANGELOG_cn.md) |
+| Release and PyPI publishing | [Release Guide](docs/RELEASE.md) | [发布指南](docs/RELEASE_cn.md) |
+| Memory-shell response references | [Toolkit](tools/memory-shell/README.md) | [工具说明](tools/memory-shell/README_cn.md) |
 
 ## Quick Start
 

@@ -1,8 +1,8 @@
-# Anteumbra Technical White Paper v1.0.28
+# Anteumbra Technical Architecture
 
 > **Target audience**: Developers, architects, security engineers. This document describes Anteumbra's internal architecture, design decisions, data model, and extension guide.
 
-[中文](ARCHITECTURE_zh.md)
+[中文](ARCHITECTURE_cn.md)
 
 ---
 
@@ -158,6 +158,7 @@ Application modules own use cases and runtime workflow state:
 | Module | Responsibility |
 |--------|----------------|
 | `launcher.py` | Composition root, multi-site resource startup, status, and deterministic shutdown |
+| `runtime_container.py` | Required runtime service inventory typed through Domain ports |
 | `jsonl_consumer.py` | Incremental JSONL acknowledgement, truncation/rotation handling, and dead letters |
 | `quarantine_service.py` | Quarantine/restore transactions with filesystem and Registry compensation |
 | `log_analysis_service.py` | Per-site access-log analysis without parser imports in web routes |
@@ -173,13 +174,14 @@ service instances.
 
 #### Runtime Lifecycle
 
-`launcher.start_all()` is the process composition root. It binds the web
-listener, activates plugins, creates file and access-log monitors for every
-enabled site, starts profiling/SSE/metrics workers, and records each owned
-resource. `stop_all()` cancels manual scans and uses that ownership list for
-idempotent shutdown. Optional
-capability failures become explicit warnings; inability to start any file
-monitor is fatal.
+`RuntimeLifecycle` in `launcher.py` is the process composition owner. The CLI
+creates one lifecycle instance and calls `run()`; the instance owns a typed
+`RuntimeState`, exposes `status()`, and uses `stop()` for idempotent reverse-order
+shutdown. There is no module-level launcher state or compatibility facade.
+Optional capability failures become explicit warnings; inability to start any
+file monitor is fatal. `domain/service_ports.py` defines the replaceable scanner,
+cluster, threat-graph, notifier, SIEM, SSE, WAL, WAF, and plugin contracts used by
+`RuntimeContainer`.
 
 ### 2.3 Infrastructure Layer
 
@@ -258,14 +260,13 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 ### 3.3 Event Flow
 
 ```
-1. Infrastructure module detects an event
-   monitor.py: _emit_alert()
+1. Composition root injects the event port
+   RuntimeServices.events: EventPublisherPort
         │
-2. Lazy-import PluginManager (avoids circular imports)
-   from anteumbra.application.plugin_manager import get_plugin_manager
+2. Infrastructure module detects and publishes an event
+   services.events.publish("alert_requested", "monitor", {...})
         │
-3. Emit event
-   pm.emit("alert_requested", "monitor", {...})
+3. Runtime-owned EventPublisherRouter forwards to the bound PluginManager
         │
 4. Event enqueued
    DomainEvent → bounded `_event_queue`
@@ -820,10 +821,10 @@ Merge conditions:
 
 ```
 1. If an existing infrastructure module already emits events:
-   - Its current compatibility path lazy-imports PluginManager
-   - Do not spread that pattern into unrelated modules
-   - Prefer an Application use case or an injected Domain event-publisher port
-   - Existing reverse imports are tracked architecture debt for v1.1.0
+   - Receive `EventPublisherPort` through the composition root
+   - Do not import or locate `PluginManager` from Infrastructure
+   - Keep synchronous dependencies as explicit Application calls
+   - Keep event payloads site-labelled and covered by isolation tests
 
 2. If adding a new event type:
    - Ensure at least one plugin declares it in supported_events
@@ -841,7 +842,7 @@ Merge conditions:
 |-------------|:------------:|---------|
 | New milestone or incompatible product architecture | MILESTONE | 2.0.0 |
 | User-facing feature line | FEATURE | 1.1.0 |
-| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.28 |
+| Bug fix, cleanup, reliability work, compatible refactoring | BUGFIX | 1.0.x -> 1.0.(x+1) |
 
 ---
 
@@ -860,18 +861,19 @@ No module may silently choose the first configured site to reinterpret them.
 
 ### 10.2 Runtime Composition
 
-`launcher.py` is the composition root. It resolves sites once, builds shared
-`RuntimeServices`, then starts one file monitor and optional log monitor for
-each enabled site. Monitors receive their site identity and runtime services as
-dependencies; they do not import a global website selection.
+`launcher.py` is the composition root. One `RuntimeLifecycle` resolves sites,
+builds the required `RuntimeContainer` and shared `RuntimeServices`, then starts
+one file monitor and optional log monitor for each enabled site. Monitors receive
+their site identity and runtime services as dependencies; they do not import a
+global website selection.
 
 ```
-config.toml -> TomlConfigProvider -> launcher.py -> RuntimeContainer
-                                   -> SiteResolver
-                                   -> RuntimeServices
-                                   -> monitor(site A)
-                                   -> monitor(site B)
-                                   -> log monitor(site N)
+config.toml -> TomlConfigProvider -> RuntimeLifecycle -> RuntimeContainer
+                                                      -> SiteResolver
+                                                      -> RuntimeServices
+                                                      -> monitor(site A)
+                                                      -> monitor(site B)
+                                                      -> log monitor(site N)
 ```
 
 The shutdown path follows the same ownership graph in reverse, so a failed or
@@ -928,14 +930,14 @@ pretending it is a distributed system.
 |----------------|------|
 | Version number | `src/anteumbra/__init__.py:__version__` |
 | Silent broad exceptions | `rg -U "except Exception.*\\n\\s+pass" src/anteumbra` (must return no matches) |
-| All event emission points | grep `pm.emit(` |
-| All thread locks | grep `Lock()` |
-| All database tables | `infrastructure/persistence/sqlite_repository.py:_init_tables()` |
-| All blueprint routes | grep `@.*_bp.route(` |
-| All configuration keys | `config.toml` (130+ keys, 27 sections) |
+| All event emission points | `rg "events\\.publish|\\.emit\\(" src/anteumbra` |
+| All thread locks | `rg "Lock\\(" src/anteumbra` |
+| All database tables | `src/anteumbra/infrastructure/persistence/sqlite_repository.py` |
+| All blueprint routes | `rg "@.*_bp\\.route\\(" src/anteumbra/interfaces/web` |
+| All configuration keys | `src/anteumbra/config.toml` |
 
 ---
 
 <div align="center">
-  <sub>Anteumbra Architecture White Paper v1.0.28 — Evolving alongside the code</sub>
+  <sub>Anteumbra Technical Architecture — Evolving alongside the code</sub>
 </div>

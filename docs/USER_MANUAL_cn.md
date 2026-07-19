@@ -830,9 +830,10 @@ GET /admin/health           # 需认证的完整诊断
 ### 12.4 获取帮助
 
 - **GitHub Issues**：https://github.com/SxyLao1/Anteumbra/issues
-- **README**：项目概览与架构
-- **ARCHITECTURE.md**：面向开发者的技术深入文档
-- **ROADMAP.md**：当前发布状态、已知债务和架构路线
+- **[README](../README_cn.md)**：项目概览与快速开始
+- **[ARCHITECTURE_cn.md](ARCHITECTURE_cn.md)**：面向开发者的技术深入文档
+- **[ROADMAP_cn.md](../ROADMAP_cn.md)**：当前发布状态与后续计划
+- **[RELEASE_cn.md](RELEASE_cn.md)**：发布、Tag 与 PyPI 检查清单
 
 ---
 

@@ -2,6 +2,45 @@
 
 > All notable changes to Anteumbra, the Web Perimeter Threat Intelligence platform.
 
+[中文](CHANGELOG_cn.md)
+
+---
+
+## [Unreleased]
+
+### Fixed
+- Isolated ThreatGraph profiles, IP/file reputation, persistence, WAF ingestion,
+  Registry linking, and public queries by `site_id`; ambiguous cross-site lookups
+  no longer guess a site.
+- Closed partially initialized plugin resources and made startup failures
+  explicit instead of leaking worker state or returning a successful CLI exit.
+- Made Waitress shutdown close SSE and keep-alive channels, wake the event loop,
+  and stop its task dispatcher; browser-driven runtimes no longer consume the
+  full shutdown timeout or leave server workers behind.
+- Centralized memory-probe degradation inside Metrics and removed Web/plugin
+  access to Metrics, cluster, ThreatGraph, and Notifier private state.
+
+### Changed
+- Replaced module-global launcher lifecycle state and `start_all`/`stop_all`
+  facades with one instance-owned `RuntimeLifecycle` and typed `RuntimeState`.
+- Added focused Domain Protocols for plugins, scanner/YARA, file clusters,
+  ThreatGraph, notifier, SIEM, SSE, WAL, and WAF; `RuntimeContainer` now marks
+  required services as required and retains `None` only for disabled capabilities.
+- Removed unused runtime retention of HashEngine and MemoryShellTracer objects;
+  FileClusterEngine now exposes immutable, thread-safe snapshots.
+- Standardized active Chinese documentation names on `*_cn.md`, added Chinese
+  roadmap/changelog/release/toolkit documents, and added documentation/link
+  governance tests.
+- Made CI run Ruff and fail on broken wheel CLI or Docker health smoke checks.
+
+### Tests
+- Current source passes `477` non-browser tests, all `41` Playwright UI tests,
+  Ruff, `git diff --check`, and an import sweep of `114` package modules.
+- Added regressions for instance-owned lifecycle shutdown, service boundaries,
+  site-qualified file/profile lookup, immutable cluster views, notification API,
+  WAF source metadata, documentation parity, strict CI, and Waitress shutdown
+  with an open keep-alive connection.
+
 ---
 
 ## [1.0.28] - 2026-07-18
@@ -431,16 +470,16 @@ Final Trident release before DDD migration. See `legacy-trident-v1.9.5` git tag.
 
 ## Version Scheme
 
-Anteumbra follows CalVer-inspired versioning:
+Anteumbra uses milestone.feature.bugfix versioning:
 
 ```
-v<major>.<minor>.<patch>
+v<milestone>.<feature>.<bugfix>
 
-major: Architecture migration milestone
-minor: Feature group / surgery cycle
-patch: Bug fix / optimization
+milestone: Architecture or product generation
+feature: User-facing feature group
+bugfix: Bug fix, reliability, optimization, or compatible cleanup
 ```
 
 - **v1.0.x**: DDD migration + surgery cycle (2026-06/07)
-- **v1.1.x**: Multi-site + Geo-IP (planned)
+- **v1.1.x**: Multi-site operations + extension SDK (planned)
 - **v2.0.x**: Async EventBus + Pydantic Schema (planned)

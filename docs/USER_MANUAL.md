@@ -2,7 +2,7 @@
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
-[中文](USER_MANUAL_zh.md)
+[中文](USER_MANUAL_cn.md)
 
 ---
 
@@ -870,9 +870,10 @@ minimal `/admin/api/v1/health` when only a status is required.
 ### 12.4 Getting Help
 
 - **GitHub Issues**: https://github.com/SxyLao1/Anteumbra/issues
-- **README**: Project overview and architecture
-- **ARCHITECTURE.md**: Technical deep-dive for developers
-- **ROADMAP.md**: Current readiness, known debt, and planned architecture work
+- **[README](../README.md)**: Project overview and quick start
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Technical deep-dive for developers
+- **[ROADMAP.md](../ROADMAP.md)**: Current readiness and planned work
+- **[RELEASE.md](RELEASE.md)**: Release, tag, and PyPI checklist
 
 ---
 

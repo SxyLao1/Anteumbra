@@ -12,7 +12,7 @@
 **轻量级 Web 边界安全平台**<br>
 被动检测、半主动响应、文件级取证与攻击者画像。
 
-[English](README.md) | [用户手册](docs/USER_MANUAL_zh.md) | [架构文档](docs/ARCHITECTURE_zh.md) | [发布指南](docs/RELEASE.md) | [PyPI](https://pypi.org/project/anteumbra/) | [Issues](https://github.com/SxyLao1/Anteumbra/issues)
+[English](README.md) | [用户手册](docs/USER_MANUAL_cn.md) | [架构文档](docs/ARCHITECTURE_cn.md) | [路线图](ROADMAP_cn.md) | [发布指南](docs/RELEASE_cn.md) | [PyPI](https://pypi.org/project/anteumbra/) | [Issues](https://github.com/SxyLao1/Anteumbra/issues)
 
 </div>
 
@@ -30,9 +30,12 @@ Anteumbra 面向单机或小规模 Web 负载：提供文件完整性监控、We
 
 | 需求 | 中文 | English |
 | --- | --- | --- |
-| 安装、配置、日常使用 | [用户手册](docs/USER_MANUAL_zh.md) | [User Manual](docs/USER_MANUAL.md) |
-| 内部架构、扩展点、模块边界 | [架构文档](docs/ARCHITECTURE_zh.md) | [Architecture](docs/ARCHITECTURE.md) |
-| 发布与 PyPI 推送 | [发布指南](docs/RELEASE.md) | [Release Guide](docs/RELEASE.md) |
+| 安装、配置、日常使用 | [用户手册](docs/USER_MANUAL_cn.md) | [User Manual](docs/USER_MANUAL.md) |
+| 内部架构、扩展点、模块边界 | [架构文档](docs/ARCHITECTURE_cn.md) | [Architecture](docs/ARCHITECTURE.md) |
+| 当前状态与后续计划 | [路线图](ROADMAP_cn.md) | [Roadmap](ROADMAP.md) |
+| 版本变更历史 | [更新日志](CHANGELOG_cn.md) | [Changelog](CHANGELOG.md) |
+| 发布与 PyPI 推送 | [发布指南](docs/RELEASE_cn.md) | [Release Guide](docs/RELEASE.md) |
+| 内存马响应参考工具 | [工具说明](tools/memory-shell/README_cn.md) | [Toolkit](tools/memory-shell/README.md) |
 
 ## 快速开始
 
@@ -87,7 +90,7 @@ anteumbra config reload
 `config reload` 会完整解析所选部署配置，但不会修改正在运行的服务。
 需要从 Web 系统页应用运行时配置，或重启服务。
 
-完整命令参考见 [CLI 命令](docs/USER_MANUAL_zh.md#4-cli-命令)。
+完整命令参考见 [CLI 命令](docs/USER_MANUAL_cn.md#4-cli-命令)。
 
 ## 核心能力
 
@@ -149,11 +152,11 @@ src/anteumbra/
   interfaces/      # CLI、Flask 蓝图、模板、静态资源
 ```
 
-模块边界、扩展指南和集成契约见 [架构文档](docs/ARCHITECTURE_zh.md)。
+模块边界、扩展指南和集成契约见 [架构文档](docs/ARCHITECTURE_cn.md)。
 
 ## 从 Trident 迁移
 
-Anteumbra 是 Trident 的后继项目。现有 `config.toml` 和 `data/` 目录设计上保持兼容；安装 Anteumbra、创建运行实例后，再复制旧配置和数据。生产迁移前建议先阅读 [用户手册](docs/USER_MANUAL_zh.md)。
+Anteumbra 是 Trident 的后继项目。现有 `config.toml` 和 `data/` 目录设计上保持兼容；安装 Anteumbra、创建运行实例后，再复制旧配置和数据。生产迁移前建议先阅读 [用户手册](docs/USER_MANUAL_cn.md)。
 
 ## 许可证
 
