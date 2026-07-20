@@ -7,7 +7,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
 from anteumbra.application.runtime_container import RuntimeContainer
@@ -27,6 +27,9 @@ from anteumbra.domain.service_ports import (
     ThreatGraphPort,
     WAFPollerPort,
 )
+
+if TYPE_CHECKING:
+    from anteumbra.infrastructure.process_identity import ProcessIdentity
 
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,7 @@ class RuntimeState:
     stop_event: threading.Event = field(default_factory=threading.Event)
     container: RuntimeContainer | None = None
     pid_file: Path | None = None
+    process_identity: ProcessIdentity | None = None
     web_server: RuntimeServerPort | None = None
     web_thread: threading.Thread | None = None
     profile_tailer: JsonlEventTailer | None = None
@@ -349,8 +353,10 @@ class RuntimeLifecycle:
 
         runtime_logger = container.logging.get_logger("Anteumbra")
         try:
+            from anteumbra.infrastructure.process_identity import write_process_identity
+
             data_dir.mkdir(parents=True, exist_ok=True)
-            pid_file.write_text(str(os.getpid()), encoding="utf-8")
+            state.process_identity = write_process_identity(pid_file, Path.cwd())
             state.warnings.extend(
                 item["message"]
                 for item in assess_runtime_capabilities(config)["warnings"]
@@ -562,13 +568,12 @@ class RuntimeLifecycle:
             _stop_resource("threat graph", threat_graph.close)
 
         try:
-            if (
-                state.pid_file
-                and state.pid_file.exists()
-                and state.pid_file.read_text(encoding="utf-8").strip()
-                == str(os.getpid())
-            ):
-                state.pid_file.unlink()
+            if state.pid_file and state.process_identity:
+                from anteumbra.infrastructure.process_identity import (
+                    remove_process_identity,
+                )
+
+                remove_process_identity(state.pid_file, state.process_identity)
         except OSError:
             logger.exception("Failed to remove PID file")
 

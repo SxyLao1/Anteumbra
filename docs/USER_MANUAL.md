@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.32
+# Anteumbra User Manual v1.0.33
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -414,16 +414,23 @@ Options:
 ```
 
 Background startup writes to `data/anteumbra.log` and waits up to 15 seconds
-for both the PID file and two consecutive configured HTTP-listener checks. It
-uses unbuffered output so startup progress and failures appear in that log
-immediately. It exits non-zero and points to that log when the process exits
-or never becomes ready.
+for both the process identity file and two consecutive health checks. The
+identity records the PID, a platform-stable process start token, and runtime
+root so a reused PID cannot claim the instance. Legacy integer PID files remain
+readable. Startup uses unbuffered output so progress and failures appear in the
+log immediately, and exits non-zero when the process exits or never becomes
+ready.
 
 ### `anteumbra stop`
 Stops the running process. On Windows it uses `taskkill /F`; on Linux it sends
 `SIGTERM` and falls back to `SIGKILL`. The command verifies actual process exit
 before deleting the PID file or reporting success. A termination failure returns
 non-zero and preserves the PID for diagnosis or retry.
+
+If `status` reports `UNKNOWN`, ownership could not be verified. `start` and
+`stop` then fail closed and preserve `data/anteumbra.pid`; retry with permission
+to inspect the process. Remove that file manually only after independently
+confirming that no Anteumbra process is running.
 
 ### `anteumbra config`
 ```
@@ -943,5 +950,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.32 — MIT License</sub>
+  <sub>Anteumbra v1.0.33 — MIT License</sub>
 </div>

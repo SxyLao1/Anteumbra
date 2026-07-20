@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.32
+# Anteumbra 用户手册 v1.0.33
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -387,13 +387,19 @@ anteumbra config validate # 校验路径、端口、.env 和已启用集成
   --port INTEGER   绑定端口（默认读取 config web_admin.port）
 ```
 
-后台启动统一写入 `data/anteumbra.log`，并在 15 秒内同时等待 PID 文件和连续两次配置的
-HTTP 监听端口检查成功。它使用无缓冲输出，启动进度和失败信息会立即写入该日志。进程提前退出或未能就绪时，命令返回非零并提示检查该日志。
+后台启动统一写入 `data/anteumbra.log`，并在 15 秒内同时等待进程身份文件和连续两次
+健康检查成功。身份文件记录 PID、平台稳定的进程启动令牌和运行实例根目录，PID 被
+复用时不能冒充本实例；旧纯数字 PID 文件仍可读取。它使用无缓冲输出，启动进度和
+失败信息会立即写入该日志；进程提前退出或未能就绪时返回非零并提示检查日志。
 
 ### `anteumbra stop`
 停止正在运行的进程。Windows 上使用 `taskkill /F`；Linux 上先发送 `SIGTERM`，
 必要时回退到 `SIGKILL`。命令只有在确认进程实际退出后才删除 PID 文件并报告
 成功；终止失败会返回非零并保留 PID，便于诊断或重试。
+
+如果 `status` 报告 `UNKNOWN`，说明无法验证进程归属。此时 `start` 和 `stop` 会失败
+关闭并保留 `data/anteumbra.pid`；请使用能够检查该进程的权限重试。只有独立确认没有
+Anteumbra 进程运行后，才能手工删除该文件。
 
 ### `anteumbra config`
 ```
@@ -893,5 +899,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.32 — MIT License</sub>
+  <sub>Anteumbra v1.0.33 — MIT License</sub>
 </div>

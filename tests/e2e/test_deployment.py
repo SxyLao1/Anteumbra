@@ -926,10 +926,12 @@ class TestCliInstall:
     def test_start_uses_package_entrypoint_not_source_run_py(self, tmp_path, monkeypatch):
         """Background start must work from a deployment dir without run.py."""
         import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentity
 
         calls = []
         ready_checks = []
-        pid_reads = iter([None, 12345])
+        identity = ProcessIdentity(12345, 123.0, str(tmp_path))
+        identity_reads = iter([None, identity])
 
         def fake_popen(cmd, **kwargs):
             calls.append((cmd, kwargs))
@@ -940,7 +942,11 @@ class TestCliInstall:
             return FakeProc()
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(
+            cli_main,
+            "_read_runtime_identity",
+            lambda _root=None: next(identity_reads, identity),
+        )
         monkeypatch.setattr(
             cli_main,
             "_service_ready",
@@ -972,8 +978,10 @@ class TestCliInstall:
     ):
         """A transient listener must not be reported as a running service."""
         import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentity
 
-        pid_reads = iter([None, 12345])
+        identity = ProcessIdentity(12345, 123.0, str(tmp_path))
+        identity_reads = iter([None, identity])
 
         class FakeProc:
             def __init__(self):
@@ -983,7 +991,11 @@ class TestCliInstall:
                 return next(self._poll_results, 1)
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(
+            cli_main,
+            "_read_runtime_identity",
+            lambda _root=None: next(identity_reads, identity),
+        )
         monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
         monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
         monkeypatch.setattr(cli_main.subprocess, "Popen", lambda *_args, **_kwargs: FakeProc())
@@ -997,13 +1009,15 @@ class TestCliInstall:
     def test_start_uses_configured_admin_port_by_default(self, tmp_path, monkeypatch):
         """start should honor web_admin.port when --port is not explicitly passed."""
         import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentity
 
         (tmp_path / "config.toml").write_text(
             "[web_admin]\nhost = \"127.0.0.1\"\nport = 18444\n",
             encoding="utf-8",
         )
         calls = []
-        pid_reads = iter([None, 12345])
+        identity = ProcessIdentity(12345, 123.0, str(tmp_path))
+        identity_reads = iter([None, identity])
 
         def fake_popen(cmd, **kwargs):
             calls.append((cmd, kwargs))
@@ -1014,7 +1028,11 @@ class TestCliInstall:
             return FakeProc()
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli_main, "_read_pid", lambda: next(pid_reads, 12345))
+        monkeypatch.setattr(
+            cli_main,
+            "_read_runtime_identity",
+            lambda _root=None: next(identity_reads, identity),
+        )
         monkeypatch.setattr(cli_main, "_service_ready", lambda _host, _port: True)
         monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
         monkeypatch.setattr(cli_main.subprocess, "Popen", fake_popen)
@@ -1029,14 +1047,18 @@ class TestCliInstall:
     def test_stop_preserves_pid_when_taskkill_fails(self, tmp_path, monkeypatch):
         """stop must not report success or lose recovery state on kill failure."""
         import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentityState
 
         pid_file = tmp_path / cli_main.PID_FILE
         pid_file.parent.mkdir(parents=True)
         pid_file.write_text("12345", encoding="utf-8")
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli_main, "_read_pid", lambda: 12345)
-        monkeypatch.setattr(cli_main, "_is_running", lambda _pid: True)
+        monkeypatch.setattr(
+            cli_main,
+            "_process_state",
+            lambda _identity, _root=None: ProcessIdentityState.RUNNING,
+        )
         monkeypatch.setattr(cli_main.sys, "platform", "win32")
         monkeypatch.setattr(
             cli_main.subprocess,
@@ -1057,18 +1079,23 @@ class TestCliInstall:
     def test_stop_removes_pid_after_confirmed_exit(self, tmp_path, monkeypatch):
         """stop reports success only after observing that the process exited."""
         import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentityState
 
         pid_file = tmp_path / cli_main.PID_FILE
         pid_file.parent.mkdir(parents=True)
         pid_file.write_text("12345", encoding="utf-8")
-        running_states = iter([True, False])
+        process_states = iter(
+            [ProcessIdentityState.RUNNING, ProcessIdentityState.STOPPED]
+        )
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
-        monkeypatch.setattr(cli_main, "_read_pid", lambda: 12345)
         monkeypatch.setattr(
             cli_main,
-            "_is_running",
-            lambda _pid: next(running_states, False),
+            "_process_state",
+            lambda _identity, _root=None: next(
+                process_states,
+                ProcessIdentityState.STOPPED,
+            ),
         )
         monkeypatch.setattr(cli_main.sys, "platform", "win32")
         monkeypatch.setattr(
@@ -1086,6 +1113,81 @@ class TestCliInstall:
         assert result.exit_code == 0, result.output
         assert "Anteumbra stopped." in result.output
         assert not pid_file.exists()
+
+    def test_stop_refuses_unverifiable_pid_ownership(self, tmp_path, monkeypatch):
+        """An unreadable legacy process must never be terminated speculatively."""
+        import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentityState
+
+        pid_file = tmp_path / cli_main.PID_FILE
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("12345", encoding="utf-8")
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(
+            cli_main,
+            "_process_state",
+            lambda _identity, _root=None: ProcessIdentityState.UNKNOWN,
+        )
+        monkeypatch.setattr(
+            cli_main.subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail("taskkill must not be called"),
+        )
+
+        result = CliRunner().invoke(cli_main.cli, ["stop"])
+
+        assert result.exit_code == 1
+        assert "refusing to terminate" in result.output
+        assert pid_file.exists()
+
+    def test_stop_removes_reused_pid_without_terminating(self, tmp_path, monkeypatch):
+        """A reused PID is stale state, not authority to kill the new process."""
+        import anteumbra.cli.main as cli_main
+        from anteumbra.infrastructure.process_identity import ProcessIdentityState
+
+        pid_file = tmp_path / cli_main.PID_FILE
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("12345", encoding="utf-8")
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(
+            cli_main,
+            "_process_state",
+            lambda _identity, _root=None: ProcessIdentityState.MISMATCH,
+        )
+        monkeypatch.setattr(
+            cli_main.subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail("taskkill must not be called"),
+        )
+
+        result = CliRunner().invoke(cli_main.cli, ["stop"])
+
+        assert result.exit_code == 0, result.output
+        assert "no longer owns this runtime" in result.output
+        assert not pid_file.exists()
+
+    def test_start_refuses_invalid_pid_identity(self, tmp_path, monkeypatch):
+        """Corrupt ownership state must block a potentially duplicate start."""
+        import anteumbra.cli.main as cli_main
+
+        pid_file = tmp_path / cli_main.PID_FILE
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("not-a-process-identity", encoding="utf-8")
+
+        monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(
+            cli_main.subprocess,
+            "Popen",
+            lambda *_args, **_kwargs: pytest.fail("process must not be started"),
+        )
+
+        result = CliRunner().invoke(cli_main.cli, ["start"])
+
+        assert result.exit_code == 1
+        assert "invalid PID identity file" in result.output
+        assert pid_file.exists()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1251,6 +1353,6 @@ class TestProcessLifecycle:
         assert "anteumbra.pid" in source, (
             "RuntimeLifecycle should write a PID file (data/anteumbra.pid) at startup"
         )
-        assert "os.getpid()" in source, (
-            "PID file should contain the actual process ID"
+        assert "write_process_identity" in source, (
+            "RuntimeLifecycle should persist PID-reuse-resistant process identity"
         )

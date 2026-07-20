@@ -8,10 +8,33 @@
 
 ## [Unreleased]
 
+No changes yet.
+
+---
+
+## [1.0.33] - 2026-07-20
+
+### Fixed
+- Replaced integer-only PID ownership with an atomic process identity containing
+  the PID, a platform-stable process start token, and runtime root. Reused PIDs
+  can no longer make `status` report an unrelated process or let `stop`
+  terminate it.
+- Made `start`, `status`, and `stop` preserve invalid or unverifiable ownership
+  evidence and refuse unsafe start/termination decisions. Legacy integer PID
+  files remain readable and are verified by command and working directory.
+
 ### Documentation
 - Removed the machine-specific virtual-environment layout from installation
   examples and clarified that Anteumbra never creates a virtual environment or
   modifies `PATH`; `python -m anteumbra` is the no-PATH fallback.
+
+### Tests
+- Added process identity coverage for PID reuse, runtime-root mismatch, legacy
+  records, missing process-inspection support, corrupt records, atomic
+  replacement, and fail-closed CLI behavior.
+- Final candidate passes 520 non-browser tests, all 41 Playwright UI tests,
+  Ruff, 118/205-file Wheel parity, Windows upgrade/reuse checks, and Linux
+  Docker PID 1 identity checks.
 
 ---
 

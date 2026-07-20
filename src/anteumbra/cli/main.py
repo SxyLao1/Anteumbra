@@ -27,6 +27,13 @@ from urllib import request as urlrequest
 import click
 
 from anteumbra import __version__
+from anteumbra.infrastructure.process_identity import (
+    ProcessIdentity,
+    ProcessIdentityState,
+    probe_process_identity,
+    read_process_identity,
+    remove_process_identity,
+)
 
 PID_FILE = Path("data/anteumbra.pid")
 DEFAULT_HOST = "127.0.0.1"
@@ -111,27 +118,19 @@ def _find_project_root() -> Path:
     return source_checkout or cwd
 
 
-def _read_pid() -> int | None:
-    pf = _find_project_root() / PID_FILE
-    if pf.exists():
-        try:
-            return int(pf.read_text().strip())
-        except (ValueError, OSError):
-            logging.getLogger(__name__).debug("Failed to read PID file", exc_info=True)
-    return None
+def _pid_path(root: Path | None = None) -> Path:
+    return (root or _find_project_root()) / PID_FILE
 
 
-def _is_running(pid: int) -> bool:
-    """Check if a process with the given PID is alive."""
-    try:
-        import psutil
-        return psutil.pid_exists(pid)
-    except ImportError:
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError:
-            return False
+def _read_runtime_identity(root: Path | None = None) -> ProcessIdentity | None:
+    return read_process_identity(_pid_path(root))
+
+
+def _process_state(
+    identity: ProcessIdentity,
+    root: Path | None = None,
+) -> ProcessIdentityState:
+    return probe_process_identity(identity, root or _find_project_root())
 
 
 def _service_ready(host: str, port: int, timeout: float = 0.25) -> bool:
@@ -150,7 +149,8 @@ def _service_ready(host: str, port: int, timeout: float = 0.25) -> bool:
 
 
 def _wait_for_process_exit(
-    pid: int,
+    identity: ProcessIdentity,
+    root: Path,
     *,
     timeout: float = 5.0,
     interval: float = 0.1,
@@ -158,10 +158,14 @@ def _wait_for_process_exit(
     """Wait until a process exits instead of trusting a kill command result."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not _is_running(pid):
+        state = _process_state(identity, root)
+        if state in {ProcessIdentityState.STOPPED, ProcessIdentityState.MISMATCH}:
             return True
         time.sleep(interval)
-    return not _is_running(pid)
+    return _process_state(identity, root) in {
+        ProcessIdentityState.STOPPED,
+        ProcessIdentityState.MISMATCH,
+    }
 
 
 def _get_python() -> str:
@@ -228,10 +232,17 @@ def cli(ctx, home):
         os.environ["ANTEUMBRA_HOME"] = str(home)
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
-        # Show quick status
-        pid = _read_pid()
-        if pid and _is_running(pid):
-            click.echo(f"\n  Status: RUNNING (PID {pid})")
+        root = _find_project_root()
+        identity = _read_runtime_identity(root)
+        state = _process_state(identity, root) if identity else None
+        if identity and state is ProcessIdentityState.RUNNING:
+            click.echo(f"\n  Status: RUNNING (PID {identity.pid})")
+        elif identity and state is ProcessIdentityState.UNKNOWN:
+            click.echo(
+                f"\n  Status: UNKNOWN (cannot verify PID {identity.pid} ownership)"
+            )
+        elif identity is None and _pid_path(root).exists():
+            click.echo("\n  Status: UNKNOWN (invalid PID identity file)")
         else:
             click.echo(f"\n  Status: STOPPED")
 
@@ -280,15 +291,29 @@ def start(host, port):
     """
     root = _find_project_root()
     host, port = _resolve_bind_options(root, host, port)
-    pid = _read_pid()
+    pid_path = _pid_path(root)
+    identity = _read_runtime_identity(root)
 
-    if pid and _is_running(pid):
-        click.echo(f"Anteumbra is already running (PID {pid}). Use 'anteumbra stop' first.")
-        raise SystemExit(1)
-    if pid:
-        stale_pid_file = root / PID_FILE
-        stale_pid_file.unlink(missing_ok=True)
-        click.echo(f"Removed stale PID file for process {pid}.")
+    if identity is None and pid_path.exists():
+        raise click.ClickException(
+            f"Cannot verify the invalid PID identity file at {pid_path}. "
+            "Confirm no Anteumbra process is running before removing it."
+        )
+    if identity:
+        state = _process_state(identity, root)
+        if state is ProcessIdentityState.RUNNING:
+            click.echo(
+                f"Anteumbra is already running (PID {identity.pid}). "
+                "Use 'anteumbra stop' first."
+            )
+            raise SystemExit(1)
+        if state is ProcessIdentityState.UNKNOWN:
+            raise click.ClickException(
+                f"Cannot verify ownership of PID {identity.pid}; refusing to start "
+                "a second instance. Retry with permission to inspect the process."
+            )
+        remove_process_identity(pid_path, identity)
+        click.echo(f"Removed stale PID identity for process {identity.pid}.")
 
     log_file = root / "data" / "anteumbra.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -341,12 +366,12 @@ def start(host, port):
         if callable(poll) and poll() is not None:
             click.echo(f"Anteumbra failed to start. Check {log_file}", err=True)
             raise SystemExit(1)
-        pid = _read_pid()
-        if pid and _service_ready(host, port):
+        identity = _read_runtime_identity(root)
+        if identity and _service_ready(host, port):
             ready_checks += 1
             if ready_checks < 2:
                 continue
-            click.echo(f"Anteumbra started (PID {pid}).")
+            click.echo(f"Anteumbra started (PID {identity.pid}).")
             click.echo(f"  Admin: http://{host}:{port}/admin")
             click.echo(f"  Log:   {log_file}")
             return
@@ -365,17 +390,33 @@ def start(host, port):
 def stop():
     """Stop a running Anteumbra instance via its PID file."""
     root = _find_project_root()
-    pid = _read_pid()
+    pid_path = _pid_path(root)
+    identity = _read_runtime_identity(root)
 
-    if not pid:
+    if identity is None and not pid_path.exists():
         click.echo("No PID file found. Anteumbra may not be running.")
         raise SystemExit(1)
+    if identity is None:
+        raise click.ClickException(
+            f"Cannot verify the invalid PID identity file at {pid_path}; "
+            "refusing to terminate any process."
+        )
 
-    if not _is_running(pid):
-        click.echo(f"PID {pid} is not alive. Removing stale PID file.")
-        (root / PID_FILE).unlink(missing_ok=True)
+    state = _process_state(identity, root)
+    if state in {ProcessIdentityState.STOPPED, ProcessIdentityState.MISMATCH}:
+        click.echo(
+            f"PID {identity.pid} no longer owns this runtime. "
+            "Removing stale PID identity."
+        )
+        remove_process_identity(pid_path, identity)
         return
+    if state is ProcessIdentityState.UNKNOWN:
+        raise click.ClickException(
+            f"Cannot verify ownership of PID {identity.pid}; refusing to terminate it. "
+            "Retry with permission to inspect the process."
+        )
 
+    pid = identity.pid
     click.echo(f"Stopping Anteumbra (PID {pid})...")
     try:
         if sys.platform == "win32":
@@ -385,23 +426,27 @@ def stop():
                 text=True,
                 check=False,
             )
-            if result.returncode != 0 and _is_running(pid):
+            if (
+                result.returncode != 0
+                and _process_state(identity, root)
+                in {ProcessIdentityState.RUNNING, ProcessIdentityState.UNKNOWN}
+            ):
                 detail = (result.stderr or result.stdout or "unknown error").strip()
                 raise RuntimeError(f"taskkill failed ({result.returncode}): {detail}")
-            stopped = _wait_for_process_exit(pid)
+            stopped = _wait_for_process_exit(identity, root)
         else:
             os.kill(pid, signal.SIGTERM)
-            stopped = _wait_for_process_exit(pid)
+            stopped = _wait_for_process_exit(identity, root)
             if not stopped:
                 os.kill(pid, signal.SIGKILL)
-                stopped = _wait_for_process_exit(pid)
+                stopped = _wait_for_process_exit(identity, root)
         if not stopped:
             raise RuntimeError(f"process {pid} is still running after termination")
     except Exception as e:
         click.echo(f"Error stopping process: {e}", err=True)
         raise SystemExit(1) from e
 
-    (root / PID_FILE).unlink(missing_ok=True)
+    remove_process_identity(pid_path, identity)
     click.echo("Anteumbra stopped.")
 
 
@@ -411,13 +456,19 @@ def stop():
 def status():
     """Check if Anteumbra is running."""
     root = _find_project_root()
-    pid = _read_pid()
+    pid_path = _pid_path(root)
+    identity = _read_runtime_identity(root)
 
-    if not pid:
+    if identity is None and not pid_path.exists():
         click.echo("Status: STOPPED (no PID file)")
         return
+    if identity is None:
+        click.echo(f"Status: UNKNOWN (invalid PID identity file at {pid_path})")
+        return
 
-    if _is_running(pid):
+    state = _process_state(identity, root)
+    pid = identity.pid
+    if state is ProcessIdentityState.RUNNING:
         click.echo(f"Status: RUNNING (PID {pid})")
         try:
             import psutil
@@ -426,9 +477,11 @@ def status():
             click.echo(f"  Memory: {proc.memory_info().rss / 1024 / 1024:.1f} MB")
         except ImportError:
             logging.getLogger(__name__).debug("psutil not available for uptime/memory stats", exc_info=True)
+    elif state is ProcessIdentityState.UNKNOWN:
+        click.echo(f"Status: UNKNOWN (cannot verify ownership of PID {pid})")
     else:
-        click.echo(f"Status: STOPPED (PID {pid} is dead; removing stale PID)")
-        (root / PID_FILE).unlink(missing_ok=True)
+        click.echo(f"Status: STOPPED (PID {pid} no longer owns this runtime)")
+        remove_process_identity(pid_path, identity)
 
 
 # ── Config management ──────────────────────────────
