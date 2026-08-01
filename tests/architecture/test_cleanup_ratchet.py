@@ -79,7 +79,12 @@ def test_module_size_baseline_records_cleanup_starting_point():
         path: len((PACKAGE_ROOT / path).read_text(encoding="utf-8").splitlines())
         for path in MODULE_SIZE_BASELINE
     }
-    assert actual == MODULE_SIZE_BASELINE
+    growth = {
+        path: (MODULE_SIZE_BASELINE[path], lines)
+        for path, lines in actual.items()
+        if lines > MODULE_SIZE_BASELINE[path]
+    }
+    assert not growth, f"cleanup target modules must not grow beyond baseline: {growth}"
 
 
 def test_stage_one_must_retire_the_only_application_to_interface_edge():
@@ -127,7 +132,11 @@ def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication()
         ("/account/password", ("POST",), True), ("/api/v1/health", ("GET",), False),
         ("/health", ("GET",), True),
     }
-    assert _route_contract("monitor_bp.py", "monitor_bp") == {
+    monitor_routes = (
+        _route_contract("monitor_bp.py", "monitor_bp")
+        | _route_contract("monitor_admin_routes.py", "monitor_bp")
+    )
+    assert monitor_routes == {
         ("/stream_logs", ("GET",), False), ("/logs/history", ("GET",), True),
         ("/logs/access-analysis", ("GET",), True), ("/wal", ("GET",), True),
         ("/wal/current", ("GET",), True), ("/wal/list", ("GET",), True),
