@@ -131,7 +131,7 @@ def test_access_log_analysis_is_available_from_log_analyzer():
     overview = read_source("src", "anteumbra", "interfaces", "web", "templates", "admin", "overview.html")
 
     assert "@monitor_bp.route('/logs/access-analysis')" in monitor_bp
-    assert "analyze_access_logs" in monitor_bp
+    assert "runtime.log_analysis.analyze" in monitor_bp
     assert "function loadAccessLogAnalysis()" in dashboard_js
     assert "/admin/logs/access-analysis" in dashboard_js
     assert "Access Analysis" in overview
