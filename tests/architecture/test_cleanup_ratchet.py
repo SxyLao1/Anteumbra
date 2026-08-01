@@ -20,14 +20,12 @@ TEMPORARY_APPLICATION_TO_INFRASTRUCTURE = {
     ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
-    ("application/path_service.py", "anteumbra.infrastructure.utils.path_utils"),
     ("application/platform_service.py", "anteumbra.infrastructure.utils.platform_utils"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.notifier"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.monitor"),
     ("application/scanner_service.py", "anteumbra.infrastructure.detection.manual_scanner"),
-    ("application/session_service.py", "anteumbra.infrastructure.utils.path_utils"),
     ("application/yara_service.py", "anteumbra.infrastructure.detection.yara_engine"),
 }
 
@@ -156,14 +154,12 @@ TEMPORARY_APPLICATION_TO_INFRASTRUCTURE_RATIONALES = {
     ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"): "move path normalization to assembly",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"): "define detection port",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "define log-analysis port",
-    ("application/path_service.py", "anteumbra.infrastructure.utils.path_utils"): "relocate neutral path helper",
     ("application/platform_service.py", "anteumbra.infrastructure.utils.platform_utils"): "define OS capability boundary",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.notifier"): "inject plugin formatter",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "inject worker analyzer factory",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"): "inject log monitor factory",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.monitor"): "inject site monitor factory",
     ("application/scanner_service.py", "anteumbra.infrastructure.detection.manual_scanner"): "define scan port",
-    ("application/session_service.py", "anteumbra.infrastructure.utils.path_utils"): "relocate neutral path helper",
     ("application/yara_service.py", "anteumbra.infrastructure.detection.yara_engine"): "define YARA scan port",
 }
 
