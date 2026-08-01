@@ -9,8 +9,8 @@ post-quarantine bookkeeping:
   - emit alert_requested for success/failure/skip notifications
   - batch notification aggregation
 
-This plugin replaces the inline quarantine logic that was previously
-embedded in FileMonitorHandler._do_scan().
+The application DetectionWorkflow emits quarantine requests; this plugin
+owns the infrastructure side effects listed above.
 """
 import logging
 import time

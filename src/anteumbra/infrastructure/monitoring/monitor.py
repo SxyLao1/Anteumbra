@@ -13,7 +13,7 @@ v1.8.1-Release: 平台自适应幽灵目录修复（改进版）
 - T-01-B验证: ≥0.01ms即可消除误判，50ms为工程保守设计
 - v1.8.1改进: 采用TTL控制的无限制容量缓存（替代LRU硬编码100）
 """
-import json
+import importlib
 import logging
 import os
 import sys
@@ -24,9 +24,12 @@ import fnmatch
 from pathlib import Path
 from typing import Callable, Dict, Set
 from watchdog.events import FileSystemEventHandler
+from anteumbra.application.detection_workflow import DetectionWorkflow
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
+from anteumbra.infrastructure.monitoring import log_analyzer
+from anteumbra.infrastructure.monitoring.detection_attribution import resolve_first_seen_ip
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 
@@ -75,6 +78,15 @@ class FileMonitorHandler(FileSystemEventHandler):
             else self.runtime.site_for_path(base_path)
         )
         self.website = website  # v1.0.10: 修复 LogAnalyzer 需要 website 属性
+        self._detection_workflow = DetectionWorkflow(
+            config=self.runtime.config,
+            registry=self.services.registry,
+            metrics=self.services.metrics,
+            events=self.services.events,
+            quarantine=self.services.quarantine,
+            site=self.site,
+            logger=self.logger,
+        )
         self.exclude_dirs = {d.lower() for d in scan_options.exclude_dirs}
         self._dedupe_window = 5.0
 
@@ -549,162 +561,44 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self._scan_queue.task_done()
 
     def _do_scan(self, event_path, event_type):
-        """实际执行扫描（从 _handle_event 抽离）"""
-        # A restored file generates a fresh filesystem event. Skip before the
-        # scanner so an intentional restore produces neither a new finding nor
-        # scan-log noise during its short guard window.
-        try:
-            if self.services.quarantine.is_recently_restored(str(event_path)):
-                self.logger.info(
-                    "[RESTORE][SKIP] Recently restored file: %s",
-                    event_path.name,
-                )
-                return
-        except Exception:
-            self.logger.debug(
-                "Failed to check restored-file guard before scanning",
-                exc_info=True,
-            )
+        """Delegate detection semantics while retaining handler monkeypatch hooks."""
+        self._detection_workflow.execute(
+            event_path,
+            event_type,
+            scan=self._scan_event_path,
+            resolve_first_seen_ip=self._resolve_first_seen_ip,
+            emit_alert=self._emit_alert,
+            emit_file_quarantined=self._emit_file_quarantined,
+            report_detection=lambda result: log_with_symbol(
+                "scan_hit",
+                "critical",
+                f"{event_path.name} | 引擎: {result.engine}",
+                self.logger,
+            ),
+            report_scan_error=lambda path, error: log_with_symbol(
+                "error_scan",
+                "error",
+                f"{path}: {error}",
+                self.logger,
+            ),
+        )
 
-        try:
-            if isinstance(self.scan_callback, str):
-                module_path, func_name = self.scan_callback.rsplit('.', 1)
-                import importlib
-                module = importlib.import_module(module_path)
-                scan_func = getattr(module, func_name)
-            else:
-                scan_func = self.scan_callback
+    def _scan_event_path(self, event_path: Path):
+        if isinstance(self.scan_callback, str):
+            module_path, func_name = self.scan_callback.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            scan_func = getattr(module, func_name)
+        else:
+            scan_func = self.scan_callback
+        return scan_func(event_path, self.scan_options, self.logger)
 
-            scan_result = scan_func(event_path, self.scan_options, self.logger)
-            self.services.metrics.increment_site("scan_total", self.site.site_id)
-
-            # v2.0: Emit FileScannedEvent to PluginManager (dual-write: existing flow + event-driven)
-            try:
-                self.services.events.publish("file_scanned", "monitor", {
-                    "file_path": str(event_path),
-                    "event_type": event_type,
-                    "is_suspicious": scan_result.is_suspicious if scan_result else False,
-                    "engine": scan_result.engine if scan_result else "unknown",
-                    "features": scan_result.features if scan_result else [],
-                    "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
-                    **self.site.as_dict(),
-                })
-            except Exception:
-                self.logger.debug("PluginManager emit file_scanned failed", exc_info=True)
-
-            if scan_result and scan_result.is_suspicious:
-                log_with_symbol("scan_hit", "critical",
-                                f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
-
-                # v1.0.9: 统一在此处完成 注册→事件化隔离，保证事务完整性
-                # Surgery 4 completion: quarantine + notification go through event bus.
-                try:
-                    # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
-                    # 优先级: WAF事件日志 > LogAnalyzer(access log) > 默认127.0.0.1
-                    first_seen_ip = "127.0.0.1"
-                    event_name = event_path.name.lower()
-
-                    # Source 1: WAF events (waf_events.jsonl)
-                    # v2.0 fix: Match by TIME WINDOW, not by filename.
-                    try:
-                        waf_log = Path("data/waf_events.jsonl")
-                        if waf_log.exists():
-                            from datetime import datetime as _dt
-                            now_dt = _dt.now()
-                            with open(str(waf_log), 'r', encoding='utf-8') as f:
-                                lines = f.readlines()
-                            for line in reversed(lines[-200:]):
-                                if not line.strip():
-                                    continue
-                                evt = json.loads(line.strip())
-                                src_ip = evt.get("src_ip", "")
-                                if not src_ip or src_ip in ("127.0.0.1", "::1"):
-                                    continue
-                                evt_ts_str = evt.get("timestamp", "")
-                                if evt_ts_str:
-                                    try:
-                                        evt_dt = _dt.fromisoformat(evt_ts_str.replace("Z", "+00:00"))
-                                        if abs((now_dt - evt_dt).total_seconds()) <= 15:
-                                            method = evt.get("method", "") or evt.get("http_method", "")
-                                            if method.upper() in ("POST", "PUT", ""):
-                                                first_seen_ip = src_ip
-                                                self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name} (time-window match, Δ={abs((now_dt - evt_dt).total_seconds()):.1f}s)")
-                                                break
-                                    except (ValueError, TypeError, AttributeError):
-                                        pass
-                    except Exception:
-                        self.logger.debug("Failed to parse WAF event log for IP resolution", exc_info=True)
-
-                    # Source 2: LogAnalyzer — Apache/Nginx access log (正则解析)
-                    # Access-log attribution is opt-in.  Otherwise a default
-                    # placeholder path creates a warning for every detection.
-                    log_config = getattr(self.website, "log_config", {}) or {}
-                    if (
-                        first_seen_ip == "127.0.0.1"
-                        and log_config.get("log_monitor_enabled", False)
-                    ):
-                        try:
-                            from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
-                            analyzer = LogAnalyzer(self.website, self.logger)
-                            result = analyzer.analyze_shell_access(event_path)
-                            if result and result.get("suspicious_ips"):
-                                best_ip = max(result["suspicious_ips"], key=result["suspicious_ips"].get)
-                                if best_ip and best_ip not in ("127.0.0.1", "::1"):
-                                    first_seen_ip = best_ip
-                                    self.logger.info(
-                                        f"[MONITOR] Resolved attacker IP from access log: {first_seen_ip} -> {event_name} "
-                                        f"(hits: {result['suspicious_ips'][best_ip]}, log: {result.get('log_path', '?')})"
-                                    )
-                        except Exception:
-                            self.logger.debug("LogAnalyzer failed to resolve attacker IP", exc_info=True)
-
-                    # v1.0.9: Critical detection alert via event bus → notifier_handler
-                    self._emit_alert("local_detection", str(event_path),
-                                     scan_result.engine, scan_result.features,
-                                     first_seen_ip, "CRITICAL")
-
-                    # Step 1: 注册到Registry — add() emits record_added internally
-                    self.services.registry.add(
-                        event_path,
-                        scan_result.features,
-                        first_seen_ip=first_seen_ip,
-                        detection_source="passive",
-                        site=self.site,
-                    )
-
-                    # Step 2: 检查隔离总开关（日志用；quarantine_handler 也会检查）
-                    quarantine_enabled = True
-                    try:
-                        quarantine_enabled = self.runtime.config.get(
-                            "quarantine", {}
-                        ).get("auto_quarantine_enabled", True)
-                    except Exception:
-                        self.logger.debug("Failed to read quarantine config", exc_info=True)
-
-                    if not quarantine_enabled:
-                        self.logger.info(f"[QUARANTINE] 总开关关闭，跳过隔离: {event_path.name}")
-                        self._emit_alert("quarantine_skipped", str(event_path),
-                                         scan_result.engine, scan_result.features,
-                                         first_seen_ip, "WARNING",
-                                         reason="auto_quarantine_disabled")
-                    elif self.services.quarantine.is_recently_restored(str(event_path)):
-                        self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
-                    else:
-                        # Step 3: 事件化隔离 — quarantine_handler 处理全链路
-                        # (quarantine_file → mark_quarantined → batch/skip/failure alert)
-                        rule_name = scan_result.features[0] if scan_result.features else "unknown"
-                        self._emit_file_quarantined(
-                            file_path=str(event_path),
-                            rule_name=rule_name,
-                            features=scan_result.features,
-                            original_path=str(event_path),
-                            first_seen_ip=first_seen_ip,
-                        )
-                except Exception as qe:
-                    self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
-
-        except Exception as e:
-            log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
+    def _resolve_first_seen_ip(self, event_path: Path) -> str:
+        return resolve_first_seen_ip(
+            event_path,
+            website=self.website,
+            logger=self.logger,
+            analyzer_factory=log_analyzer.LogAnalyzer,
+        )
 
     def _stop_scan_worker(self):
         """停止扫描工作线程"""
