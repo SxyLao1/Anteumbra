@@ -78,7 +78,7 @@ def create_app(
         config_path: config.toml 路径。None 时自动探测（CWD > 源码树 > 父目录）。
     """
     if runtime is None:
-        from anteumbra.application.launcher import build_runtime_container
+        from anteumbra.application.runtime_builder import build_runtime_container
 
         runtime = build_runtime_container(
             config_path,

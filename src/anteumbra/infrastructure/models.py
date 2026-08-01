@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from anteumbra.domain.scan import ScanOptions
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
@@ -90,27 +91,6 @@ class FileReputation:
     cluster_id: Optional[str] = None
     profile_ids: Set[str] = field(default_factory=set)
 
-
-@dataclass
-class ScanOptions:
-    """扫描策略配置"""
-    monitor_extensions: List[str] = field(default_factory=lambda: [".php"])
-    exclude_dirs: List[str] = field(default_factory=list)
-    exclude_files: List[str] = field(default_factory=list)
-    max_file_size: str = "10MB"
-    debug_mode: bool = False
-    # v1.7.4新增：access_log_path支持（用于通配符配置）
-    access_log_path: Optional[str] = None  # 新增字段
-
-    @property
-    def max_size_bytes(self) -> int:
-        """将文件大小字符串转换为字节"""
-        size_str = self.max_file_size.upper()
-        multipliers = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3, 'TB': 1024**4}
-        for unit, multiplier in multipliers.items():
-            if size_str.endswith(unit):
-                return int(size_str.replace(unit, '')) * multiplier
-        return int(size_str)
 
 @dataclass
 class Website:
