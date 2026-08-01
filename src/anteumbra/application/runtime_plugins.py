@@ -26,7 +26,7 @@ def _start_plugins(
     threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
-    *, 
+    *,
     alert_formatter: Callable[[dict[str, object]], str],
 ) -> PluginManagerPort | None:
     manager = None
@@ -73,7 +73,7 @@ def _build_builtin_plugin_factories(
     threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
-    *, 
+    *,
     alert_formatter: Callable[[dict[str, object]], str],
 ) -> dict[str, Callable[[], Any]]:
     """Wire official plugins without allowing them to locate runtime services."""
