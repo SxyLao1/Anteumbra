@@ -1,127 +1,22 @@
-<!-- v1.9.0: Active Manual Scanner -->
-<div style="display: flex; flex-direction: column; gap: 16px; padding: 16px;">
-  <h3 style="color: #00ff41; font-family: var(--font-mono); margin: 0; font-size: 15px;">
-    ◎ {{ _('Scanner') }} — {{ _('Proactive WebShell Detection') }}
-  </h3>
-
-  <!-- Scan Configuration -->
-  <div class="card" id="scan-config-card" style="display: flex; flex-direction: column;">
-    <div class="card-header"><span class="card-header-icon">◆</span> {{ _('SCAN CONFIG') }}</div>
-    <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        <div>
-          <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">{{ _('Target Directory') }}</label>
-          <input type="text" id="scan-target-dir" class="form-input"
-                 value="{{ default_dir }}" style="width: 100%; font-family: var(--font-mono); font-size: 11px;">
-        </div>
-        <div>
-          <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">{{ _('Extensions (comma-separated)') }}</label>
-          <input type="text" id="scan-extensions" class="form-input"
-                 value="{{ default_extensions|join(', ') }}" style="width: 100%; font-family: var(--font-mono); font-size: 11px;">
-        </div>
-      </div>
-      <div style="display: flex; align-items: center; gap: 16px;">
-        <label style="color: #ccc; font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="checkbox" id="scan-recursive" checked> {{ _('Include subdirectories') }}
-        </label>
-        <span style="color: #555; font-size: 10px;">{{ _('Excluded:') }} {{ exclude_dirs|join(', ') }}</span>
-        <span style="flex: 1;"></span>
-        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan()"
-                style="font-family: var(--font-mono); padding: 8px 24px;">
-          ▶ {{ _('Start Scan') }}
-        </button>
-      </div>
+<section class="scanner-view">
+  <h3>Scanner - {{ _('Proactive WebShell Detection') }}</h3>
+  <section class="card" id="scan-config-card">
+    <div class="card-header">{{ _('SCAN CONFIG') }}</div>
+    <div class="card-body scanner-config-grid">
+      <label>{{ _('Target Directory') }}<input type="text" id="scan-target-dir" class="form-input" value="{{ default_dir }}"></label>
+      <label>{{ _('Extensions (comma-separated)') }}<input type="text" id="scan-extensions" class="form-input" value="{{ default_extensions|join(', ') }}"></label>
+      <label class="scanner-checkbox"><input type="checkbox" id="scan-recursive" checked> {{ _('Include subdirectories') }}</label>
+      <span class="muted-copy">{{ _('Excluded:') }} {{ exclude_dirs|join(', ') }}</span>
+      <button class="btn btn-primary" id="scan-start-btn" type="button" data-action="scanner.start">{{ _('Start Scan') }}</button>
     </div>
-  </div>
-
-  <!-- Progress Card (hidden until scan starts) -->
-  <div class="card" id="scan-progress-card" style="display: none; flex-direction: column;">
-    <div class="card-header">
-      <span><span class="card-header-icon">↻</span> {{ _('SCAN PROGRESS') }}</span>
-      <span id="scan-status" data-testid="scan-status" data-state="idle"
-            role="status" aria-live="polite" style="font-size:10px;color:#888;margin-left:auto;">{{ _('Idle') }}</span>
-      <button class="btn btn-ghost btn-sm" id="scan-stop-btn" style="font-size:10px;" onclick="stopScan()">{{ _('Stop') }}</button>
-    </div>
-    <div class="card-body" style="padding: 16px;">
-      <div style="margin-bottom: 8px;">
-        <div style="background: #1a1a1a; border-radius: 4px; height: 20px; overflow: hidden;">
-          <div id="scan-progress-bar" style="background: #00ff41; height: 100%; width: 0%; transition: width 0.3s;">
-          </div>
-        </div>
-      </div>
-      <div style="display: flex; justify-content: space-between; color: #888; font-size: 11px; margin-bottom: 12px;">
-        <span id="scan-progress-text">0 / 0 files</span>
-        <span id="scan-elapsed">0s</span>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
-        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 8px; text-align: center;">
-          <div style="color: #00ff41; font-size: 20px; font-weight: bold;" id="stat-new">0</div>
-          <div style="color: #888; font-size: 10px;">{{ _('New') }}</div>
-        </div>
-        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ffaa00; border-radius: 4px; padding: 8px; text-align: center;">
-          <div style="color: #ffaa00; font-size: 20px; font-weight: bold;" id="stat-known">0</div>
-          <div style="color: #888; font-size: 10px;">{{ _('Known') }}</div>
-        </div>
-        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #888; border-radius: 4px; padding: 8px; text-align: center;">
-          <div style="color: #888; font-size: 20px; font-weight: bold;" id="stat-clean">0</div>
-          <div style="color: #888; font-size: 10px;">{{ _('Clean') }}</div>
-        </div>
-        <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff4444; border-radius: 4px; padding: 8px; text-align: center;">
-          <div style="color: #ff4444; font-size: 20px; font-weight: bold;" id="stat-errors">0</div>
-          <div style="color: #888; font-size: 10px;">{{ _('Errors') }}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Results Card (hidden until findings exist) -->
-  <div class="card" id="scan-results-card" style="display: none; flex-direction: column; max-height: 50vh;">
-    <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
-      <span><span class="card-header-icon">◆</span> {{ _('SCAN RESULTS') }}</span>
-      <button class="btn btn-ghost btn-sm" id="tab-new" style="font-size:10px; color:#00ff41; border-bottom:2px solid #00ff41;"
-              onclick="switchResultsTab('new')">{{ _('New') }} (<span id="tab-new-count">0</span>)</button>
-      <button class="btn btn-ghost btn-sm" id="tab-known" style="font-size:10px;"
-              onclick="switchResultsTab('known')">{{ _('Known') }} (<span id="tab-known-count">0</span>)</button>
-      <button class="btn btn-ghost btn-sm" id="tab-all" style="font-size:10px;"
-              onclick="switchResultsTab('all')">{{ _('All') }} (<span id="tab-all-count">0</span>)</button>
-      <span style="flex: 1;"></span>
-      <span id="scan-selected-count" style="font-size:10px;color:#888;display:none;">{{ _('0 selected') }}</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="scanSelectAll()">{{ _('Select All') }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="scanClearSel()">{{ _('Clear') }}</button>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;" id="scan-quarantine-sel-btn" disabled
-              onclick="scanQuarantineSelected()">{{ _('Quarantine Selected') }}</button>
-      <button class="btn btn-primary btn-sm" id="scan-report-btn" style="font-size:10px; display:none;"
-              onclick="generateReport()">{{ _('Generate Report') }}</button>
-    </div>
-    <div class="card-body" style="padding: 0; flex: 1; overflow-y: auto;">
-      <table style="width: 100%; font-size: 11px; border-collapse: collapse;" id="results-table">
-        <thead>
-          <tr style="border-bottom: 1px solid #1a1a1a; color: #888; font-size: 10px; position: sticky; top: 0; background: #0a0a0a;">
-            <th style="padding: 6px 10px; text-align: left; width:20px;"><input type="checkbox" onchange="scanToggleAll(this)" id="scan-select-all-cb"></th>
-            <th style="padding: 6px 10px; text-align: left;">{{ _('File') }}</th>
-            <th style="padding: 6px 10px; text-align: left;">{{ _('Path') }}</th>
-            <th style="padding: 6px 10px; text-align: left;">{{ _('Engine') }}</th>
-            <th style="padding: 6px 10px; text-align: left;">{{ _('Features') }}</th>
-            <th style="padding: 6px 10px; text-align: center;">{{ _('Quarantine') }}</th>
-            <th style="padding: 6px 10px; text-align: right;">{{ _('Actions') }}</th>
-          </tr>
-        </thead>
-        <tbody id="results-tbody">
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <!-- Scan History -->
-  <div class="card" style="display: flex; flex-direction: column;">
-    <div class="card-header" style="display: flex; align-items: center; gap: 12px;">
-      <span><span class="card-header-icon">↻</span> {{ _('SCAN HISTORY') }}</span>
-      <span style="flex:1;"></span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="loadScanHistory()">↻ {{ _('Refresh') }}</button>
-    </div>
-    <div class="card-body" id="scan-history-list" style="padding: 0; max-height: 200px; overflow-y: auto;">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading history...') }}</p></div>
-    </div>
-  </div>
-
-</div>
-<!-- v1.9.0: Scanner JS functions defined in dashboard.js (innerHTML doesn't execute scripts) -->
+  </section>
+  <section class="card" id="scan-progress-card" hidden>
+    <div class="card-header"><span>{{ _('SCAN PROGRESS') }}</span><span id="scan-status" data-testid="scan-status" data-state="idle" role="status">{{ _('Idle') }}</span><button class="btn btn-ghost btn-sm" id="scan-stop-btn" type="button" data-action="scanner.stop">{{ _('Stop') }}</button></div>
+    <div class="card-body"><div class="progress-track"><div id="scan-progress-bar"></div></div><div class="progress-meta"><span id="scan-progress-text">0 / 0 files</span><span id="scan-elapsed">0s</span></div><div class="scanner-stats"><div><strong id="stat-new">0</strong>{{ _('New') }}</div><div><strong id="stat-known">0</strong>{{ _('Known') }}</div><div><strong id="stat-clean">0</strong>{{ _('Clean') }}</div><div><strong id="stat-errors">0</strong>{{ _('Errors') }}</div></div></div>
+  </section>
+  <section class="card" id="scan-results-card" hidden>
+    <div class="card-header"><span>{{ _('SCAN RESULTS') }}</span><div class="scanner-tabs"><button id="tab-new" type="button" data-action="scanner.tab" data-scan-tab="new">{{ _('New') }} (<span id="tab-new-count">0</span>)</button><button id="tab-known" type="button" data-action="scanner.tab" data-scan-tab="known">{{ _('Known') }} (<span id="tab-known-count">0</span>)</button><button id="tab-all" type="button" data-action="scanner.tab" data-scan-tab="all">{{ _('All') }} (<span id="tab-all-count">0</span>)</button></div><span class="toolbar-spacer"></span><span id="scan-selected-count" hidden>{{ _('0 selected') }}</span><button class="btn btn-ghost btn-sm" type="button" data-action="scanner.select-all">{{ _('Select All') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="scanner.clear-selection">{{ _('Clear') }}</button><button class="btn btn-danger btn-sm" id="scan-quarantine-sel-btn" type="button" data-action="scanner.quarantine-selection" disabled>{{ _('Quarantine Selected') }}</button><button class="btn btn-primary btn-sm" id="scan-report-btn" type="button" data-action="scanner.report" hidden>{{ _('Generate Report') }}</button></div>
+    <div class="card-body"><table class="data-table"><thead><tr><th><input type="checkbox" id="scan-select-all-cb" data-action="scanner.toggle-all"></th><th>{{ _('File') }}</th><th>{{ _('Path') }}</th><th>{{ _('Engine') }}</th><th>{{ _('Features') }}</th><th>{{ _('Quarantine') }}</th><th>{{ _('Actions') }}</th></tr></thead><tbody id="results-tbody"></tbody></table></div>
+  </section>
+  <section class="card"><div class="card-header"><span>{{ _('SCAN HISTORY') }}</span><span class="toolbar-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-action="scanner.history-refresh">{{ _('Refresh') }}</button></div><div class="card-body" id="scan-history-list">{{ _('Loading history...') }}</div></section>
+</section>

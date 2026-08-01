@@ -1,200 +1,75 @@
-<!-- v1.8.1: Attacker Profile Detail -->
-<div style="padding:16px; display:flex; flex-direction:column; gap:16px; height:100%;">
-  <div style="display:flex; align-items:center; gap:12px;">
-    <a href="#" onclick="loadContent('profiles','Profiles');return false;" style="color:#00ff41; text-decoration:none; font-size:12px;">&larr; {{ _('Back to Profiles') }}</a>
-    <span style="flex:1;"></span>
-    <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="window.open('/admin/profiles/{{ profile.profile_id }}/report','_blank')">{{ _('Generate Report') }}</button>
-    <span class="badge badge-{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">
-      {{ _('CRITICAL') if profile.risk_score > 0.8 else _('HIGH') if profile.risk_score > 0.5 else _('MEDIUM') }}
-    </span>
-  </div>
+<section class="profile-detail-view" data-profile-id="{{ profile.profile_id }}">
+  <header class="profile-detail-toolbar">
+    <button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.navigate" data-path="profiles" data-title="{{ _('Profiles') }}">{{ _('Back to Profiles') }}</button>
+    <span class="profile-detail-toolbar__spacer"></span>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="core.open-window" data-url="/admin/profiles/{{ profile.profile_id }}/report">{{ _('Generate Report') }}</button>
+    <span class="badge badge-{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">{{ _('CRITICAL') if profile.risk_score > 0.8 else _('HIGH') if profile.risk_score > 0.5 else _('MEDIUM') }}</span>
+  </header>
 
-  <!-- Profile header -->
-  <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:20px; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:20px;">
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('PROFILE ID') }}</div>
-      <code style="color:#00ff41;font-size:14px;">{{ profile.profile_id }}</code>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('RISK SCORE') }}</div>
-      <div style="font-size:28px;font-weight:bold; color:{{ '#ff4444' if profile.risk_score > 0.8 else '#ffaa00' if profile.risk_score > 0.5 else '#00ff41' }};">
-        {{ "%.0f"|format(profile.risk_score * 100) }}
-      </div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('TOOL FINGERPRINT') }}</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.ua_fingerprint or _('Unknown') }}</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('STATUS') }}</div>
-      <div style="color:{{ '#00ff41' if profile.status == 'active' else '#ffaa00' }};font-size:14px;">{{ profile.status.upper() }}</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('IP POOL') }}</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.ip_pool|length }} {{ _('IPs') }}</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('TARGET FILES') }}</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.target_files|length }}</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('TARGET URLs') }}</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.target_urls|length }}</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('FILE CLUSTERS') }}</div>
-      <div style="color:#ccc;font-size:14px;" id="profile-cluster-count">—</div>
-    </div>
-    <div>
-      <div style="color:#888;font-size:10px;">{{ _('LAST SEEN') }}</div>
-      <div style="color:#ccc;font-size:14px;">{{ profile.last_seen.strftime('%m-%d %H:%M') if profile.last_seen else _('N/A') }}</div>
-    </div>
-  </div>
+  <dl class="profile-summary-grid">
+    <div><dt>{{ _('PROFILE ID') }}</dt><dd><code>{{ profile.profile_id }}</code></dd></div>
+    <div><dt>{{ _('RISK SCORE') }}</dt><dd class="profile-score profile-score--{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">{{ "%.0f"|format(profile.risk_score * 100) }}</dd></div>
+    <div><dt>{{ _('TOOL FINGERPRINT') }}</dt><dd>{{ profile.ua_fingerprint or _('Unknown') }}</dd></div>
+    <div><dt>{{ _('STATUS') }}</dt><dd>{{ profile.status.upper() }}</dd></div>
+    <div><dt>{{ _('IP POOL') }}</dt><dd>{{ profile.ip_pool|length }} {{ _('IPs') }}</dd></div>
+    <div><dt>{{ _('TARGET FILES') }}</dt><dd>{{ profile.target_files|length }}</dd></div>
+    <div><dt>{{ _('TARGET URLs') }}</dt><dd>{{ profile.target_urls|length }}</dd></div>
+    <div><dt>{{ _('LAST SEEN') }}</dt><dd>{{ profile.last_seen.strftime('%m-%d %H:%M') if profile.last_seen else _('N/A') }}</dd></div>
+  </dl>
 
-  <!-- Attack Chain Timeline -->
-  <div style="flex:1; overflow-y:auto; min-height:250px;">
-    <h4 style="color:#00ff41; margin:0 0 12px 0;">{{ _('ATTACK CHAIN') }}</h4>
+  <section class="profile-section">
+    <h4>{{ _('ATTACK CHAIN') }}</h4>
     {% if events %}
-    <div style="position:relative; padding-left:24px;">
-      <div style="position:absolute; left:8px; top:0; bottom:0; width:2px; background:#1a1a1a;"></div>
+    <ol class="attack-timeline">
       {% for evt in events|reverse %}
-      <div style="position:relative; margin-bottom:12px; padding:8px 12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px;">
-        <div style="position:absolute; left:-20px; top:12px; width:10px; height:10px; border-radius:50%; background:{{ '#ff4444' if evt.waf_score > 0.9 else '#ffaa00' if evt.waf_score > 0.7 else '#00ff41' }}; border:2px solid #0a0a0a;"></div>
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:4px;">
-          <span style="color:#888;font-size:10px;">{{ evt.timestamp.strftime('%H:%M:%S') if evt.timestamp else _('N/A') }}</span>
-          <span style="color:#00ff41;font-size:10px;">{{ evt.event_type.upper() }}</span>
-          <span class="badge" style="font-size:9px;">{{ evt.waf_rule_id or _('detection') }}</span>
-          <span style="color:#888;font-size:10px;">{{ _('score: ') }}{{ "%.2f"|format(evt.waf_score) }}</span>
-        </div>
-        <div style="font-size:11px;color:#ccc;">
-          <span style="color:#888;">{{ _('IP:') }}</span> {{ evt.src_ip }}
-          <span style="color:#888;margin-left:12px;">{{ _('URL:') }}</span> <code style="color:#ccc;font-size:10px;">{{ evt.url[:60] }}</code>
-        </div>
-      </div>
+      <li>
+        <div><time>{{ evt.timestamp.strftime('%H:%M:%S') if evt.timestamp else _('N/A') }}</time><strong>{{ evt.event_type.upper() }}</strong><span class="badge">{{ evt.waf_rule_id or _('detection') }}</span><span>{{ _('score: ') }}{{ "%.2f"|format(evt.waf_score) }}</span></div>
+        <p><span>{{ _('IP:') }}</span> {{ evt.src_ip }} <span>{{ _('URL:') }}</span> <code>{{ evt.url[:60] }}</code></p>
+      </li>
       {% endfor %}
-    </div>
+    </ol>
     {% else %}
     <div class="empty-state"><p>{{ _('No attack events recorded yet') }}</p></div>
     {% endif %}
-  </div>
+  </section>
 
-  <!-- v1.8.3: File Clusters -->
   {% if file_clusters %}
-  <div>
-    <h4 style="color:#00ff41; margin:0 0 8px 0;">{{ _('FILE CLUSTERS') }} ({{ file_clusters|length }})</h4>
-    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+  <section class="profile-section">
+    <h4>{{ _('FILE CLUSTERS') }} ({{ file_clusters|length }})</h4>
+    <div class="profile-cluster-grid">
       {% for fc in file_clusters %}
-      <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 12px; font-size:11px; max-width:350px;">
-        <div style="color:#00ff41; margin-bottom:4px;">
-          <code style="font-size:10px;">{{ fc.cluster_id[:10] }}</code>
-          <span style="color:#888; margin-left:6px;">{{ fc.cluster_size }} {{ _('files') }}</span>
-        </div>
-        <div style="color:#666; font-size:10px; max-height:80px; overflow-y:auto;">
-          <div style="color:#ccc;">{{ fc.file[:55] }}</div>
-          {% if fc.quarantined %}
-          <div style="color:#ffaa00; font-size:9px;">{{ _('Quarantined') }} → {{ fc.quarantine_path[:40] }}</div>
-          {% else %}
-          <div style="color:#00ff41; font-size:9px;">{{ _('Active') }}</div>
-          {% endif %}
-          {% for s in fc.samples[:3] %}
-          {% if s != fc.file %}
-          <div style="color:#555;">{{ s[:50] }}</div>
-          {% endif %}
-          {% endfor %}
-        </div>
-      </div>
+      <article><header><code>{{ fc.cluster_id[:10] }}</code><span>{{ fc.cluster_size }} {{ _('files') }}</span></header><p>{{ fc.file[:55] }}</p><small>{{ _('Quarantined') if fc.quarantined else _('Active') }}</small></article>
       {% endfor %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
-  <!-- v1.9.0: Linked Detection Records -->
   {% if linked_records %}
-  <div>
-    <h4 style="color:#00ff41; margin:0 0 8px 0;">{{ _('LINKED DETECTION RECORDS') }} ({{ linked_records|length }})</h4>
-    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+  <section class="profile-section">
+    <h4>{{ _('LINKED DETECTION RECORDS') }} ({{ linked_records|length }})</h4>
+    <div class="profile-linked-records">
       {% for lr in linked_records[:20] %}
-      <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:6px 10px; font-size:10px; display:flex; align-items:center; gap:8px;">
-        <code style="color:#ccc;font-size:10px;">{{ lr.display_name }}</code>
-        <span style="color:#888;font-size:9px;">{{ lr.detected_at }}</span>
-        {% if lr.quarantine_id %}<span style="color:#ff6b35;font-size:9px;">Q</span>{% endif %}
-        {% for f in lr.features[:2] %}<span class="badge badge-blue" style="font-size:8px;">{{ f[:20] }}</span>{% endfor %}
-      </div>
+      <div><code>{{ lr.display_name }}</code><span>{{ lr.detected_at }}</span>{% if lr.quarantine_id %}<span class="badge badge-warning">Q</span>{% endif %}{% for feature in lr.features[:2] %}<span class="badge badge-info">{{ feature[:20] }}</span>{% endfor %}</div>
       {% endfor %}
-      {% if linked_records|length > 20 %}
-      <span style="color:#555;font-size:10px;">{{ _('... and ') }}{{ linked_records|length - 20 }}{{ _(' more') }}</span>
-      {% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
-  <!-- IP Table -->
-  <div id="ip-table-section" data-all-ips='{{ all_ips|tojson }}'>
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <h4 style="color:#00ff41; margin:0;">{{ _('ASSOCIATED IPs') }} ({{ ip_total }})</h4>
-      <span style="flex:1;"></span>
-      <span style="font-size:10px;color:#888;" id="ip-selected-count">{{ _('0 selected') }}</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPs()">{{ _('Select Page') }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="selectAllIPsAll()">{{ _('Select All') }} {{ ip_total }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="clearIPSelection()">{{ _('Clear') }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copySelectedIPs()">{{ _('Copy Selected') }}</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="copyAllIPs()">{{ _('Copy All') }}</button>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;" id="block-ips-btn" disabled
-              onclick="blockSelectedIPs()">{{ _('Block Selected') }}</button>
-    </div>
-    <div style="background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; max-height:300px; overflow-y:auto;">
-      <table style="width:100%; font-size:11px; border-collapse:collapse;">
-        <thead>
-          <tr style="border-bottom:1px solid #1a1a1a; color:#888; font-size:10px; position:sticky; top:0; background:#0a0a0a;">
-            <th style="padding:6px 10px; width:30px; text-align:center;"><input type="checkbox" onchange="toggleAllIPs(this)"></th>
-            <th style="padding:6px 10px; text-align:left;">{{ _('IP Address') }}</th>
-            <th style="padding:6px 10px; text-align:right;">{{ _('Events') }}</th>
-            <th style="padding:6px 10px; text-align:right;">{{ _('WAF Score') }}</th>
-            <th style="padding:6px 10px; text-align:center;">{{ _('Level') }}</th>
-            <th style="padding:6px 10px; text-align:left;">{{ _('First Seen') }}</th>
-            <th style="padding:6px 10px; text-align:left;">{{ _('Last Seen') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for ipd in ip_details %}
-          <tr class="ip-row" style="border-bottom:1px solid #111; cursor:pointer;"
-              onclick="toggleIPRow(this)" data-ip="{{ ipd.ip }}">
-            <td style="padding:4px 10px; text-align:center;">
-              <input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" onclick="event.stopPropagation();toggleIPCheckbox(this)">
-            </td>
-            <td style="padding:4px 10px;">
-              <code style="color:#ccc; font-size:10px;" class="ip-addr">{{ ipd.ip }}</code>
-              <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:0 4px;margin-left:4px;"
-                      onclick="event.stopPropagation();copyIP('{{ ipd.ip }}')" title="{{ _('Copy IP') }}">{{ _('Copy') }}</button>
-            </td>
-            <td style="padding:4px 10px; text-align:right; color:#ccc;">{{ ipd.event_count }}</td>
-            <td style="padding:4px 10px; text-align:right; color:{{ '#ff4444' if ipd.waf_score_avg > 0.9 else '#ffaa00' if ipd.waf_score_avg > 0.7 else '#00ff41' }};">{{ "%.2f"|format(ipd.waf_score_avg) }}</td>
-            <td style="padding:4px 10px; text-align:center;">
-              <span style="color:{{ '#ff4444' if ipd.cluster_level >= 3 else '#ffaa00' if ipd.cluster_level >= 2 else '#888' }};">
-                {{ ipd.cluster_level }}
-              </span>
-            </td>
-            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else _('N/A') }}</td>
-            <td style="padding:4px 10px; color:#888; font-size:10px;">{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else _('N/A') }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <section id="ip-table-section" class="profile-section profile-ip-section" data-all-ips='{{ all_ips|tojson }}'>
+    <header class="profile-ip-toolbar">
+      <h4>{{ _('ASSOCIATED IPs') }} ({{ ip_total }})</h4><span class="profile-detail-toolbar__spacer"></span><span id="ip-selected-count">{{ _('0 selected') }}</span>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-select-page">{{ _('Select Page') }}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-select-all">{{ _('Select All') }} {{ ip_total }}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-clear">{{ _('Clear') }}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-copy-selected">{{ _('Copy Selected') }}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-copy-all">{{ _('Copy All') }}</button>
+      <button class="btn btn-danger btn-sm" type="button" id="block-ips-btn" data-action="profiles.ip-block" disabled>{{ _('Block Selected') }}</button>
+    </header>
+    <div class="table-scroll"><table class="profile-ip-table"><thead><tr><th><input type="checkbox" aria-label="{{ _('Select visible IPs') }}" data-action="profiles.ip-toggle-all"></th><th>{{ _('IP Address') }}</th><th>{{ _('Events') }}</th><th>{{ _('WAF Score') }}</th><th>{{ _('Level') }}</th><th>{{ _('First Seen') }}</th><th>{{ _('Last Seen') }}</th></tr></thead>
+      <tbody>{% for ipd in ip_details %}<tr data-action="profiles.ip-row-toggle"><td><input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" data-action="profiles.ip-toggle"></td><td><code class="ip-addr">{{ ipd.ip }}</code><button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-copy" data-ip="{{ ipd.ip }}">{{ _('Copy') }}</button></td><td>{{ ipd.event_count }}</td><td>{{ "%.2f"|format(ipd.waf_score_avg) }}</td><td>{{ ipd.cluster_level }}</td><td>{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else _('N/A') }}</td><td>{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else _('N/A') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
     {% if ip_total_pages > 1 %}
-    <div class="pagination-bar" style="margin-top:8px;">
-      <button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %}
-              hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page - 1 }}"
-              hx-target="#main-content" hx-swap="innerHTML">{{ _('Prev') }}</button>
-      <span class="page-info">{{ _('Page') }} {{ ip_page }} / {{ ip_total_pages }}</span>
-      <input type="number" class="form-input" style="width:45px;text-align:center;font-size:10px;padding:2px 4px;"
-             min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}"
-             onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/profiles/{{ profile.profile_id }}?ip_page='+p,{target:'#main-content',swap:'innerHTML'})}">
-      <button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %}
-              hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page + 1 }}"
-              hx-target="#main-content" hx-swap="innerHTML">{{ _('Next') }}</button>
-    </div>
+    <div class="pagination-bar"><button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page - 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Prev') }}</button><span class="page-info">{{ _('Page') }} {{ ip_page }} / {{ ip_total_pages }}</span><input type="number" class="form-input page-jump" min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}" data-action="core.page-jump" data-page-url="/admin/profiles/{{ profile.profile_id }}?ip_page=__PAGE__" data-target="#main-content" data-swap="innerHTML"><button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page + 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Next') }}</button></div>
     {% endif %}
-  </div>
-
-</div>
+  </section>
+</section>

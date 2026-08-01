@@ -16,10 +16,10 @@
   </div>
   <div style="display:flex;gap:6px;margin-top:4px;">
     <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
-            onclick="fetch('/admin/siem/export').then(r=>r.json()).then(d=>alert('Exported '+d.exported+' events to\\n'+d.file))">
+            type="button" data-action="settings.siem-export" data-siem-format="json">
       {{ _('Export JSON Lines') }}</button>
     <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
-            onclick="fetch('/admin/siem/export?format=cef').then(r=>r.json()).then(d=>alert('Exported '+d.exported+' events (CEF)'))">
+            type="button" data-action="settings.siem-export" data-siem-format="cef">
       {{ _('Export CEF') }}</button>
     {% if has_data %}
     <a href="/admin/siem/export?format=csv" class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;">{{ _('CSV') }}</a>

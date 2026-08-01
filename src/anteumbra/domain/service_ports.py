@@ -300,3 +300,16 @@ class WAFPollerPort(Protocol):
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop polling."""
+
+
+class ScanHistoryStorePort(Protocol):
+    """Durable storage for completed manual scan records."""
+
+    def save(self, scan_id: str, record: Mapping[str, Any]) -> None:
+        """Atomically persist one scan record under its validated identifier."""
+
+    def list_records(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Return recent complete records without exposing storage paths."""
+
+    def get(self, scan_id: str) -> dict[str, Any] | None:
+        """Return one complete record, or None when it has expired or is absent."""

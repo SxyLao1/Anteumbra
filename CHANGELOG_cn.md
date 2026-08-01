@@ -8,7 +8,26 @@
 
 ## [未发布]
 
-暂无变更。
+### 变更
+- 管理端前端解除对模板内全局 JavaScript 调用的耦合：`app.js` 统一提供事件委托、
+  HTTP 辅助与生命周期钩子，records、scanner、profiles、blocklist、YARA、settings
+  等工作流改由各自模块负责。
+- 模板内联事件与脚本片段改为声明式 `data-action` 控件，动态 HTMX 片段同样可挂载。
+- 为管理端动态片段增加成对的 `mount`/`unmount` 生命周期；离开 Scanner 时关闭浏览器侧
+  SSE，Dashboard 和 Blocklist 分别释放观察器与防抖定时器。
+- 手动扫描历史迁移至运行时拥有的应用服务和配置数据目录。
+- 运行时构建职责拆分至 `runtime_builder`、`runtime_workers`、`runtime_plugins`；
+  `launcher` 只负责编排生命周期并保留兼容入口。
+
+### 修复
+- 扫描完成后保留最终已扫描/总数计数，并在扫描进度的所有状态中一致显示 `files` 后缀。
+- 在扫描历史 ID 成为文件名之前执行格式校验，并以原子写入保存记录，阻止路径穿越到
+  配置数据目录外及半写入 JSON 被读取。
+- YARA 批量删除任一请求失败时保留当前选择，不再显示为成功。
+
+### 测试
+- 通过 528 项非浏览器测试和 43 项 Playwright UI 测试，新增扫描历史路径、Scanner SSE
+  卸载、YARA 批量失败、动作契约和运行时组合根回归覆盖。
 
 ---
 

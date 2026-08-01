@@ -1,446 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <title>Anteumbra Security Platform</title>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.svg') }}">
   <meta name="sse-token" content="{{ auth_header|safe }}">
   <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
-  <!-- v1.7.9: HTMX全局CSRF注入 — 所有hx-post自动携带token -->
-  <script>
-    document.addEventListener('htmx:configRequest', function(evt) {
-      var token = document.querySelector('meta[name="csrf-token"]')?.content;
-      if (token) { evt.detail.headers['X-CSRFToken'] = token; }
-    });
-  </script>
   <meta name="sse-max-total-clients" content="{{ config.get('web_admin', {}).get('sse_max_total_clients', 20) }}">
   <meta name="sse-max-per-ip" content="{{ config.get('web_admin', {}).get('sse_max_clients_per_ip', 5) }}">
   <meta name="sse-log-levels" content="{{ config.get('web_admin', {}).get('sse_log_levels', ['INFO', 'ERROR', 'CRITICAL']) | tojson | safe }}">
+  <meta name="anteumbra-version" content="{{ anteumbra_version }}">
 
-  <!-- 拆分后的CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vars.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 
-  <!-- HTMX: keep local so admin actions work in offline/internal deployments. -->
   <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/htmx-sse.js') }}"></script>
-
-  <!-- 拆分后的JS -->
-  <script src="{{ url_for('static', filename='js/utils.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/sse-manager.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/cyber-effects.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
-  <!-- v1.9.1: 按页面拆分的模块（defer 保证在 dashboard.js 之后加载，使 _escHtml/_escJs 可用） -->
   <script src="{{ url_for('static', filename='js/modules/scanner.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/blocklist.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/profiles.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/yara.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/settings.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/records.js') }}" defer></script>
-  <meta name="anteumbra-version" content="{{ anteumbra_version }}" hidden>
 </head>
 <body>
   <div class="app-shell">
-    <!-- 顶部导航栏 -->
     <header class="app-header">
       <div class="brand">
         <div class="brand-icon">▲</div>
         <span>ANTEUMBRA</span>
         <span class="brand-sub">v{{ anteumbra_version }}</span>
       </div>
-      <div class="header-center" id="header-center" style="display:flex;align-items:center;gap:12px;flex:1;justify-content:center;">
-        <!-- 页面工具栏由 JS 动态注入 -->
-      </div>
-      <div style="display:flex;align-items:center;gap:16px;">
-        <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle menu">
+      <div class="header-center" id="header-center"></div>
+      <div class="header-actions">
+        <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle menu" data-action="dashboard.sidebar-toggle">
           <span></span><span></span><span></span>
         </button>
-        <div id="sse-status-indicator" class="sse-status disconnected">
-          <span class="dot"></span>
-          <span class="status-label">OFF</span>
+        <div id="sse-status-indicator" class="sse-status disconnected" aria-live="polite">
+          <span class="dot"></span><span class="status-label">OFF</span>
         </div>
-        <button id="logout-btn" class="btn btn-danger btn-sm">
-          <span>⏻</span> {{ _('Logout') }}
+        <button id="logout-btn" class="btn btn-danger btn-sm" type="button" data-action="dashboard.logout">
+          <span aria-hidden="true">⏻</span> {{ _('Logout') }}
         </button>
       </div>
     </header>
 
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+    <div class="sidebar-overlay" id="sidebar-overlay" data-action="dashboard.sidebar-close"></div>
     <div class="app-body">
-      <!-- 侧边栏 -->
       <aside class="app-sidebar">
         <div class="sidebar-header">Navigation</div>
-        <ul class="nav-menu">
-          <li class="nav-item">
-            <a class="nav-link active" data-path="overview" data-title="{{ _('Overview') }}">
-              <span class="nav-icon">◆</span>
-              <span>{{ _('Overview') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="threats" data-title="{{ _('Threats') }}">
-              <span class="nav-icon">⚡</span>
-              <span>{{ _('Threats') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="yara/rules" data-title="{{ _('Rules') }}">
-              <span class="nav-icon">⌘</span>
-              <span>{{ _('Rules') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="scanner" data-title="{{ _('Scanner') }}">
-              <span class="nav-icon">◎</span>
-              <span>{{ _('Scanner') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="profiles" data-title="{{ _('Profiles') }}">
-              <span class="nav-icon">◉</span>
-              <span>{{ _('Profiles') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="blocklist" data-title="{{ _('Blocklist') }}">
-              <span class="nav-icon">◉</span>
-              <span>{{ _('Blocklist') }}</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-path="settings" data-title="{{ _('Settings') }}">
-              <span class="nav-icon">⚙</span>
-              <span>{{ _('Settings') }}</span>
-            </a>
-          </li>
-        </ul>
+        <nav aria-label="Primary navigation">
+          <ul class="nav-menu">
+            <li class="nav-item"><a class="nav-link active" href="/admin/overview" data-action="dashboard.navigate" data-path="overview" data-title="{{ _('Overview') }}"><span class="nav-icon">◆</span><span>{{ _('Overview') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/threats" data-action="dashboard.navigate" data-path="threats" data-title="{{ _('Threats') }}"><span class="nav-icon">⚡</span><span>{{ _('Threats') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/yara/rules" data-action="dashboard.navigate" data-path="yara/rules" data-title="{{ _('Rules') }}"><span class="nav-icon">⌘</span><span>{{ _('Rules') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/scanner" data-action="dashboard.navigate" data-path="scanner" data-title="{{ _('Scanner') }}"><span class="nav-icon">◎</span><span>{{ _('Scanner') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/profiles" data-action="dashboard.navigate" data-path="profiles" data-title="{{ _('Profiles') }}"><span class="nav-icon">◉</span><span>{{ _('Profiles') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/blocklist" data-action="dashboard.navigate" data-path="blocklist" data-title="{{ _('Blocklist') }}"><span class="nav-icon">◉</span><span>{{ _('Blocklist') }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/settings" data-action="dashboard.navigate" data-path="settings" data-title="{{ _('Settings') }}"><span class="nav-icon">⚙</span><span>{{ _('Settings') }}</span></a></li>
+          </ul>
+        </nav>
       </aside>
 
-      <!-- 主内容区 -->
       <main class="app-main">
         <div class="page-header">
-          <h1 class="page-title" id="page-title">Security Report</h1>
-          <div class="page-actions">
-            <button class="btn btn-ghost btn-sm" onclick="refreshCurrent()">
-              <span>↻</span> Refresh
-            </button>
-          </div>
+          <h1 class="page-title" id="page-title">{{ _('Overview') }}</h1>
+          <div class="page-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.refresh"><span aria-hidden="true">↻</span> {{ _('Refresh') }}</button></div>
         </div>
-        <div class="content-scroll" id="main-content">
+        <div class="content-scroll" id="main-content" aria-live="polite">
           {% block main_content %}
-          <div class="empty-state">
-            <div class="spinner"></div>
-            <p>Initializing dashboard...</p>
-          </div>
+          <div class="empty-state"><div class="spinner"></div><p>Initializing dashboard...</p></div>
           {% endblock %}
         </div>
       </main>
     </div>
   </div>
 
-  <!-- 模态框容器 -->
-  <div id="yara-edit-modal" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span>Edit YARA Rule</span>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="yara-edit-body">
-        <!-- HTMX loads content here -->
-      </div>
+  <div id="yara-edit-modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-label="Edit YARA Rule">
+      <div class="modal-header"><span>Edit YARA Rule</span><button class="modal-close" type="button" data-action="core.modal-hide" data-modal="yara-edit-modal" aria-label="Close">&times;</button></div>
+      <div class="modal-body" id="yara-edit-body"></div>
     </div>
   </div>
-<!-- YARA Upload Modal (always rendered, compact or not) -->
-<div id="yara-upload-modal" class="modal-overlay">
-  <div class="modal-box" style="max-width: 520px;">
-    <div class="modal-header">
-      <span>Upload YARA Rule</span>
-      <button class="modal-close" onclick="AnteumbraUtils.modal.hide('yara-upload-modal')">&times;</button>
-    </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;">
-      <div class="form-group">
-        <label class="form-label">Select .yar file</label>
-        <div class="file-drop-zone" id="yara-drop-zone"
-             ondragover="event.preventDefault();this.classList.add('drag-over');"
-             ondragleave="this.classList.remove('drag-over');"
-             ondrop="handleYaraDrop(event)">
-          <div class="file-drop-icon">📁</div>
-          <p>Drag & drop YARA rule here</p>
-          <p style="font-size:11px;color:var(--color-text-muted);">or click to browse</p>
-          <input type="file" id="yara-file-input" accept=".yar" style="display:none;" onchange="handleYaraFileSelect(this)">
+
+  <div id="yara-upload-modal" class="modal-overlay" aria-hidden="true" data-action="core.backdrop-close">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-label="Upload YARA Rule">
+      <div class="modal-header"><span>Upload YARA Rule</span><button class="modal-close" type="button" data-action="core.modal-hide" data-modal="yara-upload-modal" aria-label="Close">&times;</button></div>
+      <div class="modal-body upload-rule-form">
+        <div class="form-group">
+          <label class="form-label" for="yara-file-input">Select .yar file</label>
+          <div class="file-drop-zone" id="yara-drop-zone" data-action="yara.file-zone">
+            <div class="file-drop-icon">FILE</div><p>Drag and drop a YARA rule here</p><p class="muted-copy">or click to browse</p>
+            <input type="file" id="yara-file-input" accept=".yar" data-action="yara.file-select">
+          </div>
+          <div id="yara-file-info" class="file-info-panel" hidden><span class="file-info-name" id="yara-file-name"></span><span class="file-info-size" id="yara-file-size"></span></div>
         </div>
-        <div id="yara-file-info" style="display:none;" class="file-info-panel">
-          <span class="file-info-name" id="yara-file-name"></span>
-          <span class="file-info-size" id="yara-file-size"></span>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Preview</label>
-        <textarea id="yara-upload-preview" class="form-textarea" readonly
-                  style="min-height:120px;font-family:var(--font-mono);font-size:12px;resize:none;"></textarea>
-      </div>
-      <div id="yara-upload-result" style="font-family:var(--font-mono);font-size:12px;min-height:24px;"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="AnteumbraUtils.modal.hide('yara-upload-modal')">Cancel</button>
-        <button class="btn btn-primary" id="yara-upload-btn" onclick="submitYaraUpload()" disabled>Upload</button>
+        <div class="form-group"><label class="form-label" for="yara-upload-preview">Preview</label><textarea id="yara-upload-preview" class="form-textarea" readonly></textarea></div>
+        <div id="yara-upload-result" class="form-result" role="status"></div>
+        <div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="core.modal-hide" data-modal="yara-upload-modal">{{ _('Cancel') }}</button><button class="btn btn-primary" id="yara-upload-btn" type="button" data-action="yara.submit-upload" disabled>{{ _('Upload') }}</button></div>
       </div>
     </div>
   </div>
-</div>
 
-<script>
-window._yaraShowUploadModal = function() {
-  AnteumbraUtils.modal.show('yara-upload-modal');
-  document.getElementById('yara-file-input').value = '';
-  document.getElementById('yara-upload-preview').value = '';
-  document.getElementById('yara-upload-result').innerHTML = '';
-  document.getElementById('yara-file-info').style.display = 'none';
-  document.getElementById('yara-upload-btn').disabled = true;
-};
-
-document.getElementById('yara-drop-zone').addEventListener('click', function(e) {
-  if (e.target !== document.getElementById('yara-file-input')) {
-    document.getElementById('yara-file-input').click();
-  }
-});
-
-function handleYaraDrop(e) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
-  const files = e.dataTransfer.files;
-  if (files.length > 0) processYaraFile(files[0]);
-}
-
-function handleYaraFileSelect(input) {
-  if (input.files.length > 0) processYaraFile(input.files[0]);
-}
-
-let _yaraUploadFile = null;
-
-function processYaraFile(file) {
-  _yaraUploadFile = file;
-  if (!file.name.endsWith('.yar')) {
-    AnteumbraUtils.toast('Only .yar files allowed', 'error');
-    return;
-  }
-  document.getElementById('yara-file-name').textContent = file.name;
-  document.getElementById('yara-file-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
-  document.getElementById('yara-file-info').style.display = 'flex';
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const content = e.target.result;
-    document.getElementById('yara-upload-preview').value = content;
-    document.getElementById('yara-upload-btn').disabled = false;
-  };
-  reader.readAsText(file);
-}
-
-function submitYaraUpload() {
-  if (!_yaraUploadFile) return;
-  const btn = document.getElementById('yara-upload-btn');
-  const resultDiv = document.getElementById('yara-upload-result');
-  btn.disabled = true;
-  btn.textContent = 'Uploading...';
-  resultDiv.innerHTML = '<span style="color:var(--color-info)">[INFO] Uploading...</span>';
-
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-  const formData = new FormData();
-  formData.append('file', _yaraUploadFile);
-  formData.append('csrf_token', csrfToken);
-
-  fetch('/admin/yara/rules/upload', {
-    method: 'POST',
-    headers: {'X-CSRFToken': csrfToken},
-    body: formData
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      resultDiv.innerHTML = '<span style="color:var(--color-safe)">[✓] ' + (data.message || 'Upload successful') + '</span>';
-      AnteumbraUtils.toast(data.message || 'Upload successful', 'success');
-      setTimeout(() => {
-        AnteumbraUtils.modal.hide('yara-upload-modal');
-        htmx.ajax('GET', '/admin/yara/rules', {target: '#main-content'});
-      }, 800);
-    } else {
-      resultDiv.innerHTML = '<span style="color:var(--color-danger)">[✗] ' + (data.error || 'Upload failed') + '</span>';
-      btn.disabled = false;
-      btn.textContent = 'Upload';
-    }
-  })
-  .catch(e => {
-    resultDiv.innerHTML = '<span style="color:var(--color-danger)">[✗] Network error: ' + e.message + '</span>';
-    btn.disabled = false;
-    btn.textContent = 'Upload';
-  });
-}
-</script>
-
-<!-- v1.7.9: 检测记录详情模态框容器 -->
-<div id="record-detail-modal-overlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeRecordDetail()">
-  <div id="record-detail-modal" class="modal-container" style="display:none;">
-    <!-- htmx 会把 record_detail.html 内容插入这里 -->
+  <div id="record-detail-modal-overlay" class="modal-overlay" aria-hidden="true" data-action="core.backdrop-close">
+    <div id="record-detail-modal" class="modal-box modal-box--detail" role="dialog" aria-modal="true" aria-label="Record detail"></div>
   </div>
-</div>
 
-<style>
-/* 模态框遮罩层 */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-}
-.modal-overlay.active { display: flex !important; }
-
-/* 模态框容器 */
-.modal-container {
-  background: #0a0a0a;
-  border: 2px solid #00ff41;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 700px;
-  max-height: 85vh;
-  overflow-y: auto;
-  padding: 24px;
-  box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
-  animation: modalSlideIn 0.3s ease-out;
-}
-@keyframes modalSlideIn {
-  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* 模态框内容样式（record_detail.html 内使用） */
-.record-detail-modal .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #333;
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-}
-.record-detail-modal .modal-header h3 {
-  color: #00ff41;
-  margin: 0;
-  font-size: 18px;
-}
-.record-detail-modal .modal-close {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px; height: 32px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-.record-detail-modal .modal-close:hover {
-  color: #ff4444;
-  background: #1a1a1a;
-}
-.record-detail-modal .detail-section {
-  margin-bottom: 20px;
-}
-.record-detail-modal .detail-section h4 {
-  color: #00ff41;
-  font-size: 14px;
-  margin: 0 0 10px 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.record-detail-modal .detail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.record-detail-modal .detail-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #1a1a1a;
-}
-.record-detail-modal .detail-table td:first-child {
-  color: #888;
-  width: 120px;
-  font-family: var(--font-mono);
-}
-.record-detail-modal .detail-table td:last-child {
-  color: #fff;
-  word-break: break-all;
-}
-.record-detail-modal .detail-table code {
-  background: #1a1a1a;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: #00ff41;
-}
-.record-detail-modal .badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: bold;
-}
-.record-detail-modal .badge-green { background: #003300; color: #00ff00; }
-.record-detail-modal .badge-red { background: #330000; color: #ff4444; }
-.record-detail-modal .badge-yellow { background: #332200; color: #ffaa00; }
-.record-detail-modal .badge-blue { background: #001a33; color: #00aaff; }
-.record-detail-modal .badge-gray { background: #1a1a1a; color: #666; }
-</style>
-
-<script>
-/* v1.7.9: 检测记录详情模态框控制 */
-function showRecordDetail() {
-  var overlay = document.getElementById('record-detail-modal-overlay');
-  var modal = document.getElementById('record-detail-modal');
-  if (overlay) overlay.style.display = 'flex';
-  if (modal) modal.style.display = 'block';
-}
-function closeRecordDetail() {
-  var overlay = document.getElementById('record-detail-modal-overlay');
-  var modal = document.getElementById('record-detail-modal');
-  if (overlay) {
-    overlay.style.display = 'none';
-    overlay.classList.remove('active');
-  }
-  if (modal) {
-    modal.style.display = 'none';
-    modal.classList.remove('active');
-    modal.innerHTML = ''; // 清空内容，下次重新加载
-  }
-}
-// ESC 键关闭模态框
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeRecordDetail();
-});
-</script>
-
-<!-- v1.8.4: 文件内容查看器（全屏模态框） -->
-<div id="file-viewer-modal" class="modal-overlay" style="display:none; z-index:3000;" onclick="if(event.target===this)closeFileViewer()">
-  <div class="modal-container" style="width:95vw; height:90vh; max-width:1600px; display:flex; flex-direction:column; background:#050505; border:1px solid #00ff41; border-radius:6px;">
-    <div class="modal-header" style="display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid #1a1a1a; gap:12px; background:#0a0a0a;">
-      <span style="color:#00ff41; font-weight:bold; font-size:13px; white-space:nowrap;">[FILE VIEWER]</span>
-      <span id="fv-file-path" style="color:#888; font-size:11px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-      <span id="fv-file-size" style="color:#666; font-size:10px; white-space:nowrap;"></span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px; padding:3px 8px;" onclick="copyFileContent()">Copy</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px; padding:3px 8px;" onclick="toggleLineWrap()">Wrap</button>
-      <button class="btn btn-ghost btn-sm" style="font-size:11px; padding:3px 8px;" onclick="closeFileViewer()">Close</button>
-    </div>
-    <div class="modal-body" style="flex:1; padding:0; overflow:auto; background:#050505; position:relative;">
-      <pre id="fv-content" style="margin:0; padding:12px 12px 12px 56px; white-space:pre; color:#ccc; tab-size:4; font-family:var(--font-mono); font-size:12px; line-height:1.5; min-height:100%;"></pre>
+  <div id="file-viewer-modal" class="modal-overlay modal-overlay--front" aria-hidden="true" data-action="core.backdrop-close">
+    <div class="modal-box modal-box--file" role="dialog" aria-modal="true" aria-label="File source viewer">
+      <div class="modal-header"><span>FILE VIEWER</span><span id="fv-file-path" class="modal-path"></span><span id="fv-file-size" class="modal-size"></span><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-copy">{{ _('Copy') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-wrap">{{ _('Wrap') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-close">{{ _('Close') }}</button></div>
+      <div class="modal-body modal-body--file"><pre id="fv-content"></pre></div>
     </div>
   </div>
-</div>
-
 </body>
 </html>

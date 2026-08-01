@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
+    from anteumbra.application.scan_history_service import ScanHistoryService
     from anteumbra.application.scan_state_service import ScanRuntimeState
 
 
@@ -49,6 +50,7 @@ class RuntimeContainer:
     passwords: PasswordService
     config_history: ConfigHistoryLogger
     scan_state: ScanRuntimeState
+    scan_history: ScanHistoryService
     login_rate_limiter: LoginRateLimiter
     metrics: RuntimeMetricsPort
     notifier: NotifierPort

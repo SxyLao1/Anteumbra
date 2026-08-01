@@ -1,7 +1,7 @@
 <div class="record-detail-modal">
   <div class="modal-header">
     <h3>{{ _('检测详情') }}</h3>
-    <button class="modal-close" onclick="closeRecordDetail()">&times;</button>
+    <button class="modal-close" type="button" data-action="records.detail-close">&times;</button>
   </div>
   <div class="modal-body">
     <div class="detail-section">
@@ -80,7 +80,7 @@
           </div>
           <button class="btn btn-sm btn-ghost"
                   style="font-size: 10px; padding: 2px 8px;"
-                  onclick="closeRecordDetail(); loadContent('profiles/{{ lp.profile_id }}', 'Profile {{ lp.profile_id[:8] }}')">
+                  type="button" data-action="records.detail-profile" data-profile-id="{{ lp.profile_id }}" data-profile-label="{{ lp.profile_id[:8] }}">
             {{ _('View') }} →
           </button>
         </div>

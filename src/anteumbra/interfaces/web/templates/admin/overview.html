@@ -54,10 +54,10 @@
     <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
       <span style="flex: 1;"><span class="card-header-icon">◆</span> {{ _('LIVE LOG STREAM') }}</span>
       <input type="text" class="form-input" style="width: 140px; font-size: 10px; padding: 3px 6px;"
-             placeholder="{{ _('Quick filter...') }}" oninput="filterLogStream()" id="log-filter-input">
+             placeholder="{{ _('Quick filter...') }}" data-action="dashboard.log-stream-filter" id="log-filter-input">
       <span class="badge badge-info">{{ _('SSE') }}</span>
       <button class="btn btn-ghost btn-sm" style="font-size: 10px; padding: 3px 8px;"
-              onclick="openLogAnalyzer()">{{ _('Analyze') }}</button>
+              type="button" data-action="dashboard.log-open">{{ _('Analyze') }}</button>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
          id="live-log-stream">
@@ -66,14 +66,14 @@
   </div>
 
 <!-- v1.8.0: Log Analyzer Modal -->
-<div id="log-analyzer-modal" class="modal-overlay" style="display:none; z-index:2000;" onclick="if(event.target===this)closeLogAnalyzer()">
+<div id="log-analyzer-modal" class="modal-overlay" style="display:none; z-index:2000;" data-action="dashboard.log-backdrop">
   <div class="modal-container" style="width:95vw; height:90vh; max-width:1400px; display:flex; flex-direction:column;">
     <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
       <h3 style="color:#00ff41; margin:0; flex:1;">{{ _('Log Analyzer') }}</h3>
       <div style="display:flex; gap:8px; align-items:center;">
         <input type="text" class="form-input" style="width:200px; font-size:11px; padding:4px 8px;"
-               placeholder="{{ _('Search keyword...') }}" oninput="filterLogAnalyzer()" id="analyzer-filter-input">
-        <select id="analyzer-level-filter" onchange="filterLogAnalyzer()"
+               placeholder="{{ _('Search keyword...') }}" data-action="dashboard.log-filter" id="analyzer-filter-input">
+        <select id="analyzer-level-filter" data-action="dashboard.log-filter"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
           <option value="all">{{ _('All') }}</option>
           <option value="INFO">{{ _('INFO') }}</option>
@@ -81,7 +81,7 @@
           <option value="ERROR">{{ _('ERROR') }}</option>
           <option value="CRITICAL">{{ _('CRITICAL') }}</option>
         </select>
-        <select id="analyzer-module-filter" onchange="filterLogAnalyzer()"
+        <select id="analyzer-module-filter" data-action="dashboard.log-filter"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
           <option value="all">{{ _('All') }}</option>
           <option value="MONITOR">{{ _('MONITOR') }}</option>
@@ -92,7 +92,7 @@
           <option value="SECURITY">{{ _('SECURITY') }}</option>
           <option value="ALERT">{{ _('ALERT') }}</option>
         </select>
-        <select id="analyzer-time-filter" onchange="analyzerTimePreset()"
+        <select id="analyzer-time-filter" data-action="dashboard.log-time"
                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
           <option value="all">{{ _('All Time') }}</option>
           <option value="1h">{{ _('Last 1h') }}</option>
@@ -104,19 +104,19 @@
         </select>
         <span id="analyzer-custom-time" style="display:none; gap:2px; align-items:center; flex-wrap:wrap;">
           <span style="color:#666; font-size:10px;">{{ _('From') }}</span>
-          <input type="date" id="analyzer-time-from-date" onchange="filterLogAnalyzer()"
+          <input type="date" id="analyzer-time-from-date" data-action="dashboard.log-filter"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
-          <input type="time" id="analyzer-time-from-time" step="1" onchange="filterLogAnalyzer()"
+          <input type="time" id="analyzer-time-from-time" step="1" data-action="dashboard.log-filter"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
           <span style="color:#666; font-size:10px;">{{ _('to') }}</span>
-          <input type="date" id="analyzer-time-to-date" onchange="filterLogAnalyzer()"
+          <input type="date" id="analyzer-time-to-date" data-action="dashboard.log-filter"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
-          <input type="time" id="analyzer-time-to-time" step="1" onchange="filterLogAnalyzer()"
+          <input type="time" id="analyzer-time-to-time" step="1" data-action="dashboard.log-filter"
                  style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
         </span>
         <span style="font-size:10px; color:#666;" id="analyzer-count">{{ _('0 lines') }}</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="loadAccessLogAnalysis()">{{ _('Access Analysis') }}</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="closeLogAnalyzer()">{{ _('Close') }}</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;" type="button" data-action="dashboard.log-access-analysis">{{ _('Access Analysis') }}</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;" type="button" data-action="dashboard.log-close">{{ _('Close') }}</button>
       </div>
     </div>
     <div class="modal-body" style="flex:1; padding:16px; overflow-y:auto; font-family:var(--font-mono); font-size:12px; line-height:1.7;"

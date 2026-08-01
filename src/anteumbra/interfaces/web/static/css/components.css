@@ -539,3 +539,117 @@
   outline: none;
   border-color: var(--color-accent);
 }
+/* Profile views use stable layout primitives because HTMX replaces their fragments. */
+.profiles-view,
+.profile-detail-view {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.page-toolbar,
+.profile-detail-toolbar,
+.profile-ip-toolbar,
+.block-status-panel > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.page-toolbar h3,
+.profile-ip-toolbar h4,
+.profile-section h4 {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 14px;
+}
+
+.toolbar-spacer,
+.profile-detail-toolbar__spacer { flex: 1 1 12px; }
+
+.page-toolbar .form-input { width: min(280px, 100%); }
+.page-jump { width: 64px; text-align: center; }
+
+.block-status-panel,
+.profile-summary-grid,
+.profile-section,
+.profile-card {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+
+.block-status-panel { padding: 10px 12px; }
+.block-status-panel strong { color: var(--color-accent); font-size: 11px; }
+.block-status-panel span { color: var(--color-text-muted); font-size: 11px; }
+#block-detail { margin-top: 8px; border-top: 1px solid var(--color-border); padding-top: 8px; }
+#block-queue-list { max-height: 200px; overflow: auto; color: var(--color-text-muted); font-size: 10px; }
+
+.profile-list { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.profile-card { display: flex; align-items: center; gap: 16px; padding: 12px 14px; cursor: pointer; border-left-width: 3px; }
+.profile-card:hover,
+.profile-card:focus-visible { border-color: var(--color-accent); outline: none; background: var(--color-bg-glass); }
+.profile-card--danger { border-left-color: var(--color-danger); }
+.profile-card--warning { border-left-color: var(--color-warning); }
+.profile-card--muted { border-left-color: var(--color-text-muted); opacity: 0.75; }
+.profile-card__body { min-width: 0; flex: 1; color: var(--color-text-secondary); font-size: 11px; }
+.profile-card__body > div:first-child { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.profile-card__body code { color: var(--color-accent); }
+.profile-card__body small { display: block; margin-top: 3px; color: var(--color-text-muted); }
+.profile-risk { min-width: 54px; text-align: center; }
+.profile-risk strong { display: block; color: var(--color-text-primary); font-size: 22px; }
+.profile-risk span { color: var(--color-text-muted); font-size: 9px; }
+
+.profile-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; }
+.profile-summary-grid > div { min-width: 0; padding: 12px; background: var(--color-bg-secondary); }
+.profile-summary-grid dt { color: var(--color-text-muted); font-size: 10px; }
+.profile-summary-grid dd { margin: 5px 0 0; color: var(--color-text-primary); font-size: 13px; overflow-wrap: anywhere; }
+.profile-summary-grid code { color: var(--color-accent); }
+.profile-score { font-size: 26px !important; font-weight: 700; }
+.profile-score--danger { color: var(--color-danger) !important; }
+.profile-score--warning { color: var(--color-warning) !important; }
+.profile-score--safe { color: var(--color-safe) !important; }
+
+.profile-section { padding: 12px; }
+.attack-timeline { display: grid; gap: 8px; margin: 10px 0 0; padding-left: 22px; }
+.attack-timeline li { padding: 8px 10px; border-left: 2px solid var(--color-border); background: var(--color-bg-secondary); }
+.attack-timeline div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--color-text-muted); font-size: 10px; }
+.attack-timeline strong { color: var(--color-accent); }
+.attack-timeline p { margin: 5px 0 0; color: var(--color-text-secondary); font-size: 11px; }
+.attack-timeline p span { color: var(--color-text-muted); margin-right: 3px; }
+.profile-cluster-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; }
+.profile-cluster-grid article,
+.profile-linked-records > div { padding: 8px 10px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); }
+.profile-cluster-grid header,
+.profile-linked-records > div { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.profile-cluster-grid code { color: var(--color-accent); }
+.profile-cluster-grid p { margin: 7px 0; font-size: 11px; overflow-wrap: anywhere; }
+.profile-cluster-grid small { color: var(--color-text-muted); }
+.profile-linked-records { display: grid; gap: 6px; margin-top: 10px; }
+.profile-linked-records code { color: var(--color-text-primary); }
+.profile-linked-records span { color: var(--color-text-muted); font-size: 10px; }
+
+.table-scroll { overflow: auto; margin-top: 10px; }
+.profile-ip-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.profile-ip-table th,
+.profile-ip-table td { padding: 7px 9px; border-bottom: 1px solid var(--color-border); text-align: left; }
+.profile-ip-table th { position: sticky; top: 0; background: var(--color-bg-secondary); color: var(--color-text-muted); font-size: 10px; }
+.profile-ip-table tbody tr { cursor: pointer; }
+.profile-ip-table tbody tr:hover { background: var(--color-bg-glass); }
+.profile-ip-table td:nth-child(n+3) { text-align: right; }
+.profile-ip-table .btn { margin-left: 6px; font-size: 9px; }
+
+@media (max-width: 900px) {
+  .profile-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-ip-toolbar { align-items: flex-start; }
+}
+
+@media (max-width: 600px) {
+  .profiles-view,
+  .profile-detail-view { padding: 12px; }
+  .profile-summary-grid { grid-template-columns: 1fr; }
+  .profile-card { align-items: flex-start; }
+  .profile-risk { min-width: 42px; }
+}

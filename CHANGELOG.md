@@ -8,7 +8,33 @@
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+- Decoupled the admin frontend from template-bound global JavaScript calls. `app.js`
+  now provides delegated actions, HTTP helpers, and lifecycle hooks while focused
+  modules own records, scanner, profiles, blocklist, YARA, and settings workflows.
+- Replaced inline event handlers and script fragments with declarative `data-action`
+  controls, including dynamically swapped HTMX content.
+- Added paired `mount`/`unmount` lifecycle handling for swapped admin fragments;
+  leaving Scanner now closes its browser-side SSE stream, while Dashboard and
+  Blocklist release their observer and debounce resources.
+- Moved durable manual-scan history behind a runtime-owned application service
+  and configured data directory.
+- Moved runtime construction into focused `runtime_builder`, `runtime_workers`,
+  and `runtime_plugins` modules. `launcher` now owns lifecycle orchestration
+  and remains a compatibility entry point.
+
+### Fixed
+- Preserved the final scanner progress count after a completed scan and restored the
+  `files` suffix consistently across scanner progress states.
+- Rejected invalid scan-history IDs before they can become filenames and write
+  history records atomically, preventing traversal outside the configured data
+  directory and partial JSON reads.
+- Kept YARA batch-rule selection intact when any delete request fails.
+
+### Tests
+- Passed 528 non-browser tests and 43 Playwright UI tests, including scan-history
+  path, scanner SSE teardown, YARA batch-failure, action-contract, and
+  runtime-composition regressions.
 
 ---
 

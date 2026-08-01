@@ -1,469 +1,247 @@
-/* Anteumbra scanner module */
-// All functions intentionally global — HTML onclick handlers depend on them
-/* ============================================================
-   v1.9.0: Manual Scanner (defined globally — innerHTML doesn't exec <script>)
-   ============================================================ */
+/* Active scanner workflow. */
+(function () {
+  'use strict';
 
-var _scanSSE = null;
-var _scanFindings = [];
-var _scanResultsTab = 'new';
-var _scanStartTime = 0;
-var _scanComplete = false;
-var _scanLastId = '';
-var _scanJobId = '';
-var _scanSelected = new Set();
-var _scanQuarantined = new Set();
-var _scanHistoryRequestId = 0;
-
-function setScanUiState(state, progressText) {
-  var labels = {
-    starting: 'Starting',
-    running: 'Running',
-    stopping: 'Stopping',
-    completed: 'Completed',
-    stopped: 'Stopped',
-    failed: 'Failed'
+  var app = window.Anteumbra;
+  var state = {
+    stream: null, findings: [], tab: 'new', startedAt: 0, complete: false,
+    scanId: '', jobId: '', selected: new Set(), quarantined: new Set(), historyRequest: 0
   };
-  var colors = {
-    starting: '#ffaa00',
-    running: '#00ff41',
-    stopping: '#ffaa00',
-    completed: '#00ff41',
-    stopped: '#ffaa00',
-    failed: '#ff4444'
-  };
-  var active = state === 'starting' || state === 'running' || state === 'stopping';
-  var status = document.getElementById('scan-status');
-  if (status) {
-    status.textContent = labels[state] || state;
-    status.dataset.state = state;
-    status.style.color = colors[state] || '#888';
+
+  function node(id) { return document.getElementById(id); }
+
+  function ownsScanner(root) {
+    return Boolean(root && (
+      root.id === 'scan-target-dir' ||
+      (root.querySelector && root.querySelector('#scan-target-dir'))
+    ));
   }
-  var progress = document.getElementById('scan-progress-text');
-  if (progress && progressText != null) progress.textContent = progressText;
 
-  var stopBtn = document.getElementById('scan-stop-btn');
-  if (stopBtn) {
-    stopBtn.disabled = state !== 'running';
-    stopBtn.style.display = state === 'running' ? '' : 'none';
+  function setState(status, progressText) {
+    var labels = { starting: 'Starting', running: 'Running', stopping: 'Stopping', completed: 'Completed', stopped: 'Stopped', failed: 'Failed' };
+    var colors = { starting: '#ffaa00', running: '#00ff41', stopping: '#ffaa00', completed: '#00ff41', stopped: '#ffaa00', failed: '#ff4444' };
+    var active = ['starting', 'running', 'stopping'].indexOf(status) >= 0;
+    var statusNode = node('scan-status');
+    if (statusNode) { statusNode.textContent = labels[status] || status; statusNode.dataset.state = status; statusNode.style.color = colors[status] || '#888'; }
+    var progress = node('scan-progress-text');
+    if (progress && progressText != null) progress.textContent = progressText;
+    var stop = node('scan-stop-btn');
+    if (stop) { stop.disabled = status !== 'running'; stop.style.display = status === 'running' ? '' : 'none'; }
+    var start = node('scan-start-btn');
+    if (start) start.disabled = active;
+    var config = node('scan-config-card');
+    if (config) { config.hidden = active; config.style.display = active ? 'none' : 'flex'; }
   }
-  var startBtn = document.getElementById('scan-start-btn');
-  if (startBtn) startBtn.disabled = active;
-  var configCard = document.getElementById('scan-config-card');
-  if (configCard) configCard.style.display = active ? 'none' : 'flex';
-}
 
-function startScan() {
-  var dir = document.getElementById('scan-target-dir');
-  if (!dir) return;
-  dir = dir.value.trim();
-  if (!dir) { alert('Please enter a target directory.'); return; }
+  function setResultsMessage(message, error) {
+    var table = node('results-tbody');
+    if (!table) return;
+    table.innerHTML = '<tr><td colspan="7" class="scan-result-message"></td></tr>';
+    table.querySelector('.scan-result-message').textContent = message;
+    table.querySelector('.scan-result-message').style.color = error ? 'var(--color-danger)' : '';
+  }
 
-  var recursive = document.getElementById('scan-recursive')?.checked ? '1' : '0';
-  var extensions = document.getElementById('scan-extensions')?.value?.trim() || '';
-
-  // Reset state
-  _scanFindings = [];
-  _scanComplete = false;
-  _scanJobId = '';
-  _scanStartTime = Date.now();
-  if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-  var tbody = document.getElementById('results-tbody');
-  if (tbody) tbody.innerHTML = '';
-
-  // Show/hide cards
-  var configCard = document.getElementById('scan-config-card');
-  var progressCard = document.getElementById('scan-progress-card');
-  var resultsCard = document.getElementById('scan-results-card');
-  var reportBtn = document.getElementById('scan-report-btn');
-  if (configCard) configCard.style.display = 'none';
-  if (progressCard) progressCard.style.display = 'flex';
-  if (resultsCard) resultsCard.style.display = 'none';
-  if (reportBtn) reportBtn.style.display = 'none';
-
-  // Reset stats
-  ['stat-new','stat-known','stat-clean','stat-errors'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.textContent = '0';
-  });
-  ['tab-new-count','tab-known-count','tab-all-count'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.textContent = '0';
-  });
-  document.getElementById('scan-progress-bar')?.style && (document.getElementById('scan-progress-bar').style.width = '0%');
-  var pt = document.getElementById('scan-progress-text'); if (pt) pt.textContent = '0 / ?';
-  setScanUiState('starting', '0 / ? files');
-
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var csrfToken = csrf ? csrf.content : '';
-  var body = 'target_dir=' + encodeURIComponent(dir)
-          + '&recursive=' + recursive
-          + '&extensions=' + encodeURIComponent(extensions);
-
-  fetch('/admin/scanner/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
-    body: body
-  })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
-      return d;
-    });
-  })
-  .then(function(d) {
-    _scanJobId = d.scan_id;
-    setScanUiState('running', '0 / ? files');
-    _scanSSE = new EventSource(d.stream_url, { withCredentials: true });
-
-    _scanSSE.onmessage = function(event) {
-      try { var data = JSON.parse(event.data); handleScanEvent(data); }
-      catch(e) { console.error('SSE parse error:', e); }
-    };
-
-    _scanSSE.onerror = function() {
-      if (!_scanComplete) {
-        _scanComplete = true;
-        setScanUiState('failed', 'Connection lost');
-        var tb = document.getElementById('results-tbody');
-        if (tb) tb.innerHTML += '<tr><td colspan="7" style="color:#ff4444;padding:12px;">SSE connection lost.</td></tr>';
+  function start() {
+    var target = node('scan-target-dir');
+    if (!target || !target.value.trim()) { app.ui.toast('Please enter a target directory.', 'warning'); return; }
+    state.findings = [];
+    state.complete = false;
+    state.jobId = '';
+    state.startedAt = Date.now();
+    state.selected.clear();
+    state.quarantined.clear();
+    if (state.stream) state.stream.close();
+    var table = node('results-tbody');
+    if (table) table.replaceChildren();
+    ['scan-config-card', 'scan-progress-card', 'scan-results-card'].forEach(function (id) {
+      var card = node(id);
+      if (card) {
+        var visible = id === 'scan-progress-card';
+        card.hidden = !visible;
+        card.style.display = visible ? 'flex' : 'none';
       }
-      if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-    };
-  })
-  .catch(function(e) {
-    _scanComplete = true;
-    setScanUiState('failed', 'Start failed: ' + e.message);
-    var tb = document.getElementById('results-tbody');
-    if (tb) tb.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Start failed: ' + _escHtml(e.message) + '</td></tr>';
-  });
-}
-
-function handleScanEvent(data) {
-  switch (data.event) {
-    case 'init':
-      var pt = document.getElementById('scan-progress-text');
-      if (pt) pt.textContent = '0 / ' + (data.total_files || '?');
-      break;
-    case 'progress':
-      var pct = data.total > 0 ? Math.round(data.scanned / data.total * 100) : 0;
-      var pb = document.getElementById('scan-progress-bar');
-      if (pb) pb.style.width = pct + '%';
-      var pt2 = document.getElementById('scan-progress-text');
-      if (pt2) pt2.textContent = data.scanned + ' / ' + data.total;
-      var el = document.getElementById('scan-elapsed');
-      if (el) el.textContent = Math.round((Date.now() - _scanStartTime) / 1000) + 's';
-      var sn = document.getElementById('stat-new'); if (sn) sn.textContent = data.new_findings || 0;
-      var sk = document.getElementById('stat-known'); if (sk) sk.textContent = data.known_findings || 0;
-      var sc = document.getElementById('stat-clean'); if (sc) sc.textContent = data.clean || 0;
-      var se = document.getElementById('stat-errors'); if (se) se.textContent = data.errors || 0;
-      break;
-    case 'finding':
-      _scanFindings.push(data);
-      addResultRow(data);
-      updateResultCounts();
-      break;
-    case 'complete':
-      _scanComplete = true;
-      _scanLastId = data.scan_id;
-      _scanJobId = '';
-      var pb2 = document.getElementById('scan-progress-bar');
-      var terminalPct = data.status === 'completed'
-        ? 100
-        : (data.total_files > 0 ? Math.round(data.scanned_files / data.total_files * 100) : 0);
-      if (pb2) pb2.style.width = terminalPct + '%';
-      var finalState = data.status === 'cancelled'
-        ? 'stopped'
-        : (data.status === 'error' ? 'failed' : 'completed');
-      var finalLabel = finalState === 'stopped'
-        ? 'Stopped'
-        : (finalState === 'failed' ? 'Failed' : 'Completed');
-      var finalText = finalLabel + ' - ' + data.scanned_files + ' / ' + data.total_files + ' files';
-      if (finalState === 'failed' && data.error_message) finalText += ': ' + data.error_message;
-      setScanUiState(
-        finalState,
-        finalText
-      );
-      var el2 = document.getElementById('scan-elapsed');
-      if (el2) el2.textContent = (data.duration == null ? '?' : data.duration) + 's';
-      var sn2 = document.getElementById('stat-new'); if (sn2) sn2.textContent = data.new_findings;
-      var sk2 = document.getElementById('stat-known'); if (sk2) sk2.textContent = data.known_findings;
-      var sc2 = document.getElementById('stat-clean'); if (sc2) sc2.textContent = data.clean;
-      var se2 = document.getElementById('stat-errors'); if (se2) se2.textContent = data.errors;
-      if (data.new_findings > 0 || data.known_findings > 0) {
-        var rb = document.getElementById('scan-report-btn');
-        if (rb) rb.style.display = '';
-      }
-      if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-      setTimeout(loadScanHistory, 50);
-      break;
-    case 'error':
-      _scanComplete = true;
-      _scanJobId = '';
-      setScanUiState('failed', 'Failed - ' + (data.message || 'Unknown error'));
-      var tb2 = document.getElementById('results-tbody');
-      if (tb2) tb2.innerHTML += '<tr><td colspan="6" style="color:#ff4444;padding:12px;">Error: ' + (data.message || 'Unknown') + '</td></tr>';
-      if (_scanSSE) { _scanSSE.close(); _scanSSE = null; }
-      break;
-  }
-}
-
-function addResultRow(finding) {
-  var resultsCard = document.getElementById('scan-results-card');
-  if (resultsCard && resultsCard.style.display === 'none') resultsCard.style.display = 'flex';
-
-  var isNew = finding.classification === 'new';
-  var isQuarantined = !!finding.quarantine_id;
-  var rowClass = isNew ? 'result-new' : 'result-known';
-  var esc = _escJs;
-
-  // v2.0: Show quarantine status instead of New/Known classification
-  var qStatusHtml;
-  if (isQuarantined) {
-    qStatusHtml = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
-  } else if (finding.quarantine_id) {
-    qStatusHtml = '<span class="badge badge-warning" style="font-size:9px;">Q: ' + _escHtml(finding.quarantine_id.substring(0, 10)) + '</span>';
-  } else {
-    qStatusHtml = '<span style="color:#ff4444;font-size:9px;">Active</span>';
+    });
+    ['stat-new', 'stat-known', 'stat-clean', 'stat-errors', 'tab-new-count', 'tab-known-count', 'tab-all-count'].forEach(function (id) { var value = node(id); if (value) value.textContent = '0'; });
+    var progressBar = node('scan-progress-bar');
+    if (progressBar) progressBar.style.width = '0%';
+    setState('starting', '0 / ? files');
+    var body = new URLSearchParams({
+      target_dir: target.value.trim(),
+      recursive: node('scan-recursive').checked ? '1' : '0',
+      extensions: node('scan-extensions').value.trim()
+    });
+    app.http.json('/admin/scanner/run', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+      .then(function (result) {
+        if (!result.success) throw new Error(result.error || 'Scanner did not start');
+        state.jobId = result.scan_id;
+        setState('running', '0 / ? files');
+        state.stream = new EventSource(result.stream_url, { withCredentials: true });
+        state.stream.onmessage = function (event) { try { handleEvent(JSON.parse(event.data)); } catch (error) { console.error('Scanner SSE parse error', error); } };
+        state.stream.onerror = function () {
+          if (!state.complete) { state.complete = true; setState('failed', 'Connection lost'); setResultsMessage('SSE connection lost.', true); }
+          if (state.stream) { state.stream.close(); state.stream = null; }
+        };
+      })
+      .catch(function (error) { state.complete = true; setState('failed', 'Start failed: ' + error.message); setResultsMessage('Start failed: ' + error.message, true); });
   }
 
-  var actions = '<span style="display:inline-flex;gap:3px;white-space:nowrap;">'
-    + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:2px 5px;" onclick="openFileViewerByPath(\'' + esc(finding.file_path) + '\')">View</button>'
-    + '</span>';
-
-  var row = '<tr class="' + rowClass + '" data-file-path="' + _escHtml(finding.file_path) + '" style="border-bottom:1px solid #111;">'
-    + '<td style="padding:3px 6px;text-align:center;"><input type="checkbox" class="scan-cb" data-file-path="' + _escHtml(finding.file_path) + '" onchange="scanUpdateSel()" onclick="event.stopPropagation()"></td>'
-    + '<td style="padding:3px 8px;"><code style="color:#ccc;font-size:10px;">' + _escHtml(finding.file_name) + '</code></td>'
-    + '<td style="padding:3px 8px;color:#555;font-size:9px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _escHtml(finding.file_path) + '">' + _escHtml(finding.file_path) + '</td>'
-    + '<td style="padding:3px 8px;color:#888;font-size:10px;">' + _escHtml(finding.engine || '') + '</td>'
-    + '<td style="padding:3px 8px;font-size:10px;">' + (finding.features || []).map(function(f) { return '<span class="badge badge-blue">' + _escHtml(f) + '</span>'; }).join(' ') + '</td>'
-    + '<td style="padding:3px 8px;text-align:center;">' + qStatusHtml + '</td>'
-    + '<td style="padding:3px 8px;text-align:right;white-space:nowrap;">' + actions + '</td>'
-    + '</tr>';
-
-  var tbody = document.getElementById('results-tbody');
-  if (tbody) tbody.insertAdjacentHTML('beforeend', row);
-  applyTabFilter();
-}
-
-function switchResultsTab(tab) {
-  _scanResultsTab = tab;
-  ['tab-new','tab-known','tab-all'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) { el.style.color = '#888'; el.style.borderBottomColor = 'transparent'; }
-  });
-  var active = document.getElementById('tab-' + tab);
-  if (active) { active.style.color = '#00ff41'; active.style.borderBottom = '2px solid #00ff41'; }
-  applyTabFilter();
-}
-
-function applyTabFilter() {
-  var rows = document.querySelectorAll('#results-tbody tr');
-  rows.forEach(function(row) {
-    if (_scanResultsTab === 'all') { row.style.display = ''; return; }
-    if (_scanResultsTab === 'new' && row.classList.contains('result-new')) row.style.display = '';
-    else if (_scanResultsTab === 'known' && row.classList.contains('result-known')) row.style.display = '';
-    else row.style.display = 'none';
-  });
-}
-
-function updateResultCounts() {
-  var newCount = _scanFindings.filter(function(f) { return f.classification === 'new'; }).length;
-  var knownCount = _scanFindings.filter(function(f) { return f.classification === 'known'; }).length;
-  var nc = document.getElementById('tab-new-count'); if (nc) nc.textContent = newCount;
-  var kc = document.getElementById('tab-known-count'); if (kc) kc.textContent = knownCount;
-  var ac = document.getElementById('tab-all-count'); if (ac) ac.textContent = _scanFindings.length;
-}
-
-function quarantineScanFile(filePath, btn) {
-  if (!confirm('Quarantine ' + filePath.split(/[\\/]/).pop() + '?')) return;
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var token = csrf ? csrf.content : '';
-  fetch('/admin/scanner/quarantine', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
-    body: 'file_path=' + encodeURIComponent(filePath)
-  })
-  .then(function(r) {
-    if (!r.ok) {
-      return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); })
-        .catch(function() { throw new Error('Server error: HTTP ' + r.status); });
-    }
-    return r.json();
-  })
-  .then(function(d) {
-    if (d.success) {
-      btn.outerHTML = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
-    } else {
-      alert('Quarantine failed: ' + (d.error || 'unknown'));
-    }
-  })
-  .catch(function(e) {
-    alert('Quarantine failed: ' + e.message);
-  });
-}
-
-function stopScan() {
-  if (!_scanJobId || _scanComplete) return;
-  setScanUiState('stopping', 'Stopping...');
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var token = csrf ? csrf.content : '';
-  fetch('/admin/scanner/cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
-    body: 'scan_id=' + encodeURIComponent(_scanJobId)
-  })
-  .then(function(r) {
-    return r.json().then(function(d) {
-      if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
-      return d;
-    });
-  })
-  .catch(function(e) {
-    setScanUiState('running', 'Cancel failed: ' + e.message);
-  });
-}
-
-function generateReport() {
-  if (_scanLastId) window.open('/admin/scanner/report?scan_id=' + _scanLastId, '_blank');
-}
-
-function loadScanHistory() {
-  var el = document.getElementById('scan-history-list');
-  if (!el) return;
-  var requestId = ++_scanHistoryRequestId;
-  el.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>Loading history...</p></div>';
-  fetch('/admin/scanner/history')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (requestId !== _scanHistoryRequestId || !el.isConnected) return;
-      if (!d.scans || d.scans.length === 0) {
-        el.innerHTML = '<p style="color:#555;text-align:center;padding:12px;">No scan history yet.</p>';
-        return;
-      }
-      var html = '';
-      d.scans.forEach(function(s) {
-        var statusColor = s.status === 'completed' ? '#00ff41' : s.status === 'error' ? '#ff4444' : '#ffaa00';
-        var dateStr = s.start_time ? new Date(s.start_time * 1000).toLocaleString() : 'N/A';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #111;font-size:10px;">'
-          + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">'
-          + '<span style="color:' + statusColor + ';">●</span>'
-          + '<code style="color:#00ff41;font-size:9px;">' + s.scan_id.substring(0, 8) + '</code>'
-          + '<span style="color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="' + _escHtml(s.target_dir) + '">' + _escHtml(s.target_dir) + '</span>'
-          + '<span style="color:#ccc;">' + s.scanned_files + '/' + s.total_files + ' files</span>'
-          + '<span style="color:#ff4444;font-size:9px;">' + s.new_findings + ' new</span>'
-          + '<span style="color:#ffaa00;font-size:9px;">' + s.known_findings + ' known</span>'
-          + '<span style="color:#555;">' + dateStr + '</span>'
-          + '<span style="color:#888;">' + (s.duration == null ? '?' : s.duration) + 's</span>'
-          + '</div>'
-          + '<div style="display:flex;gap:4px;flex-shrink:0;">'
-          + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;" onclick="viewScanResults(\'' + s.scan_id + '\')">View</button>'
-          + '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;" onclick="window.open(\'/admin/scanner/report?scan_id=' + s.scan_id + '\',\'_blank\')">Report</button>'
-          + '</div>'
-          + '</div>';
-      });
-      el.innerHTML = html;
-    })
-    .catch(function() {
-      if (requestId !== _scanHistoryRequestId || !el.isConnected) return;
-      el.innerHTML = '<p style="color:#ff4444;text-align:center;padding:12px;">Failed to load history.</p>';
-    });
-}
-
-function viewScanResults(scanId) {
-  // Load full scan results from disk and render in the results card
-  var tbody = document.getElementById('results-tbody');
-  var card = document.getElementById('scan-results-card');
-  if (!tbody || !card) return;
-  tbody.innerHTML = '<tr><td colspan="7" style="padding:12px;text-align:center;"><div class="spinner"></div><p>Loading results...</p></td></tr>';
-  card.style.display = 'flex';
-  _scanFindings = [];
-  _scanSelected.clear();
-  _scanQuarantined.clear();
-  fetch('/admin/scanner/results?scan_id=' + encodeURIComponent(scanId))
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.error) { tbody.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Error: ' + d.error + '</td></tr>'; return; }
-      tbody.innerHTML = '';
-      _scanFindings = d.findings || [];
-      _scanFindings.forEach(function(f) { addResultRow(f); });
-      updateResultCounts();
-      scanUpdateSel();
-      _scanLastId = d.scan_id;
-      document.getElementById('scan-report-btn').style.display = '';
-      document.getElementById('scan-progress-card').style.display = 'none';
-    })
-    .catch(function() { tbody.innerHTML = '<tr><td colspan="7" style="color:#ff4444;padding:12px;">Failed to load.</td></tr>'; });
-}
-
-// v2.0: Scan results — cross-result selection + batch quarantine
-function scanUpdateSel() {
-  _scanSelected.clear();
-  document.querySelectorAll('.scan-cb:checked').forEach(function(cb) {
-    _scanSelected.add(cb.dataset.filePath);
-  });
-  var count = _scanSelected.size;
-  var countEl = document.getElementById('scan-selected-count');
-  var btn = document.getElementById('scan-quarantine-sel-btn');
-  if (countEl) { countEl.style.display = count > 0 ? '' : 'none'; countEl.textContent = count + ' selected'; }
-  if (btn) btn.disabled = count === 0;
-}
-
-function scanToggleAll(masterCb) {
-  document.querySelectorAll('.scan-cb').forEach(function(cb) {
-    cb.checked = masterCb.checked;
-  });
-  scanUpdateSel();
-}
-
-function scanSelectAll() {
-  document.querySelectorAll('.scan-cb').forEach(function(cb) { cb.checked = true; });
-  document.getElementById('scan-select-all-cb').checked = true;
-  scanUpdateSel();
-}
-
-function scanClearSel() {
-  document.querySelectorAll('.scan-cb').forEach(function(cb) { cb.checked = false; });
-  document.getElementById('scan-select-all-cb').checked = false;
-  scanUpdateSel();
-}
-
-function scanQuarantineSelected() {
-  var paths = Array.from(_scanSelected);
-  if (!paths.length) return;
-  if (!confirm('Quarantine ' + paths.length + ' selected files?')) return;
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var token = csrf ? csrf.content : '';
-  var done = 0;
-  var failed = 0;
-  var total = paths.length;
-
-  function processNext() {
-    if (paths.length === 0) {
-      alert('Done: ' + done + ' quarantined, ' + failed + ' failed');
-      _scanSelected.clear();
-      scanUpdateSel();
+  function handleEvent(event) {
+    if (event.event === 'init') { setState('running', '0 / ' + (event.total_files || '?') + ' files'); return; }
+    if (event.event === 'progress') {
+      var total = event.total || 0;
+      var progress = node('scan-progress-bar');
+      if (progress) progress.style.width = (total ? Math.round(event.scanned / total * 100) : 0) + '%';
+      var text = node('scan-progress-text'); if (text) text.textContent = event.scanned + ' / ' + total + ' files';
+      var elapsed = node('scan-elapsed'); if (elapsed) elapsed.textContent = Math.round((Date.now() - state.startedAt) / 1000) + 's';
+      [['stat-new', event.new_findings], ['stat-known', event.known_findings], ['stat-clean', event.clean], ['stat-errors', event.errors]].forEach(function (entry) { var stat = node(entry[0]); if (stat) stat.textContent = entry[1] || 0; });
       return;
     }
-    var fp = paths.shift();
-    fetch('/admin/scanner/quarantine', {
-      method: 'POST',
-      headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
-      body: 'file_path=' + encodeURIComponent(fp)
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) {
-        done++;
-        _scanQuarantined.add(fp);
-        // Update row status
-        var row = document.querySelector('tr[data-file-path="' + fp.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '"]');
-        if (row) {
-          var td = row.querySelector('td:nth-child(6)');
-          if (td) td.innerHTML = '<span class="badge badge-success" style="font-size:9px;">Quarantined</span>';
-        }
-      } else { failed++; }
-      processNext();
-    })
-    .catch(function() { failed++; processNext(); });
+    if (event.event === 'finding') { state.findings.push(event); addRow(event); updateCounts(); return; }
+    if (event.event === 'complete' || event.event === 'error') {
+      state.complete = true;
+      state.scanId = event.scan_id || state.scanId;
+      state.jobId = '';
+      var failed = event.event === 'error' || event.status === 'error';
+      var stopped = event.status === 'cancelled';
+      var terminalStatus = failed ? 'failed' : stopped ? 'stopped' : 'completed';
+      // Successful scans retain their final scanned/total count for operator review.
+      var terminalText = failed ? 'Failed - ' + (event.message || event.error_message || 'Unknown error') : (stopped ? 'Stopped' : null);
+      setState(terminalStatus, terminalText);
+      if (state.stream) { state.stream.close(); state.stream = null; }
+      if (state.findings.length) node('scan-report-btn').style.display = '';
+      window.setTimeout(loadHistory, 50);
+    }
   }
-  processNext();
-}
+
+  function addRow(finding) {
+    var card = node('scan-results-card');
+    if (card) { card.hidden = false; card.style.display = 'flex'; }
+    var tbody = node('results-tbody');
+    if (!tbody) return;
+    var row = document.createElement('tr');
+    row.className = finding.classification === 'new' ? 'result-new' : 'result-known';
+    row.dataset.filePath = finding.file_path;
+    var select = document.createElement('input');
+    select.type = 'checkbox'; select.className = 'scan-cb'; select.dataset.filePath = finding.file_path; select.dataset.action = 'scanner.selection-change';
+    var cells = [document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td')];
+    cells[0].appendChild(select);
+    cells[1].textContent = finding.file_name;
+    cells[2].textContent = finding.file_path;
+    cells[3].textContent = finding.engine || '';
+    cells[4].textContent = (finding.features || []).join(', ');
+    cells[5].textContent = finding.quarantine_id ? 'Quarantined' : 'Active';
+    var view = document.createElement('button');
+    view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View'; view.dataset.action = 'records.view-path'; view.dataset.filePath = finding.file_path;
+    cells[6].appendChild(view);
+    cells.forEach(function (cell) { row.appendChild(cell); });
+    tbody.appendChild(row);
+    filterTab();
+  }
+
+  function updateCounts() {
+    var fresh = state.findings.filter(function (item) { return item.classification === 'new'; }).length;
+    var known = state.findings.filter(function (item) { return item.classification === 'known'; }).length;
+    [['tab-new-count', fresh], ['tab-known-count', known], ['tab-all-count', state.findings.length]].forEach(function (entry) { var value = node(entry[0]); if (value) value.textContent = entry[1]; });
+  }
+
+  function switchTab(tab) {
+    state.tab = tab;
+    ['new', 'known', 'all'].forEach(function (name) { var control = node('tab-' + name); if (control) control.classList.toggle('active', name === tab); });
+    filterTab();
+  }
+
+  function filterTab() {
+    document.querySelectorAll('#results-tbody tr').forEach(function (row) {
+      row.style.display = state.tab === 'all' || row.classList.contains('result-' + state.tab) ? '' : 'none';
+    });
+  }
+
+  function stop() {
+    if (!state.jobId || state.complete) return;
+    setState('stopping', 'Stopping...');
+    app.http.json('/admin/scanner/cancel', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'scan_id=' + encodeURIComponent(state.jobId) })
+      .catch(function (error) { setState('running', 'Cancel failed: ' + error.message); });
+  }
+
+  function updateSelection() {
+    state.selected.clear();
+    document.querySelectorAll('.scan-cb:checked').forEach(function (checkbox) { state.selected.add(checkbox.dataset.filePath); });
+    var count = node('scan-selected-count');
+    var button = node('scan-quarantine-sel-btn');
+    if (count) { count.textContent = state.selected.size + ' selected'; count.style.display = state.selected.size ? '' : 'none'; }
+    if (button) button.disabled = state.selected.size === 0;
+  }
+
+  function quarantineSelection() {
+    var paths = Array.from(state.selected);
+    if (!paths.length || !app.confirm('Quarantine ' + paths.length + ' selected files?')) return;
+    var completed = 0;
+    function next() {
+      var path = paths.shift();
+      if (!path) { window.alert('Done: ' + completed + ' quarantined'); state.selected.clear(); updateSelection(); return; }
+      app.http.json('/admin/scanner/quarantine', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'file_path=' + encodeURIComponent(path) })
+        .then(function (result) { if (result.success) completed += 1; next(); }).catch(next);
+    }
+    next();
+  }
+
+  function loadHistory() {
+    var target = node('scan-history-list');
+    if (!target) return;
+    var requestId = ++state.historyRequest;
+    target.textContent = 'Loading history...';
+    app.http.json('/admin/scanner/history').then(function (result) {
+      if (requestId !== state.historyRequest || !target.isConnected) return;
+      target.replaceChildren();
+      (result.scans || []).forEach(function (scan) {
+        var line = document.createElement('div');
+        line.className = 'scan-history-row';
+        line.textContent = scan.scan_id.slice(0, 8) + ' ' + scan.target_dir + ' ' + scan.scanned_files + '/' + scan.total_files;
+        var view = document.createElement('button');
+        view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View'; view.dataset.action = 'scanner.view-results'; view.dataset.scanId = scan.scan_id;
+        var report = document.createElement('button');
+        report.className = 'btn btn-ghost btn-sm'; report.textContent = 'Report'; report.dataset.action = 'core.open-window'; report.dataset.url = '/admin/scanner/report?scan_id=' + encodeURIComponent(scan.scan_id);
+        line.append(' ', view, ' ', report);
+        target.appendChild(line);
+      });
+      if (!target.childElementCount) target.textContent = 'No scan history yet.';
+    }).catch(function () { if (requestId === state.historyRequest) target.textContent = 'Failed to load history.'; });
+  }
+
+  function viewResults(scanId) {
+    state.findings = []; state.selected.clear(); state.quarantined.clear();
+    setResultsMessage('Loading results...');
+    app.http.json('/admin/scanner/results?scan_id=' + encodeURIComponent(scanId)).then(function (result) {
+      var tbody = node('results-tbody');
+      if (tbody) tbody.replaceChildren();
+      (result.findings || []).forEach(function (finding) { state.findings.push(finding); addRow(finding); });
+      updateCounts(); updateSelection(); state.scanId = result.scan_id;
+      var results = node('scan-results-card');
+      if (results) { results.hidden = false; results.style.display = 'flex'; }
+      node('scan-report-btn').style.display = '';
+    }).catch(function (error) { setResultsMessage(error.message, true); });
+  }
+
+  app.register('scanner', {
+    actions: {
+      'scanner.start': { handler: start },
+      'scanner.stop': { handler: stop },
+      'scanner.tab': { handler: function (context) { switchTab(context.element.dataset.scanTab); } },
+      'scanner.selection-change': { handler: updateSelection, events: ['change'], preventDefault: false },
+      'scanner.select-all': { handler: function () { document.querySelectorAll('.scan-cb').forEach(function (box) { box.checked = true; }); var master = node('scan-select-all-cb'); if (master) master.checked = true; updateSelection(); } },
+      'scanner.clear-selection': { handler: function () { document.querySelectorAll('.scan-cb').forEach(function (box) { box.checked = false; }); var master = node('scan-select-all-cb'); if (master) master.checked = false; updateSelection(); } },
+      'scanner.toggle-all': { handler: function (context) { document.querySelectorAll('.scan-cb').forEach(function (box) { box.checked = context.element.checked; }); updateSelection(); }, events: ['change'], preventDefault: false },
+      'scanner.quarantine-selection': { handler: quarantineSelection },
+      'scanner.report': { handler: function () { if (state.scanId) window.open('/admin/scanner/report?scan_id=' + encodeURIComponent(state.scanId), '_blank'); } },
+      'scanner.history-refresh': { handler: loadHistory },
+      'scanner.view-results': { handler: function (context) { viewResults(context.element.dataset.scanId); } }
+    },
+    mount: function (root) { if (root && (root.id === 'scan-history-list' || root.querySelector && root.querySelector('#scan-history-list'))) loadHistory(); },
+    unmount: function (root) {
+      if (!ownsScanner(root)) return;
+      state.historyRequest += 1;
+      if (state.stream) { state.stream.close(); state.stream = null; }
+    },
+    loadHistory: loadHistory
+  });
+}());

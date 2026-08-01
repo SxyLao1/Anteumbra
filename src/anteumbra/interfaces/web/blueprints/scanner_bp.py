@@ -20,10 +20,7 @@ from flask import (
 
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.path_service import normalize_path
-from anteumbra.interfaces.web.blueprints._shared import (
-    save_scan_to_disk,
-    load_scans_from_disk,
-)
+
 from anteumbra.interfaces.web.runtime import get_runtime
 
 # ── Blueprint ──────────────────────────────────────────────
@@ -172,7 +169,11 @@ def _run_scan_job(scan_id: str, runtime) -> None:
         )
         state.put_result(result.scan_id, result)
         state.cleanup_results(_SCAN_JOB_TTL)
-        save_scan_to_disk(result)
+        try:
+            runtime.scan_history.record(result)
+        except Exception:
+            # A completed scan remains usable in memory even when durable history is unavailable.
+            scan_logger.exception("Failed to persist manual scan history")
         progress_queue.put(('complete', result))
     except Exception as e:
         scan_logger.error("scanner failed: %s", e, exc_info=True)
@@ -412,26 +413,7 @@ def scanner_quarantine():
 @require_auth
 def scanner_history():
     """扫描历史列表（JSON）"""
-    scans = load_scans_from_disk()
-    summaries = []
-    for s in scans[:20]:
-        summaries.append({
-            "scan_id": s.get("scan_id", ""),
-            "target_dir": s.get("target_dir", ""),
-            "site_id": s.get("site_id", ""),
-            "site_name": s.get("site_name", ""),
-            "start_time": s.get("start_time", 0),
-            "end_time": s.get("end_time", 0),
-            "status": s.get("status", "unknown"),
-            "total_files": s.get("total_files", 0),
-            "scanned_files": s.get("scanned_files", 0),
-            "new_findings": s.get("new_findings", 0),
-            "known_findings": s.get("known_findings", 0),
-            "clean": s.get("clean", 0),
-            "duration": s.get("duration", 0),
-        })
-    return jsonify({"scans": summaries})
-
+    return jsonify({"scans": get_runtime().scan_history.list_summaries()})
 
 @scanner_bp.route('/scanner/results')
 @require_auth
@@ -441,16 +423,13 @@ def scanner_results_json():
     if not scan_id:
         return jsonify({"error": "missing scan_id"}), 400
 
-    disk_file = Path("data") / "scans" / f"{scan_id}.json"
-    if disk_file.exists():
-        try:
-            import json
-            data = json.loads(disk_file.read_text(encoding='utf-8'))
-            return jsonify(data)
-        except Exception:
-            return jsonify({"error": "failed to load scan data"}), 500
-    return jsonify({"error": "scan not found"}), 404
-
+    try:
+        data = get_runtime().scan_history.get_result(scan_id)
+    except ValueError:
+        return jsonify({"error": "invalid scan_id"}), 400
+    if data is None:
+        return jsonify({"error": "scan not found"}), 404
+    return jsonify(data)
 
 @scanner_bp.route('/scanner/report')
 @require_auth
@@ -460,35 +439,30 @@ def scanner_report():
     result = get_runtime().scan_state.get_result(scan_id)
 
     if not result:
-        disk_file = Path("data") / "scans" / f"{scan_id}.json"
-        if disk_file.exists():
-            try:
-                import json
-                raw = json.loads(disk_file.read_text(encoding='utf-8'))
-                from anteumbra.application.scanner_service import ManualScanResult
-                result = ManualScanResult(
-                    scan_id=raw.get("scan_id", scan_id),
-                    target_dir=raw.get("target_dir", ""),
-                    start_time=raw.get("start_time", 0),
-                    end_time=raw.get("end_time", 0),
-                    status=raw.get("status", "completed"),
-                    total_files=raw.get("total_files", 0),
-                    scanned_files=raw.get("scanned_files", 0),
-                    new_findings=raw.get("new_findings", 0),
-                    known_findings=raw.get("known_findings", 0),
-                    clean=raw.get("clean", 0),
-                    errors=raw.get("errors", 0),
-                    findings=raw.get("findings", []),
-                    site_id=raw.get("site_id", ""),
-                    site_name=raw.get("site_name", ""),
-                )
-            except Exception:
-                return render_template('admin/error.html',
-                    error="扫描结果不存在或已过期"), 404
-        else:
+        try:
+            raw = get_runtime().scan_history.get_result(scan_id)
+        except ValueError:
+            raw = None
+        if raw is None:
             return render_template('admin/error.html',
                 error="扫描结果不存在或已过期"), 404
-
+        from anteumbra.application.scanner_service import ManualScanResult
+        result = ManualScanResult(
+            scan_id=raw.get("scan_id", scan_id),
+            target_dir=raw.get("target_dir", ""),
+            start_time=raw.get("start_time", 0),
+            end_time=raw.get("end_time", 0),
+            status=raw.get("status", "completed"),
+            total_files=raw.get("total_files", 0),
+            scanned_files=raw.get("scanned_files", 0),
+            new_findings=raw.get("new_findings", 0),
+            known_findings=raw.get("known_findings", 0),
+            clean=raw.get("clean", 0),
+            errors=raw.get("errors", 0),
+            findings=raw.get("findings", []),
+            site_id=raw.get("site_id", ""),
+            site_name=raw.get("site_name", ""),
+        )
     return render_template('admin/scanner_report.html',
         result=result,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

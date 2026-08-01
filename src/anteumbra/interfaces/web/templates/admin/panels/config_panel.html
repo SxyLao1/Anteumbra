@@ -71,7 +71,7 @@
       <span class="page-info">{{ _('Page %(page)s / %(total_pages)s (%(total)s total)', page=page, total_pages=total_pages, total=total) }}</span>
       <div class="page-jump">
         <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
-               onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/system/config_panel?page='+p,{target:'#system-config-panel',swap:'innerHTML'})}">
+               data-action="core.page-jump" data-page-url="/admin/system/config_panel?page=__PAGE__" data-target="#system-config-panel" data-swap="innerHTML">
       </div>
       <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
               hx-get="/admin/system/config_panel?page={{ page + 1 }}"
@@ -84,9 +84,7 @@
   <!-- 快速操作 -->
   <div class="config-actions">
     <button class="btn btn-success"
-            hx-post="/admin/system/config/reload"
-            hx-confirm="确定立即重载配置？"
-            onclick="this.innerHTML='⏳ 重载中...'; this.disabled=true;">
+            type="button" data-action="settings.config-reload-button">
       🔄 手动重载
     </button>
   </div>

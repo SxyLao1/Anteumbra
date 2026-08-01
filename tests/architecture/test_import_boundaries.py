@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -403,6 +404,75 @@ def test_packaged_code_has_no_unscoped_legacy_branding():
     )
 
 
+def test_runtime_composition_is_split_from_lifecycle():
+    """Lifecycle orchestration must not regain service construction helpers."""
+    application_root = PACKAGE_ROOT / "application"
+    launcher = (application_root / "launcher.py").read_text(encoding="utf-8")
+
+    assert "from anteumbra.application.runtime_builder import build_runtime_container" in launcher
+    assert "from anteumbra.application.runtime_plugins import (" in launcher
+    assert "from anteumbra.application.runtime_workers import (" in launcher
+    for helper in (
+        "build_runtime_container",
+        "_start_site_monitors",
+        "_start_profile_workers",
+        "_start_plugins",
+        "_build_builtin_plugin_factories",
+    ):
+        assert f"def {helper}(" not in launcher
+
+    expected_owners = {
+        "runtime_builder.py": "def build_runtime_container(",
+        "runtime_workers.py": "def _start_site_monitors(",
+        "runtime_plugins.py": "def _start_plugins(",
+    }
+    for filename, function in expected_owners.items():
+        assert function in (application_root / filename).read_text(encoding="utf-8")
+
+
+def test_admin_data_actions_are_registered():
+    """Template and generated actions must resolve through the delegated registry."""
+    frontend_root = PACKAGE_ROOT / "interfaces" / "web" / "static" / "js"
+    sources = [
+        frontend_root / "app.js",
+        frontend_root / "dashboard.js",
+        *sorted((frontend_root / "modules").glob("*.js")),
+    ]
+    registered: set[str] = set()
+    generated: set[str] = set()
+    for path in sources:
+        source = path.read_text(encoding="utf-8")
+        registered.update(
+            re.findall(
+                r"registerAction\(\s*['\"]([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)['\"]",
+                source,
+            )
+        )
+        registered.update(
+            re.findall(
+                r"(?m)^\s*['\"]([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)['\"]\s*:\s*\{\s*handler",
+                source,
+            )
+        )
+        generated.update(
+            re.findall(
+                r"(?:dataset\.action\s*=\s*|setAttribute\(\s*['\"]data-action['\"]\s*,\s*)['\"]([^'\"]+)['\"]",
+                source,
+            )
+        )
+
+    template_actions: set[str] = set()
+    templates = PACKAGE_ROOT / "interfaces" / "web" / "templates" / "admin"
+    for path in templates.rglob("*.html"):
+        template_actions.update(
+            re.findall(
+                r"data-action\s*=\s*['\"]([^'\"]+)['\"]",
+                path.read_text(encoding="utf-8"),
+            )
+        )
+
+    missing = sorted((template_actions | generated) - registered)
+    assert not missing, "unregistered admin data-action values:\n" + "\n".join(missing)
 def test_dashboard_initial_version_uses_package_version_context():
     dashboard = PACKAGE_ROOT / "interfaces" / "web" / "templates" / "admin" / "dashboard.html"
     source = dashboard.read_text(encoding="utf-8")

@@ -1,5 +1,5 @@
 <!-- Session管理面板 -->
-<div class="session-panel">
+<div class="session-panel" data-session-stats data-session-count="{{ session_count }}" data-active-count="{{ active_count }}">
   {% if message %}
   <div class="operation-message {{ message_type }}">
     <span class="message-icon">{% if message_type == 'success' %}✓{% else %}✗{% endif %}</span>
@@ -46,7 +46,7 @@
     <span class="page-info">{{ _('Page %(page)s / %(total_pages)s (%(session_count)s total)', page=page, total_pages=total_pages, session_count=session_count) }}</span>
     <div class="page-jump">
       <input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{{ total_pages }}" value="{{ page }}"
-             onkeydown="if(event.key==='Enter'){var p=this.value;htmx.ajax('GET','/admin/system/session_panel?page='+p,{target:'#system-session-panel',swap:'innerHTML'})}">
+             data-action="core.page-jump" data-page-url="/admin/system/session_panel?page=__PAGE__" data-target="#system-session-panel" data-swap="innerHTML">
     </div>
     <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %}
             hx-get="/admin/system/session_panel?page={{ page + 1 }}"
@@ -56,14 +56,6 @@
   {% endif %}
 </div>
 
-<script>
-(function(){
-  var stats = document.getElementById('session-header-stats');
-  if (stats) {
-    stats.innerHTML = '<span style="color:#00ff41">{{ session_count }}</span> total / <span style="color:#00ff41">{{ active_count }}</span> active';
-  }
-})();
-</script>
 
 <style>
 .session-panel {

@@ -25,12 +25,12 @@
   code { background:#f0f0f0; padding:1px 4px; font-size:11px; }
   .footer { margin-top:30px; padding-top:10px; border-top:1px solid #ddd; font-size:10px; color:#888; }
   .disclaimer { background:#fff8e1; border:1px solid #ffe082; padding:10px; font-size:11px; margin:16px 0; }
-</style></head><body>
+</style><script src="{{ url_for('static', filename='js/app.js') }}" defer></script></head><body>
 
 <div class="no-print" style="background:#cc0000;color:#fff;padding:8px 16px;display:flex;align-items:center;gap:12px;margin-bottom:20px;">
   <span style="flex:1;">{{ _('Report Preview') }}</span>
-  <button onclick="window.print()" style="background:#fff;color:#cc0000;border:none;padding:6px 16px;cursor:pointer;font-weight:bold;">{{ _('Print / Save PDF') }}</button>
-  <a href="#" onclick="loadContent('profiles/{{ profile.profile_id }}','Profile');return false;" style="color:#fff;">{{ _('Back') }}</a>
+  <button type="button" data-action="core.print" style="background:#fff;color:#cc0000;border:none;padding:6px 16px;cursor:pointer;font-weight:bold;">{{ _('Print / Save PDF') }}</button>
+  <a href="/admin/profiles/{{ profile.profile_id }}" style="color:#fff;">{{ _('Back') }}</a>
 </div>
 
 <h1>{{ _('Attacker Profile Report') }}</h1>

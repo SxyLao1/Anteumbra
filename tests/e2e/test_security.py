@@ -594,6 +594,14 @@ class TestPentestRegressions:
         finally:
             rule_file.unlink(missing_ok=True)
 
+    def test_scanner_results_rejects_path_traversal_scan_id(self, client):
+        self._authenticate(client)
+
+        response = client.get("/admin/scanner/results?scan_id=../../config")
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "invalid scan_id"
+
     def test_scanner_run_requires_post_job_creation(self, client):
         self._authenticate(client)
 
@@ -607,8 +615,14 @@ class TestPentestRegressions:
     def test_scanner_post_job_streams_completion(self, client, monkeypatch, tmp_path):
         self._authenticate(client)
 
-        scan_id = "anteumbra-test-scanner-post-stream"
-        scan_file = Path("data") / "scans" / f"{scan_id}.json"
+        scan_id = "a3f1c5d7e9b2a4c6"
+        runtime = client.application.extensions["anteumbra.runtime"]
+        from anteumbra.infrastructure.utils.path_utils import normalize_path
+        scan_file = (
+            normalize_path(runtime.config.get()["paths"]["data_dir"])
+            / "scans"
+            / f"{scan_id}.json"
+        )
 
         class DummyResult:
             def __init__(self):

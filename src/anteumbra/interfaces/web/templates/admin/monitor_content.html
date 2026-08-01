@@ -22,7 +22,7 @@
       <span><span class="card-header-icon">●</span> {{ _('LIVE LOG STREAM') }}</span>
       <input type="text" class="form-input" style="width: 160px; font-size: 12px; padding: 6px 10px;"
              placeholder="{{ _('Filter logs...') }}" id="log-search-input"
-             onkeyup="filterLogStream(this.value)">
+             data-action="dashboard.log-stream-filter">
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
       <div id="log-stream" class="log-terminal" style="height: 100%; max-height: none; border: none; border-radius: 0;">
@@ -43,7 +43,7 @@
                hx-target="#yara-rules-container"
                hx-swap="innerHTML">
         <button class="btn btn-primary btn-sm" style="font-size: 11px; padding: 5px 10px;"
-                onclick="window._yaraShowUploadModal()">{{ _('Upload') }}</button>
+                type="button" data-action="yara.show-upload">{{ _('Upload') }}</button>
       </div>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
@@ -68,7 +68,7 @@
                hx-target="#records-table-container"
                hx-swap="innerHTML">
         <button class="btn btn-ghost btn-sm" id="dash-audit-btn" style="font-size: 11px; padding: 5px 10px;"
-                onclick="toggleDashboardAudit()">{{ _('Audit') }}</button>
+                type="button" data-action="dashboard.audit-toggle">{{ _('Audit') }}</button>
       </div>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column;">

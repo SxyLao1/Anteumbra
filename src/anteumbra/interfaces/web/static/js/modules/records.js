@@ -1,336 +1,288 @@
-/* Anteumbra records module */
-// All functions intentionally global — HTML onclick handlers depend on them
-/* ============================================================
-   v1.9.0: Records batch selection + toolbar (class-based, no dup IDs)
-   ============================================================ */
-window._recSelected = window._recSelected || new Set();
+/* Records, quarantine, and safe source-viewer workflows. */
+(function () {
+  'use strict';
 
-function _recUpdateUI() {
-  var c = window._recSelected.size;
-  document.querySelectorAll('.rec-count').forEach(function(el) { el.textContent = c + ' selected'; });
-  document.querySelectorAll('.rec-batch-btn').forEach(function(b) { b.disabled = c === 0; });
-}
-function _restoreRecCheckboxes() {
-  document.querySelectorAll('.rec-checkbox').forEach(function(cb) {
-    cb.checked = window._recSelected.has(cb.value);
-  });
-  _recUpdateUI();
-}
-function toggleRecCb(cb) {
-  if (cb.checked) window._recSelected.add(cb.value);
-  else window._recSelected.delete(cb.value);
-  _recUpdateUI();
-}
-function selRecPage(btn) {
-  var row = btn.closest('[id^="records-table-container"]');
-  (row||document).querySelectorAll('.rec-checkbox').forEach(function(cb) {
-    cb.checked = true; window._recSelected.add(cb.value);
-  });
-  _recUpdateUI();
-}
-function selRecAll(btn) {
-  var row = btn.closest('[data-all-paths]');
-  if (row && row.dataset.allPaths) {
-    try { JSON.parse(row.dataset.allPaths).forEach(function(p) { window._recSelected.add(p); }); } catch(e) {}
+  var app = window.Anteumbra;
+  var state = { records: new Set(), quarantine: new Set(), lineWrap: false };
+  var dangerousTokens = /(eval|assert|system|exec|passthru|shell_exec|popen|proc_open)\s*\(|\b(base64_decode|gzinflate|str_rot13|gzuncompress)\s*\(|\b(file_get_contents|file_put_contents|move_uploaded_file)\s*\(|\b\$_(?:GET|POST|REQUEST|SERVER|FILES|COOKIE)\b/gi;
+
+  function containerFor(element, selector) {
+    return element && element.closest(selector);
   }
-  (row||document).querySelectorAll('.rec-checkbox').forEach(function(cb) {
-    cb.checked = true; window._recSelected.add(cb.value);
-  });
-  _recUpdateUI();
-}
-function clearRecSel(btn) {
-  window._recSelected.clear();
-  var row = btn.closest('[id^="records-table-container"]');
-  (row||document).querySelectorAll('.rec-checkbox').forEach(function(cb) { cb.checked = false; });
-  _recUpdateUI();
-}
-function _activeRecContainer(trigger) {
-  if (trigger) {
-    var scoped = trigger.closest('[id^="records-table-container"]');
-    if (scoped) return scoped;
+
+  function visibleContainer(selector) {
+    return Array.from(document.querySelectorAll(selector)).find(function (item) {
+      return item.offsetParent !== null;
+    }) || document.querySelector(selector);
   }
-  var containers = Array.from(document.querySelectorAll('[id^="records-table-container"]'));
-  return containers.find(function(el) { return el.offsetParent !== null; }) || containers[0] || null;
-}
 
-function _triggerStatsRefresh() {
-  document.dispatchEvent(new Event('anteumbra:statsRefresh'));
-}
+  function updateRecordControls() {
+    var count = state.records.size;
+    document.querySelectorAll('.rec-count').forEach(function (item) { item.textContent = count + ' selected'; });
+    document.querySelectorAll('.rec-batch-btn').forEach(function (item) { item.disabled = count === 0; });
+  }
 
-function batchRecAction(action, trigger) {
-  var container = _activeRecContainer(trigger);
-  var paths = Array.from(window._recSelected);
-  if (!paths.length) return;
-  var labels = {quarantine:'Quarantine', false_positive:'Mark as FP', delete:'Delete'};
-  if (!confirm(labels[action] + ' ' + paths.length + ' records?')) return;
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var token = csrf ? csrf.content : '';
-  var body = 'action=' + action;
-  paths.forEach(function(fp) { body += '&file_paths[]=' + encodeURIComponent(fp); });
-  fetch('/admin/records/batch', {
-    method: 'POST',
-    headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
-    body: body
-  })
-  .then(function(r) {
-    if (!r.ok && r.status === 400) {
-      return r.json().then(function(d) {
-        if (d.code === 'csrf_expired') { alert('Session expired. Please refresh the page.'); return null; }
-        throw new Error(d.error || 'Bad request');
+  function updateQuarantineControls() {
+    var count = state.quarantine.size;
+    document.querySelectorAll('.q-count').forEach(function (item) { item.textContent = count + ' selected'; });
+    document.querySelectorAll('.q-batch-btn').forEach(function (item) { item.disabled = count === 0; });
+  }
+
+  function restoreSelections(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.rec-checkbox').forEach(function (checkbox) { checkbox.checked = state.records.has(checkbox.value); });
+    scope.querySelectorAll('.q-checkbox').forEach(function (checkbox) { checkbox.checked = state.quarantine.has(checkbox.value); });
+    updateRecordControls();
+    updateQuarantineControls();
+  }
+
+  function setVisibleCheckboxes(container, selector, selection, checked) {
+    (container || document).querySelectorAll(selector).forEach(function (checkbox) {
+      checkbox.checked = checked;
+      if (checked) selection.add(checkbox.value); else selection.delete(checkbox.value);
+    });
+  }
+
+  function selectAllFromDataset(container, key, selection) {
+    if (!container || !container.dataset[key]) return;
+    try {
+      JSON.parse(container.dataset[key]).forEach(function (value) { selection.add(String(value)); });
+    } catch (_) {
+      app.ui.toast('Selection metadata is invalid.', 'error');
+    }
+  }
+
+  function filterList(input, itemSelector, source) {
+    var keyword = String(input.value || '').toLowerCase();
+    var target = input.dataset.container ? document.getElementById(input.dataset.container) : input.closest('[data-record-list]');
+    if (!target) target = document;
+    target.querySelectorAll(itemSelector).forEach(function (item) {
+      var text = source(item).toLowerCase();
+      item.style.display = !keyword || text.indexOf(keyword) >= 0 ? '' : 'none';
+    });
+  }
+
+  function refreshRecords(container) {
+    if (!container || !window.htmx) return;
+    var audit = container.dataset.auditMode === 'true' ? '&audit=true' : '';
+    window.htmx.ajax('GET', '/admin/records?compact=1' + audit, { target: '#' + container.id, swap: 'outerHTML' });
+  }
+
+  function refreshQuarantine(container) {
+    if (!container || !window.htmx) return;
+    var status = encodeURIComponent(container.dataset.currentStatus || 'quarantined');
+    window.htmx.ajax('GET', '/admin/quarantine?status=' + status, { target: '#' + container.id, swap: 'outerHTML' });
+  }
+
+  function batchRecords(action, trigger) {
+    var records = Array.from(state.records);
+    if (!records.length) return;
+    var labels = { quarantine: 'Quarantine', false_positive: 'Mark as FP', delete: 'Delete' };
+    if (!app.confirm(labels[action] + ' ' + records.length + ' records?')) return;
+    var body = new URLSearchParams({ action: action });
+    records.forEach(function (path) { body.append('file_paths[]', path); });
+    app.http.json('/admin/records/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    }).then(function (result) {
+      if (result.error) throw new Error(result.error);
+      window.alert('Done: ' + (result.success || 0) + ' success, ' + (result.skipped || 0) + ' skipped, ' + (result.failed || 0) + ' failed');
+      state.records.clear();
+      updateRecordControls();
+      document.dispatchEvent(new Event('anteumbra:stats-refresh'));
+      refreshRecords(visibleContainer('[id^="records-table-container"]') || containerFor(trigger, '[id^="records-table-container"]'));
+    }).catch(function (error) {
+      window.alert('Batch failed: ' + error.message);
+    });
+  }
+
+  function batchQuarantine(action, trigger) {
+    var ids = Array.from(state.quarantine);
+    if (!ids.length) return;
+    var labels = { restore: 'Restore', delete: 'Delete' };
+    if (!app.confirm(labels[action] + ' ' + ids.length + ' quarantine records?')) return;
+    var body = new URLSearchParams({ action: action });
+    ids.forEach(function (id) { body.append('qids[]', id); });
+    app.http.json('/admin/quarantine/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    }).then(function (result) {
+      if (result.error) throw new Error(result.error);
+      window.alert('Done: ' + (result.success || 0) + ' success, ' + (result.failed || 0) + ' failed');
+      state.quarantine.clear();
+      updateQuarantineControls();
+      document.dispatchEvent(new Event('anteumbra:stats-refresh'));
+      refreshQuarantine(visibleContainer('#quarantine-list-container') || containerFor(trigger, '#quarantine-list-container'));
+    }).catch(function (error) {
+      window.alert('Batch failed: ' + error.message);
+    });
+  }
+
+  function decodeEscapedContent(value) {
+    var decoder = document.createElement('textarea');
+    decoder.innerHTML = String(value || '');
+    return decoder.value;
+  }
+
+  function highlightClass(token) {
+    var value = token.toLowerCase();
+    if (/^(eval|assert|system|exec|passthru|shell_exec|popen|proc_open)/.test(value)) return 'kw-danger';
+    if (/^(base64_decode|gzinflate|str_rot13|gzuncompress)/.test(value)) return 'kw-warn';
+    if (/^(file_get_contents|file_put_contents|move_uploaded_file)/.test(value)) return 'kw-info';
+    return 'kw-var';
+  }
+
+  function renderSourceContent(target, escapedContent) {
+    var content = decodeEscapedContent(escapedContent);
+    target.replaceChildren();
+    dangerousTokens.lastIndex = 0;
+    var cursor = 0;
+    var match;
+    while ((match = dangerousTokens.exec(content)) !== null) {
+      target.appendChild(document.createTextNode(content.slice(cursor, match.index)));
+      var token = document.createElement('span');
+      token.className = highlightClass(match[0]);
+      token.textContent = match[0];
+      target.appendChild(token);
+      cursor = match.index + match[0].length;
+    }
+    target.appendChild(document.createTextNode(content.slice(cursor)));
+  }
+
+  function showSource(label, query) {
+    var modal = app.ui.showModal('file-viewer-modal');
+    if (!modal) return;
+    var path = document.getElementById('fv-file-path');
+    var size = document.getElementById('fv-file-size');
+    var content = document.getElementById('fv-content');
+    if (path) path.textContent = label;
+    if (size) size.textContent = 'Loading...';
+    if (content) content.replaceChildren();
+    app.http.json('/admin/file/content?' + query, { headers: { 'HX-Request': 'true' } })
+      .then(function (result) {
+        if (path) path.textContent = result.path || label;
+        if (size) {
+          var displaySize = result.size > 1024 ? (result.size / 1024).toFixed(1) + ' KB' : result.size + ' B';
+          size.textContent = displaySize + ' | ' + result.lines + ' lines';
+        }
+        if (content) {
+          renderSourceContent(content, result.content);
+          content.style.whiteSpace = state.lineWrap ? 'pre-wrap' : 'pre';
+        }
+      })
+      .catch(function (error) {
+        if (size) size.textContent = 'ERROR';
+        if (content) content.textContent = 'Error: ' + error.message;
       });
-    }
-    return r.json();
-  })
-  .then(function(d) {
-    if (!d) return;  // CSRF error already handled
-    if (d.error) { alert('Batch failed: ' + d.error); return; }
-    alert('Done: ' + (d.success||0) + ' success, ' + (d.skipped||0) + ' skipped, ' + (d.failed||0) + ' failed');
-    window._recSelected.clear();
-    _triggerStatsRefresh();
-    if (container && window.htmx) {
-      htmx.ajax('GET', '/admin/records?compact=1' + (container.dataset.auditMode === 'true'?'&audit=true':''), {target:'#'+container.id,swap:'outerHTML'});
-    }
-  })
-  .catch(function(e) { alert('Batch failed: ' + e.message); });
-}
-
-/* ============================================================
-   v1.9.0: Quarantine batch selection (class-based)
-   ============================================================ */
-window._qSelected = window._qSelected || new Set();
-
-function _qUpdateUI() {
-  var c = window._qSelected.size;
-  document.querySelectorAll('.q-count').forEach(function(el) { el.textContent = c + ' selected'; });
-  document.querySelectorAll('.q-batch-btn').forEach(function(b) { b.disabled = c === 0; });
-}
-function _restoreQCheckboxes() {
-  document.querySelectorAll('.q-checkbox').forEach(function(cb) {
-    cb.checked = window._qSelected.has(cb.value);
-  });
-  _qUpdateUI();
-}
-function toggleQCheckbox(cb) {
-  if (cb.checked) window._qSelected.add(cb.value);
-  else window._qSelected.delete(cb.value);
-  _qUpdateUI();
-}
-function selQPage(btn) {
-  var row = btn.closest('#quarantine-list-container');
-  (row||document).querySelectorAll('.q-checkbox').forEach(function(cb) {
-    cb.checked = true; window._qSelected.add(cb.value);
-  });
-  _qUpdateUI();
-}
-function selQAll(btn) {
-  var row = btn.closest('[data-all-qids]');
-  if (row && row.dataset.allQids) {
-    try { JSON.parse(row.dataset.allQids).forEach(function(id) { window._qSelected.add(id); }); } catch(e) {}
   }
-  (row||document).querySelectorAll('.q-checkbox').forEach(function(cb) {
-    cb.checked = true; window._qSelected.add(cb.value);
-  });
-  _qUpdateUI();
-}
-function clearQSel(btn) {
-  window._qSelected.clear();
-  var row = btn.closest('#quarantine-list-container');
-  (row||document).querySelectorAll('.q-checkbox').forEach(function(cb) { cb.checked = false; });
-  _qUpdateUI();
-}
-function batchQAction(action, trigger) {
-  var container = trigger ? trigger.closest('#quarantine-list-container') : document.getElementById('quarantine-list-container');
-  var ids = Array.from(window._qSelected);
-  if (!ids.length) return;
-  var labels = {restore:'Restore', delete:'Delete'};
-  if (!confirm(labels[action] + ' ' + ids.length + ' quarantine records?')) return;
-  var csrf = document.querySelector('meta[name="csrf-token"]');
-  var token = csrf ? csrf.content : '';
-  var body = 'action=' + action;
-  ids.forEach(function(id) { body += '&qids[]=' + encodeURIComponent(id); });
-  fetch('/admin/quarantine/batch', {
-    method: 'POST',
-    headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':token},
-    body: body
-  })
-  .then(function(r) {
-    if (!r.ok && r.status === 400) {
-      return r.json().then(function(d) {
-        if (d.code === 'csrf_expired') { alert('Session expired. Please refresh the page.'); return null; }
-        throw new Error(d.error || 'Bad request');
-      });
-    }
-    return r.json();
-  })
-  .then(function(d) {
-    if (!d) return;
-    if (d.error) { alert('Batch failed: ' + d.error); return; }
-    alert('Done: ' + (d.success||0) + ' success, ' + (d.failed||0) + ' failed');
-    window._qSelected.clear();
-    _triggerStatsRefresh();
-    if (container && window.htmx) {
-      var status = container.dataset.currentStatus || 'quarantined';
-      htmx.ajax('GET', '/admin/quarantine?status=' + encodeURIComponent(status), {target:'#quarantine-list-container', swap:'outerHTML'});
-    }
-  })
-  .catch(function(e) { alert('Batch failed: ' + e.message); });
-}
 
-// ═══════════════════════════════════════════════════════════════
-// v1.8.4: 安全文件内容查看器
-// ═══════════════════════════════════════════════════════════════
+  function closeSource() { app.ui.hideModal('file-viewer-modal'); }
 
-var _fvLineWrap = false;
-
-// 危险关键词高亮规则
-var _dangerPatterns = [
-  {re: /(eval)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(assert)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(system)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(exec)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(passthru)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(shell_exec)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(popen)\s*\(/gi, cls: 'kw-danger'},
-  {re: /(proc_open)\s*\(/gi, cls: 'kw-danger'},
-  {re: /\b(base64_decode)\s*\(/gi, cls: 'kw-warn'},
-  {re: /\b(gzinflate)\s*\(/gi, cls: 'kw-warn'},
-  {re: /\b(str_rot13)\s*\(/gi, cls: 'kw-warn'},
-  {re: /\b(gzuncompress)\s*\(/gi, cls: 'kw-warn'},
-  {re: /\b(file_get_contents)\s*\(/gi, cls: 'kw-info'},
-  {re: /\b(file_put_contents)\s*\(/gi, cls: 'kw-info'},
-  {re: /\b(move_uploaded_file)\s*\(/gi, cls: 'kw-info'},
-  {re: /\b(\$_GET)\b/gi, cls: 'kw-var'},
-  {re: /\b(\$_POST)\b/gi, cls: 'kw-var'},
-  {re: /\b(\$_REQUEST)\b/gi, cls: 'kw-var'},
-  {re: /\b(\$_SERVER)\b/gi, cls: 'kw-var'},
-  {re: /\b(\$_FILES)\b/gi, cls: 'kw-var'},
-  {re: /\b(\$_COOKIE)\b/gi, cls: 'kw-var'},
-];
-
-function _highlightDangerKeywords(html) {
-  // 只在非 HTML 标签的部分做高亮（保护已转义的内容）
-  var result = html;
-  _dangerPatterns.forEach(function(p) {
-    result = result.replace(p.re, function(match) {
-      return '<span class="' + p.cls + '">' + match + '</span>';
+  function copySource() {
+    var content = document.getElementById('fv-content');
+    if (!content || !navigator.clipboard) return;
+    navigator.clipboard.writeText(content.textContent || '').then(function () {
+      app.ui.toast('Source copied.', 'success');
     });
+  }
+
+  function toggleWrap(trigger) {
+    state.lineWrap = !state.lineWrap;
+    var content = document.getElementById('fv-content');
+    if (content) content.style.whiteSpace = state.lineWrap ? 'pre-wrap' : 'pre';
+    if (trigger) trigger.textContent = state.lineWrap ? 'Unwrap' : 'Wrap';
+  }
+
+  function openQuarantineDetail(trigger) {
+    var modal = document.getElementById('quarantine-detail-modal');
+    if (modal) app.ui.showModal(modal);
+  }
+
+  function closeRecordDetail() { app.ui.hideModal('record-detail-modal-overlay'); }
+
+  function openProfileFromRecord(trigger) {
+    var dashboard = app.module('dashboard');
+    if (!dashboard || typeof dashboard.navigate !== 'function') return;
+    closeRecordDetail();
+    dashboard.navigate('profiles/' + trigger.dataset.profileId, 'Profile ' + trigger.dataset.profileLabel);
+  }
+
+  function closeQuarantineDetail() { app.ui.hideModal('quarantine-detail-modal'); }
+
+  app.register('records', {
+    actions: {
+      'records.selection-change': { handler: function (context) {
+        var checkbox = context.element;
+        if (checkbox.checked) state.records.add(checkbox.value); else state.records.delete(checkbox.value);
+        updateRecordControls();
+      }, events: ['change'], preventDefault: false },
+      'records.select-page': { handler: function (context) {
+        setVisibleCheckboxes(containerFor(context.element, '[id^="records-table-container"]'), '.rec-checkbox', state.records, true);
+        updateRecordControls();
+      } },
+      'records.select-all': { handler: function (context) {
+        var container = containerFor(context.element, '[id^="records-table-container"]');
+        selectAllFromDataset(container, 'allPaths', state.records);
+        setVisibleCheckboxes(container, '.rec-checkbox', state.records, true);
+        updateRecordControls();
+      } },
+      'records.clear-selection': { handler: function (context) {
+        state.records.clear();
+        setVisibleCheckboxes(containerFor(context.element, '[id^="records-table-container"]'), '.rec-checkbox', state.records, false);
+        updateRecordControls();
+      } },
+      'records.batch': { handler: function (context) { batchRecords(context.element.dataset.batchAction, context.element); } },
+      'records.filter': { handler: function (context) {
+        filterList(context.element, '.record-item', function (item) { return (item.dataset.path || '') + ' ' + (item.textContent || ''); });
+      }, events: ['input'], preventDefault: false },
+      'quarantine.selection-change': { handler: function (context) {
+        var checkbox = context.element;
+        if (checkbox.checked) state.quarantine.add(checkbox.value); else state.quarantine.delete(checkbox.value);
+        updateQuarantineControls();
+      }, events: ['change'], preventDefault: false },
+      'quarantine.select-page': { handler: function (context) {
+        setVisibleCheckboxes(containerFor(context.element, '#quarantine-list-container'), '.q-checkbox', state.quarantine, true);
+        updateQuarantineControls();
+      } },
+      'quarantine.select-all': { handler: function (context) {
+        var container = containerFor(context.element, '#quarantine-list-container');
+        selectAllFromDataset(container, 'allQids', state.quarantine);
+        setVisibleCheckboxes(container, '.q-checkbox', state.quarantine, true);
+        updateQuarantineControls();
+      } },
+      'quarantine.clear-selection': { handler: function (context) {
+        state.quarantine.clear();
+        setVisibleCheckboxes(containerFor(context.element, '#quarantine-list-container'), '.q-checkbox', state.quarantine, false);
+        updateQuarantineControls();
+      } },
+      'quarantine.batch': { handler: function (context) { batchQuarantine(context.element.dataset.batchAction, context.element); } },
+      'quarantine.filter': { handler: function (context) {
+        filterList(context.element, '.record-item', function (item) { return item.textContent || ''; });
+      }, events: ['input'], preventDefault: false },
+      'records.view-path': { handler: function (context) {
+        var path = context.element.dataset.filePath || (context.element.closest('.record-item') || {}).dataset.path;
+        if (path) showSource(path, 'path=' + encodeURIComponent(path));
+      } },
+      'records.view-quarantine': { handler: function (context) {
+        var id = context.element.dataset.quarantineId;
+        if (id) showSource('Quarantine: ' + id, 'qid=' + encodeURIComponent(id));
+      } },
+      'records.file-close': { handler: closeSource },
+      'records.file-copy': { handler: copySource },
+      'records.file-wrap': { handler: function (context) { toggleWrap(context.element); } },
+      'quarantine.detail-open': { handler: function (context) { openQuarantineDetail(context.element); } },
+      'quarantine.detail-close': { handler: closeQuarantineDetail },
+      'records.detail-close': { handler: closeRecordDetail },
+      'records.detail-profile': { handler: function (context) { openProfileFromRecord(context.element); } }
+    },
+    mount: function (root) {
+      restoreSelections(root);
+      var recordDetail = root && root.id === 'record-detail-modal' ? root : root && root.querySelector && root.querySelector('#record-detail-modal');
+      if (recordDetail && recordDetail.childElementCount) app.ui.showModal('record-detail-modal-overlay');
+    },
+    selectedRecords: function () { return new Set(state.records); },
+    selectedQuarantine: function () { return new Set(state.quarantine); }
   });
-  return result;
-}
-
-function openFileViewerByPath(filePath) {
-  if (!filePath) return;
-  _showFileViewerLoading(filePath);
-  fetch('/admin/file/content?path=' + encodeURIComponent(filePath), {
-    headers: { 'HX-Request': 'true' }
-  })
-    .then(function(r) {
-      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); });
-      return r.json();
-    })
-    .then(_renderFileViewer)
-    .catch(function(e) {
-      var content = document.getElementById('fv-content');
-      if (content) content.innerHTML = '<span style="color:#ff4444;">Error: ' + e.message + '</span>';
-      document.getElementById('fv-file-size').textContent = 'ERROR';
-    });
-}
-
-function openFileViewerByQid(qid) {
-  if (!qid) return;
-  _showFileViewerLoading('Quarantine: ' + qid);
-  fetch('/admin/file/content?qid=' + encodeURIComponent(qid), {
-    headers: { 'HX-Request': 'true' }
-  })
-    .then(function(r) {
-      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); });
-      return r.json();
-    })
-    .then(_renderFileViewer)
-    .catch(function(e) {
-      var content = document.getElementById('fv-content');
-      if (content) content.innerHTML = '<span style="color:#ff4444;">Error: ' + e.message + '</span>';
-      document.getElementById('fv-file-size').textContent = 'ERROR';
-    });
-}
-
-function _showFileViewerLoading(label) {
-  var m = document.getElementById('file-viewer-modal');
-  if (!m) {
-    // Modal template not yet in DOM — load it from server
-    var container = document.body;
-    var div = document.createElement('div');
-    div.innerHTML = '<div id="file-viewer-modal" class="modal-overlay" style="display:flex; z-index:3000;"><div style="margin:auto; color:#00ff41;"><div class="spinner"></div><p>Loading viewer...</p></div></div>';
-    // Replace the temp div with actual content
-    document.body.appendChild(div.firstElementChild);
-    m = document.getElementById('file-viewer-modal');
-  }
-  m.style.display = 'flex';
-  m.style.visibility = 'visible';
-  m.style.opacity = '1';
-  m.classList.add('active');
-  document.getElementById('fv-file-path').textContent = label;
-  document.getElementById('fv-file-size').textContent = 'Loading...';
-  document.getElementById('fv-content').innerHTML = '';
-}
-
-function _renderFileViewer(data) {
-  document.getElementById('fv-file-path').textContent = data.path || '';
-  var sizeStr = data.size > 1024 ? (data.size / 1024).toFixed(1) + ' KB' : data.size + ' B';
-  if (data.truncated) sizeStr += ' [TRUNCATED >512KB]';
-  document.getElementById('fv-file-size').textContent = sizeStr + ' | ' + data.lines + ' lines';
-
-  var html = _highlightDangerKeywords(data.content);
-  document.getElementById('fv-content').innerHTML = html;
-
-  // Apply wrap if active
-  if (_fvLineWrap) {
-    document.getElementById('fv-content').style.whiteSpace = 'pre-wrap';
-  } else {
-    document.getElementById('fv-content').style.whiteSpace = 'pre';
-  }
-}
-
-function closeFileViewer() {
-  var m = document.getElementById('file-viewer-modal');
-  if (!m) return;
-  m.style.display = 'none';
-  m.style.visibility = 'hidden';
-  m.style.opacity = '0';
-  m.classList.remove('active');
-}
-
-function copyFileContent() {
-  var pre = document.getElementById('fv-content');
-  if (!pre) return;
-  // Get raw text (not innerHTML with highlight spans)
-  var text = pre.textContent || pre.innerText || '';
-  navigator.clipboard.writeText(text).then(function() {
-    var btn = document.querySelector('#file-viewer-modal .btn-ghost');
-    if (btn && btn.textContent === 'Copy') {
-      var orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(function() { btn.textContent = orig; }, 1500);
-    }
-  });
-}
-
-function toggleLineWrap() {
-  _fvLineWrap = !_fvLineWrap;
-  var pre = document.getElementById('fv-content');
-  if (!pre) return;
-  pre.style.whiteSpace = _fvLineWrap ? 'pre-wrap' : 'pre';
-  var btn = document.querySelector('#file-viewer-modal .btn-ghost:nth-child(2)');
-  if (btn) btn.textContent = _fvLineWrap ? 'Unwrap' : 'Wrap';
-}
-
-// Extend ESC key handler
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    var fv = document.getElementById('file-viewer-modal');
-    if (fv && fv.style.display !== 'none') {
-      closeFileViewer();
-      e.stopPropagation();
-    }
-  }
-});
+}());

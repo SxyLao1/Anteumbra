@@ -145,7 +145,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
     _open_threats(page)
 
     assert _select_matching_records(page, "codex_e2e_fp", 4) == 4
-    assert page.evaluate("window._recSelected && window._recSelected.size") == 4
+    assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 4
     fp_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="FP Sel")
     expect(fp_button).to_be_enabled()
     fp_button.click()
@@ -167,7 +167,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
     assert sum(bool(item.get("marked_false_positive")) for item in fp_records.values()) == 4
 
     assert _select_matching_records(page, "codex_e2e_q", 8) == 8
-    assert page.evaluate("window._recSelected && window._recSelected.size") == 8
+    assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 8
     q_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="Quar Sel")
     expect(q_button).to_be_enabled()
     q_button.click()
@@ -195,7 +195,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
     _switch_tab(page, "quarantine")
     page.wait_for_selector("#quarantine-list-container", timeout=10000)
     assert _select_matching_quarantine(page, "codex_e2e_qrestore", 8) == 8
-    assert page.evaluate("window._qSelected && window._qSelected.size") == 8
+    assert page.evaluate("window.Anteumbra.module('records').selectedQuarantine().size") == 8
     restore_button = page.locator("#quarantine-list-container .q-batch-btn").filter(has_text="Restore Sel")
     expect(restore_button).to_be_enabled()
     restore_button.click()
@@ -213,7 +213,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
     _switch_tab(page, "audit")
     page.wait_for_selector("#records-table-container-audit", timeout=10000)
     assert _select_matching_records(page, "codex_e2e_fp", 2, audit=True) == 2
-    assert page.evaluate("window._recSelected && window._recSelected.size") == 2
+    assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 2
     page.locator("#records-table-container-audit .rec-batch-btn").filter(has_text="Del Sel").click()
     _wait_for_message(page, "2 success")
     expect(page.locator("#records-table-container-audit input.rec-checkbox:checked")).to_have_count(0, timeout=10000)

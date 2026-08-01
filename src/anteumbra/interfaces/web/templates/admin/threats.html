@@ -1,67 +1,12 @@
-<!-- v1.8.0: Threats — 检测记录 + 隔离管理 合并视图 -->
-<div style="display: flex; flex-direction: column; height: 100%; gap: 0;">
-  <!-- Tab navigation -->
-  <div class="threats-tabs" style="display: flex; gap: 0; border-bottom: 1px solid #1a1a1a; padding: 0 16px;">
-    <button class="threats-tab active" data-tab="active"
-            style="background: none; border: none; color: #00ff41; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid #00ff41;"
-            onclick="switchThreatsTab('active')">
-      {{ _('Active Threats') }}
-    </button>
-    <button class="threats-tab" data-tab="quarantine"
-            style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
-            onclick="switchThreatsTab('quarantine')">
-      {{ _('Quarantine') }}
-    </button>
-    <button class="threats-tab" data-tab="audit"
-            style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
-            onclick="switchThreatsTab('audit')">
-      {{ _('Audit Log') }}
-    </button>
-    <button class="threats-tab" data-tab="clusters"
-            style="background: none; border: none; color: #666; font-family: var(--font-mono); font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;"
-            onclick="switchThreatsTab('clusters')">
-      {{ _('File Clusters') }}
-    </button>
+<section class="threats-view" data-threats-tabs>
+  <div class="threats-tabs" role="tablist">
+    <button class="threats-tab active" type="button" role="tab" data-action="dashboard.threat-tab" data-tab="active">{{ _('Active Threats') }}</button>
+    <button class="threats-tab" type="button" role="tab" data-action="dashboard.threat-tab" data-tab="quarantine">{{ _('Quarantine') }}</button>
+    <button class="threats-tab" type="button" role="tab" data-action="dashboard.threat-tab" data-tab="audit">{{ _('Audit Log') }}</button>
+    <button class="threats-tab" type="button" role="tab" data-action="dashboard.threat-tab" data-tab="clusters">{{ _('File Clusters') }}</button>
   </div>
-
-  <!-- Active Threats -->
-  <div id="threats-tab-active" class="threats-tab-content" style="flex: 1; overflow: hidden; display: flex;">
-    <div id="threats-active-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
-         hx-get="/admin/records?compact=1"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
-    </div>
-  </div>
-
-  <!-- Quarantine (auto-loaded on Threats page load) -->
-  <div id="threats-tab-quarantine" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
-    <div id="threats-quarantine-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
-         hx-get="/admin/quarantine?status=quarantined"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading quarantine...') }}</p></div>
-    </div>
-  </div>
-
-  <!-- Audit Log (auto-loaded on Threats page load) -->
-  <div id="threats-tab-audit" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
-    <div id="threats-audit-container" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;"
-         hx-get="/admin/records?audit=true&compact=1"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading audit log...') }}</p></div>
-    </div>
-  </div>
-
-  <!-- Clusters (v1.9.0: 第4个Tab，懒加载) -->
-  <div id="threats-tab-clusters" class="threats-tab-content" style="flex: 1; overflow: hidden; display: none;">
-    <div id="threats-clusters-container" style="flex: 1; min-height: 0; overflow-y: auto;"
-         hx-get="/admin/file-clusters"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading clusters...') }}</p></div>
-    </div>
-  </div>
-</div>
-
+  <div id="threats-tab-active" class="threats-tab-content"><div id="threats-active-container" data-threat-target><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div></div></div>
+  <div id="threats-tab-quarantine" class="threats-tab-content" hidden><div id="threats-quarantine-container" data-threat-target><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading quarantine...') }}</p></div></div></div>
+  <div id="threats-tab-audit" class="threats-tab-content" hidden><div id="threats-audit-container" data-threat-target><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading audit log...') }}</p></div></div></div>
+  <div id="threats-tab-clusters" class="threats-tab-content" hidden><div id="threats-clusters-container" data-threat-target><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading clusters...') }}</p></div></div></div>
+</section>

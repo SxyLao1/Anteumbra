@@ -1,244 +1,29 @@
-<!-- v1.8.0: Hierarchical config editor v3 -->
-<div style="display:flex; flex-direction:column; gap:12px; overflow:visible;">
-  <!-- Toolbar -->
-  <div style="display:flex; align-items:center; gap:12px;">
-    <input type="text" class="form-input" placeholder="{{ _('Search config...') }}" style="flex:1; max-width:300px; font-size:11px; padding:4px 8px;"
-           oninput="searchConfig(this.value)">
-    <span style="flex:1;"></span>
-    <span id="config-saved" style="color:#00ff41; font-size:12px; display:none;">{{ _('Saved') }}</span>
-    <button class="btn btn-primary btn-sm" onclick="saveConfig()">{{ _('Save config.toml') }}</button>
-  </div>
-
-  <!-- Tree -->
-  <div id="config-tree" style="font-family:var(--font-mono); font-size:12px; background:#0a0a0a; border:1px solid #1a1a1a; border-radius:4px; padding:8px 0; overflow:visible;">
+<div class="config-editor">
+  <div class="page-toolbar"><input type="search" class="form-input" placeholder="{{ _('Search config...') }}" data-action="settings.config-search"><span class="toolbar-spacer"></span><span id="config-saved" class="form-result" hidden>{{ _('Saved') }}</span><button class="btn btn-primary btn-sm" type="button" data-action="settings.config-save">{{ _('Save config.toml') }}</button></div>
+  <div id="config-tree" class="config-tree">
     {% macro render_section(sec_name, fields, level) %}
-    {% set indent = level * 18 %}
-    <div class="cfg-section collapsed" data-section="{{ sec_name }}">
-      <div class="cfg-section-hdr" onclick="toggleCfgSection(this)" style="padding:4px 12px; padding-left:{{ 12 + indent }}px; cursor:pointer; display:flex; align-items:center; gap:8px;">
-        <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
-        <span style="color:#00ff41; font-weight:bold;">[{{ sec_name }}]</span>
-        <span style="color:#555; font-size:10px;">{{ _('%(count)s fields', count=fields|length) }}</span>
-      </div>
+    <section class="cfg-section collapsed" data-section="{{ sec_name }}">
+      <button class="cfg-section-hdr" type="button" data-action="settings.section-toggle"><span class="cfg-arrow">▼</span><strong>[{{ sec_name }}]</strong><span>{{ _('%(count)s fields', count=fields|length) }}</span></button>
       <div class="cfg-section-body">
-        {% for f in fields %}
-        <div class="cfg-field" data-field="{{ sec_name }}.{{ f.key }}" style="padding:3px 12px; padding-left:{{ 36 + indent }}px; display:flex; align-items:center; gap:8px;">
-          <span style="color:#ccc; min-width:160px;">{{ f.key }}</span>
-          {% if f.desc %}
-          <span class="cfg-info" data-tooltip="{{ f.desc }}">i</span>
-          {% else %}
-          <span style="width:14px;"></span>
-          {% endif %}
-          {% if f.is_env %}
-          <input type="text" value="{{ f.display }}" data-key="{{ sec_name }}.{{ f.key }}" disabled
-                 style="flex:1; background:#111; color:#555; border:1px solid #222; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono); cursor:not-allowed;">
-          <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('(env var)') }}</span>
-          {% elif f.type == 'bool' %}
-          <input type="checkbox" data-key="{{ sec_name }}.{{ f.key }}" {% if f.value %}checked{% endif %} onchange="markDirty()">
-          <span style="color:#888; font-size:10px;">{{ _('true') if f.value else _('false') }}</span>
-          {% elif f.type in ('int', 'float') %}
-          <input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="max-width:180px; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
-          {% elif f.type == 'array' %}
-          <input type="text" value="{{ f.raw }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
-          {% else %}
-          <input type="text" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" onchange="markDirty()" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:2px 6px; font-size:11px; border-radius:2px; font-family:var(--font-mono);">
-          {% endif %}
-        </div>
-        {% endfor %}
+      {% for f in fields %}
+        <label class="cfg-field" data-field="{{ sec_name }}.{{ f.key }}"><span>{{ f.key }}</span>{% if f.desc %}<span class="cfg-info" data-tooltip="{{ f.desc }}">i</span>{% endif %}
+        {% if f.is_env %}<input type="text" value="{{ f.display }}" disabled>
+        {% elif f.type == 'bool' %}<input type="checkbox" data-key="{{ sec_name }}.{{ f.key }}" {% if f.value %}checked{% endif %} data-action="settings.mark-dirty">
+        {% elif f.type in ('int', 'float') %}<input type="number" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" data-action="settings.mark-dirty">
+        {% elif f.type == 'array' %}<input type="text" value="{{ f.raw }}" data-key="{{ sec_name }}.{{ f.key }}" data-action="settings.mark-dirty">
+        {% else %}<input type="text" value="{{ f.value }}" data-key="{{ sec_name }}.{{ f.key }}" data-action="settings.mark-dirty">{% endif %}
+        </label>
+      {% endfor %}
       </div>
-    </div>
+    </section>
     {% endmacro %}
-
-    {% for sec_name, fields in sections.items() %}
-    {{ render_section(sec_name, fields, sections_levels.get(sec_name, 0)) }}
+    {% for sec_name, fields in sections.items() %}{{ render_section(sec_name, fields, sections_levels.get(sec_name, 0)) }}{% endfor %}
+  </div>
+  <section class="config-section collapsed"><button class="config-section-header" type="button" data-action="settings.section-toggle"><span class="cfg-arrow">▼</span><strong>{{ _('.env File') }}</strong><span>{{ _('sensitive credentials') }}</span></button><div class="config-section-body environment-editor">
+    <div class="env-field"><label>ANTEUMBRA_PASSWORD_HASH</label><code id="env-pwd-display">{{ env_vars.get('ANTEUMBRA_PASSWORD_HASH', 'Not set')[:60] }}...</code><input type="password" id="env-pwd-input" placeholder="{{ _('New password') }}"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.password-hash">{{ _('Generate Hash') }}</button></div>
+    {% for key in ['ANTEUMBRA_WECHAT_API_KEY', 'ANTEUMBRA_EMAIL_USERNAME', 'ANTEUMBRA_EMAIL_PASSWORD', 'ANTEUMBRA_EMAIL_FROM', 'ANTEUMBRA_EMAIL_TO', 'ANTEUMBRA_WEBHOOK_SECRET'] %}
+    <label class="env-field"><span>{{ key }}</span><input type="{{ 'password' if key == 'ANTEUMBRA_EMAIL_PASSWORD' else 'text' }}" value="{{ env_vars.get(key, '') }}" data-env-key="{{ key }}"></label>
     {% endfor %}
-  </div>
-
-  <!-- .env Editor (structured) -->
-  <div class="config-section collapsed">
-    <div class="config-section-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex;align-items:center;padding:8px 14px;cursor:pointer;border-bottom:1px solid #1a1a1a;background:#0a0a0a;border-radius:4px 4px 0 0;">
-      <span class="cfg-arrow" style="font-size:10px; color:#666; width:12px; display:inline-block; transform:rotate(-90deg);">▼</span>
-      <h4 style="color:#00ff41; margin:0; font-size:13px; flex:1;">{{ _('.env File') }}</h4>
-      <span style="color:#666; font-size:10px;">{{ _('sensitive credentials') }}</span>
-    </div>
-    <div class="config-section-body" style="padding:14px; background:#0a0a0a; border:1px solid #1a1a1a; border-top:none; border-radius:0 0 4px 4px; flex-direction:column; gap:14px; overflow:visible;">
-
-      <!-- Password Hash row -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_PASSWORD_HASH</span>
-        <span class="cfg-info" data-tooltip="scrypt-hashed admin login password. Use Generate Hash button, don't paste raw password.">i</span>
-        <code id="env-pwd-display" style="flex:1; background:#000; color:#888; padding:4px 8px; font-size:10px; border-radius:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px;">{{ env_vars.get('ANTEUMBRA_PASSWORD_HASH', 'Not set')[:60] }}...</code>
-        <input type="text" id="env-pwd-input" placeholder="{{ _('New password') }}" style="width:140px; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <button class="btn btn-ghost btn-sm" onclick="generatePwdHash()" style="white-space:nowrap;">{{ _('Generate Hash') }}</button>
-      </div>
-
-      <!-- Server酱 key -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_WECHAT_API_KEY</span>
-        <span class="cfg-info" data-tooltip="ServerChan API key for WeChat push notifications. Get from sct.ftqq.com">i</span>
-        <input type="text" id="env-wechat-key" value="{{ env_vars.get('ANTEUMBRA_WECHAT_API_KEY', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <a href="https://sct.ftqq.com/" target="_blank" style="color:#00ff41; font-size:10px; white-space:nowrap; text-decoration:none;">{{ _('Get Key') }}</a>
-      </div>
-
-      <!-- Email: Username -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_EMAIL_USERNAME</span>
-        <span class="cfg-info" data-tooltip="SMTP login account, e.g. your@163.com">i</span>
-        <input type="text" id="env-ANTEUMBRA_EMAIL_USERNAME" value="{{ env_vars.get('ANTEUMBRA_EMAIL_USERNAME', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-      </div>
-      <!-- Email: Password -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_EMAIL_PASSWORD</span>
-        <span class="cfg-info" data-tooltip="SMTP authorization code (not login password). 163: Settings > POP3/SMTP > Add auth code">i</span>
-        <input type="password" id="env-ANTEUMBRA_EMAIL_PASSWORD" value="{{ env_vars.get('ANTEUMBRA_EMAIL_PASSWORD', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('SMTP auth code') }}</span>
-      </div>
-      <!-- Email: From -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_EMAIL_FROM</span>
-        <span class="cfg-info" data-tooltip="Sender address, usually same as USERNAME">i</span>
-        <input type="text" id="env-ANTEUMBRA_EMAIL_FROM" value="{{ env_vars.get('ANTEUMBRA_EMAIL_FROM', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-      </div>
-      <!-- Email: To (multi) -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_EMAIL_TO</span>
-        <span class="cfg-info" data-tooltip="Recipients, comma-separated. e.g. alice@qq.com,bob@163.com">i</span>
-        <input type="text" id="env-ANTEUMBRA_EMAIL_TO" value="{{ env_vars.get('ANTEUMBRA_EMAIL_TO', '') }}" placeholder="{{ _('a@qq.com,b@163.com') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-        <span style="color:#666; font-size:10px; white-space:nowrap;">{{ _('comma-separated') }}</span>
-      </div>
-
-      <!-- Webhook -->
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:#ccc; font-size:11px; min-width:150px;">ANTEUMBRA_WEBHOOK_SECRET</span>
-        <span class="cfg-info" data-tooltip="Shared secret for webhook signature verification. Leave empty if not using webhooks.">i</span>
-        <input type="text" id="env-webhook" value="{{ env_vars.get('ANTEUMBRA_WEBHOOK_SECRET', '') }}" style="flex:1; background:#000; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-      </div>
-
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button class="btn btn-primary btn-sm" onclick="saveEnvVars()">{{ _('Save .env') }}</button>
-        <span id="env-saved" style="color:#00ff41; font-size:12px; display:none;">{{ _('Saved') }}</span>
-        <span style="color:#888; font-size:10px;">{{ _('Credentials never committed to git.') }}</span>
-      </div>
-    </div>
-  </div>
+    <div class="page-toolbar"><button class="btn btn-primary btn-sm" type="button" data-action="settings.environment-save">{{ _('Save .env') }}</button><span id="env-saved" class="form-result" hidden>{{ _('Saved') }}</span><span class="muted-copy">{{ _('Credentials never committed to git.') }}</span></div>
+  </div></section>
 </div>
-
-<style>
-.cfg-section-hdr:hover { background:#0d0d0d; }
-.cfg-section.collapsed .cfg-section-body { display:none; }
-.cfg-section:not(.collapsed) .cfg-section-body { display:block; }
-.cfg-section:not(.collapsed) .cfg-arrow { transform:rotate(0deg); display:inline-block; }
-.cfg-info { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1px solid #555; color:#555; font-size:9px; font-weight:bold; cursor:help; position:relative; flex-shrink:0; }
-.cfg-info:hover { border-color:#00ff41; color:#00ff41; }
-.config-section.collapsed .config-section-body { display:none; }
-#cfg-tooltip { position:fixed; background:#0a0a0a; color:#ccc; border:1px solid #00ff41; padding:6px 10px; font-size:11px; border-radius:3px; z-index:99999; pointer-events:none; display:none; max-width:320px; white-space:normal; }
-.cfg-highlight { background:#0a1a0a; }
-</style>
-
-<script>
-function toggleCfgSection(hdr) {
-  var sec = hdr.parentElement;
-  sec.classList.toggle('collapsed');
-}
-
-function searchConfig(query) {
-  var q = query.toLowerCase();
-  document.querySelectorAll('.cfg-section').forEach(function(sec) {
-    var text = (sec.dataset.section || '') + ' ' + sec.innerText;
-    if (!q) { sec.classList.add('collapsed'); return; }
-    if (text.toLowerCase().indexOf(q) >= 0) {
-      sec.classList.remove('collapsed');
-      sec.querySelectorAll('.cfg-field').forEach(function(f) {
-        f.classList.toggle('cfg-highlight', f.dataset.field && f.dataset.field.toLowerCase().indexOf(q) >= 0);
-      });
-    } else {
-      sec.classList.add('collapsed');
-    }
-  });
-}
-
-function markDirty() {
-  var el = document.getElementById('config-saved');
-  if (el) el.style.display = 'none';
-}
-
-function saveConfig() {
-  var changes = {};
-  document.querySelectorAll('#config-tree input:not([disabled])').forEach(function(inp) {
-    var key = inp.dataset.key; if (!key) return;
-    var val;
-    if (inp.type === 'checkbox') val = inp.checked;
-    else if (inp.type === 'number') val = parseFloat(inp.value) || 0;
-    else val = inp.value;
-    changes[key] = val;
-  });
-  fetch('/admin/settings/config/save', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
-    body: JSON.stringify({changes: changes})
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    var el = document.getElementById('config-saved');
-    if (data.success) { if (el) { el.style.display = ''; el.textContent = 'Saved'; } }
-    else { if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; } }
-  });
-}
-
-function generatePwdHash() {
-  var pwd = document.getElementById('env-pwd-input').value;
-  if (!pwd) { alert('Enter a password first'); return; }
-  fetch('/admin/settings/env/hash', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
-    body: JSON.stringify({password: pwd})
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.hash) {
-      // Store hash for Save .env and show preview
-      document.getElementById('env-pwd-input').value = '';
-      document.getElementById('env-pwd-display').textContent = data.hash.substring(0, 60) + '...';
-      document.getElementById('env-pwd-display').dataset.hash = data.hash;
-    }
-  });
-}
-
-function saveEnvVars() {
-  var vars = {};
-  // Collect all env inputs
-  var hashVal = document.getElementById('env-pwd-display')?.dataset?.hash;
-  if (hashVal) vars['ANTEUMBRA_PASSWORD_HASH'] = hashVal;
-  ['ANTEUMBRA_WECHAT_API_KEY',
-   'ANTEUMBRA_EMAIL_USERNAME', 'ANTEUMBRA_EMAIL_PASSWORD', 'ANTEUMBRA_EMAIL_FROM', 'ANTEUMBRA_EMAIL_TO',
-   'ANTEUMBRA_WEBHOOK_SECRET'].forEach(function(k) {
-    var el = document.getElementById('env-' + k);
-    if (el) vars[k] = el.value;
-  });
-
-  fetch('/admin/settings/env/save', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
-    body: JSON.stringify({vars: vars})
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    var el = document.getElementById('env-saved');
-    if (data.success) { if (el) { el.style.display = ''; el.textContent = 'Saved'; } }
-    else { if (el) { el.style.display = ''; el.textContent = 'Error: ' + (data.error || 'unknown'); el.style.color = '#ff4444'; } }
-  });
-}
-// v1.8.0: JS tooltip - avoids CSS overflow clipping
-(function() {
-  var tip = document.createElement('div'); tip.id = 'cfg-tooltip'; document.body.appendChild(tip);
-  document.addEventListener('mouseover', function(e) {
-    var info = e.target.closest('.cfg-info');
-    if (info && info.dataset.tooltip) {
-      tip.textContent = info.dataset.tooltip;
-      tip.style.display = 'block';
-    }
-  });
-  document.addEventListener('mousemove', function(e) {
-    if (tip.style.display === 'block') {
-      tip.style.left = (e.clientX + 12) + 'px';
-      tip.style.top = (e.clientY - 30) + 'px';
-    }
-  });
-  document.addEventListener('mouseout', function(e) {
-    if (e.target.closest('.cfg-info')) tip.style.display = 'none';
-  });
-})();
-</script>

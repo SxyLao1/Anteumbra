@@ -67,7 +67,7 @@
               <span style="color: #555; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ f.path|e }}">{{ f.path|e }}</span>
               <button class="btn btn-ghost btn-sm"
                       style="font-size: 9px; padding: 1px 6px;"
-                      onclick="openFileViewerByPath(this.closest('.record-item').dataset.path)">
+                      type="button" data-action="records.view-path">
                 {{ _('View') }}
               </button>
             </div>
