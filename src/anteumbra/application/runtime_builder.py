@@ -21,6 +21,7 @@ def build_runtime_container(
     """Build one runtime container at the process composition root."""
     from anteumbra.application.config_history_service import ConfigHistoryLogger
     from anteumbra.application.login_rate_service import LoginRateLimiter
+    from anteumbra.application.log_analysis_service import AccessLogAnalysisService
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
@@ -43,7 +44,11 @@ def build_runtime_container(
     from anteumbra.infrastructure.threat_graph import ThreatGraph
     from anteumbra.infrastructure.utils.logger_factory import RuntimeLoggerFactory
     from anteumbra.infrastructure.utils.path_utils import normalize_path
-    from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
+    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        get_analyzer,
+        resolve_access_log_path,
+    )
     from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
     from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
     from anteumbra.infrastructure.monitoring.notifier import format_alert_message
@@ -72,6 +77,7 @@ def build_runtime_container(
         )
     )
     login_rate_limiter = LoginRateLimiter()
+    log_analysis = AccessLogAnalysisService(resolve_access_log_path, LogHeuristicEngine)
     events = EventPublisherRouter(plugin_manager)
     wal = WalManager(
         data_dir / "registry_wal.log",
@@ -205,6 +211,7 @@ def build_runtime_container(
         scan_state=scan_state,
         scan_history=scan_history,
         login_rate_limiter=login_rate_limiter,
+        log_analysis=log_analysis,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,
@@ -251,7 +258,11 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
         write_process_identity,
     )
     from anteumbra.infrastructure.utils.path_utils import normalize_path
-    from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
+    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        get_analyzer,
+        resolve_access_log_path,
+    )
     from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
     from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
     from anteumbra.infrastructure.monitoring.notifier import format_alert_message

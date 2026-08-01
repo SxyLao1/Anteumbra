@@ -247,9 +247,8 @@ def access_log_analysis():
 
     parts = [line("info", "[ACCESS_ANALYSIS] Web access log analysis")]
     try:
-        from anteumbra.application.log_analysis_service import analyze_access_logs
-
-        results = analyze_access_logs(get_runtime().config.get_enabled_websites())
+        runtime = get_runtime()
+        results = runtime.log_analysis.analyze(runtime.config.get_enabled_websites())
     except Exception as exc:
         current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
         parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))

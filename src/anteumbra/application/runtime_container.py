@@ -28,6 +28,7 @@ from anteumbra.domain.service_ports import (
 
 if TYPE_CHECKING:
     from anteumbra.application.config_history_service import ConfigHistoryLogger
+    from anteumbra.application.log_analysis_service import AccessLogAnalysisService
     from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
@@ -52,6 +53,7 @@ class RuntimeContainer:
     scan_state: ScanRuntimeState
     scan_history: ScanHistoryService
     login_rate_limiter: LoginRateLimiter
+    log_analysis: AccessLogAnalysisService
     metrics: RuntimeMetricsPort
     notifier: NotifierPort
     siem_exporter: SIEMExporterPort
