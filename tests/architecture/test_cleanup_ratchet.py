@@ -122,7 +122,11 @@ def _route_contract(filename: str, blueprint: str) -> set[tuple[str, tuple[str, 
 
 
 def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication():
-    assert _route_contract("admin_bp.py", "admin_bp") == {
+    admin_routes = (
+        _route_contract("admin_bp.py", "admin_bp")
+        | _route_contract("admin_diagnostic_routes.py", "admin_bp")
+    )
+    assert admin_routes == {
         ("/", ("GET",), True), ("/overview", ("GET",), True), ("/threats", ("GET",), True),
         ("/dashboard_content", ("GET",), True), ("/monitor_content", ("GET",), True),
         ("/login", ("GET", "POST"), False), ("/logout", ("GET",), True), ("/dashboard", ("GET",), True),
