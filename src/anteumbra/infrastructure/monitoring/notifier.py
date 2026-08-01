@@ -7,61 +7,48 @@
 @Motto: HACK THE REAL
 v1.7.0重构：迁移所有硬编码到config.toml
 """
+import json
 import logging
 import os
 import queue
-import re
 import smtplib
-import sys
 import threading
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 import requests
-import json
-from pathlib import Path
-from typing import Dict, Any, Optional
-from email.mime.text import MIMEText
-from email.header import Header
-from datetime import datetime
 
 from anteumbra.domain.runtime import MetricsPort
+from anteumbra.infrastructure.monitoring import notification_transports
+from anteumbra.infrastructure.monitoring.notification_formatting import (
+    enhance_alert_message,
+)
+from anteumbra.infrastructure.monitoring.notification_formatting import (
+    format_alert_message as _format_alert_message,
+)
+from anteumbra.infrastructure.monitoring.notification_redaction import (
+    mask_email as _redact_email,
+)
+from anteumbra.infrastructure.monitoring.notification_redaction import (
+    mask_secret as _redact_secret,
+)
+from anteumbra.infrastructure.monitoring.notification_redaction import (
+    mask_url_secret as _redact_url_secret,
+)
+from anteumbra.infrastructure.monitoring.notification_redaction import (
+    sanitize_log_text as _redact_log_text,
+)
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
 _notifier_logger = logging.getLogger(__name__)
 
-
-def _mask_secret(value: str, prefix: int = 6, suffix: int = 4) -> str:
-    value = str(value or "")
-    if len(value) <= prefix + suffix:
-        return "***" if value else ""
-    return f"{value[:prefix]}...{value[-suffix:]}"
-
-
-def _mask_email(addr: str) -> str:
-    addr = str(addr or "")
-    if "@" not in addr:
-        return _mask_secret(addr, 2, 2)
-    local, domain = addr.split("@", 1)
-    if len(local) <= 2:
-        masked_local = local[:1] + "***"
-    else:
-        masked_local = f"{local[:2]}***{local[-1:]}"
-    return f"{masked_local}@{domain}"
-
-
-def _mask_url_secret(url: str) -> str:
-    url = str(url or "")
-    return re.sub(r"/([^/?#]+)(\.send)", lambda m: f"/{_mask_secret(m.group(1))}{m.group(2)}", url)
-
-
-def _sanitize_log_text(value: object) -> str:
-    text = str(value or "")
-    text = re.sub(
-        r"https://sctapi\.ftqq\.com/([^/\s]+)\.send",
-        lambda m: f"https://sctapi.ftqq.com/{_mask_secret(m.group(1))}.send",
-        text,
-    )
-    return text
-
+# Preserve the long-standing helper import surface while implementations live
+# in focused pure modules.
+format_alert_message = _format_alert_message
+_mask_email = _redact_email
+_mask_secret = _redact_secret
+_mask_url_secret = _redact_url_secret
+_sanitize_log_text = _redact_log_text
 
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
@@ -470,18 +457,7 @@ class Notifier:
             )
             return False
 
-        # 必须在调用发送方法前完成消息增强
-        enhanced_message = message
-        if analysis:
-            suspicious_ips = analysis.get("suspicious_ips", {})
-            if suspicious_ips:
-                enhanced_message += f"\n\n攻击溯源分析:\n"
-                enhanced_message += f"时间窗口: {analysis.get('create_time', '未知')}\n"
-                enhanced_message += f"可疑IP访问统计:\n"
-                for ip, count in suspicious_ips.items():
-                    enhanced_message += f"   {ip}: {count}次\n"
-                enhanced_message += f"日志文件: {analysis.get('log_path', '未知')}"
-
+        enhanced_message = enhance_alert_message(message, analysis)
         results = {}
         metrics.record_notification("attempted", site_id=site_id)
 
@@ -537,175 +513,63 @@ class Notifier:
         return successes > 0
 
     def _send_email(self, message: str, level: str) -> bool:
-        """发送邮件告警"""
-        try:
-            cfg = self.channels["email"]
-            msg = MIMEText(message, "plain", "utf-8")
-            msg["Subject"] = Header(f"[WebShell警报-{level}]", "utf-8")
-            msg["From"] = cfg["from_addr"]
-            msg["To"] = ", ".join(cfg["to_addrs"])
-
-            # 修复：根据端口选择SMTP或SMTP_SSL
-            port = cfg["smtp_port"]
-            timeout = cfg.get("timeout", 10)
-
-            if cfg.get("use_ssl", False) or port == 465:
-                # SSL加密端口（465）
-                self.logger.debug(f"[NOTIFIER][EMAIL] 使用SSL连接: {cfg['smtp_host']}:{port}")
-                server = smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=timeout)
-            else:
-                # TLS加密端口（587/25）
-                self.logger.debug(f"[NOTIFIER][EMAIL] 使用TLS连接: {cfg['smtp_host']}:{port}")
-                server = smtplib.SMTP(cfg["smtp_host"], port, timeout=timeout)
-                if cfg.get("use_tls", True):
-                    server.starttls()
-
-            server.login(cfg["username"], cfg["password"])
-            server.send_message(msg)
-            server.quit()
-
-            recipients = [_mask_email(addr) for addr in cfg["to_addrs"]]
-            self.logger.info(f"[NOTIFIER][EMAIL] 发送成功 -> {recipients}")
-            return True
-
-        except Exception as e:
-            self.logger.error("[NOTIFIER][EMAIL] send failed: %s", e, exc_info=True)
-            return False
+        return notification_transports.send_email(
+            self.channels["email"],
+            message,
+            level,
+            self.logger,
+            smtp_module=smtplib,
+        )
 
     def _send_wechat(self, message: str, level: str) -> bool:
-        """发送微信告警（Server酱）- 熔断降级版【必须完整替换】"""
-
         if not self._wechat_circuit_enabled:
             self.logger.warning("[NOTIFIER][WECHAT] 熔断中，跳过发送")
             return False
 
-        success = False
-        try:
-            cfg = self.channels["wechat"]
-            send_key = cfg["send_key"]
-            if not send_key:
-                self.logger.warning("[NOTIFIER][WECHAT] SendKey未配置，推送已跳过")
-                return False
-
-            # VPN/代理环境优化
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-            url = f"https://sctapi.ftqq.com/{send_key}.send"
-            title = f"[WebShell-{level}]"[:32]
-
-            payload = {
-                "title": title,
-                "desp": message,
-                "channel": cfg["channel"],
-                "noip": cfg["noip"]
-            }
-
-            session = requests.Session()
-            session.verify = bool(cfg.get("verify_ssl", True))
-
-            if os.environ.get("HTTPS_PROXY"):
-                self.logger.debug(f"[NOTIFIER][WECHAT] 检测到系统代理: {_mask_url_secret(os.environ['HTTPS_PROXY'])}")
-
-            self.logger.debug(f"[NOTIFIER][WECHAT] 正在发送请求至: {_mask_url_secret(url)}")
-
-            # 设置超时和重试
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
-
-            retry_strategy = Retry(
-                total=3,  # 最多3次重试
-                backoff_factor=0.5,  # 间隔0.5秒递增
-                status_forcelist=[500, 502, 503, 504]
-            )
-            session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
-
-            response = session.post(
-                url,
-                json=payload,
-                timeout=cfg["timeout"],
-                headers={"Content-Type": "application/json"}
+        config = self.channels["wechat"]
+        if not config["send_key"]:
+            return notification_transports.send_serverchan(
+                config,
+                message,
+                level,
+                self.logger,
+                requests_module=requests,
+                os_module=os,
             )
 
-            response.raise_for_status()
-            result = response.json()
-
-            if result.get("code") == 0:
-                pushid = result.get("data", {}).get("pushid")
-                self.logger.info(f"[NOTIFIER][WECHAT] 发送成功 (pushid: {pushid})")
-            else:
-                error_msg = result.get("message", "未知错误")
-                raise RuntimeError(f"Server酱API返回错误: {error_msg}")
-
-            # 成功：重置熔断计数
+        success = notification_transports.send_serverchan(
+            config,
+            message,
+            level,
+            self.logger,
+            requests_module=requests,
+            os_module=os,
+        )
+        if success:
             self._wechat_failure_count = 0
-            success = True
-            self.logger.debug("[NOTIFIER][WECHAT] 发送成功")
-
-        # 异常处理：所有路径统一增加熔断计数
-        except ValueError as e:
-            self._wechat_failure_count += 1
-            if "check_hostname requires server_hostname" in str(e):
-                self.logger.error("[NOTIFIER][WECHAT] SSL代理配置错误")
-            else:
-                self.logger.error("[NOTIFIER][WECHAT] 参数错误: %s", _sanitize_log_text(e))
-
-        except requests.exceptions.ProxyError as e:
-            self._wechat_failure_count += 1
-            self.logger.error("[NOTIFIER][WECHAT] 代理连接失败: %s", _sanitize_log_text(e))
-
-        except requests.exceptions.ConnectionError as e:
-            self._wechat_failure_count += 1
-            self.logger.error("[NOTIFIER][WECHAT] 网络连接失败: %s", _sanitize_log_text(e))
-
-        except Exception as e:
-            self._wechat_failure_count += 1
-            self.logger.error("[NOTIFIER][WECHAT] send failed: %s", _sanitize_log_text(e))
-
-        # 熔断判断
-        finally:
-            if self._wechat_failure_count >= self._circuit_threshold:
-                self._wechat_circuit_enabled = False
-                self.logger.critical("[NOTIFIER][WECHAT] 熔断器触发，降级为仅邮件")
-
-                # 发送熔断通知到邮件
-                fallback_msg = f"微信推送熔断已触发！失败次数: {self._wechat_failure_count}"
-                try:
-                    self._send_email(fallback_msg, "CRITICAL")
-                except Exception as mail_e:
-                    self.logger.critical(f"[NOTIFIER][FUSE] 邮件通知也失败: {mail_e}")
-        return success
-
-    def _send_webhook(self, message: str, level: str) -> bool:
-        """发送Webhook告警（钉钉/企微）"""
-        try:
-            cfg = self.channels["webhook"]
-
-            payload = {
-                "msgtype": "text",
-                "text": {
-                    "content": f"[WebShell-{level}]\n\n{message}"
-                }
-            }
-
-            headers = {"Content-Type": "application/json"}
-            headers.update(cfg["headers"])
-
-            response = requests.post(
-                cfg["url"],
-                json=payload,
-                headers=headers,
-                timeout=cfg["timeout"]
-            )
-            response.raise_for_status()
-
-            self.logger.info(f"[NOTIFIER][WEBHOOK] 发送成功")
             return True
 
-        except Exception as e:
-            self.logger.error(f"[NOTIFIER][WEBHOOK] 发送失败: {e}", exc_info=True)
-            return False
+        self._wechat_failure_count += 1
+        if self._wechat_failure_count >= self._circuit_threshold:
+            self._wechat_circuit_enabled = False
+            self.logger.critical("[NOTIFIER][WECHAT] 熔断器触发，降级为仅邮件")
+            fallback_message = (
+                f"微信推送熔断已触发！失败次数: {self._wechat_failure_count}"
+            )
+            try:
+                self._send_email(fallback_message, "CRITICAL")
+            except Exception as exc:
+                self.logger.critical(f"[NOTIFIER][FUSE] 邮件通知也失败: {exc}")
+        return False
 
+    def _send_webhook(self, message: str, level: str) -> bool:
+        return notification_transports.send_webhook(
+            self.channels["webhook"],
+            message,
+            level,
+            self.logger,
+            requests_module=requests,
+        )
     def _stop_alert_worker(self):
         """停止告警工作线程"""
         if self._alert_thread and self._alert_thread.is_alive():
@@ -726,175 +590,3 @@ class Notifier:
     def shutdown(self) -> None:
         """Release the notifier worker owned by the application runtime."""
         self._stop_alert_worker()
-
-# ═══════════════════════════════════════════════════════════════
-# v1.8.4: 统一通知消息构建器（纯函数，不依赖实例状态）
-# ═══════════════════════════════════════════════════════════════
-
-def _ip_label(ip: str) -> str:
-    """给 IP 加上可读标签"""
-    if not ip:
-        return "未知"
-    if ip in ("127.0.0.1", "::1", "0:0:0:0:0:0:0:1"):
-        return f"{ip} (本机/内网)"
-    return ip
-
-
-def _disposition_block(status: dict) -> str:
-    """构建封禁处置状态行"""
-    auto = status.get("auto_block_enabled", False)
-    device_count = status.get("block_device_count", 0)
-    ip = status.get("first_seen_ip") or status.get("attacker_ip", "")
-
-    if auto and device_count > 0:
-        return (
-            f"IP封禁: 已自动封禁 ({device_count} 台设备)\n"
-            f"  被封禁IP: {ip}"
-        )
-    elif auto and device_count == 0:
-        return "IP封禁: 自动封禁已开启但无可用设备"
-    else:
-        return (
-            f"IP封禁: 已关闭自动封禁\n"
-            f"  可疑IP: {ip}\n"
-            f"  建议: 人工研判后在管理面板手动封禁"
-        )
-
-
-def _disposition_quarantine(status: dict) -> str:
-    """构建隔离处置状态行"""
-    auto = status.get("auto_quarantine_enabled", True)
-    qid = status.get("quarantine_id")
-    qpath = status.get("quarantine_path")
-
-    if qid and qpath:
-        return (
-            f"文件隔离: 已自动隔离\n"
-            f"  隔离ID: {qid}\n"
-            f"  隔离路径: {qpath}"
-        )
-    elif not auto:
-        return "文件隔离: 已关闭自动隔离（可手动在隔离管理页面操作）"
-    else:
-        reason = status.get("reason", "未知原因")
-        return f"文件隔离: 隔离失败（{reason}）"
-
-
-def format_alert_message(context: dict) -> str:
-    """
-    v1.8.4: 统一构建告警通知消息。
-
-    支持的 alert_type:
-        - "local_detection":  本地文件系统检测到可疑文件
-        - "webshell_access":  WebShell 被 HTTP 访问
-        - "quarantine_batch": 批量隔离完成
-        - "quarantine_single": 单文件隔离成功
-        - "quarantine_failed": 隔离失败
-        - "quarantine_skipped": 隔离被跳过（开关关闭/白名单）
-
-    Returns: 格式化的纯文本告警消息（无 emoji，纯 ASCII）
-    """
-    alert_type = context.get("alert_type", "unknown")
-    ts = context.get("timestamp", "")
-    level = context.get("level", "WARNING")
-    status = context  # 直接传整个 context 给子函数
-
-    # -- 公共头部 --
-    header = f"[Anteumbra {level}] {ts}"
-    site_id = str(context.get("site_id", "")).strip()
-    site_name = str(context.get("site_name", "")).strip()
-    if site_name and site_id:
-        header += f"\n[Site] {site_name} ({site_id})"
-    elif site_name or site_id:
-        header += f"\n[Site] {site_name or site_id}"
-
-    if alert_type == "local_detection":
-        body = (
-            f"[!!] 内网边界突破告警\n\n"
-            f"可疑文件在本地被检测到（无外网访问记录）\n\n"
-            f"文件路径: {context.get('file_path', '?')}\n"
-            f"检测引擎: {context.get('engine', '?')}\n"
-            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
-            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
-            f"检测时间: {ts}"
-        )
-
-    elif alert_type == "webshell_access":
-        body = (
-            f"[WEB] WebShell 被外部访问\n\n"
-            f"文件路径: {context.get('file_path', '?')}\n"
-            f"攻击IP: {context.get('attacker_ip', '?')}\n"
-            f"告警级别: {context.get('alert_level', level)}\n"
-            f"访问时间: {ts}"
-        )
-
-    elif alert_type == "quarantine_batch":
-        count = context.get("batch_count", 0)
-        body = (
-            f"[BATCH] 批量隔离完成\n\n"
-            f"本次共隔离 {count} 个可疑文件\n"
-            f"完成时间: {ts}\n\n"
-            f"详情请登录管理面板查看 [威胁 -> 隔离管理]"
-        )
-
-    elif alert_type == "quarantine_single":
-        body = (
-            f"[OK] 文件已隔离\n\n"
-            f"文件路径: {context.get('file_path', '?')}\n"
-            f"检测引擎: {context.get('engine', '?')}\n"
-            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
-            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}"
-        )
-
-    elif alert_type == "quarantine_failed":
-        body = (
-            f"[FAIL] 隔离失败\n\n"
-            f"文件路径: {context.get('file_path', '?')}\n"
-            f"检测引擎: {context.get('engine', '?')}\n"
-            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
-            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
-            f"失败原因: {context.get('reason', '未知')}\n"
-            f"时间: {ts}"
-        )
-
-    elif alert_type == "quarantine_skipped":
-        reason = context.get("reason", "")
-        if reason == "auto_quarantine_disabled":
-            reason_text = "自动隔离总开关已关闭"
-        elif reason == "recently_restored":
-            reason_text = "文件刚被恢复，跳过隔离（30秒白名单）"
-        else:
-            reason_text = reason
-        body = (
-            f"[SKIP] 隔离已跳过\n\n"
-            f"文件路径: {context.get('file_path', '?')}\n"
-            f"检测引擎: {context.get('engine', '?')}\n"
-            f"匹配规则: {', '.join(context.get('features', [])[:5])}\n"
-            f"首次发现IP: {_ip_label(context.get('first_seen_ip', ''))}\n"
-            f"跳过原因: {reason_text}\n"
-            f"时间: {ts}"
-        )
-
-    else:
-        body = context.get("raw_message", f"未知告警类型: {alert_type}")
-
-    # -- 处置状态（仅适用于需要展示处置状态的类型） --
-    types_with_disposition = {
-        "local_detection", "webshell_access", "quarantine_single",
-        "quarantine_failed", "quarantine_skipped"
-    }
-    sep = "=============================="
-
-    if alert_type in types_with_disposition:
-        disposition = (
-            f"\n{sep}\n"
-            f"[处置状态]\n\n"
-            f"{_disposition_quarantine(status)}\n"
-            f"{_disposition_block(status)}\n"
-            f"{sep}"
-        )
-    else:
-        disposition = ""
-
-    divider = sep if alert_type in types_with_disposition else "-" * 48
-    return f"{header}\n{divider}\n{body}{disposition}"

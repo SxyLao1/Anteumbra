@@ -154,3 +154,89 @@ def test_successful_email_updates_notification_metrics(tmp_path, monkeypatch):
         assert [status for status, _ in metrics.outcomes] == ["attempted", "success"]
     finally:
         notifier._stop_alert_worker()
+
+def test_email_transport_starts_tls_before_login(tmp_path, monkeypatch):
+    from anteumbra.infrastructure.monitoring import notifier as notifier_module
+
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    class FakeSmtp:
+        def __init__(self, *_args, **_kwargs):
+            calls.append("connect")
+
+        def starttls(self):
+            calls.append("starttls")
+
+        def login(self, _username, _password):
+            calls.append("login")
+
+        def send_message(self, _message):
+            calls.append("send")
+
+        def quit(self):
+            calls.append("quit")
+
+    monkeypatch.setattr(notifier_module.smtplib, "SMTP", FakeSmtp)
+    notifier = notifier_module.Notifier(
+        {
+            "enabled": True,
+            "email": {
+                "enabled": True,
+                "smtp_host": "smtp.example.test",
+                "smtp_port": 587,
+                "username": "sender",
+                "password": "secret",
+                "from_addr": "sender@example.test",
+                "to_addrs": ["soc@example.test"],
+                "use_tls": True,
+                "use_ssl": False,
+            },
+        },
+        logging.getLogger("test.notifier.starttls"),
+        FakeMetrics(),
+    )
+
+    try:
+        assert notifier.send_alert("detected", "CRITICAL") is True
+        assert calls == ["connect", "starttls", "login", "send", "quit"]
+    finally:
+        notifier._stop_alert_worker()
+
+
+def test_serverchan_circuit_breaker_uses_email_fallback(tmp_path, monkeypatch):
+    from anteumbra.infrastructure.monitoring import notifier as notifier_module
+
+    monkeypatch.chdir(tmp_path)
+    notifier = notifier_module.Notifier(
+        {
+            "enabled": True,
+            "circuit_breaker_threshold": 2,
+            "wechat": {
+                "enabled": True,
+                "send_key": "SCT-test-key",
+            },
+        },
+        logging.getLogger("test.notifier.circuit"),
+        FakeMetrics(),
+    )
+    fallbacks = []
+    monkeypatch.setattr(
+        notifier_module.notification_transports,
+        "send_serverchan",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        notifier,
+        "_send_email",
+        lambda message, level: fallbacks.append((message, level)) or True,
+    )
+
+    try:
+        assert notifier._send_wechat("first", "CRITICAL") is False
+        assert notifier._wechat_circuit_enabled is True
+        assert notifier._send_wechat("second", "CRITICAL") is False
+        assert notifier._wechat_circuit_enabled is False
+        assert fallbacks == [("微信推送熔断已触发！失败次数: 2", "CRITICAL")]
+    finally:
+        notifier._stop_alert_worker()
