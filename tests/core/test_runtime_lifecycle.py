@@ -196,3 +196,86 @@ def test_runtime_lifecycle_stop_is_idempotent_and_releases_resources(
         "monitor_count": 0,
         "log_monitor_count": 0,
     }
+
+
+def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, monkeypatch):
+    """Startup failures must release the container assembled before monitor startup."""
+    import pytest
+
+    from anteumbra.application import launcher
+    from anteumbra.infrastructure import process_identity
+    from anteumbra.interfaces.web import factory
+    from anteumbra.application import runtime_adapters
+
+    calls = []
+
+    class Resource:
+        def __init__(self, name):
+            self.name = name
+
+        def stop(self):
+            calls.append(self.name)
+
+    class RuntimeLogger:
+        def exception(self, *_args):
+            calls.append("startup-error")
+
+    class Logging:
+        def get_logger(self, _name):
+            return RuntimeLogger()
+
+        def close(self):
+            calls.append("logging")
+
+    container = SimpleNamespace(
+        logging=Logging(),
+        metrics=Resource("metrics"),
+        notifier=None,
+        siem_exporter=None,
+        threat_graph=SimpleNamespace(
+            persist=lambda: calls.append("graph-persist"),
+            close=lambda: calls.append("graph-close"),
+        ),
+        quarantine=None,
+        events=SimpleNamespace(bind=lambda manager: calls.append(f"bind:{manager is None}")),
+        ip_blocker=None,
+        registry=None,
+        scanner=SimpleNamespace(scan=lambda *_args: None),
+        waf_poller=None,
+        scan_state=None,
+        block_ledger=None,
+    )
+    manager = SimpleNamespace(shutdown=lambda: calls.append("plugins"))
+    provider = SimpleNamespace(
+        get=lambda: {"paths": {"data_dir": str(tmp_path / "data")}},
+        get_enabled_websites=lambda: [
+            SimpleNamespace(name="Test Site", path=tmp_path, site_id="test")
+        ],
+    )
+
+    monkeypatch.setattr(launcher, "build_runtime_container", lambda **_kwargs: container)
+    monkeypatch.setattr(launcher, "_start_plugins", lambda *_args: manager)
+    monkeypatch.setattr(launcher, "assess_runtime_capabilities", lambda _config: {"warnings": []})
+    monkeypatch.setattr(launcher, "_start_site_monitors", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")))
+    monkeypatch.setattr(runtime_adapters, "build_runtime_services", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(factory, "create_app", lambda **_kwargs: object())
+    monkeypatch.setattr(factory, "create_runtime_server", lambda *_args: object())
+    monkeypatch.setattr(process_identity, "write_process_identity", lambda *_args: object())
+    monkeypatch.setattr(process_identity, "remove_process_identity", lambda *_args: calls.append("pid"))
+
+    lifecycle = launcher.RuntimeLifecycle(config_provider=provider)
+    with pytest.raises(launcher.RuntimeStartupError, match="Runtime startup failed"):
+        lifecycle.run()
+
+    assert calls == [
+        "bind:False",
+        "startup-error",
+        "plugins",
+        "bind:True",
+        "metrics",
+        "graph-persist",
+        "graph-close",
+        "pid",
+        "logging",
+    ]
+    assert lifecycle.status()["running"] is False
