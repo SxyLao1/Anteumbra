@@ -3,6 +3,7 @@
 v1.0.6: Monitor Blueprint — extracted from admin_bp.py
 Routes: /stream_logs, /logs/*, /wal/*, /registry/*, /session/*, /sse/*, /config/*
 """
+
 import base64
 import hmac
 import html
@@ -40,15 +41,17 @@ def _registry():
     """Return the Registry owned by the current Flask runtime."""
     return get_runtime().registry
 
-monitor_bp = Blueprint('monitor', __name__, url_prefix='/admin')
+
+monitor_bp = Blueprint("monitor", __name__, url_prefix="/admin")
 
 
 # -- SSE Live Log Stream --
 
-@monitor_bp.route('/stream_logs')
+
+@monitor_bp.route("/stream_logs")
 def stream_logs():
     """v1.7.6: SSE log stream with level filtering (config-driven, hot-reloadable)"""
-    token = request.args.get('token')
+    token = request.args.get("token")
     if not token:
         abort(403)
 
@@ -65,7 +68,7 @@ def stream_logs():
     ip_client_count = sse.ip_client_count(client_ip)
     ip_connections = sse.ip_clients(client_ip)
 
-    if ip_client_count >= limits['per_ip']:
+    if ip_client_count >= limits["per_ip"]:
         for old_queue in ip_connections:
             sse.unregister_client(old_queue)
         logging.getLogger("monitor.admin_sse").info(
@@ -73,15 +76,15 @@ def stream_logs():
         )
         ip_client_count = 0
 
-    session_token = session.get('sse_token')
-    if not session.get('authenticated') or not session_token:
+    session_token = session.get("sse_token")
+    if not session.get("authenticated") or not session_token:
         abort(403)
     if not hmac.compare_digest(str(token), str(session_token)):
         abort(403)
 
     try:
-        decoded = base64.b64decode(token).decode('utf-8')
-        username, random_part = decoded.split(':', 1)
+        decoded = base64.b64decode(token).decode("utf-8")
+        username, random_part = decoded.split(":", 1)
         expected_username, password_hash, allowed_ips = get_admin_credentials()
         if username != expected_username or not is_ip_allowed(client_ip, allowed_ips):
             abort(403)
@@ -89,7 +92,7 @@ def stream_logs():
         abort(403)
 
     logger = current_app.logger
-    requested_site = request.args.get('site_id') or request.args.get('site')
+    requested_site = request.args.get("site_id") or request.args.get("site")
     try:
         websites = runtime.config.get_enabled_websites()
     except Exception:
@@ -98,21 +101,17 @@ def stream_logs():
     if requested_site:
         requested_id = requested_site.strip().lower()
         websites = [
-            site
-            for site in websites
-            if site.site_id == requested_id or site.name == requested_site
+            site for site in websites if site.site_id == requested_id or site.name == requested_site
         ]
         if not websites:
             abort(404)
     if not websites:
         abort(503)
     log_files = [
-        runtime.logging.get_site_log_path(
-            SiteIdentity.from_values(site.site_id, site.name)
-        )
+        runtime.logging.get_site_log_path(SiteIdentity.from_values(site.site_id, site.name))
         for site in websites
     ]
-    show_all_levels = request.args.get('levels', '') == 'all'
+    show_all_levels = request.args.get("levels", "") == "all"
 
     if not show_all_levels:
         try:
@@ -142,9 +141,9 @@ def stream_logs():
                 log_file.touch(exist_ok=True)
                 handle = open(
                     log_file,
-                    'r',
-                    encoding='utf-8',
-                    errors='ignore',
+                    "r",
+                    encoding="utf-8",
+                    errors="ignore",
                     buffering=1,
                 )
                 handle.seek(0, 2)
@@ -172,14 +171,14 @@ def stream_logs():
                     emitted = True
                     log_line = line.strip()
                     if allowed_levels_set is not None:
-                        level_match = re.search(r'\] (\w+) -', log_line)
+                        level_match = re.search(r"\] (\w+) -", log_line)
                         if level_match:
                             level = level_match.group(1).upper()
                             if level not in allowed_levels_set:
                                 continue
                     if "[SSE]" in log_line:
                         continue
-                    cleaned = log_line.replace('\n', ' ').replace('\r', ' ')
+                    cleaned = log_line.replace("\n", " ").replace("\r", " ")
                     sse.persist_log_line(cleaned)
                     yield f"data: {cleaned}\n\n"
 
@@ -192,7 +191,7 @@ def stream_logs():
                     time.sleep(0.1)
 
         except Exception as e:
-            error_msg = str(e).replace('\n', ' ')
+            error_msg = str(e).replace("\n", " ")
             yield f"data: [SSE][ERROR] {error_msg}\n\n"
         finally:
             for handle in handles:
@@ -207,18 +206,19 @@ def stream_logs():
 
     response = Response(
         stream_with_context(generate()),
-        mimetype='text/event-stream',
+        mimetype="text/event-stream",
         headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
-        }
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
     return response
 
 
 # -- Log History --
 
-@monitor_bp.route('/logs/history')
+
+@monitor_bp.route("/logs/history")
 @require_auth
 def logs_history():
     """Return escaped runtime-owned history for LIVE LOG STREAM initialization."""
@@ -238,10 +238,11 @@ def logs_history():
         return f'<div class="log-line error">[ERROR] Failed to load history: {message}</div>'
 
 
-@monitor_bp.route('/logs/access-analysis')
+@monitor_bp.route("/logs/access-analysis")
 @require_auth
 def access_log_analysis():
     """Render a read-only access-log behavior analysis for the Log Analyzer modal."""
+
     def line(level: str, text: str) -> str:
         return f'<div class="log-line {level}">{html.escape(text)}</div>'
 
@@ -252,11 +253,13 @@ def access_log_analysis():
     except Exception as exc:
         current_app.logger.warning("[ACCESS_ANALYSIS] failed: %s", exc, exc_info=True)
         parts.append(line("error", f"[ACCESS_ANALYSIS][ERROR] {exc}"))
-        return ''.join(parts)
+        return "".join(parts)
 
     if not results:
-        parts.append(line("warn", "[ACCESS_ANALYSIS][DISABLED] No enabled websites are configured."))
-        return ''.join(parts)
+        parts.append(
+            line("warn", "[ACCESS_ANALYSIS][DISABLED] No enabled websites are configured.")
+        )
+        return "".join(parts)
 
     for result in results:
         site = result["website"]
@@ -266,21 +269,27 @@ def access_log_analysis():
             parts.append(line("warn", f"[ACCESS_ANALYSIS][DISABLED] {site}"))
             continue
         if status in {"missing", "error"}:
-            parts.append(line(
-                "error",
-                f"[ACCESS_ANALYSIS][{status.upper()}] {site}: {result['error']} "
-                f"path={result['configured_path']}",
-            ))
+            parts.append(
+                line(
+                    "error",
+                    f"[ACCESS_ANALYSIS][{status.upper()}] {site}: {result['error']} "
+                    f"path={result['configured_path']}",
+                )
+            )
             continue
 
         parts.append(line("info", f"[ACCESS_ANALYSIS][SOURCE] selected={result['selected_path']}"))
         stats = result["stats"]
-        parts.append(line(
-            "info",
-            f"[ACCESS_ANALYSIS][SUMMARY] analyzed={stats.get('total_analyzed', 0)} alerts={stats.get('total_alerts', 0)} ips={stats.get('ips_tracked', 0)}",
-        ))
+        parts.append(
+            line(
+                "info",
+                f"[ACCESS_ANALYSIS][SUMMARY] analyzed={stats.get('total_analyzed', 0)} alerts={stats.get('total_alerts', 0)} ips={stats.get('ips_tracked', 0)}",
+            )
+        )
         if not result["events"]:
-            parts.append(line("info", "[ACCESS_ANALYSIS][CLEAN] No suspicious access-log behavior detected."))
+            parts.append(
+                line("info", "[ACCESS_ANALYSIS][CLEAN] No suspicious access-log behavior detected.")
+            )
             continue
         for event in result["events"]:
             severity = str(event.get("severity", "medium")).upper()
@@ -288,9 +297,15 @@ def access_log_analysis():
             ip = event.get("ip", "unknown")
             target = event.get("path") or event.get("user_agent") or event.get("tools") or ""
             detail = event.get("reason") or event.get("count") or event.get("unique_paths") or ""
-            parts.append(line("warn", f"[ACCESS_ANALYSIS][{severity}] {event_type} ip={ip} target={target} detail={detail}"))
+            parts.append(
+                line(
+                    "warn",
+                    f"[ACCESS_ANALYSIS][{severity}] {event_type} ip={ip} target={target} detail={detail}",
+                )
+            )
 
-    return ''.join(parts)
+    return "".join(parts)
+
 
 # Import route registrations after the shared Blueprint is initialized.
 from anteumbra.interfaces.web.blueprints import (  # noqa: E402

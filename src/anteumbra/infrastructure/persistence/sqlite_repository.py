@@ -16,6 +16,7 @@ v1.0.4 优化:
   - 表创建顺序保证引用完整性
   - 自动迁移：检测缺失 FK → 重建受影响的表
 """
+
 import json
 import logging
 import sqlite3
@@ -219,6 +220,7 @@ _REQUIRED_COLUMNS = {
 
 # ── SqliteRepository ──────────────────────────────────────
 
+
 class SqliteRepository(EventRepository):
     """基于 SQLite 的数据仓库，实现 Repository + EventRepository 接口
 
@@ -231,17 +233,25 @@ class SqliteRepository(EventRepository):
     """
 
     _ALLOWED_TABLE_NAMES = {
-        "registry", "quarantine", "block_ledger_entries",
-        "threat_profiles", "scan_history", "wal_events",
+        "registry",
+        "quarantine",
+        "block_ledger_entries",
+        "threat_profiles",
+        "scan_history",
+        "wal_events",
     }
     _schema_lock = threading.RLock()
 
-    def __init__(self, db_path: str = "data/anteumbra.db", table_name: str = "registry",
-                 key_column: str = "record_id", sort_column: str = "detected_at"):
+    def __init__(
+        self,
+        db_path: str = "data/anteumbra.db",
+        table_name: str = "registry",
+        key_column: str = "record_id",
+        sort_column: str = "detected_at",
+    ):
         if table_name not in self._ALLOWED_TABLE_NAMES:
             raise ValueError(
-                f"Invalid table name: {table_name!r}. "
-                f"Allowed: {sorted(self._ALLOWED_TABLE_NAMES)}"
+                f"Invalid table name: {table_name!r}. Allowed: {sorted(self._ALLOWED_TABLE_NAMES)}"
             )
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,13 +274,11 @@ class SqliteRepository(EventRepository):
     def _get_conn(self) -> sqlite3.Connection:
         """获取当前线程的数据库连接（自动创建）"""
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            conn = sqlite3.connect(
-                str(self._db_path), check_same_thread=False, timeout=2.0
-            )
+            conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=2.0)
             # SQLite shadows must never hold up authoritative JSON workflows.
             conn.execute("PRAGMA busy_timeout=2000")
-            conn.execute("PRAGMA journal_mode=WAL")       # 高并发读
-            conn.execute("PRAGMA synchronous=NORMAL")      # 平衡性能/安全
+            conn.execute("PRAGMA journal_mode=WAL")  # 高并发读
+            conn.execute("PRAGMA synchronous=NORMAL")  # 平衡性能/安全
             conn.execute("PRAGMA foreign_keys=ON")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
@@ -297,15 +305,11 @@ class SqliteRepository(EventRepository):
         """Add backward-compatible columns before site-aware indexes are created."""
         for table_name, columns in _REQUIRED_COLUMNS.items():
             existing = {
-                row["name"]
-                for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+                row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
             }
             for column_name, declaration in columns.items():
                 if column_name not in existing:
-                    conn.execute(
-                        f"ALTER TABLE {table_name} "
-                        f"ADD COLUMN {column_name} {declaration}"
-                    )
+                    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {declaration}")
 
     def _run_migrations(self):
         """检测并添加缺失的外键约束（表重建实现）。
@@ -318,9 +322,7 @@ class SqliteRepository(EventRepository):
 
         for table_name, expected_fks in _EXPECTED_FOREIGN_KEYS.items():
             # 检查当前外键
-            existing = conn.execute(
-                f"PRAGMA foreign_key_list({table_name})"
-            ).fetchall()
+            existing = conn.execute(f"PRAGMA foreign_key_list({table_name})").fetchall()
             existing_set = {(r["from"], r["table"], r["to"]) for r in existing}
 
             if existing_set >= expected_fks:
@@ -328,29 +330,27 @@ class SqliteRepository(EventRepository):
 
             logger.info(
                 "[MIGRATE] %s — adding %d FK constraint(s) (current: %d)",
-                table_name, len(expected_fks), len(existing_set)
+                table_name,
+                len(expected_fks),
+                len(existing_set),
             )
 
             # 1) 从 SCHEMA 提取 DDL，替换表名生成带 FK 的新表
             ddl = SCHEMA[table_name]
             temp_name = f"{table_name}_v2"
             new_ddl = ddl.replace(
-                f"CREATE TABLE IF NOT EXISTS {table_name}",
-                f"CREATE TABLE {temp_name}"
+                f"CREATE TABLE IF NOT EXISTS {table_name}", f"CREATE TABLE {temp_name}"
             )
 
             conn.execute(f"DROP TABLE IF EXISTS {temp_name}")
             conn.execute(new_ddl)
 
             # 2) 复制数据（列名从旧表 PRAGMA 获取，保证兼容）
-            columns = conn.execute(
-                f"PRAGMA table_info({table_name})"
-            ).fetchall()
+            columns = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
             col_names = [c["name"] for c in columns]
             cols_str = ", ".join(col_names)
             conn.execute(
-                f"INSERT INTO {temp_name} ({cols_str}) "
-                f"SELECT {cols_str} FROM {table_name}"
+                f"INSERT INTO {temp_name} ({cols_str}) SELECT {cols_str} FROM {table_name}"
             )
 
             # 3) 替换旧表
@@ -377,9 +377,7 @@ class SqliteRepository(EventRepository):
             except (TypeError, json.JSONDecodeError):
                 raw_data = None
             if isinstance(raw_data, dict):
-                raw_data.update(
-                    {key: value for key, value in data.items() if value is not None}
-                )
+                raw_data.update({key: value for key, value in data.items() if value is not None})
                 data = raw_data
 
         value = data.get("features")
@@ -432,20 +430,37 @@ class SqliteRepository(EventRepository):
         conn = self._get_conn()
         rows = conn.execute(
             f"SELECT * FROM {self._table} ORDER BY {self._sort_column} DESC LIMIT ? OFFSET ?",
-            (limit, offset)).fetchall()
+            (limit, offset),
+        ).fetchall()
         return [self._row_to_data(row) for row in rows]
 
     # Whitelist of allowed query columns (prevents SQL injection via filter keys)
     _ALLOWED_COLUMNS = {
-        "id", "record_id", "file_path", "display_name", "detected_at",
-        "file_exists", "communication_count", "first_seen_ip", "alerted",
-        "marked_false_positive", "quarantine_id", "deleted_at",
-        "detection_source", "status", "source", "ip", "blocked_by",
-        "broadcast_status", "site_id", "site_name",
+        "id",
+        "record_id",
+        "file_path",
+        "display_name",
+        "detected_at",
+        "file_exists",
+        "communication_count",
+        "first_seen_ip",
+        "alerted",
+        "marked_false_positive",
+        "quarantine_id",
+        "deleted_at",
+        "detection_source",
+        "status",
+        "source",
+        "ip",
+        "blocked_by",
+        "broadcast_status",
+        "site_id",
+        "site_name",
     }
 
-    def query(self, filters: Dict[str, Any],
-              limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def query(
+        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         where = []
         params = []
@@ -464,9 +479,7 @@ class SqliteRepository(EventRepository):
 
     def delete(self, record_id: str) -> bool:
         conn = self._get_conn()
-        cur = conn.execute(
-            f"DELETE FROM {self._table} WHERE {self._key_column}=?", (record_id,)
-        )
+        cur = conn.execute(f"DELETE FROM {self._table} WHERE {self._key_column}=?", (record_id,))
         conn.commit()
         return cur.rowcount > 0
 
@@ -496,15 +509,16 @@ class SqliteRepository(EventRepository):
         }
         conn.execute(
             "INSERT INTO wal_events (event_type, timestamp, source, payload) VALUES (:event_type, :timestamp, :source, :payload)",
-            row)
+            row,
+        )
         conn.commit()
 
     def replay(self, since: Optional[float] = None) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         if since:
             rows = conn.execute(
-                "SELECT * FROM wal_events WHERE timestamp > ? ORDER BY timestamp",
-                (since,)).fetchall()
+                "SELECT * FROM wal_events WHERE timestamp > ? ORDER BY timestamp", (since,)
+            ).fetchall()
         else:
             rows = conn.execute("SELECT * FROM wal_events ORDER BY timestamp").fetchall()
         return [dict(r) for r in rows]
@@ -523,7 +537,8 @@ class SqliteRepository(EventRepository):
         ups = [f"{c}=excluded.{c}" for c in columns if c != "quarantine_id"]
         conn.execute(
             f"INSERT INTO quarantine ({','.join(columns)}) VALUES ({','.join(ph)}) ON CONFLICT(quarantine_id) DO UPDATE SET {','.join(ups)}",
-            row)
+            row,
+        )
         conn.commit()
 
     def save_scan(self, scan_id: str, data: Dict[str, Any]) -> None:
@@ -537,7 +552,8 @@ class SqliteRepository(EventRepository):
         ph = [f":{c}" for c in columns]
         conn.execute(
             f"INSERT OR REPLACE INTO scan_history ({','.join(columns)}) VALUES ({','.join(ph)})",
-            row)
+            row,
+        )
         conn.commit()
 
     def get_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
@@ -580,6 +596,7 @@ class SqliteRepository(EventRepository):
 
 # ── 双写适配器 ──────────────────────────────────────────
 
+
 class DualWriteRepository:
     """Write JSON and SQLite, with JSON as the authoritative read store.
 
@@ -617,8 +634,9 @@ class DualWriteRepository:
         except Exception:
             return self._sql.list_all(limit, offset)
 
-    def query(self, filters: Dict[str, Any],
-              limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def query(
+        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         try:
             return self._json.query(filters, limit, offset)
         except Exception:
@@ -629,7 +647,9 @@ class DualWriteRepository:
         try:
             self._sql.delete(record_id)
         except Exception:
-            logger.debug("SQLite delete failed for record %s, JSON delete was OK", record_id, exc_info=True)
+            logger.debug(
+                "SQLite delete failed for record %s, JSON delete was OK", record_id, exc_info=True
+            )
         return ok
 
     def count(self, filters: Optional[Dict[str, Any]] = None) -> int:

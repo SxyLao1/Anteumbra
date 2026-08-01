@@ -27,9 +27,7 @@ def test_successful_monitor_startup_does_not_emit_critical_logs(monkeypatch, tmp
         scan_options=object(),
     )
     services = RuntimeServices(
-        context=RuntimeContext.from_websites(
-            {"scanner": {}, "monitor": {}}, [website]
-        ),
+        context=RuntimeContext.from_websites({"scanner": {}, "monitor": {}}, [website]),
         registry=SimpleNamespace(),
         metrics=SimpleNamespace(),
         events=SimpleNamespace(),
@@ -42,14 +40,10 @@ def test_successful_monitor_startup_does_not_emit_critical_logs(monkeypatch, tmp
     monkeypatch.setattr(
         monitor_module,
         "log_with_symbol",
-        lambda symbol, level, message, _logger: emitted.append(
-            (symbol, level, message)
-        ),
+        lambda symbol, level, message, _logger: emitted.append((symbol, level, message)),
     )
 
-    monitor = monitor_module.WebsiteMonitor(
-        website, Mock(), logger, services=services
-    )
+    monitor = monitor_module.WebsiteMonitor(website, Mock(), logger, services=services)
     monitor.start()
 
     logger.debug.assert_called_once_with("[DEBUG][CONFIG] Website配置: Test Site")

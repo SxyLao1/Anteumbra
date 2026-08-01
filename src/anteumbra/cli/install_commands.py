@@ -69,12 +69,8 @@ def register_install_command(
                 click.echo(f"  Version: {existing.get('version', 'unknown')}")
                 click.echo(f"  Installed: {existing.get('installed_at', 'unknown')}")
                 click.echo("\nOnly one instance per machine is supported.")
-                click.echo(
-                    "To move the installation, reinstall with --force at the new path."
-                )
-                click.echo(
-                    "To reinstall at the existing path, run: anteumbra install --force"
-                )
+                click.echo("To move the installation, reinstall with --force at the new path.")
+                click.echo("To reinstall at the existing path, run: anteumbra install --force")
                 raise SystemExit(1)
             else:
                 click.echo(f"Moving installation from {existing_path} to {target}...")
@@ -82,9 +78,7 @@ def register_install_command(
         if target.exists() and not (target / ".anteumbra_install").exists():
             existing_files = list(target.iterdir())
             if existing_files and not force:
-                click.echo(
-                    f"Target directory {target} already exists and is not empty."
-                )
+                click.echo(f"Target directory {target} already exists and is not empty.")
                 click.echo("It does not appear to be an Anteumbra installation.")
                 if not click.confirm("Continue anyway?"):
                     click.echo("Aborted.")
@@ -169,11 +163,7 @@ def register_install_command(
             )
 
         admin_host, admin_port = resolve_bind_options(target, None, None)
-        display_host = (
-            "127.0.0.1"
-            if admin_host in {"0.0.0.0", "::", "[::]"}
-            else admin_host
-        )
+        display_host = "127.0.0.1" if admin_host in {"0.0.0.0", "::", "[::]"} else admin_host
         if ":" in display_host and not display_host.startswith("["):
             display_host = f"[{display_host}]"
         username = "admin"

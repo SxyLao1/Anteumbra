@@ -37,8 +37,6 @@ def sanitize_log_text(value: object) -> str:
     text = str(value or "")
     return re.sub(
         r"https://sctapi\.ftqq\.com/([^/\s]+)\.send",
-        lambda match: (
-            f"https://sctapi.ftqq.com/{mask_secret(match.group(1))}.send"
-        ),
+        lambda match: f"https://sctapi.ftqq.com/{mask_secret(match.group(1))}.send",
         text,
     )

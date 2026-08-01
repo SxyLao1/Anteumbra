@@ -1,4 +1,5 @@
 """Tests for core/siem_exporter.py and utils/siem_formatter.py"""
+
 import json
 import logging
 
@@ -64,17 +65,24 @@ class TestSIEMExporter:
 
     def test_enabled_with_file_output(self, temp_dir):
         p = temp_dir / "siem_test.jsonl"
-        exporter = SIEMExporter({
-            "enabled": True,
-            "format": "json_lines",
-            "export_file": str(p),
-            "rotate_mb": 100,
-        })
+        exporter = SIEMExporter(
+            {
+                "enabled": True,
+                "format": "json_lines",
+                "export_file": str(p),
+                "rotate_mb": 100,
+            }
+        )
         assert exporter.enabled is True
 
-        event = {"id": "test", "detected_at": "2026-06-28T12:00:00Z",
-                 "file_path": "/tmp/test.php", "features": ["a"],
-                 "rule_name": "test_rule", "source_ip": "10.0.0.1"}
+        event = {
+            "id": "test",
+            "detected_at": "2026-06-28T12:00:00Z",
+            "file_path": "/tmp/test.php",
+            "features": ["a"],
+            "rule_name": "test_rule",
+            "source_ip": "10.0.0.1",
+        }
         result = exporter.emit(event)
         assert result is not None
         assert p.exists()
@@ -83,15 +91,22 @@ class TestSIEMExporter:
 
     def test_emit_batch(self, temp_dir):
         p = temp_dir / "batch_test.jsonl"
-        exporter = SIEMExporter({
-            "enabled": True,
-            "format": "json_lines",
-            "export_file": str(p),
-        })
+        exporter = SIEMExporter(
+            {
+                "enabled": True,
+                "format": "json_lines",
+                "export_file": str(p),
+            }
+        )
         events = [
-            {"id": f"evt-{i}", "detected_at": f"2026-06-28T12:{i:02d}:00Z",
-             "file_path": f"/tmp/{i}.php", "features": ["x"],
-             "rule_name": f"rule_{i}", "source_ip": "10.0.0.1"}
+            {
+                "id": f"evt-{i}",
+                "detected_at": f"2026-06-28T12:{i:02d}:00Z",
+                "file_path": f"/tmp/{i}.php",
+                "features": ["x"],
+                "rule_name": f"rule_{i}",
+                "source_ip": "10.0.0.1",
+            }
             for i in range(5)
         ]
         count = exporter.emit_batch(events)
@@ -101,13 +116,22 @@ class TestSIEMExporter:
 
     def test_export_existing(self, temp_dir):
         p = temp_dir / "export_test.jsonl"
-        exporter = SIEMExporter({
-            "enabled": True, "format": "json_lines", "export_file": str(p),
-        })
+        exporter = SIEMExporter(
+            {
+                "enabled": True,
+                "format": "json_lines",
+                "export_file": str(p),
+            }
+        )
         records = [
-            {"id": "r1", "detected_at": "2026-06-28T12:00:00Z",
-             "file_path": "/tmp/a.php", "display_name": "a.php",
-             "features": ["php_eval"], "first_seen_ip": "10.0.0.1"},
+            {
+                "id": "r1",
+                "detected_at": "2026-06-28T12:00:00Z",
+                "file_path": "/tmp/a.php",
+                "display_name": "a.php",
+                "features": ["php_eval"],
+                "first_seen_ip": "10.0.0.1",
+            },
         ]
         count = exporter.export_existing(records)
         assert count == 1
@@ -118,20 +142,21 @@ def test_siem_handler_exports_registry_events():
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
 
     emitted = []
+
     class Exporter:
         def emit_detection(self, payload):
             emitted.append(payload)
 
-    plugin = SIEMHandlerPlugin(
-        Exporter(), log=logging.getLogger("test.siem_handler")
-    )
+    plugin = SIEMHandlerPlugin(Exporter(), log=logging.getLogger("test.siem_handler"))
     plugin.activate({"enabled": True})
 
-    plugin.on_event(DomainEvent(
-        "record_added",
-        0,
-        "registry",
-        {"file_path": "/tmp/shell.php", "features": ["YARA:test"]},
-    ))
+    plugin.on_event(
+        DomainEvent(
+            "record_added",
+            0,
+            "registry",
+            {"file_path": "/tmp/shell.php", "features": ["YARA:test"]},
+        )
+    )
 
     assert emitted == [{"file_path": "/tmp/shell.php", "features": ["YARA:test"]}]

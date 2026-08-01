@@ -85,9 +85,7 @@ def parse_websites(config: Mapping[str, Any]) -> tuple[Website, ...]:
             raise ValueError("Every [[website]] entry must be a table")
         website = _create_website(entry)
         if website.site_id in _RESERVED_CONFIG_SITE_IDS:
-            raise ValueError(
-                f"website.id {website.site_id!r} is reserved for unassigned records"
-            )
+            raise ValueError(f"website.id {website.site_id!r} is reserved for unassigned records")
         if website.site_id in site_ids:
             raise ValueError(f"Duplicate website.id: {website.site_id}")
         site_ids.add(website.site_id)

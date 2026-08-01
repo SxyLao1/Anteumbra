@@ -8,6 +8,7 @@ Flow:
   3. Verify IP reputation is tracked
   4. Verify profile risk scores increase with more attacks
 """
+
 import json
 
 
@@ -19,7 +20,7 @@ class TestWAFProfiling:
         graph = threat_graph
 
         # Feed all events
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
@@ -28,9 +29,7 @@ class TestWAFProfiling:
         # Check profiles — 3 distinct UAs → at least 2 profiles
         # (the "browser" UA may normalize to same bucket as another)
         profiles = graph.get_active_profiles()
-        assert len(profiles) >= 1, (
-            f"Should have at least 1 attacker profile, got {len(profiles)}"
-        )
+        assert len(profiles) >= 1, f"Should have at least 1 attacker profile, got {len(profiles)}"
 
         # Verify specific IPs have profiles
         all_ips = set()
@@ -45,7 +44,7 @@ class TestWAFProfiling:
         """Verify the SQLMap attacker (4 high-score events) gets a high risk score."""
         graph = threat_graph
 
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
@@ -53,8 +52,7 @@ class TestWAFProfiling:
 
         # The SQLMap attacker sent 4 high-score events — risk should be elevated
         profiles = graph.get_active_profiles()
-        sqlmap_profiles = [p for p in profiles
-                          if "10.99.99.1" in p.ip_pool]
+        sqlmap_profiles = [p for p in profiles if "10.99.99.1" in p.ip_pool]
 
         assert len(sqlmap_profiles) >= 1, (
             f"Should have at least 1 profile for SQLMap IP, got {len(sqlmap_profiles)}"
@@ -73,15 +71,14 @@ class TestWAFProfiling:
         """Verify AntSword attacker profile includes the uploaded webshell paths."""
         graph = threat_graph
 
-        with open(str(waf_events_file), 'r', encoding='utf-8') as f:
+        with open(str(waf_events_file), "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     evt = json.loads(line.strip())
                     graph.ingest_waf_event(evt)
 
         profiles = graph.get_active_profiles()
-        antsword_profiles = [p for p in profiles
-                            if "10.88.77.2" in p.ip_pool]
+        antsword_profiles = [p for p in profiles if "10.88.77.2" in p.ip_pool]
 
         assert len(antsword_profiles) >= 1, (
             f"Should have at least 1 profile for AntSword IP, got {len(antsword_profiles)}"
@@ -131,10 +128,7 @@ class TestWAFProfiling:
         )
 
         profile = matching[0]
-        found_file = any(
-            "backdoor.php" in f for f in profile.target_files
-        )
+        found_file = any("backdoor.php" in f for f in profile.target_files)
         assert found_file, (
-            f"Profile should have target_file containing backdoor.php, "
-            f"got: {profile.target_files}"
+            f"Profile should have target_file containing backdoor.php, got: {profile.target_files}"
         )

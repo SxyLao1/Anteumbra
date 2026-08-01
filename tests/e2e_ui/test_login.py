@@ -8,6 +8,7 @@ Tests:
   - Successful login redirects to dashboard
   - Logout clears session
 """
+
 from playwright.sync_api import expect
 
 
@@ -65,6 +66,4 @@ class TestLogin:
         pg.goto(f"{server_url}/admin/logout", wait_until="commit", timeout=20000)
         # After redirect, login form should be visible
         expect(pg.locator("form.login-form")).to_be_visible(timeout=10000)
-        assert "/login" in pg.url.lower(), (
-            f"After logout, should be on login page, got: {pg.url}"
-        )
+        assert "/login" in pg.url.lower(), f"After logout, should be on login page, got: {pg.url}"

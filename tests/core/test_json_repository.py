@@ -1,4 +1,5 @@
 """Tests for core/repositories/json_repository.py"""
+
 import json
 
 import pytest
@@ -67,10 +68,14 @@ class TestJsonRepository:
 
     def test_load_from_array_format(self, temp_dir):
         p = temp_dir / "array_test.json"
-        p.write_text(json.dumps([
-            {"uid": "xxx", "name": "Alice"},
-            {"uid": "yyy", "name": "Bob"},
-        ]))
+        p.write_text(
+            json.dumps(
+                [
+                    {"uid": "xxx", "name": "Alice"},
+                    {"uid": "yyy", "name": "Bob"},
+                ]
+            )
+        )
         repo = JsonRepository(p, key_field="uid")
         assert repo.count() == 2
         assert repo.get("xxx")["name"] == "Alice"

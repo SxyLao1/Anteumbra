@@ -47,10 +47,7 @@ def build_dashboard_summary(
     quarantine_stats = quarantine_stats_reader(site_id=normalized_site_id)
     metric_sites = metrics.get().get("sites", {})
 
-    identities = {
-        site.site_id: SiteIdentity(site.site_id, site.name)
-        for site in websites
-    }
+    identities = {site.site_id: SiteIdentity(site.site_id, site.name) for site in websites}
     for record in records:
         identity = SiteIdentity.from_values(
             record.get("site_id"), record.get("site_name") or "Legacy / unassigned"
@@ -63,13 +60,9 @@ def build_dashboard_summary(
     for identity in identities.values():
         if normalized_site_id and identity.site_id != normalized_site_id:
             continue
-        site_records = [
-            record for record in records if record.get("site_id") == identity.site_id
-        ]
+        site_records = [record for record in records if record.get("site_id") == identity.site_id]
         site_quarantine = quarantine_stats_reader(site_id=identity.site_id)
-        false_positives = sum(
-            1 for record in site_records if record.get("marked_false_positive")
-        )
+        false_positives = sum(1 for record in site_records if record.get("marked_false_positive"))
         sites.append(
             {
                 **identity.as_dict(),
@@ -83,16 +76,12 @@ def build_dashboard_summary(
             }
         )
 
-    false_positives = sum(
-        1 for record in records if record.get("marked_false_positive")
-    )
+    false_positives = sum(1 for record in records if record.get("marked_false_positive"))
     aggregate = {
         "total_detections": len(records),
         "quarantined": quarantine_stats.get("quarantined", 0),
         "false_positives": false_positives,
-        "protection_rate": _protection_rate(
-            quarantine_stats.get("quarantined", 0), len(records)
-        ),
+        "protection_rate": _protection_rate(quarantine_stats.get("quarantined", 0), len(records)),
     }
     return {
         "aggregate": aggregate,

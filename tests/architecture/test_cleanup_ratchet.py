@@ -97,12 +97,16 @@ def test_stage_one_must_retire_the_only_application_to_interface_edge():
 
 
 def _route_contract(filename: str, blueprint: str) -> set[tuple[str, tuple[str, ...], bool]]:
-    tree = ast.parse((PACKAGE_ROOT / "interfaces" / "web" / "blueprints" / filename).read_text(encoding="utf-8"))
+    tree = ast.parse(
+        (PACKAGE_ROOT / "interfaces" / "web" / "blueprints" / filename).read_text(encoding="utf-8")
+    )
     routes: set[tuple[str, tuple[str, ...], bool]] = set()
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        protected = any(isinstance(item, ast.Name) and item.id == "require_auth" for item in node.decorator_list)
+        protected = any(
+            isinstance(item, ast.Name) and item.id == "require_auth" for item in node.decorator_list
+        )
         for decorator in node.decorator_list:
             if not (
                 isinstance(decorator, ast.Call)
@@ -122,45 +126,84 @@ def _route_contract(filename: str, blueprint: str) -> set[tuple[str, tuple[str, 
 
 
 def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication():
-    admin_routes = (
-        _route_contract("admin_bp.py", "admin_bp")
-        | _route_contract("admin_diagnostic_routes.py", "admin_bp")
+    admin_routes = _route_contract("admin_bp.py", "admin_bp") | _route_contract(
+        "admin_diagnostic_routes.py", "admin_bp"
     )
     assert admin_routes == {
-        ("/", ("GET",), True), ("/overview", ("GET",), True), ("/threats", ("GET",), True),
-        ("/dashboard_content", ("GET",), True), ("/monitor_content", ("GET",), True),
-        ("/login", ("GET", "POST"), False), ("/logout", ("GET",), True), ("/dashboard", ("GET",), True),
-        ("/metrics/<metric_name>", ("GET",), True), ("/metrics", ("GET",), True),
-        ("/metrics/data", ("GET",), True), ("/test", ("GET",), True),
-        ("/debug/routes", ("GET",), True), ("/account", ("GET",), True),
-        ("/account/password", ("POST",), True), ("/api/v1/health", ("GET",), False),
+        ("/", ("GET",), True),
+        ("/overview", ("GET",), True),
+        ("/threats", ("GET",), True),
+        ("/dashboard_content", ("GET",), True),
+        ("/monitor_content", ("GET",), True),
+        ("/login", ("GET", "POST"), False),
+        ("/logout", ("GET",), True),
+        ("/dashboard", ("GET",), True),
+        ("/metrics/<metric_name>", ("GET",), True),
+        ("/metrics", ("GET",), True),
+        ("/metrics/data", ("GET",), True),
+        ("/test", ("GET",), True),
+        ("/debug/routes", ("GET",), True),
+        ("/account", ("GET",), True),
+        ("/account/password", ("POST",), True),
+        ("/api/v1/health", ("GET",), False),
         ("/health", ("GET",), True),
     }
-    monitor_routes = (
-        _route_contract("monitor_bp.py", "monitor_bp")
-        | _route_contract("monitor_admin_routes.py", "monitor_bp")
+    monitor_routes = _route_contract("monitor_bp.py", "monitor_bp") | _route_contract(
+        "monitor_admin_routes.py", "monitor_bp"
     )
     assert monitor_routes == {
-        ("/stream_logs", ("GET",), False), ("/logs/history", ("GET",), True),
-        ("/logs/access-analysis", ("GET",), True), ("/wal", ("GET",), True),
-        ("/wal/current", ("GET",), True), ("/wal/list", ("GET",), True),
-        ("/wal/replay", ("POST",), True), ("/registry", ("GET",), True),
-        ("/registry/count", ("GET",), True), ("/registry/queue", ("GET",), True),
-        ("/registry/last-save", ("GET",), True), ("/registry/compact", ("POST",), True),
-        ("/session", ("GET",), True), ("/session/list", ("GET",), True),
-        ("/session/cleanup", ("POST",), True), ("/config", ("GET",), True),
-        ("/config/history", ("GET",), True), ("/config/signature", ("GET",), True),
-        ("/sse/history", ("GET",), True), ("/registry/wal-status", ("GET",), True),
+        ("/stream_logs", ("GET",), False),
+        ("/logs/history", ("GET",), True),
+        ("/logs/access-analysis", ("GET",), True),
+        ("/wal", ("GET",), True),
+        ("/wal/current", ("GET",), True),
+        ("/wal/list", ("GET",), True),
+        ("/wal/replay", ("POST",), True),
+        ("/registry", ("GET",), True),
+        ("/registry/count", ("GET",), True),
+        ("/registry/queue", ("GET",), True),
+        ("/registry/last-save", ("GET",), True),
+        ("/registry/compact", ("POST",), True),
+        ("/session", ("GET",), True),
+        ("/session/list", ("GET",), True),
+        ("/session/cleanup", ("POST",), True),
+        ("/config", ("GET",), True),
+        ("/config/history", ("GET",), True),
+        ("/config/signature", ("GET",), True),
+        ("/sse/history", ("GET",), True),
+        ("/registry/wal-status", ("GET",), True),
     }
 
+
 TEMPORARY_APPLICATION_TO_INFRASTRUCTURE_RATIONALES = {
-    ("application/runtime_builder.py", "anteumbra.infrastructure.config.provider"): "inject default provider",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.process_identity"): "extract process identity port",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"): "move path normalization to assembly",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.notifier"): "inject plugin formatter",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "inject worker analyzer factory",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"): "inject log monitor factory",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.monitor"): "inject site monitor factory",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.config.provider",
+    ): "inject default provider",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.process_identity",
+    ): "extract process identity port",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.utils.path_utils",
+    ): "move path normalization to assembly",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.monitoring.notifier",
+    ): "inject plugin formatter",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.monitoring.log_analyzer",
+    ): "inject worker analyzer factory",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.monitoring.log_monitor",
+    ): "inject log monitor factory",
+    (
+        "application/runtime_builder.py",
+        "anteumbra.infrastructure.monitoring.monitor",
+    ): "inject site monitor factory",
 }
 
 

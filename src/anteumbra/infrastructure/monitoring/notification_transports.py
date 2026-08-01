@@ -36,9 +36,7 @@ def send_email(
                 config["smtp_host"],
                 port,
             )
-            server = smtp_module.SMTP_SSL(
-                config["smtp_host"], port, timeout=timeout
-            )
+            server = smtp_module.SMTP_SSL(config["smtp_host"], port, timeout=timeout)
         else:
             logger.debug(
                 "[NOTIFIER][EMAIL] 使用TLS连接: %s:%s",
@@ -97,9 +95,7 @@ def send_serverchan(
                 "[NOTIFIER][WECHAT] 检测到系统代理: %s",
                 mask_url_secret(os_module.environ["HTTPS_PROXY"]),
             )
-        logger.debug(
-            "[NOTIFIER][WECHAT] 正在发送请求至: %s", mask_url_secret(url)
-        )
+        logger.debug("[NOTIFIER][WECHAT] 正在发送请求至: %s", mask_url_secret(url))
 
         retry_strategy = Retry(
             total=3,
@@ -116,9 +112,7 @@ def send_serverchan(
         response.raise_for_status()
         result = response.json()
         if result.get("code") != 0:
-            raise RuntimeError(
-                f"Server酱API返回错误: {result.get('message', '未知错误')}"
-            )
+            raise RuntimeError(f"Server酱API返回错误: {result.get('message', '未知错误')}")
 
         push_id = result.get("data", {}).get("pushid")
         logger.info("[NOTIFIER][WECHAT] 发送成功 (pushid: %s)", push_id)
@@ -128,17 +122,11 @@ def send_serverchan(
         if "check_hostname requires server_hostname" in str(exc):
             logger.error("[NOTIFIER][WECHAT] SSL代理配置错误")
         else:
-            logger.error(
-                "[NOTIFIER][WECHAT] 参数错误: %s", sanitize_log_text(exc)
-            )
+            logger.error("[NOTIFIER][WECHAT] 参数错误: %s", sanitize_log_text(exc))
     except requests_module.exceptions.ProxyError as exc:
-        logger.error(
-            "[NOTIFIER][WECHAT] 代理连接失败: %s", sanitize_log_text(exc)
-        )
+        logger.error("[NOTIFIER][WECHAT] 代理连接失败: %s", sanitize_log_text(exc))
     except requests_module.exceptions.ConnectionError as exc:
-        logger.error(
-            "[NOTIFIER][WECHAT] 网络连接失败: %s", sanitize_log_text(exc)
-        )
+        logger.error("[NOTIFIER][WECHAT] 网络连接失败: %s", sanitize_log_text(exc))
     except Exception as exc:
         logger.error("[NOTIFIER][WECHAT] send failed: %s", sanitize_log_text(exc))
     return False

@@ -14,6 +14,7 @@ Design Philosophy:
 - Event taxonomy: All events follow MITRE ATT&CK-style tagging
 - Backward compatible: Existing text logs continue to work
 """
+
 import json
 import uuid
 from datetime import datetime, timezone
@@ -54,6 +55,7 @@ class SIEMFormatter:
     def _get_version(self) -> str:
         try:
             from anteumbra.infrastructure.config.version import get_version
+
             return get_version()
         except Exception:
             return "unknown"
@@ -79,13 +81,11 @@ class SIEMFormatter:
             "event_id": raw.get("id") or raw.get("event_id") or str(uuid.uuid4()),
             "event_time": raw.get("detected_at") or raw.get("timestamp") or now,
             "ingest_time": now,
-
             # Taxonomy
             "event_category": raw.get("category", EventCategory.WEBSHELL_DETECTED.value),
             "event_type": raw.get("event_type", "detection"),
             "severity": raw.get("severity", "medium"),
             "confidence": raw.get("confidence", 80),
-
             # Source context
             "source": {
                 "ip": raw.get("source_ip", "unknown"),
@@ -93,7 +93,6 @@ class SIEMFormatter:
                 "file_name": raw.get("display_name", ""),
                 "website": raw.get("website_name", "default"),
             },
-
             # Detection context
             "detection": {
                 "rule_name": raw.get("rule_name", ""),
@@ -103,19 +102,16 @@ class SIEMFormatter:
                 "communication_count": raw.get("communication_count", 0),
                 "false_positive": raw.get("false_positive", False),
             },
-
             # MITRE ATT&CK mapping (placeholder for v1.8)
             "mitre": {
                 "technique_id": raw.get("mitre_tid", ""),
                 "tactic": raw.get("mitre_tactic", ""),
             },
-
             # Enrichment (placeholder for v1.9)
             "enrichment": {
                 "geo_ip": raw.get("geo_ip", {}),
                 "threat_intel": raw.get("threat_intel", {}),
             },
-
             # System metadata
             "anteumbra": {
                 "version": self.version,
@@ -196,6 +192,7 @@ class SIEMFormatter:
 # ============================================================================
 # Convenience functions (module-level API)
 # ============================================================================
+
 
 def format_event(event: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> str:
     """One-shot event formatting."""

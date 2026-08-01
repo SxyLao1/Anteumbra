@@ -6,6 +6,7 @@ query_profile, get_active_profiles, get_cluster_level, merge_overlapping_profile
 decay_profiles, generate_profile_id, persist/load round-trip,
 _normalize_ua, _normalize_url, _is_management_ip, and edge cases.
 """
+
 from datetime import datetime, timedelta
 
 import pytest
@@ -219,7 +220,9 @@ class TestIngestRegistryEntry:
         rep = graph.query_file("/var/www/html/shell.php")
         assert rep is not None
 
-    def test_ingest_registry_entry_with_existing_ip_profile(self, graph, sample_waf_event, sample_registry_entry):
+    def test_ingest_registry_entry_with_existing_ip_profile(
+        self, graph, sample_waf_event, sample_registry_entry
+    ):
         # First, create a profile via WAF event from same IP
         sample_waf_event["src_ip"] = "10.0.0.50"
         waf_pid = graph.ingest_waf_event(sample_waf_event)
@@ -394,13 +397,15 @@ class TestPersistLoad:
             "site_name": "Alpha",
         }
         graph.ingest_waf_event(shared)
-        graph.ingest_registry_entry({
-            "file_path": "/srv/shared/shell.php",
-            "first_seen_ip": "192.0.2.44",
-            "features": ["php_eval"],
-            "site_id": "alpha",
-            "site_name": "Alpha",
-        })
+        graph.ingest_registry_entry(
+            {
+                "file_path": "/srv/shared/shell.php",
+                "first_seen_ip": "192.0.2.44",
+                "features": ["php_eval"],
+                "site_id": "alpha",
+                "site_name": "Alpha",
+            }
+        )
         path = tmp_path / "site-aware.json"
         graph.set_persist_path(path)
         graph.persist()
@@ -410,9 +415,7 @@ class TestPersistLoad:
         recovered.load()
 
         assert recovered.query_ip("192.0.2.44", site_id="alpha").site_name == "Alpha"
-        assert recovered.query_file(
-            "/srv/shared/shell.php", site_id="alpha"
-        ).detection_count == 1
+        assert recovered.query_file("/srv/shared/shell.php", site_id="alpha").detection_count == 1
         assert recovered.get_active_profiles(site_id="alpha")[0].site_id == "alpha"
 
     def test_legacy_flat_json_migrates_to_explicit_legacy_bucket(self, graph, tmp_path):
@@ -441,13 +444,9 @@ class TestPersistLoad:
         graph.load()
 
         assert graph.query_profile("old-profile").site_id == "legacy"
-        assert graph.query_ip("192.0.2.55", site_id="legacy").site_name == (
-            "Legacy / unassigned"
-        )
+        assert graph.query_ip("192.0.2.55", site_id="legacy").site_name == ("Legacy / unassigned")
 
-    def test_load_prefers_json_to_sqlite_shadow(
-        self, graph, sample_waf_event, tmp_path
-    ):
+    def test_load_prefers_json_to_sqlite_shadow(self, graph, sample_waf_event, tmp_path):
         graph.ingest_waf_event(sample_waf_event)
         persist_path = tmp_path / "authoritative_threat_graph.json"
         graph.set_persist_path(str(persist_path))
@@ -456,9 +455,11 @@ class TestPersistLoad:
         shadow = type(
             "Shadow",
             (),
-            {"list_all": lambda *_args, **_kwargs: pytest.fail(
-                "a valid threat graph JSON file must not read SQLite"
-            )},
+            {
+                "list_all": lambda *_args, **_kwargs: pytest.fail(
+                    "a valid threat graph JSON file must not read SQLite"
+                )
+            },
         )()
 
         recovered = _new_graph(shadow)
@@ -467,9 +468,7 @@ class TestPersistLoad:
 
         assert len(recovered._profiles) == len(graph._profiles)
 
-    def test_shadow_is_injected_for_write_recovery_and_close(
-        self, sample_waf_event, tmp_path
-    ):
+    def test_shadow_is_injected_for_write_recovery_and_close(self, sample_waf_event, tmp_path):
         records = {}
         closed = []
 
@@ -535,20 +534,14 @@ class TestThreatGraphSiteIsolation:
             "url": "/login.php",
             "waf_score": 0.8,
         }
-        alpha_id = graph.ingest_waf_event({
-            **base, "site_id": "alpha", "site_name": "Alpha"
-        })
-        beta_id = graph.ingest_waf_event({
-            **base, "site_id": "beta", "site_name": "Beta"
-        })
+        alpha_id = graph.ingest_waf_event({**base, "site_id": "alpha", "site_name": "Alpha"})
+        beta_id = graph.ingest_waf_event({**base, "site_id": "beta", "site_name": "Beta"})
 
         assert alpha_id != beta_id
         assert graph.query_ip("198.51.100.23") is None
         assert graph.query_ip("198.51.100.23", site_id="alpha").event_count == 1
         assert graph.query_ip("198.51.100.23", site_id="beta").event_count == 1
-        assert [p.site_id for p in graph.get_active_profiles(site_id="alpha")] == [
-            "alpha"
-        ]
+        assert [p.site_id for p in graph.get_active_profiles(site_id="alpha")] == ["alpha"]
 
     def test_same_file_path_does_not_cross_sites(self, graph):
         entry = {
@@ -556,20 +549,12 @@ class TestThreatGraphSiteIsolation:
             "features": ["php_eval"],
             "first_seen_ip": "198.51.100.24",
         }
-        graph.ingest_registry_entry({
-            **entry, "site_id": "alpha", "site_name": "Alpha"
-        })
-        graph.ingest_registry_entry({
-            **entry, "site_id": "beta", "site_name": "Beta"
-        })
+        graph.ingest_registry_entry({**entry, "site_id": "alpha", "site_name": "Alpha"})
+        graph.ingest_registry_entry({**entry, "site_id": "beta", "site_name": "Beta"})
 
         assert graph.query_file("/srv/www/shell.php") is None
-        assert graph.query_file(
-            "/srv/www/shell.php", site_id="alpha"
-        ).site_name == "Alpha"
-        assert graph.query_file(
-            "/srv/www/shell.php", site_id="beta"
-        ).site_name == "Beta"
+        assert graph.query_file("/srv/www/shell.php", site_id="alpha").site_name == "Alpha"
+        assert graph.query_file("/srv/www/shell.php", site_id="beta").site_name == "Beta"
 
     def test_file_profile_lookup_is_site_qualified(self, graph):
         event = {
@@ -579,22 +564,25 @@ class TestThreatGraphSiteIsolation:
             "url": "/upload.php",
         }
         for site_id, site_name in (("alpha", "Alpha"), ("beta", "Beta")):
-            graph.ingest_waf_event({
-                **event,
-                "site_id": site_id,
-                "site_name": site_name,
-            })
-            graph.ingest_registry_entry({
-                "file_path": "/srv/www/shell.php",
-                "features": ["php_eval"],
-                "first_seen_ip": event["src_ip"],
-                "site_id": site_id,
-                "site_name": site_name,
-            })
+            graph.ingest_waf_event(
+                {
+                    **event,
+                    "site_id": site_id,
+                    "site_name": site_name,
+                }
+            )
+            graph.ingest_registry_entry(
+                {
+                    "file_path": "/srv/www/shell.php",
+                    "features": ["php_eval"],
+                    "first_seen_ip": event["src_ip"],
+                    "site_id": site_id,
+                    "site_name": site_name,
+                }
+            )
 
         assert {
-            profile.site_id
-            for profile in graph.find_profiles_for_file("/srv/www/shell.php")
+            profile.site_id for profile in graph.find_profiles_for_file("/srv/www/shell.php")
         } == {"alpha", "beta"}
         assert [
             profile.site_id
@@ -611,12 +599,8 @@ class TestThreatGraphSiteIsolation:
             "user_agent": "sqlmap/1.8",
             "url": "/login.php",
         }
-        graph.ingest_waf_event({
-            **base, "site_id": "alpha", "site_name": "Alpha"
-        })
-        graph.ingest_waf_event({
-            **base, "site_id": "beta", "site_name": "Beta"
-        })
+        graph.ingest_waf_event({**base, "site_id": "alpha", "site_name": "Alpha"})
+        graph.ingest_waf_event({**base, "site_id": "beta", "site_name": "Beta"})
 
         graph.merge_overlapping_profiles(min_overlap=1)
 

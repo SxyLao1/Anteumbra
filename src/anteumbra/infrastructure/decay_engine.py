@@ -8,6 +8,7 @@ v1.8.3: 简单衰减引擎 — 后台线程遍历画像表，应用衰减公式
     - 高危(>80) 10min / 中危(20-80) 1h / 低危(<20) 6h
     - 7天无活动内存移除，30天WAL归档
 """
+
 import logging
 import threading
 import time
@@ -73,9 +74,9 @@ class SimpleDecayEngine:
             if score > 0.8:
                 decay_check = 0.17  # ~10 min
             elif score > 0.2:
-                decay_check = 1.0   # ~1 hour
+                decay_check = 1.0  # ~1 hour
             else:
-                decay_check = 6.0   # ~6 hours
+                decay_check = 6.0  # ~6 hours
 
             # Only decay at configured intervals
             if profile.last_decayed:

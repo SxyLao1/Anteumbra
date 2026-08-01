@@ -40,11 +40,7 @@ def _disposition_block(status: dict) -> str:
         return f"IP封禁: 已自动封禁 ({device_count} 台设备)\n  被封禁IP: {ip}"
     if auto and device_count == 0:
         return "IP封禁: 自动封禁已开启但无可用设备"
-    return (
-        f"IP封禁: 已关闭自动封禁\n"
-        f"  可疑IP: {ip}\n"
-        "  建议: 人工研判后在管理面板手动封禁"
-    )
+    return f"IP封禁: 已关闭自动封禁\n  可疑IP: {ip}\n  建议: 人工研判后在管理面板手动封禁"
 
 
 def _disposition_quarantine(status: dict) -> str:
@@ -53,11 +49,7 @@ def _disposition_quarantine(status: dict) -> str:
     quarantine_path = status.get("quarantine_path")
 
     if quarantine_id and quarantine_path:
-        return (
-            "文件隔离: 已自动隔离\n"
-            f"  隔离ID: {quarantine_id}\n"
-            f"  隔离路径: {quarantine_path}"
-        )
+        return f"文件隔离: 已自动隔离\n  隔离ID: {quarantine_id}\n  隔离路径: {quarantine_path}"
     if not auto:
         return "文件隔离: 已关闭自动隔离（可手动在隔离管理页面操作）"
     return f"文件隔离: 隔离失败（{status.get('reason', '未知原因')}）"

@@ -31,6 +31,7 @@ def _start_plugins(
     manager = None
     try:
         from anteumbra.application.plugin_manager import PluginManager
+
         manager = PluginManager(
             metric_recorder=lambda name: metrics.increment(name),
             log=logger_factory("plugin_manager"),

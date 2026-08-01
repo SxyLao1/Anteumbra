@@ -8,6 +8,7 @@ Covers:
   3. Process startup / port listening
   4. Process shutdown / no residue
 """
+
 import os
 import socket
 import subprocess
@@ -33,6 +34,7 @@ def _app():
     os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
     from anteumbra.interfaces.web.factory import create_app
+
     app = create_app()
     app.config["TESTING"] = True
     return app
@@ -83,8 +85,7 @@ class TestHealthCheck:
             if data and data.get("status") == "degraded":
                 return  # acceptable: degraded in test env
         assert resp.status_code in (200, 302, 404, 503), (
-            f"Expected 200/302/404/503, got {resp.status_code}: "
-            f"{resp.get_data(as_text=True)[:200]}"
+            f"Expected 200/302/404/503, got {resp.status_code}: {resp.get_data(as_text=True)[:200]}"
         )
         if resp.status_code == 200:
             data = resp.get_json()
@@ -183,6 +184,7 @@ class TestVersionSource:
         This test verifies the attr path correctly resolves to the package version.
         """
         import anteumbra
+
         pkg_version = anteumbra.__version__
 
         pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
@@ -210,6 +212,7 @@ class TestVersionSource:
         parts = version_attr.split(".")
         if len(parts) >= 2:
             import importlib
+
             mod = importlib.import_module(parts[0])
             resolved = getattr(mod, parts[1])
             assert resolved == pkg_version, (
@@ -229,10 +232,7 @@ class TestVersionSource:
           2. `from anteumbra.infrastructure.config.version import get_version`
           3. Any import that avoids an inline string literal like "1.0.4"
         """
-        cli_path = (
-            Path(__file__).parent.parent.parent
-            / "src" / "anteumbra" / "cli" / "main.py"
-        )
+        cli_path = Path(__file__).parent.parent.parent / "src" / "anteumbra" / "cli" / "main.py"
         if not cli_path.exists():
             pytest.skip(f"CLI entry point not found at {cli_path}")
 
@@ -256,6 +256,7 @@ class TestVersionSource:
     def test_version_not_unknown(self):
         """get_version() should return a real version, not 'unknown'."""
         from anteumbra.infrastructure.config.version import get_version
+
         v = get_version()
         assert v is not None, "get_version() returned None"
         assert v != "unknown", (
@@ -279,9 +280,7 @@ class TestVersionSource:
             requirements = tomllib.load(handle)["project"]["dependencies"]
 
         missing = [
-            requirement
-            for requirement in requirements
-            if f"'{requirement}'" not in dockerfile
+            requirement for requirement in requirements if f"'{requirement}'" not in dockerfile
         ]
         assert not missing, (
             "Dockerfile must quote every base dependency so shell operators in "
@@ -295,9 +294,7 @@ class TestVersionSource:
         entrypoint = project_root / "scripts" / "docker-entrypoint.sh"
 
         assert "*.sh text eol=lf" in attributes
-        assert "sed -i 's/\\r$//' /usr/local/bin/anteumbra-docker-entrypoint" in (
-            dockerfile
-        )
+        assert "sed -i 's/\\r$//' /usr/local/bin/anteumbra-docker-entrypoint" in (dockerfile)
         assert b"\r\n" not in entrypoint.read_bytes()
         assert entrypoint.read_bytes().startswith(b"#!/bin/sh\n")
 
@@ -438,8 +435,7 @@ class TestCliInstall:
         assert registered["path"] == str(target.resolve())
         env_text = (target / ".env").read_text(encoding="utf-8")
         secret_line = next(
-            line for line in env_text.splitlines()
-            if line.startswith("ANTEUMBRA_SECRET_KEY=")
+            line for line in env_text.splitlines() if line.startswith("ANTEUMBRA_SECRET_KEY=")
         )
         secret = secret_line.partition("=")[2]
         assert secret != "change_this_to_a_random_32_char_string"
@@ -552,7 +548,15 @@ class TestCliInstall:
 
         result = runner.invoke(
             cli,
-            ["config", "env", "set", "ANTEUMBRA_WECHAT_API_KEY", "send-key", "--env", str(env_path)],
+            [
+                "config",
+                "env",
+                "set",
+                "ANTEUMBRA_WECHAT_API_KEY",
+                "send-key",
+                "--env",
+                str(env_path),
+            ],
         )
         assert result.exit_code == 0, result.output
 
@@ -690,38 +694,38 @@ class TestCliInstall:
         second.mkdir()
         config_path = tmp_path / "config.toml"
         config_path.write_text(
-            tomli_w.dumps({
-                "website": [
-                    {
-                        "name": "A",
-                        "path": str(first),
-                        "port": 80,
-                        "enabled": True,
-                        "log_config": {"log_monitor_enabled": False},
+            tomli_w.dumps(
+                {
+                    "website": [
+                        {
+                            "name": "A",
+                            "path": str(first),
+                            "port": 80,
+                            "enabled": True,
+                            "log_config": {"log_monitor_enabled": False},
+                        },
+                        {
+                            "name": "B",
+                            "path": str(second),
+                            "port": 8081,
+                            "enabled": True,
+                            "log_config": {"log_monitor_enabled": False},
+                        },
+                    ],
+                    "web_admin": {
+                        "port": 8080,
+                        "password_hash": "configured",
                     },
-                    {
-                        "name": "B",
-                        "path": str(second),
-                        "port": 8081,
-                        "enabled": True,
-                        "log_config": {"log_monitor_enabled": False},
-                    },
-                ],
-                "web_admin": {
-                    "port": 8080,
-                    "password_hash": "configured",
-                },
-                "security": {"secret_key": "a-persistent-secret-key"},
-                "waf_source": {"enabled": False},
-                "notifier": {"enabled": False},
-                "scanner": {"yara": {"enabled": False}},
-            }),
+                    "security": {"secret_key": "a-persistent-secret-key"},
+                    "waf_source": {"enabled": False},
+                    "notifier": {"enabled": False},
+                    "scanner": {"yara": {"enabled": False}},
+                }
+            ),
             encoding="utf-8",
         )
 
-        result = CliRunner().invoke(
-            cli, ["config", "validate", "--config", str(config_path)]
-        )
+        result = CliRunner().invoke(cli, ["config", "validate", "--config", str(config_path)])
 
         assert result.exit_code == 0, result.output
         assert "Config OK" in result.output
@@ -745,10 +749,22 @@ class TestCliInstall:
         result = runner.invoke(cli, ["config", "init", "--output", str(target), "--force"])
         assert result.exit_code == 0, result.output
 
-        result = runner.invoke(cli, ["config", "set", "website.path", str(site_path), "--config", str(target)])
+        result = runner.invoke(
+            cli, ["config", "set", "website.path", str(site_path), "--config", str(target)]
+        )
         assert result.exit_code == 0, result.output
 
-        result = runner.invoke(cli, ["config", "set", "website.log_config.log_monitor_enabled", "true", "--config", str(target)])
+        result = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "website.log_config.log_monitor_enabled",
+                "true",
+                "--config",
+                str(target),
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         result = runner.invoke(
@@ -1027,7 +1043,7 @@ class TestCliInstall:
         from anteumbra.infrastructure.process_identity import ProcessIdentity
 
         (tmp_path / "config.toml").write_text(
-            "[web_admin]\nhost = \"127.0.0.1\"\nport = 18444\n",
+            '[web_admin]\nhost = "127.0.0.1"\nport = 18444\n',
             encoding="utf-8",
         )
         calls = []
@@ -1099,9 +1115,7 @@ class TestCliInstall:
         pid_file = tmp_path / cli_main.PID_FILE
         pid_file.parent.mkdir(parents=True)
         pid_file.write_text("12345", encoding="utf-8")
-        process_states = iter(
-            [ProcessIdentityState.RUNNING, ProcessIdentityState.STOPPED]
-        )
+        process_states = iter([ProcessIdentityState.RUNNING, ProcessIdentityState.STOPPED])
 
         monkeypatch.setattr(cli_main, "_find_project_root", lambda: tmp_path)
         monkeypatch.setattr(
@@ -1252,9 +1266,7 @@ class TestProcessLifecycle:
         # We use flask run directly rather than run.py to avoid starting
         # all the background threads (monitor, WAF, etc.)
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(project_root) + os.pathsep + str(
-            project_root / "src"
-        )
+        env["PYTHONPATH"] = str(project_root) + os.pathsep + str(project_root / "src")
         env["ANTEUMBRA_TOOL_MODE"] = "true"
         env["FLASK_APP"] = "anteumbra.interfaces.web.factory:create_app"
         env.pop("FLASK_RUN_PORT", None)
@@ -1264,9 +1276,18 @@ class TestProcessLifecycle:
         proc = None
         try:
             proc = subprocess.Popen(
-                [sys.executable, "-m", "flask", "run",
-                 "--host", "127.0.0.1", "--port", str(test_port),
-                 "--no-debugger", "--no-reload"],
+                [
+                    sys.executable,
+                    "-m",
+                    "flask",
+                    "run",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(test_port),
+                    "--no-debugger",
+                    "--no-reload",
+                ],
                 env=env,
                 cwd=str(tmp_path),
                 stdout=subprocess.DEVNULL,
@@ -1276,10 +1297,7 @@ class TestProcessLifecycle:
             # Wait for port to be ready
             is_listening = _wait_for_port("127.0.0.1", test_port, timeout=20)
             if not is_listening:
-                pytest.fail(
-                    f"Flask did not listen on {test_port}; "
-                    f"returncode={proc.poll()}"
-                )
+                pytest.fail(f"Flask did not listen on {test_port}; returncode={proc.poll()}")
 
             # Verify we can connect
             sock = socket.create_connection(("127.0.0.1", test_port), timeout=3)
@@ -1300,16 +1318,23 @@ class TestProcessLifecycle:
         project_root = Path(__file__).parent.parent.parent
 
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(project_root) + os.pathsep + str(
-            project_root / "src"
-        )
+        env["PYTHONPATH"] = str(project_root) + os.pathsep + str(project_root / "src")
         env["ANTEUMBRA_TOOL_MODE"] = "true"
         env["FLASK_APP"] = "anteumbra.interfaces.web.factory:create_app"
 
         proc = subprocess.Popen(
-            [sys.executable, "-m", "flask", "run",
-             "--host", "127.0.0.1", "--port", str(test_port),
-             "--no-debugger", "--no-reload"],
+            [
+                sys.executable,
+                "-m",
+                "flask",
+                "run",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(test_port),
+                "--no-debugger",
+                "--no-reload",
+            ],
             env=env,
             cwd=str(tmp_path),
             stdout=subprocess.DEVNULL,
@@ -1323,8 +1348,7 @@ class TestProcessLifecycle:
             if proc.poll() is not None:
                 proc.wait()
                 pytest.fail(
-                    f"Flask exited with code {proc.returncode} — "
-                    f"test env may lack config.toml"
+                    f"Flask exited with code {proc.returncode} — test env may lack config.toml"
                 )
             proc.kill()
             proc.wait()
@@ -1364,13 +1388,7 @@ class TestProcessLifecycle:
         launcher_path = project_root / "src" / "anteumbra" / "application" / "launcher.py"
         assert launcher_path.exists(), "launcher.py not found"
 
-        builder_path = (
-            project_root
-            / "src"
-            / "anteumbra"
-            / "application"
-            / "runtime_builder.py"
-        )
+        builder_path = project_root / "src" / "anteumbra" / "application" / "runtime_builder.py"
         launcher_source = launcher_path.read_text(encoding="utf-8")
         builder_source = builder_path.read_text(encoding="utf-8")
 

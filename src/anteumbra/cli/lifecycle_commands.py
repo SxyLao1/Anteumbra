@@ -46,7 +46,9 @@ def register_lifecycle_commands(
 
     @root.command()
     @click.option("--host", default=None, help="Bind address (default: config web_admin.host)")
-    @click.option("--port", default=None, type=int, help="Bind port (default: config web_admin.port)")
+    @click.option(
+        "--port", default=None, type=int, help="Bind port (default: config web_admin.port)"
+    )
     @click.option("--debug/--no-debug", default=False, help="Enable debug mode")
     def run(host, port, debug):
         """Start all Anteumbra subsystems in the foreground.
@@ -74,7 +76,9 @@ def register_lifecycle_commands(
 
     @root.command()
     @click.option("--host", default=None, help="Bind address (default: config web_admin.host)")
-    @click.option("--port", default=None, type=int, help="Bind port (default: config web_admin.port)")
+    @click.option(
+        "--port", default=None, type=int, help="Bind port (default: config web_admin.port)"
+    )
     def start(host, port):
         """Start Anteumbra as a background process.
 
@@ -193,8 +197,7 @@ def register_lifecycle_commands(
         state = deps.process_state(identity, instance_root)
         if state in {ProcessIdentityState.STOPPED, ProcessIdentityState.MISMATCH}:
             click.echo(
-                f"PID {identity.pid} no longer owns this runtime. "
-                "Removing stale PID identity."
+                f"PID {identity.pid} no longer owns this runtime. Removing stale PID identity."
             )
             remove_process_identity(identity_path, identity)
             return
@@ -214,15 +217,12 @@ def register_lifecycle_commands(
                     text=True,
                     check=False,
                 )
-                if (
-                    result.returncode != 0
-                    and deps.process_state(identity, instance_root)
-                    in {ProcessIdentityState.RUNNING, ProcessIdentityState.UNKNOWN}
-                ):
+                if result.returncode != 0 and deps.process_state(identity, instance_root) in {
+                    ProcessIdentityState.RUNNING,
+                    ProcessIdentityState.UNKNOWN,
+                }:
                     detail = (result.stderr or result.stdout or "unknown error").strip()
-                    raise RuntimeError(
-                        f"taskkill failed ({result.returncode}): {detail}"
-                    )
+                    raise RuntimeError(f"taskkill failed ({result.returncode}): {detail}")
                 stopped = deps.wait_for_process_exit(identity, instance_root)
             else:
                 deps.os_module.kill(pid, signal.SIGTERM)
@@ -261,12 +261,8 @@ def register_lifecycle_commands(
                 import psutil
 
                 process = psutil.Process(pid)
-                click.echo(
-                    f"  Uptime: {deps.time_module.time() - process.create_time():.0f}s"
-                )
-                click.echo(
-                    f"  Memory: {process.memory_info().rss / 1024 / 1024:.1f} MB"
-                )
+                click.echo(f"  Uptime: {deps.time_module.time() - process.create_time():.0f}s")
+                click.echo(f"  Memory: {process.memory_info().rss / 1024 / 1024:.1f} MB")
             except ImportError:
                 logging.getLogger(__name__).debug(
                     "psutil not available for uptime/memory stats", exc_info=True

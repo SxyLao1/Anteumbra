@@ -226,9 +226,7 @@ def generate_deployment_credentials() -> tuple[str, str, str]:
 
     from werkzeug.security import generate_password_hash
 
-    password = "".join(
-        secrets.choice(string.ascii_letters + string.digits) for _ in range(16)
-    )
+    password = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
     return password, generate_password_hash(password), secrets.token_urlsafe(48)
 
 
@@ -269,7 +267,9 @@ def create_config_template(
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if not template:
-        click.echo("No bundled config.toml template found. Reinstall the anteumbra package.", err=True)
+        click.echo(
+            "No bundled config.toml template found. Reinstall the anteumbra package.", err=True
+        )
         raise SystemExit(1)
 
     if target.exists():
@@ -286,7 +286,11 @@ def create_config_template(
     click.echo(f"Default website directory ready at {site_dir}")
 
     env_file = target.parent / ".env"
-    if not env_file.exists() or overwrite is True or click.confirm(f"{env_file} already exists. Overwrite?"):
+    if (
+        not env_file.exists()
+        or overwrite is True
+        or click.confirm(f"{env_file} already exists. Overwrite?")
+    ):
         password = write_generated_env(env_file)
         click.echo(f".env written to {env_file}")
         click.echo("  Admin username: admin")
@@ -441,7 +445,15 @@ def validate_config_file(config_path: Path) -> tuple[list[str], list[str]]:
 
     secure_cookie = web_admin.get("session_cookie_secure", "auto")
     if isinstance(secure_cookie, str) and secure_cookie.strip().lower() not in {
-        "auto", "true", "false", "yes", "no", "on", "off", "1", "0",
+        "auto",
+        "true",
+        "false",
+        "yes",
+        "no",
+        "on",
+        "off",
+        "1",
+        "0",
     }:
         errors.append("[web_admin].session_cookie_secure must be true, false, or 'auto'.")
     if web_admin.get("trusted_proxy_ips") and secure_cookie is False:

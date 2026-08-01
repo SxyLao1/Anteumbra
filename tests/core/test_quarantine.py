@@ -124,9 +124,7 @@ def test_restore_refuses_to_overwrite_an_existing_destination(store, sample_file
     assert Path(record["quarantine_path"]).is_file()
 
 
-def test_primary_commit_failure_rolls_quarantined_file_back(
-    store, sample_file, monkeypatch
-):
+def test_primary_commit_failure_rolls_quarantined_file_back(store, sample_file, monkeypatch):
     original_atomic_write = store._atomic_write
 
     def fail_primary(path, content):
@@ -149,9 +147,7 @@ def test_primary_commit_failure_rolls_quarantined_file_back(
     assert not list(store.directory.glob("*/*"))
 
 
-def test_backup_refresh_failure_does_not_rollback_primary_commit(
-    store, sample_file, monkeypatch
-):
+def test_backup_refresh_failure_does_not_rollback_primary_commit(store, sample_file, monkeypatch):
     original_atomic_write = store._atomic_write
 
     def fail_backup(path, content):
@@ -173,9 +169,7 @@ def test_backup_refresh_failure_does_not_rollback_primary_commit(
     assert store.db_path.is_file()
 
 
-def test_restore_commit_failure_moves_file_back_to_quarantine(
-    store, sample_file, monkeypatch
-):
+def test_restore_commit_failure_moves_file_back_to_quarantine(store, sample_file, monkeypatch):
     record = store.quarantine_file(
         sample_file,
         "rule",
@@ -199,9 +193,7 @@ def test_restore_commit_failure_moves_file_back_to_quarantine(
     assert store.get_detail(record["quarantine_id"])["status"] == "quarantined"
 
 
-def test_delete_commit_failure_preserves_file_and_status(
-    store, sample_file, monkeypatch
-):
+def test_delete_commit_failure_preserves_file_and_status(store, sample_file, monkeypatch):
     record = store.quarantine_file(
         sample_file,
         "rule",
@@ -243,9 +235,7 @@ def test_delete_retains_audit_record(store, sample_file):
     assert store.get_stats("alpha")["deleted"] == 1
 
 
-def test_explicit_quarantine_rollback_restores_file_and_removes_record(
-    store, sample_file
-):
+def test_explicit_quarantine_rollback_restores_file_and_removes_record(store, sample_file):
     record = store.quarantine_file(
         sample_file,
         "rule",
@@ -293,7 +283,7 @@ def test_legacy_object_metadata_is_normalized_and_persisted(tmp_path):
         "original_path": str(tmp_path / "legacy.php"),
         "quarantine_path": str(directory / "2026-01-01" / "Q-legacy_legacy.php"),
         "status": "quarantined",
-        "features": "[\"eval\"]",
+        "features": '["eval"]',
     }
     (directory / "quarantine.json").write_text(
         json.dumps({"Q-legacy": record}),

@@ -470,8 +470,7 @@ class IPBlocker:
     def device_status(self) -> list[dict[str, object]]:
         """Return names and availability without exposing private device state."""
         return [
-            {"name": device.name, "available": device.is_available()}
-            for device in self._devices
+            {"name": device.name, "available": device.is_available()} for device in self._devices
         ]
 
     def _execute_block(
@@ -588,9 +587,7 @@ class IPBlocker:
     def _persist_retry_queue_locked(self) -> None:
         if self._retry_path is None:
             return
-        temporary = self._retry_path.with_name(
-            f".{self._retry_path.name}.{uuid.uuid4().hex}.tmp"
-        )
+        temporary = self._retry_path.with_name(f".{self._retry_path.name}.{uuid.uuid4().hex}.tmp")
         payload = [self._retry_to_dict(item) for item in self._retry_queue.values()]
         try:
             self._retry_path.parent.mkdir(parents=True, exist_ok=True)

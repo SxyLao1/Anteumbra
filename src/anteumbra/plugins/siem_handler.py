@@ -26,9 +26,7 @@ class SIEMHandlerPlugin(Plugin):
 
     def activate(self, config: Dict[str, Any]) -> None:
         self._enabled = bool(config.get("enabled", True))
-        self._logger.info(
-            "SIEMHandler: %s", "enabled" if self._enabled else "disabled"
-        )
+        self._logger.info("SIEMHandler: %s", "enabled" if self._enabled else "disabled")
 
     def deactivate(self) -> None:
         self._logger.info("SIEMHandler: stopped")

@@ -7,6 +7,7 @@
 @Motto: HACK THE REAL
 v1.7.0重构：从配置读取冷却策略
 """
+
 import os
 import re
 import sys
@@ -66,18 +67,24 @@ class LogMonitor:
     def start(self):
         """启动监控（修复状态初始化）"""
         if self._is_running:
-            log_with_symbol("log_monitor_skip_duplicate", "warning", "重复启动，已忽略", self.logger)
+            log_with_symbol(
+                "log_monitor_skip_duplicate", "warning", "重复启动，已忽略", self.logger
+            )
             return
 
         self.log_path = self.analyzer.log_path
         if not self.log_path or not self.log_path.exists():
-            log_with_symbol("log_monitor_start_error", "error", "启动失败：日志文件不存在", self.logger)
+            log_with_symbol(
+                "log_monitor_start_error", "error", "启动失败：日志文件不存在", self.logger
+            )
             return
 
         self._last_size = self.log_path.stat().st_size
         self._current_inode = self.log_path.stat().st_ino
         self._last_log_scan_complete = True
-        log_with_symbol("log_monitor_info", "info", f"初始化位置: {self._last_size} (跳过历史日志)", self.logger)
+        log_with_symbol(
+            "log_monitor_info", "info", f"初始化位置: {self._last_size} (跳过历史日志)", self.logger
+        )
 
         self._is_running = True
         self._thread = Thread(target=self._monitor_loop, daemon=True)
@@ -102,7 +109,12 @@ class LogMonitor:
         while self._is_running:
             try:
                 if not self.log_path or not self.log_path.exists():
-                    log_with_symbol("log_monitor_start_error", "warning", f"日志文件不存在: {self.log_path}", self.logger)
+                    log_with_symbol(
+                        "log_monitor_start_error",
+                        "warning",
+                        f"日志文件不存在: {self.log_path}",
+                        self.logger,
+                    )
                     self._last_log_scan_complete = False
                     time.sleep(5)
                     continue
@@ -112,7 +124,12 @@ class LogMonitor:
                     latest_path = self.analyzer.get_configured_path()
                     if latest_path and latest_path != self.log_path:
                         if self._last_log_scan_complete:
-                            log_with_symbol("log_monitor_info", "info", f"切换到新日志: {latest_path.name}", self.logger)
+                            log_with_symbol(
+                                "log_monitor_info",
+                                "info",
+                                f"切换到新日志: {latest_path.name}",
+                                self.logger,
+                            )
                             self.log_path = latest_path
                             self._last_size = 0
                             self._current_inode = self.log_path.stat().st_ino
@@ -130,25 +147,34 @@ class LogMonitor:
                     # Windows共享模式读取
                     try:
                         if sys.platform == "win32":
+
                             def share_mode_opener(filepath, flags):
                                 return os.open(filepath, os.O_RDONLY | os.O_BINARY)
 
-                            with open(self.log_path, 'r', encoding='utf-8', errors='ignore',
-                                      opener=share_mode_opener) as f:
+                            with open(
+                                self.log_path,
+                                "r",
+                                encoding="utf-8",
+                                errors="ignore",
+                                opener=share_mode_opener,
+                            ) as f:
                                 f.seek(self._last_size)
                                 new_content = f.read(new_bytes)
                         else:
-                            with open(self.log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            with open(self.log_path, "r", encoding="utf-8", errors="ignore") as f:
                                 f.seek(self._last_size)
                                 new_content = f.read(new_bytes)
                     except PermissionError as pe:
-                        log_with_symbol("log_monitor_skip", "warning", f"权限不足，跳过: {pe}", self.logger)
+                        log_with_symbol(
+                            "log_monitor_skip", "warning", f"权限不足，跳过: {pe}", self.logger
+                        )
                         self._last_log_scan_complete = True
                         time.sleep(1)
                         continue
                     except Exception as file_error:
-
-                        log_with_symbol("log_monitor_error", "error", f"文件读取错误: {file_error}", self.logger)
+                        log_with_symbol(
+                            "log_monitor_error", "error", f"文件读取错误: {file_error}", self.logger
+                        )
                         self._last_log_scan_complete = True
                         time.sleep(1)
                         continue
@@ -163,7 +189,12 @@ class LogMonitor:
                     self._last_log_scan_complete = True
 
                 elif current_size < self._last_size:
-                    log_with_symbol("log_monitor_warning", "warning", f"日志截断，重置: {current_size}", self.logger)
+                    log_with_symbol(
+                        "log_monitor_warning",
+                        "warning",
+                        f"日志截断，重置: {current_size}",
+                        self.logger,
+                    )
                     self._last_size = current_size
                     self._last_log_scan_complete = True
 
@@ -191,9 +222,7 @@ class LogMonitor:
             self.logger.info(f"[LOG_MONITOR][URL] 访问: {access_url} | IP: {ip}")
 
             # 匹配可疑文件
-            suspicious_files = self.registry.get_all(
-                include_deleted=True, site_id=self.site_id
-            )
+            suspicious_files = self.registry.get_all(include_deleted=True, site_id=self.site_id)
             for record in suspicious_files:
                 file_path = normalize_path(record["file_path"])
                 file_name = file_path.name
@@ -209,9 +238,7 @@ class LogMonitor:
                     )
 
                     # 立即递增
-                    self.registry.increment_access(
-                        file_path, ip, site_id=self.site_id
-                    )
+                    self.registry.increment_access(file_path, ip, site_id=self.site_id)
 
                     # 三层冷却策略
                     alert_level, should_alert = self._check_alert_layers(file_path, ip, line)
@@ -256,10 +283,7 @@ class LogMonitor:
             self._access_history[key] = []
 
         # 清理过期记录（1小时窗口）
-        self._access_history[key] = [
-            ts for ts in self._access_history[key]
-            if now - ts < 3600
-        ]
+        self._access_history[key] = [ts for ts in self._access_history[key] if now - ts < 3600]
 
         # 添加当前访问时间戳
         self._access_history[key].append(now)
@@ -274,8 +298,10 @@ class LogMonitor:
         if self._is_apt_attack(file_path, ip, now):
             level = 3
             alert_level = "APT"
-            T_cooldown = T_base * (1 + alpha * N_events) * (beta ** level) * gamma * delta
-            self.logger.critical(f"[ALERT][APT] {file_path.name} - {ip} 持续攻击！冷却: {T_cooldown:.1f}秒")
+            T_cooldown = T_base * (1 + alpha * N_events) * (beta**level) * gamma * delta
+            self.logger.critical(
+                f"[ALERT][APT] {file_path.name} - {ip} 持续攻击！冷却: {T_cooldown:.1f}秒"
+            )
             should_alert = self._is_cooling_expired(key, level, T_cooldown, now)
             return alert_level, should_alert
 
@@ -285,7 +311,7 @@ class LogMonitor:
             alert_level = "HIGH_FREQ"
 
             # 计算冷却时间（指数退避）
-            T_cooldown = T_base * (1 + alpha * N_events) * (beta ** level)
+            T_cooldown = T_base * (1 + alpha * N_events) * (beta**level)
 
             # IP聚类惩罚（如果是同一IP）
             if self._is_same_ip_cluster(ip, file_path):
@@ -298,7 +324,8 @@ class LogMonitor:
                 alert_level = "HIGH_FREQ_COMBO"
 
             self.logger.critical(
-                f"[ALERT][{alert_level}] {file_path.name} - {ip} 60秒访问{N_events}次！冷却: {T_cooldown:.1f}秒")
+                f"[ALERT][{alert_level}] {file_path.name} - {ip} 60秒访问{N_events}次！冷却: {T_cooldown:.1f}秒"
+            )
             should_alert = self._is_cooling_expired(key, level, T_cooldown, now)
             return alert_level, should_alert
 
@@ -349,7 +376,8 @@ class LogMonitor:
 
         # 检查最近3次是否都超过阈值
         recent_alerts = [
-            ts for ts in self._access_history.get(key, [])
+            ts
+            for ts in self._access_history.get(key, [])
             if now - ts < 180  # 3分钟内
         ]
 
@@ -386,7 +414,7 @@ class LogMonitor:
                     continue
 
                 # 检查是否是数据库相关文件
-                db_indicators = ['db.php', 'mysql', 'config.php', 'database']
+                db_indicators = ["db.php", "mysql", "config.php", "database"]
                 if any(ind in file_key.lower() for ind in db_indicators):
                     db_access = True
 
@@ -413,14 +441,18 @@ class LogMonitor:
         # 清理过期冷却记录（缓存超过1000条时）
         if len(self._cooldown_cache) > 1000:
             cutoff = now - 3600  # 清理1小时前的冷却记录
-            self._cooldown_cache = {
-                k: v for k, v in self._cooldown_cache.items() if v > cutoff
-            }
+            self._cooldown_cache = {k: v for k, v in self._cooldown_cache.items() if v > cutoff}
 
         return True
 
-    def _trigger_alert(self, record: Dict, attacker_ip: str, log_line: str,
-                       file_path: Path, alert_level: str = "NORMAL"):
+    def _trigger_alert(
+        self,
+        record: Dict,
+        attacker_ip: str,
+        log_line: str,
+        file_path: Path,
+        alert_level: str = "NORMAL",
+    ):
         """异步触发告警（增强版）"""
         try:
             # 标记已告警
@@ -436,15 +468,25 @@ class LogMonitor:
             def _send_async():
                 try:
                     # 读取系统状态（隔离/封禁开关）
-                    sys_status = {"auto_quarantine_enabled": True, "auto_block_enabled": False, "block_device_count": 0}
+                    sys_status = {
+                        "auto_quarantine_enabled": True,
+                        "auto_block_enabled": False,
+                        "block_device_count": 0,
+                    }
                     try:
                         cfg = self.config_provider.get()
-                        sys_status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
+                        sys_status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get(
+                            "auto_quarantine_enabled", True
+                        )
                         blocker_cfg = cfg.get("ip_blocker", {})
-                        sys_status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
+                        sys_status["auto_block_enabled"] = blocker_cfg.get(
+                            "auto_block_enabled", False
+                        )
                         sys_status["block_device_count"] = len(blocker_cfg.get("devices", []))
                     except Exception:
-                        self.logger.debug("Failed to read system status config for alert context", exc_info=True)
+                        self.logger.debug(
+                            "Failed to read system status config for alert context", exc_info=True
+                        )
                     ctx = {
                         "alert_type": "webshell_access",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),

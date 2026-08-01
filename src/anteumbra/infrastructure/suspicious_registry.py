@@ -38,9 +38,7 @@ class RegistryPersistenceError(RegistryError):
 class SuspiciousRegistry:
     """Own one Registry dataset and all of its persistence dependencies."""
 
-    _SHADOW_STORAGE_FIELDS = frozenset(
-        {"id", "record_id", "raw_json", "created_at", "updated_at"}
-    )
+    _SHADOW_STORAGE_FIELDS = frozenset({"id", "record_id", "raw_json", "created_at", "updated_at"})
 
     def __init__(
         self,
@@ -68,9 +66,7 @@ class SuspiciousRegistry:
         self._shadow_store = RegistryShadowStore(
             shadow_repository, self._logger, registry_records.record_id
         )
-        self._event_notifier = RegistryEventNotifier(
-            event_publisher, self._logger, change_callback
-        )
+        self._event_notifier = RegistryEventNotifier(event_publisher, self._logger, change_callback)
         self._lock = threading.RLock()
         records, normalized = self._load_records()
         self._records = records
@@ -143,6 +139,7 @@ class SuspiciousRegistry:
                 include_false_positive=include_false_positive,
                 site_id=normalized_site_id,
             )
+
     def get(
         self,
         file_path: str | Path,
@@ -214,9 +211,7 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="mark_false_positive",
-            mutate=lambda record: registry_records.mark_false_positive(
-                record, str(reason), now
-            ),
+            mutate=lambda record: registry_records.mark_false_positive(record, str(reason), now),
             extra={"reason": str(reason)},
         )
 
@@ -233,9 +228,7 @@ class SuspiciousRegistry:
             records = copy.deepcopy(self._records)
             index = self._find_index(records, key, identity.site_id)
             if index is None:
-                record = registry_records.create_access_record(
-                    key, ip, identity, self._now()
-                )
+                record = registry_records.create_access_record(key, ip, identity, self._now())
                 records.append(record)
             else:
                 record = records[index]
@@ -263,7 +256,6 @@ class SuspiciousRegistry:
         resolved_site_id = site.site_id if site is not None else site_id
         now = self._now()
 
-
         return self._update_record(
             file_path,
             resolved_site_id,
@@ -288,9 +280,7 @@ class SuspiciousRegistry:
     def compact(self, compact_days: int | None = None) -> dict[str, int]:
         """Permanently remove old inactive records and return compaction stats."""
         if compact_days is None:
-            raw = self._config.get().get("filesizes", {}).get(
-                "registry_compact_days", 30
-            )
+            raw = self._config.get().get("filesizes", {}).get("registry_compact_days", 30)
             try:
                 compact_days = int(raw)
             except (TypeError, ValueError) as exc:
@@ -454,6 +444,7 @@ class SuspiciousRegistry:
                 f"cannot atomically write Registry at {self.path}: {exc}"
             ) from exc
         self._shadow_store.sync(records, previous)
+
     def _load_records(self) -> tuple[list[dict[str, Any]], bool]:
         failures: list[str] = []
         for candidate, source in self._json_store.candidates():
@@ -466,9 +457,7 @@ class SuspiciousRegistry:
                 failures.append(f"{source}: {exc}")
                 continue
             if candidate == self.backup_path:
-                self._logger.warning(
-                    "Registry primary recovered from backup %s", candidate
-                )
+                self._logger.warning("Registry primary recovered from backup %s", candidate)
                 normalized = True
             return records, normalized
 
@@ -484,10 +473,9 @@ class SuspiciousRegistry:
             failures.append(f"shadow: {exc}")
 
         if failures:
-            raise RegistryDataError(
-                "Registry has no valid recovery source: " + "; ".join(failures)
-            )
+            raise RegistryDataError("Registry has no valid recovery source: " + "; ".join(failures))
         return [], False
+
     def _normalize_records(self, raw: Any) -> tuple[list[dict[str, Any]], bool]:
         normalized = isinstance(raw, dict)
         if isinstance(raw, dict):
@@ -557,9 +545,7 @@ class SuspiciousRegistry:
                 normalized, _ = self._normalize_records([payload["record"]])
                 record = normalized[0]
                 records = copy.deepcopy(self._records)
-                index = self._find_index(
-                    records, record["file_path"], record["site_id"]
-                )
+                index = self._find_index(records, record["file_path"], record["site_id"])
                 if index is None:
                     records.append(record)
                 else:
@@ -604,16 +590,14 @@ class SuspiciousRegistry:
                     }
                 )
             else:
-                records[index]["features"] = self._normalize_features(
-                    entry.get("features")
-                )
+                records[index]["features"] = self._normalize_features(entry.get("features"))
                 records[index]["file_exists"] = True
         elif operation == "increment":
             if index is None:
                 raise RegistryDataError("legacy increment target does not exist")
-            records[index]["communication_count"] = int(
-                records[index].get("communication_count", 0)
-            ) + 1
+            records[index]["communication_count"] = (
+                int(records[index].get("communication_count", 0)) + 1
+            )
         elif operation == "remove":
             if index is None:
                 raise RegistryDataError("legacy remove target does not exist")
@@ -630,6 +614,7 @@ class SuspiciousRegistry:
 
     def _notify(self, event_type: str, payload: Mapping[str, Any]) -> None:
         self._event_notifier.notify(event_type, payload)
+
     def _resolve_site(
         self,
         file_path: str | Path,
@@ -643,17 +628,13 @@ class SuspiciousRegistry:
             str(file_path), site_id=site_id, site_name=site_name
         )
 
-    def _site_id_for_lookup(
-        self, file_path: str | Path, site_id: str | None
-    ) -> str:
+    def _site_id_for_lookup(self, file_path: str | Path, site_id: str | None) -> str:
         if site_id:
             return self._normalize_site_id(site_id)
         return self._config.resolve_site_identity(str(file_path)).site_id
 
     @staticmethod
-    def _find_index(
-        records: list[dict[str, Any]], file_path: str, site_id: str
-    ) -> int | None:
+    def _find_index(records: list[dict[str, Any]], file_path: str, site_id: str) -> int | None:
         for index, record in enumerate(records):
             if record.get("file_path") == file_path and record.get("site_id") == site_id:
                 return index

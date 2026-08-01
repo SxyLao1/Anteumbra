@@ -105,15 +105,13 @@ class ThreatGraphStore:
 def encode_snapshot(snapshot: ThreatGraphSnapshot) -> dict[str, Any]:
     ip_table: dict[str, dict[str, dict[str, Any]]] = {}
     for reputation in snapshot.ip_table.values():
-        ip_table.setdefault(reputation.site_id, {})[reputation.ip] = ip_to_data(
-            reputation
-        )
+        ip_table.setdefault(reputation.site_id, {})[reputation.ip] = ip_to_data(reputation)
 
     file_table: dict[str, dict[str, dict[str, Any]]] = {}
     for reputation in snapshot.file_table.values():
-        file_table.setdefault(reputation.site_id, {})[
-            path_key(reputation.path)
-        ] = file_to_data(reputation)
+        file_table.setdefault(reputation.site_id, {})[path_key(reputation.path)] = file_to_data(
+            reputation
+        )
 
     return {
         "schema_version": 2,
@@ -151,9 +149,7 @@ def decode_snapshot(
         data.get("ip_table", {}), identity_field="ip"
     ):
         try:
-            reputation = ip_from_data(
-                ip, with_site_defaults(raw_reputation, site_id)
-            )
+            reputation = ip_from_data(ip, with_site_defaults(raw_reputation, site_id))
             ip_table[(reputation.site_id, reputation.ip)] = reputation
         except Exception:
             logger.warning(
@@ -168,9 +164,7 @@ def decode_snapshot(
         data.get("file_table", {}), identity_field="path"
     ):
         try:
-            reputation = file_from_data(
-                record_path, with_site_defaults(raw_reputation, site_id)
-            )
+            reputation = file_from_data(record_path, with_site_defaults(raw_reputation, site_id))
             file_table[(reputation.site_id, path_key(reputation.path))] = reputation
         except Exception:
             logger.warning(
@@ -267,9 +261,7 @@ def profile_to_data(profile: AttackerProfile) -> dict[str, Any]:
         "risk_score": profile.risk_score,
         "raw_score": profile.raw_score,
         "decay_factor": profile.decay_factor,
-        "last_decayed": (
-            profile.last_decayed.isoformat() if profile.last_decayed else None
-        ),
+        "last_decayed": (profile.last_decayed.isoformat() if profile.last_decayed else None),
         "last_seen": profile.last_seen.isoformat() if profile.last_seen else None,
         "status": profile.status,
         "last_alert_sent": (

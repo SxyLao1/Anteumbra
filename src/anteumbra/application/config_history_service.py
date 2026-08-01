@@ -23,11 +23,7 @@ class ConfigHistoryLogger:
         rules_dir: str | Path | None = None,
     ) -> None:
         self.history_file = Path(history_file).expanduser().resolve()
-        self.rules_dir = (
-            Path(rules_dir).expanduser().resolve()
-            if rules_dir is not None
-            else None
-        )
+        self.rules_dir = Path(rules_dir).expanduser().resolve() if rules_dir is not None else None
         self._lock = threading.RLock()
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
         if not self.history_file.exists():
@@ -51,13 +47,13 @@ class ConfigHistoryLogger:
                     "duration_ms": round(reload_duration_ms, 2),
                     "config_summary": {
                         "websites_count": self._website_count(config_snapshot),
-                        "notifier_enabled": config_snapshot.get(
-                            "notifier", {}
-                        ).get("enabled", False),
+                        "notifier_enabled": config_snapshot.get("notifier", {}).get(
+                            "enabled", False
+                        ),
                         "yara_rules_count": self._count_yara_rules(),
-                        "registry_async_enabled": config_snapshot.get(
-                            "registry", {}
-                        ).get("async_save_enabled", False),
+                        "registry_async_enabled": config_snapshot.get("registry", {}).get(
+                            "async_save_enabled", False
+                        ),
                     },
                     "user_triggered": False,
                 }
@@ -99,9 +95,7 @@ class ConfigHistoryLogger:
         return data
 
     def _write_data(self, data: dict[str, Any]) -> None:
-        temp_file = self.history_file.with_suffix(
-            f"{self.history_file.suffix}.tmp"
-        )
+        temp_file = self.history_file.with_suffix(f"{self.history_file.suffix}.tmp")
         temp_file.write_text(
             json.dumps(data, indent=2, ensure_ascii=False),
             encoding="utf-8",

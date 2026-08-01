@@ -95,9 +95,7 @@ class RegistryShadowStore:
             for stale_id in (previous_ids | shadow_ids) - current_ids:
                 self._repository.delete(stale_id)
             for record in records:
-                self._repository.save(
-                    self._record_id(record), copy.deepcopy(record)
-                )
+                self._repository.save(self._record_id(record), copy.deepcopy(record))
         except Exception:
             self._logger.warning(
                 "Registry SQLite shadow synchronization failed; JSON remains authoritative",

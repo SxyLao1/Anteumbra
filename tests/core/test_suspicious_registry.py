@@ -203,9 +203,7 @@ def test_remove_and_soft_delete_preserve_audit_records(registry_bundle):
     assert all(record["deleted_at"] for record in records)
 
 
-def test_failed_json_commit_stays_pending_and_replays_idempotently(
-    registry_bundle, monkeypatch
-):
+def test_failed_json_commit_stays_pending_and_replays_idempotently(registry_bundle, monkeypatch):
     registry, wal, _, _, _ = registry_bundle
     path = Path("/srv/alpha/shell.php")
     registry.add(path, ["eval"])
@@ -321,9 +319,7 @@ def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
     assert registry.get(Path("/srv/beta/shadow.php")) is None
 
 
-def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(
-    tmp_path, caplog
-):
+def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(tmp_path, caplog):
     old_record_id = "/srv/alpha/recovered.php"
     shadow = SqliteRepository(str(tmp_path / "anteumbra.db"))
     shadow.save(
@@ -384,9 +380,9 @@ def test_compaction_removes_only_old_inactive_records(registry_bundle):
     registry.soft_delete_record(recent)
 
     records = json.loads(registry.path.read_text(encoding="utf-8"))
-    next(record for record in records if record["file_path"].endswith("old.php"))[
-        "detected_at"
-    ] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    next(record for record in records if record["file_path"].endswith("old.php"))["detected_at"] = (
+        datetime.now(timezone.utc) - timedelta(days=60)
+    ).isoformat()
     serialized = json.dumps(records)
     registry.path.write_text(serialized, encoding="utf-8")
     registry.backup_path.write_text(serialized, encoding="utf-8")

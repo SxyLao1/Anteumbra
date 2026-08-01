@@ -61,9 +61,7 @@ def build_runtime_container(
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     config_history = ConfigHistoryLogger(
         data_dir / "config_history.json",
-        rules_dir=normalize_path(
-            config.get("paths", {}).get("yara_rules_path", "rules/webshell")
-        ),
+        rules_dir=normalize_path(config.get("paths", {}).get("yara_rules_path", "rules/webshell")),
     )
     scan_state = ScanRuntimeState()
     scan_history = ScanHistoryService(

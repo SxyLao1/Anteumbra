@@ -13,6 +13,7 @@ v1.9.0: 主动手动扫描引擎
     → 新发现自动 add(detection_source="active")
     → progress_callback 进度回调 → 供 SSE 推送
 """
+
 import hashlib
 import logging
 import os
@@ -38,15 +39,16 @@ logger = logging.getLogger("monitor.manual_scanner")
 @dataclass
 class ManualScanResult:
     """单次手动扫描的完整结果"""
+
     scan_id: str
     target_dir: str
     start_time: float
     end_time: float = 0.0
-    status: str = "pending"        # pending | running | completed | cancelled | error
+    status: str = "pending"  # pending | running | completed | cancelled | error
     total_files: int = 0
     scanned_files: int = 0
-    new_findings: int = 0           # 命中规则 且 不在 Registry
-    known_findings: int = 0         # 命中规则 且 已在 Registry
+    new_findings: int = 0  # 命中规则 且 不在 Registry
+    known_findings: int = 0  # 命中规则 且 已在 Registry
     clean: int = 0
     errors: int = 0
     findings: List[Dict] = field(default_factory=list)
@@ -81,9 +83,7 @@ class ManualScanner:
 
     def _build_known_index(self):
         """预加载 Registry 全部记录到内存索引，O(1) 去重查找"""
-        records = self.registry.get_all(
-            include_deleted=True, site_id=self._site_id
-        )
+        records = self.registry.get_all(include_deleted=True, site_id=self._site_id)
         self._known_paths.clear()
         self._registry_records.clear()
         for r in records:
@@ -181,8 +181,7 @@ class ManualScanner:
         # site's [website] table.
         if website is not None:
             exclude_dirs = {
-                str(directory).lower()
-                for directory in website.scan_options.exclude_dirs
+                str(directory).lower() for directory in website.scan_options.exclude_dirs
             }
         else:
             exclude_dirs = {"cache", "logs", "temp", "data", ".git"}
@@ -200,8 +199,7 @@ class ManualScanner:
                 dirs[:] = [
                     directory
                     for directory in dirs
-                    if directory.lower() not in exclude_dirs
-                    and not directory.startswith(".")
+                    if directory.lower() not in exclude_dirs and not directory.startswith(".")
                 ]
                 for f in files:
                     fp = Path(root) / f
@@ -233,7 +231,9 @@ class ManualScanner:
             if cancelled_check and cancelled_check():
                 result.status = "cancelled"
                 result.end_time = time.time()
-                self.logger.info(f"[MANUAL_SCANNER] 扫描已取消: {result.scanned_files}/{result.total_files}")
+                self.logger.info(
+                    f"[MANUAL_SCANNER] 扫描已取消: {result.scanned_files}/{result.total_files}"
+                )
                 return result
 
             result.scanned_files = idx + 1
@@ -258,19 +258,21 @@ class ManualScanner:
                         # 已在 Registry → 已知发现
                         result.known_findings += 1
                         existing = self._registry_records.get(norm_key, {})
-                        result.findings.append({
-                            "file_path": str(file_path),
-                            "file_name": file_path.name,
-                            "classification": "known",
-                            "engine": scan_result.engine,
-                            "features": scan_result.features,
-                            "score": scan_result.score,
-                            "detected_at": existing.get("detected_at", "N/A"),
-                            "quarantine_id": existing.get("quarantine_id", ""),
-                            "detection_source": existing.get("detection_source", "passive"),
-                            "site_id": self._site_id,
-                            "site_name": self._site_name,
-                        })
+                        result.findings.append(
+                            {
+                                "file_path": str(file_path),
+                                "file_name": file_path.name,
+                                "classification": "known",
+                                "engine": scan_result.engine,
+                                "features": scan_result.features,
+                                "score": scan_result.score,
+                                "detected_at": existing.get("detected_at", "N/A"),
+                                "quarantine_id": existing.get("quarantine_id", ""),
+                                "detection_source": existing.get("detection_source", "passive"),
+                                "site_id": self._site_id,
+                                "site_name": self._site_name,
+                            }
+                        )
                     else:
                         # 不在 Registry → 新发现！自动注册
                         result.new_findings += 1
@@ -295,22 +297,25 @@ class ManualScanner:
                             }
                         except Exception as add_err:
                             self.logger.warning(
-                                f"[MANUAL_SCANNER] 注册失败: {file_path} | {add_err}")
+                                f"[MANUAL_SCANNER] 注册失败: {file_path} | {add_err}"
+                            )
                             result.errors += 1
 
-                        result.findings.append({
-                            "file_path": str(file_path),
-                            "file_name": file_path.name,
-                            "classification": "new",
-                            "engine": scan_result.engine,
-                            "features": scan_result.features,
-                            "score": scan_result.score,
-                            "detected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "quarantine_id": "",
-                            "detection_source": "active",
-                            "site_id": self._site_id,
-                            "site_name": self._site_name,
-                        })
+                        result.findings.append(
+                            {
+                                "file_path": str(file_path),
+                                "file_name": file_path.name,
+                                "classification": "new",
+                                "engine": scan_result.engine,
+                                "features": scan_result.features,
+                                "score": scan_result.score,
+                                "detected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "quarantine_id": "",
+                                "detection_source": "active",
+                                "site_id": self._site_id,
+                                "site_name": self._site_name,
+                            }
+                        )
 
                     self.logger.debug(
                         f"[MANUAL_SCANNER] {'KNOWN' if is_known else 'NEW'}: "
@@ -350,5 +355,6 @@ class ManualScanner:
                 logger.debug("Final progress callback failed in scan_directory", exc_info=True)
 
         return result
+
 
 __all__ = ["ManualScanner", "ManualScanResult"]

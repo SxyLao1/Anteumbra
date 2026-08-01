@@ -5,6 +5,7 @@ E2E UI Tests — shared fixtures (Playwright + Flask test server)
 Each test gets a FRESH Flask server (function scope) to avoid state
 accumulation that causes intermittent timeouts.
 """
+
 import socket
 import sys
 import threading
@@ -20,12 +21,86 @@ TEST_PASSWORD = "test_anteumbra"
 TEST_HASH = generate_password_hash(TEST_PASSWORD)
 
 CHROMIUM_UNSAFE_PORTS = {
-    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69,
-    77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119,
-    123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
-    526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
-    993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 5060, 5061, 6000, 6566,
-    6665, 6666, 6667, 6668, 6669, 6697, 10080,
+    1,
+    7,
+    9,
+    11,
+    13,
+    15,
+    17,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    37,
+    42,
+    43,
+    53,
+    69,
+    77,
+    79,
+    87,
+    95,
+    101,
+    102,
+    103,
+    104,
+    109,
+    110,
+    111,
+    113,
+    115,
+    117,
+    119,
+    123,
+    135,
+    137,
+    139,
+    143,
+    161,
+    179,
+    389,
+    427,
+    465,
+    512,
+    513,
+    514,
+    515,
+    526,
+    530,
+    531,
+    532,
+    540,
+    548,
+    554,
+    556,
+    563,
+    587,
+    601,
+    636,
+    989,
+    990,
+    993,
+    995,
+    1719,
+    1720,
+    1723,
+    2049,
+    3659,
+    4045,
+    5060,
+    5061,
+    6000,
+    6566,
+    6665,
+    6666,
+    6667,
+    6668,
+    6669,
+    6697,
+    10080,
 }
 
 # ── Session-scoped browser (expensive to restart) ─────────────
@@ -64,6 +139,7 @@ def runtime_server(monkeypatch, tmp_path):
 
     # Monkey-patch credentials
     import anteumbra.interfaces.web.auth as auth_mod
+
     original_get_creds = auth_mod.get_admin_credentials
 
     def _test_credentials():
@@ -75,6 +151,7 @@ def runtime_server(monkeypatch, tmp_path):
     sys.path.insert(0, str(project_root))
 
     from anteumbra.interfaces.web.factory import create_app
+
     app = create_app()
     app.config["TESTING"] = True
     app.config["SERVER_NAME"] = None
@@ -83,6 +160,7 @@ def runtime_server(monkeypatch, tmp_path):
     base_url = f"http://127.0.0.1:{port}"
 
     from anteumbra.interfaces.web.factory import create_runtime_server
+
     server = create_runtime_server(app, "127.0.0.1", port)
     server_thread = threading.Thread(
         target=server.serve_forever,
@@ -92,6 +170,7 @@ def runtime_server(monkeypatch, tmp_path):
     server_thread.start()
 
     import requests
+
     deadline = time.time() + 10
     while time.time() < deadline:
         try:

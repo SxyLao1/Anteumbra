@@ -2,6 +2,7 @@
 """
 v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
 """
+
 import logging
 import threading
 from datetime import datetime
@@ -46,6 +47,7 @@ v1.8.1: 攻击者画像引擎 MVP — ThreatGraph
 # Threat Graph Engine
 # ═══════════════════════════════════════════════════════════════
 
+
 class ThreatGraph:
     """
     攻击者画像引擎。
@@ -81,9 +83,7 @@ class ThreatGraph:
             management.get("ips", []) if isinstance(management, Mapping) else []
         )
         self._time_window = int(
-            profiling.get("time_window_hours", 4)
-            if isinstance(profiling, Mapping)
-            else 4
+            profiling.get("time_window_hours", 4) if isinstance(profiling, Mapping) else 4
         )
 
     @staticmethod
@@ -118,15 +118,14 @@ class ThreatGraph:
         if not ip:
             return False
         for entry in self._management_ips:
-            if '/' in entry:  # CIDR
+            if "/" in entry:  # CIDR
                 try:
                     import ipaddress
+
                     if ipaddress.ip_address(ip) in ipaddress.ip_network(entry, strict=False):
                         return True
                 except Exception:
-                    self._logger.debug(
-                        "CIDR check failed for management IP entry", exc_info=True
-                    )
+                    self._logger.debug("CIDR check failed for management IP entry", exc_info=True)
             if ip == entry:
                 return True
         return False
@@ -157,6 +156,7 @@ class ThreatGraph:
             site_name=site_name,
             observed_at=observed_at or datetime.now(),
         )
+
     # ── Event Ingestion ───────────────────────────────────────
 
     def ingest_waf_event(self, event: Dict) -> Optional[str]:
@@ -201,9 +201,7 @@ class ThreatGraph:
             n = ip_rep.event_count
             ip_rep.waf_score_avg = (ip_rep.waf_score_avg * (n - 1) + waf_score) / n
 
-            ip_rep.cluster_level = threat_profile_rules.cluster_level(
-                ip_rep.event_count
-            )
+            ip_rep.cluster_level = threat_profile_rules.cluster_level(ip_rep.event_count)
             # ── Find or create profile ────────────────────────
             pid = self.generate_profile_id(
                 ua,
@@ -234,8 +232,11 @@ class ThreatGraph:
                 site_id=site.site_id,
                 site_name=site.site_name,
                 event_type="waf_alert",
-                src_ip=ip, user_agent=ua, url=url,
-                waf_rule_id=rule_id, waf_score=waf_score,
+                src_ip=ip,
+                user_agent=ua,
+                url=url,
+                waf_rule_id=rule_id,
+                waf_score=waf_score,
             )
             profile.attack_chain.append(evt)
             if len(profile.attack_chain) > 100:
@@ -405,10 +406,13 @@ class ThreatGraph:
         """返回活跃画像，按风险分降序"""
         normalized_site = self._normalize_site_id(site_id) if site_id else None
         with self._lock:
-            active = [p for p in self._profiles.values()
-                      if p.status == "active"
-                      and p.risk_score >= min_score
-                      and (normalized_site is None or p.site_id == normalized_site)]
+            active = [
+                p
+                for p in self._profiles.values()
+                if p.status == "active"
+                and p.risk_score >= min_score
+                and (normalized_site is None or p.site_id == normalized_site)
+            ]
         return sorted(active, key=lambda p: p.risk_score, reverse=True)
 
     def get_cluster_level(
@@ -428,7 +432,8 @@ class ThreatGraph:
             # Return highest-risk profile for this IP
             best = max(
                 (self._profiles.get(p) for p in ip_rep.profile_ids if self._profiles.get(p)),
-                key=lambda p: p.risk_score, default=None
+                key=lambda p: p.risk_score,
+                default=None,
             )
             pid = best.profile_id if best else ""
         return (ip_level, file_count, pid)
@@ -444,7 +449,7 @@ class ThreatGraph:
                 if primary_id not in self._profiles:
                     continue
                 primary = self._profiles[primary_id]
-                for secondary_id in profile_ids[index + 1:]:
+                for secondary_id in profile_ids[index + 1 :]:
                     if secondary_id not in self._profiles:
                         continue
                     secondary = self._profiles[secondary_id]
@@ -487,6 +492,7 @@ class ThreatGraph:
             for profile_id in expired:
                 self._profiles[profile_id].status = "expired"
         return len(expired)
+
     # ── Persistence ───────────────────────────────────────────
 
     def set_persist_path(self, path: str | Path) -> None:

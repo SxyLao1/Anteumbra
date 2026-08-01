@@ -75,9 +75,7 @@ def register_config_commands(
         parsed = config_support.parse_config_value(raw_value)
         site_id_changed = False
         if allow_site_id_change and key != "website.id":
-            raise click.ClickException(
-                "--allow-site-id-change is only valid with website.id."
-            )
+            raise click.ClickException("--allow-site-id-change is only valid with website.id.")
         if key == "website.id":
             from anteumbra.domain.site import SiteIdentity
 
@@ -112,9 +110,7 @@ def register_config_commands(
         if note:
             click.echo(f"Note: {note}")
         if site_id_changed:
-            click.echo(
-                "Warning: website.id changed; existing records keep the previous site ID."
-            )
+            click.echo("Warning: website.id changed; existing records keep the previous site ID.")
         click.echo(f"Set {key} = {parsed!r} in {target}")
 
     @config.command("access-log")
@@ -142,9 +138,7 @@ def register_config_commands(
         data = config_support.load_toml_file(target)
         server = server_type.lower()
         if server == "none":
-            config_support.set_dotted_value(
-                data, "website.log_config.log_monitor_enabled", False
-            )
+            config_support.set_dotted_value(data, "website.log_config.log_monitor_enabled", False)
             config_support.write_toml_file(target, data)
             click.echo(f"Disabled access log analysis in {target}")
             return
@@ -152,17 +146,11 @@ def register_config_commands(
         access_log = config_support.access_log_preset_path(
             server, log_path=log_path, base_path=base_path
         )
-        config_support.set_dotted_value(
-            data, "website.log_config.log_monitor_enabled", True
-        )
-        config_support.set_dotted_value(
-            data, "website.log_config.access_log_path", access_log
-        )
+        config_support.set_dotted_value(data, "website.log_config.log_monitor_enabled", True)
+        config_support.set_dotted_value(data, "website.log_config.access_log_path", access_log)
         config_support.write_toml_file(target, data)
         click.echo(f"Enabled access log analysis for {server}.")
-        click.echo(
-            f"Set website.log_config.access_log_path = {access_log!r} in {target}"
-        )
+        click.echo(f"Set website.log_config.access_log_path = {access_log!r} in {target}")
 
     @config.group("env")
     def config_env():
@@ -220,8 +208,7 @@ def register_config_commands(
         click.echo(f"Config parsed successfully: {provider.path}")
         click.echo(f"Enabled websites: {len(provider.get_enabled_websites())}")
         click.echo(
-            "The running Anteumbra service is unchanged; "
-            "reload it in Web System or restart it."
+            "The running Anteumbra service is unchanged; reload it in Web System or restart it."
         )
 
     @config.command("wizard")
@@ -235,9 +222,7 @@ def register_config_commands(
 
         data = config_support.load_toml_file(target)
 
-        current_site = str(
-            config_support.get_dotted_value(data, "website.path", "sites/default")
-        )
+        current_site = str(config_support.get_dotted_value(data, "website.path", "sites/default"))
         site_path = click.prompt("Website root path", default=current_site)
         resolved_site = Path(site_path)
         if not resolved_site.is_absolute():
@@ -248,9 +233,7 @@ def register_config_commands(
             resolved_site.mkdir(parents=True, exist_ok=True)
         config_support.set_dotted_value(data, "website.path", site_path)
 
-        current_port = int(
-            config_support.get_dotted_value(data, "web_admin.port", default_port)
-        )
+        current_port = int(config_support.get_dotted_value(data, "web_admin.port", default_port))
         admin_port = click.prompt("Admin port", default=current_port, type=int)
         if not (1 <= admin_port <= 65535):
             raise click.ClickException("Admin port must be between 1 and 65535.")
@@ -269,24 +252,16 @@ def register_config_commands(
             )
 
         log_enabled = bool(
-            config_support.get_dotted_value(
-                data, "website.log_config.log_monitor_enabled", False
-            )
+            config_support.get_dotted_value(data, "website.log_config.log_monitor_enabled", False)
         )
         enable_logs = click.confirm("Enable access log analysis?", default=log_enabled)
-        config_support.set_dotted_value(
-            data, "website.log_config.log_monitor_enabled", enable_logs
-        )
+        config_support.set_dotted_value(data, "website.log_config.log_monitor_enabled", enable_logs)
         if enable_logs:
             current_log = str(
-                config_support.get_dotted_value(
-                    data, "website.log_config.access_log_path", ""
-                )
+                config_support.get_dotted_value(data, "website.log_config.access_log_path", "")
             )
             default_server = (
-                config_support.infer_access_log_server(current_log)
-                if current_log
-                else "custom"
+                config_support.infer_access_log_server(current_log) if current_log else "custom"
             )
             server = click.prompt(
                 "Access log server",
@@ -298,36 +273,24 @@ def register_config_commands(
             )
             if server.lower() == "tomcat":
                 default_base = config_support.infer_tomcat_base(current_log) or "."
-                base_path = click.prompt(
-                    "Tomcat/CATALINA_BASE directory", default=default_base
-                )
-                access_log = config_support.access_log_preset_path(
-                    "tomcat", base_path=base_path
-                )
+                base_path = click.prompt("Tomcat/CATALINA_BASE directory", default=default_base)
+                access_log = config_support.access_log_preset_path("tomcat", base_path=base_path)
             elif server.lower() == "custom":
                 access_log = click.prompt(
                     "Access log path", default=current_log or "logs/access.log"
                 )
             else:
                 default_log = config_support.access_log_preset_path(server)
-                access_log = click.prompt(
-                    "Access log path", default=current_log or default_log
-                )
-            config_support.set_dotted_value(
-                data, "website.log_config.access_log_path", access_log
-            )
+                access_log = click.prompt("Access log path", default=current_log or default_log)
+            config_support.set_dotted_value(data, "website.log_config.access_log_path", access_log)
 
-        waf_enabled = bool(
-            config_support.get_dotted_value(data, "waf_source.enabled", False)
-        )
+        waf_enabled = bool(config_support.get_dotted_value(data, "waf_source.enabled", False))
         enable_waf = click.confirm("Enable WAF event polling?", default=waf_enabled)
         config_support.set_dotted_value(data, "waf_source.enabled", enable_waf)
         if enable_waf:
             waf_type = click.prompt(
                 "WAF type",
-                default=str(
-                    config_support.get_dotted_value(data, "waf_source.type", "mock")
-                ),
+                default=str(config_support.get_dotted_value(data, "waf_source.type", "mock")),
                 type=click.Choice(
                     ["mock", "http", "modsecurity", "cloudflare", "aws_waf", "syslog"],
                     case_sensitive=False,
@@ -336,9 +299,7 @@ def register_config_commands(
             waf_url = click.prompt(
                 "WAF URL",
                 default=str(
-                    config_support.get_dotted_value(
-                        data, "waf_source.url", "http://127.0.0.1:8081"
-                    )
+                    config_support.get_dotted_value(data, "waf_source.url", "http://127.0.0.1:8081")
                 ),
             )
             config_support.set_dotted_value(data, "waf_source.type", waf_type)
@@ -349,9 +310,7 @@ def register_config_commands(
                     target.parent / ".env", "ANTEUMBRA_WAF_API_KEY", waf_key
                 )
 
-        wechat_key = config_support.secret_prompt(
-            "ServerChan/WeChat SendKey (optional)"
-        )
+        wechat_key = config_support.secret_prompt("ServerChan/WeChat SendKey (optional)")
         if wechat_key:
             config_support.write_env_value(
                 target.parent / ".env", "ANTEUMBRA_WECHAT_API_KEY", wechat_key

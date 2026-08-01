@@ -142,22 +142,28 @@ class YaraEngine:
                 self.load_errors = {"<engine>": "yara-python is not installed"}
             return False
 
-        rule_files = sorted(
-            self.rules_path.glob("*.yar"),
-            key=lambda path: path.name.lower(),
-        ) if self.rules_path.is_dir() else []
+        rule_files = (
+            sorted(
+                self.rules_path.glob("*.yar"),
+                key=lambda path: path.name.lower(),
+            )
+            if self.rules_path.is_dir()
+            else []
+        )
         bundles: List[_CompiledRuleFile] = []
         errors: Dict[str, str] = {}
 
         for yar_file in rule_files:
             try:
                 compiled = yara.compile(filepaths={yar_file.stem: str(yar_file)})
-                bundles.append(_CompiledRuleFile(
-                    filename=yar_file.name,
-                    namespace=yar_file.stem,
-                    rules=compiled,
-                    rule_count=sum(1 for _ in compiled),
-                ))
+                bundles.append(
+                    _CompiledRuleFile(
+                        filename=yar_file.name,
+                        namespace=yar_file.stem,
+                        rules=compiled,
+                        rule_count=sum(1 for _ in compiled),
+                    )
+                )
             except Exception as exc:
                 errors[yar_file.name] = str(exc)
                 self.logger.warning(
@@ -241,13 +247,15 @@ class YaraEngine:
         for match in raw_matches:
             meta = match.meta if hasattr(match, "meta") else {}
             severity = str(meta.get("severity", "medium")).lower()
-            results.append(YaraMatch(
-                rule_name=match.rule,
-                namespace=match.namespace,
-                meta=meta,
-                strings=[],
-                severity=severity,
-            ))
+            results.append(
+                YaraMatch(
+                    rule_name=match.rule,
+                    namespace=match.namespace,
+                    meta=meta,
+                    strings=[],
+                    severity=severity,
+                )
+            )
 
         severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
         results.sort(
@@ -314,13 +322,15 @@ class YaraEngine:
             except OSError:
                 self.logger.debug("[YARA] Failed to stat %s", yar_file, exc_info=True)
                 continue
-            files.append({
-                "filename": yar_file.name,
-                "size": stats.st_size,
-                "modified": datetime.fromtimestamp(stats.st_mtime).isoformat(),
-                "loaded": yar_file.name in self.loaded_rule_files,
-                "error": self.load_errors.get(yar_file.name),
-            })
+            files.append(
+                {
+                    "filename": yar_file.name,
+                    "size": stats.st_size,
+                    "modified": datetime.fromtimestamp(stats.st_mtime).isoformat(),
+                    "loaded": yar_file.name in self.loaded_rule_files,
+                    "error": self.load_errors.get(yar_file.name),
+                }
+            )
         return files
 
     def validate_rule_string(self, rule_content: str) -> Tuple[bool, Optional[str]]:
@@ -332,7 +342,6 @@ class YaraEngine:
             return True, None
         except Exception as exc:
             return False, str(exc)
-
 
 
 class DisabledYaraEngine:
@@ -371,9 +380,8 @@ def build_yara_engine(
     config = config_provider.get()
     yara_config = config.get("scanner", {}).get("yara", {})
     paths_config = config.get("paths", {})
-    configured_path = (
-        yara_config.get("rules_path")
-        or paths_config.get("yara_rules_path", "rules/webshell")
+    configured_path = yara_config.get("rules_path") or paths_config.get(
+        "yara_rules_path", "rules/webshell"
     )
     rules_path = resolve_yara_rules_path(configured_path, logger)
     if not yara_config.get("enabled", False):

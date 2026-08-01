@@ -3,6 +3,7 @@
 Version is defined in ``anteumbra.__init__.__version__``.
 pyproject.toml reads it dynamically via ``attr`` directive at build time.
 """
+
 import logging
 import os
 import sys
@@ -22,6 +23,7 @@ def _find_config():
     # 其次：包所在源码树（dev install）—— config.toml 在项目根
     try:
         import anteumbra as _pkg
+
         pkg_dir = os.path.dirname(os.path.abspath(_pkg.__file__))
         # dev: src/anteumbra/ → 上两级到项目根；pip: site-packages/anteumbra/ → 无 config.toml
         root_config = os.path.normpath(os.path.join(pkg_dir, "..", "..", "config.toml"))
@@ -39,6 +41,7 @@ def _load_version():
     # Version: single source of truth from anteumbra.__version__
     try:
         from anteumbra import __version__
+
         _ANTEUMBRA_VERSION = __version__
     except Exception:
         _ANTEUMBRA_VERSION = "unknown"

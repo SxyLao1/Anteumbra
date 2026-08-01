@@ -148,6 +148,7 @@ def _start_profile_workers(
         logger=runtime_logger,
         dead_letter_path=data_dir / "waf_events.deadletter.jsonl",
     )
+
     def consume() -> None:
         while not stop_event.is_set():
             try:

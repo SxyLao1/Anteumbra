@@ -33,9 +33,7 @@ def test_metrics_reports_total_registry_size(tmp_path):
             return [{"file_path": "a"}, {"file_path": "b"}, {"file_path": "c"}]
         return [{"file_path": "a"}]
 
-    collector = MetricsCollector(
-        tmp_path / "metrics.json", registry_reader=fake_get_all
-    )
+    collector = MetricsCollector(tmp_path / "metrics.json", registry_reader=fake_get_all)
 
     snapshot = collector.get()
 
@@ -103,36 +101,36 @@ def test_site_monitors_start_for_every_enabled_website(tmp_path):
 def test_config_provider_parses_per_site_log_configuration(tmp_path):
     from anteumbra.infrastructure.config.provider import parse_websites
 
-    websites = parse_websites({
-        "website": [
-            {
-                "name": "Alpha",
-                "path": str(tmp_path / "alpha"),
-                "port": 80,
-                "enabled": True,
-                "log_config": {
-                    "log_monitor_enabled": True,
-                    "access_log_path": str(tmp_path / "alpha.log"),
+    websites = parse_websites(
+        {
+            "website": [
+                {
+                    "name": "Alpha",
+                    "path": str(tmp_path / "alpha"),
+                    "port": 80,
+                    "enabled": True,
+                    "log_config": {
+                        "log_monitor_enabled": True,
+                        "access_log_path": str(tmp_path / "alpha.log"),
+                    },
                 },
-            },
-            {
-                "name": "Beta",
-                "path": str(tmp_path / "beta"),
-                "port": 8080,
-                "enabled": True,
-                "log_config": {"log_monitor_enabled": False},
-            },
-        ]
-    })
+                {
+                    "name": "Beta",
+                    "path": str(tmp_path / "beta"),
+                    "port": 8080,
+                    "enabled": True,
+                    "log_config": {"log_monitor_enabled": False},
+                },
+            ]
+        }
+    )
 
     assert [website.name for website in websites] == ["Alpha", "Beta"]
     assert websites[0].log_config["log_monitor_enabled"] is True
     assert websites[0].scan_options.access_log_path == str(tmp_path / "alpha.log")
 
 
-def test_runtime_lifecycle_stop_is_idempotent_and_releases_resources(
-    tmp_path, monkeypatch
-):
+def test_runtime_lifecycle_stop_is_idempotent_and_releases_resources(tmp_path, monkeypatch):
     from anteumbra.application import launcher
 
     monkeypatch.chdir(tmp_path)
@@ -268,7 +266,11 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
     )
     monkeypatch.setattr(launcher, "_start_plugins", lambda *_args, **_kwargs: manager)
     monkeypatch.setattr(launcher, "assess_runtime_capabilities", lambda _config: {"warnings": []})
-    monkeypatch.setattr(launcher, "_start_site_monitors", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")))
+    monkeypatch.setattr(
+        launcher,
+        "_start_site_monitors",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")),
+    )
 
     lifecycle = launcher.RuntimeLifecycle(config_provider=provider, dependencies=dependencies)
     with pytest.raises(launcher.RuntimeStartupError, match="Runtime startup failed"):

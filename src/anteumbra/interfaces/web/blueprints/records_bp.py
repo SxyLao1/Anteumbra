@@ -6,6 +6,7 @@ v1.9.0: Records Blueprint — 检测记录 + 审计日志 + 文件查看器
 路由前缀: /admin/records/*, /admin/search, /admin/remove/*,
          /admin/mark_false_positive/*, /admin/audit, /admin/file/*
 """
+
 import json
 import logging
 from pathlib import Path
@@ -29,12 +30,14 @@ def _registry():
     """Return the Registry owned by the current Flask runtime."""
     return get_runtime().registry
 
+
 # ── Blueprint ──────────────────────────────────────────────
 
-records_bp = Blueprint('records', __name__, url_prefix='/admin')
+records_bp = Blueprint("records", __name__, url_prefix="/admin")
 
 
 # ── Helper ─────────────────────────────────────────────────
+
 
 def _deserialize_list(value):
     """v2.0 fix: SQLite stores list fields as JSON strings.
@@ -62,20 +65,22 @@ def _enhance_records(raw_records):
             display_name = normalize_path(r.get("file_path", "")).name
         except Exception:
             display_name = Path(r.get("file_path", "")).name
-        enhanced.append({
-            "file_exists": r.get("file_exists", False),
-            "alerted": r.get("alerted", False),
-            "marked_false_positive": r.get("marked_false_positive", False),
-            "display_name": display_name,
-            "detected_at": r.get("detected_at", "")[:16] if r.get("detected_at") else 'N/A',
-            "features": _deserialize_list(r.get("features")),
-            "communication_count": r.get("communication_count", 0),
-            "file_path": r.get("file_path", ""),
-            "site_id": r.get("site_id", "legacy"),
-            "site_name": r.get("site_name", "Legacy / unassigned"),
-            "deleted_at": r.get("deleted_at", ""),
-            "quarantine_id": r.get("quarantine_id", ""),
-        })
+        enhanced.append(
+            {
+                "file_exists": r.get("file_exists", False),
+                "alerted": r.get("alerted", False),
+                "marked_false_positive": r.get("marked_false_positive", False),
+                "display_name": display_name,
+                "detected_at": r.get("detected_at", "")[:16] if r.get("detected_at") else "N/A",
+                "features": _deserialize_list(r.get("features")),
+                "communication_count": r.get("communication_count", 0),
+                "file_path": r.get("file_path", ""),
+                "site_id": r.get("site_id", "legacy"),
+                "site_name": r.get("site_name", "Legacy / unassigned"),
+                "deleted_at": r.get("deleted_at", ""),
+                "quarantine_id": r.get("quarantine_id", ""),
+            }
+        )
     return enhanced
 
 
@@ -107,16 +112,17 @@ def _find_record(file_path, *, site_id=None):
 
 # ── Records List ───────────────────────────────────────────
 
-@records_bp.route('/records', methods=['GET'])
+
+@records_bp.route("/records", methods=["GET"])
 @require_auth
 def get_records():
     """检测记录列表（支持强制刷新、分页、审计模式）"""
     try:
-        force_reload = request.args.get('force', 'false').lower() == 'true'
-        audit_mode = request.args.get('audit', 'false').lower() in ('true', '1')
-        site_id = request.args.get('site_id') or None
+        force_reload = request.args.get("force", "false").lower() == "true"
+        audit_mode = request.args.get("audit", "false").lower() in ("true", "1")
+        site_id = request.args.get("site_id") or None
 
-        page_str = request.args.get('page', '1')
+        page_str = request.args.get("page", "1")
         try:
             page = max(1, int(page_str))
         except (ValueError, TypeError):
@@ -146,32 +152,46 @@ def get_records():
         end = start + per_page
         paginated = all_records[start:end]
         enhanced = _enhance_records(paginated)
-        all_paths = [r.get('file_path', '') for r in all_records if r.get('file_path')]
+        all_paths = [r.get("file_path", "") for r in all_records if r.get("file_path")]
 
-        compact = request.args.get('compact') == '1'
-        if request.headers.get('HX-Request'):
-            return render_template('admin/records_table.html',
-                records=enhanced, page=page, total_pages=total_pages,
-                total=total, per_page=per_page, audit_mode=audit_mode,
-                compact=compact, all_paths=all_paths)
+        compact = request.args.get("compact") == "1"
+        if request.headers.get("HX-Request"):
+            return render_template(
+                "admin/records_table.html",
+                records=enhanced,
+                page=page,
+                total_pages=total_pages,
+                total=total,
+                per_page=per_page,
+                audit_mode=audit_mode,
+                compact=compact,
+                all_paths=all_paths,
+            )
         else:
-            return jsonify({
-                'records': enhanced,
-                'pagination': {'page': page, 'total_pages': total_pages, 'total': total, 'per_page': per_page},
-                'audit_mode': audit_mode,
-                'site_id': site_id,
-            })
+            return jsonify(
+                {
+                    "records": enhanced,
+                    "pagination": {
+                        "page": page,
+                        "total_pages": total_pages,
+                        "total": total,
+                        "per_page": per_page,
+                    },
+                    "audit_mode": audit_mode,
+                    "site_id": site_id,
+                }
+            )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 致命错误: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-@records_bp.route('/records/quarantine', methods=['POST'])
+@records_bp.route("/records/quarantine", methods=["POST"])
 @require_auth
 def manual_quarantine():
     """手动隔离 — 从Records列表一键隔离"""
     try:
-        file_path = request.form.get('file_path', '')
+        file_path = request.form.get("file_path", "")
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
@@ -185,42 +205,51 @@ def manual_quarantine():
         features = record.get("features", [])
         rule_name = features[0] if features else "manual_quarantine"
         result = get_runtime().quarantine.quarantine_file(
-            file_path=str(file_path), rule_name=rule_name,
-            features=features, original_path=str(file_path),
-            site_id=record.get("site_id"), site_name=record.get("site_name"))
+            file_path=str(file_path),
+            rule_name=rule_name,
+            features=features,
+            original_path=str(file_path),
+            site_id=record.get("site_id"),
+            site_name=record.get("site_name"),
+        )
 
         if result is None:
             return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
 
         current_app.logger.info(f"[RECORDS] 手动隔离成功: {file_path} -> {result['quarantine_id']}")
-        return jsonify({"success": True, "quarantine_id": result["quarantine_id"],
-                        "message": f"已隔离: {result['quarantine_id']}"})
+        return jsonify(
+            {
+                "success": True,
+                "quarantine_id": result["quarantine_id"],
+                "message": f"已隔离: {result['quarantine_id']}",
+            }
+        )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 手动隔离失败: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
-@records_bp.route('/records/batch', methods=['POST'])
+@records_bp.route("/records/batch", methods=["POST"])
 @require_auth
 def records_batch():
     """批量操作：隔离/误报/删除"""
     try:
-        action = request.form.get('action', '')
-        file_paths = request.form.getlist('file_paths[]')
+        action = request.form.get("action", "")
+        file_paths = request.form.getlist("file_paths[]")
         if not file_paths:
-            return jsonify({'error': 'missing file_paths'}), 400
+            return jsonify({"error": "missing file_paths"}), 400
 
-        results = {'success': 0, 'failed': 0, 'skipped': 0, 'errors': []}
+        results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
         site_id = _requested_site_id()
-        if action == 'quarantine':
+        if action == "quarantine":
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
-                    if not record or record.get('quarantine_id'):
-                        results['skipped'] += 1
+                    if not record or record.get("quarantine_id"):
+                        results["skipped"] += 1
                         continue
-                    features = record.get('features', [])
-                    rule = features[0] if features else 'batch'
+                    features = record.get("features", [])
+                    rule = features[0] if features else "batch"
                     qr = get_runtime().quarantine.quarantine_file(
                         str(fp),
                         rule,
@@ -230,39 +259,45 @@ def records_batch():
                         record.get("site_name"),
                     )
                     if qr:
-                        results['success'] += 1
+                        results["success"] += 1
                     else:
-                        results['failed'] += 1
-                        results['errors'].append({
-                            'file_path': fp,
-                            'error': 'source file is missing or could not be moved',
-                        })
+                        results["failed"] += 1
+                        results["errors"].append(
+                            {
+                                "file_path": fp,
+                                "error": "source file is missing or could not be moved",
+                            }
+                        )
                 except Exception as exc:
-                    results['failed'] += 1
-                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    results["failed"] += 1
+                    results["errors"].append({"file_path": fp, "error": str(exc)})
                     current_app.logger.error(
-                        '[RECORDS] batch quarantine failed for %s: %s',
-                        fp, exc, exc_info=True,
+                        "[RECORDS] batch quarantine failed for %s: %s",
+                        fp,
+                        exc,
+                        exc_info=True,
                     )
-        elif action == 'false_positive':
+        elif action == "false_positive":
             # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
                     if _registry().mark_false_positive(
-                        fp, '', record.get("site_id") if record else None
+                        fp, "", record.get("site_id") if record else None
                     ):
-                        results['success'] += 1
+                        results["success"] += 1
                     else:
-                        results['skipped'] += 1
+                        results["skipped"] += 1
                 except Exception as exc:
-                    results['failed'] += 1
-                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    results["failed"] += 1
+                    results["errors"].append({"file_path": fp, "error": str(exc)})
                     current_app.logger.error(
-                        '[RECORDS] batch false-positive failed for %s: %s',
-                        fp, exc, exc_info=True,
+                        "[RECORDS] batch false-positive failed for %s: %s",
+                        fp,
+                        exc,
+                        exc_info=True,
                     )
-        elif action == 'delete':
+        elif action == "delete":
             # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
             for fp in file_paths:
                 try:
@@ -270,36 +305,39 @@ def records_batch():
                     if _registry().soft_delete_record(
                         fp, record.get("site_id") if record else None
                     ):
-                        results['success'] += 1
+                        results["success"] += 1
                     else:
-                        results['skipped'] += 1
+                        results["skipped"] += 1
                 except Exception as exc:
-                    results['failed'] += 1
-                    results['errors'].append({'file_path': fp, 'error': str(exc)})
+                    results["failed"] += 1
+                    results["errors"].append({"file_path": fp, "error": str(exc)})
                     current_app.logger.error(
-                        '[RECORDS] batch delete failed for %s: %s',
-                        fp, exc, exc_info=True,
+                        "[RECORDS] batch delete failed for %s: %s",
+                        fp,
+                        exc,
+                        exc_info=True,
                     )
         else:
-            return jsonify({'error': 'unknown action'}), 400
+            return jsonify({"error": "unknown action"}), 400
 
         # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
         resp = jsonify(results)
-        resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
-        return resp, 207 if results['failed'] else 200
+        resp.headers["HX-Trigger"] = "anteumbra:statsRefresh"
+        return resp, 207 if results["failed"] else 200
     except Exception as e:
-        current_app.logger.error(f'[RECORDS] batch error: {e}', exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"[RECORDS] batch error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Record Detail ──────────────────────────────────────────
 
-@records_bp.route('/records/detail', methods=['GET'])
+
+@records_bp.route("/records/detail", methods=["GET"])
 @require_auth
 def get_record_detail():
     """获取单个检测记录的完整详情"""
     try:
-        file_path = request.args.get('file_path', '')
+        file_path = request.args.get("file_path", "")
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
 
@@ -332,17 +370,20 @@ def get_record_detail():
                 file_path,
                 site_id=record.get("site_id"),
             ):
-                linked_profiles.append({
-                    "profile_id": profile.profile_id,
-                    "risk_score": round(profile.risk_score, 2),
-                    "ip_count": len(profile.ip_pool),
-                    "tool_signature": profile.tool_signature or "N/A",
-                })
+                linked_profiles.append(
+                    {
+                        "profile_id": profile.profile_id,
+                        "risk_score": round(profile.risk_score, 2),
+                        "ip_count": len(profile.ip_pool),
+                        "tool_signature": profile.tool_signature or "N/A",
+                    }
+                )
         except Exception:
             logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 
         detail = {
-            "file_path": file_path, "display_name": display_name,
+            "file_path": file_path,
+            "display_name": display_name,
             "detected_at": record.get("detected_at", "N/A"),
             "features": record.get("features", []),
             "rule_name": record.get("features", ["未知"])[0] if record.get("features") else "未知",
@@ -359,8 +400,8 @@ def get_record_detail():
             "linked_profiles": linked_profiles,
         }
 
-        if request.headers.get('HX-Request'):
-            return render_template('admin/record_detail.html', record=detail)
+        if request.headers.get("HX-Request"):
+            return render_template("admin/record_detail.html", record=detail)
         else:
             return jsonify(detail)
     except Exception as e:
@@ -370,32 +411,41 @@ def get_record_detail():
 
 # ── Search ─────────────────────────────────────────────────
 
-@records_bp.route('/search')
+
+@records_bp.route("/search")
 @require_auth
 def search():
     """HTMX 搜索端点"""
-    query = request.args.get('q', '').lower()
-    records = _registry().get_all(
-        include_deleted=True, site_id=_requested_site_id()
-    )
-    filtered = [r for r in records
-                if query in str(r.get("file_path", "")).lower()
-                or query in str(r.get("features", [])).lower()]
+    query = request.args.get("q", "").lower()
+    records = _registry().get_all(include_deleted=True, site_id=_requested_site_id())
+    filtered = [
+        r
+        for r in records
+        if query in str(r.get("file_path", "")).lower()
+        or query in str(r.get("features", [])).lower()
+    ]
     enhanced = _enhance_records(filtered)
-    compact = request.args.get('compact') == '1'
-    return render_template('admin/records_table.html',
-        records=enhanced, page=1, total_pages=1, total=len(enhanced),
-        per_page=len(enhanced), compact=compact)
+    compact = request.args.get("compact") == "1"
+    return render_template(
+        "admin/records_table.html",
+        records=enhanced,
+        page=1,
+        total_pages=1,
+        total=len(enhanced),
+        per_page=len(enhanced),
+        compact=compact,
+    )
 
 
 # ── Remove ─────────────────────────────────────────────────
 
-@records_bp.route('/remove/<path:file_path>', methods=['POST'])
+
+@records_bp.route("/remove/<path:file_path>", methods=["POST"])
 @require_auth
 def remove_file(file_path):
     """物理删除记录"""
     try:
-        page_str = request.args.get('page', '1')
+        page_str = request.args.get("page", "1")
         try:
             page = max(1, int(page_str))
         except (ValueError, TypeError):
@@ -426,18 +476,25 @@ def remove_file(file_path):
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
 
-        compact = request.args.get('compact') == '1'
-        return render_template('admin/records_table.html',
-            records=enhanced, page=page, total_pages=total_pages,
-            total=total, per_page=per_page, compact=compact)
+        compact = request.args.get("compact") == "1"
+        return render_template(
+            "admin/records_table.html",
+            records=enhanced,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            per_page=per_page,
+            compact=compact,
+        )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 物理删除失败: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
 # ── False Positive ─────────────────────────────────────────
 
-@records_bp.route('/mark_false_positive/<path:file_path>', methods=['POST'])
+
+@records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
 @require_auth
 def mark_false_positive_route(file_path):
     """标记为误报 — v2.0: 委托给 centralized suspicious_registry.mark_false_positive()"""
@@ -465,23 +522,30 @@ def mark_false_positive_route(file_path):
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = 1
 
-        compact = request.args.get('compact') == '1'
-        return render_template('admin/records_table.html',
-            records=enhanced, page=page, total_pages=total_pages,
-            total=total, per_page=per_page, compact=compact)
+        compact = request.args.get("compact") == "1"
+        return render_template(
+            "admin/records_table.html",
+            records=enhanced,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            per_page=per_page,
+            compact=compact,
+        )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 误报标记失败: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
 # ── Audit Log ──────────────────────────────────────────────
 
-@records_bp.route('/audit')
+
+@records_bp.route("/audit")
 @require_auth
 def audit_records():
     """审计日志 — 懒加载 HTMX 分页"""
     try:
-        page = max(1, request.args.get('page', 1, type=int))
+        page = max(1, request.args.get("page", 1, type=int))
         config = get_runtime().config.get()
         per_page = config.get("web_admin", {}).get("items_per_page", 20)
 
@@ -494,29 +558,36 @@ def audit_records():
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
         start = (page - 1) * per_page
-        paginated = all_records[start:start + per_page]
+        paginated = all_records[start : start + per_page]
         enhanced = _enhance_records(paginated)
 
-        return render_template('admin/records_table.html',
-            records=enhanced, page=page, total_pages=total_pages,
-            total=total, per_page=per_page, audit_mode=True)
+        return render_template(
+            "admin/records_table.html",
+            records=enhanced,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            per_page=per_page,
+            audit_mode=True,
+        )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] audit error: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
 # ── File Content Viewer ────────────────────────────────────
 
-@records_bp.route('/file/content', methods=['GET'])
+
+@records_bp.route("/file/content", methods=["GET"])
 @require_auth
 def view_file_content():
     """安全文件内容查看器（白名单 + HTML 转义）"""
     try:
-        file_path = request.args.get('path', '')
-        quarantine_id = request.args.get('qid', '')
+        file_path = request.args.get("path", "")
+        quarantine_id = request.args.get("qid", "")
 
         # 路径穿越基础检测
-        if '..' in file_path or '..' in quarantine_id:
+        if ".." in file_path or ".." in quarantine_id:
             abort(403)
 
         actual_path = None
@@ -533,22 +604,24 @@ def view_file_content():
 
         # 二次路径穿越确认
         resolved = actual_path.resolve()
-        if '..' in str(resolved):
+        if ".." in str(resolved):
             abort(403)
 
         size = resolved.stat().st_size
         if size > 512 * 1024:
             return jsonify({"error": f"文件过大 ({size} bytes)，上限 512KB"}), 413
 
-        content = resolved.read_text(encoding='utf-8', errors='replace')
+        content = resolved.read_text(encoding="utf-8", errors="replace")
         escaped = html_escape(content)
 
-        return jsonify({
-            "path": str(actual_path),
-            "size": size,
-            "content": escaped,
-            "lines": content.count('\n') + 1,
-        })
+        return jsonify(
+            {
+                "path": str(actual_path),
+                "size": size,
+                "content": escaped,
+                "lines": content.count("\n") + 1,
+            }
+        )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] file content error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

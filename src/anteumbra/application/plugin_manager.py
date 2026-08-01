@@ -12,6 +12,7 @@ Anteumbra Plugin Manager
     │   └── ...              — 更多内置插件
     └── 第三方插件 (pip install)
 """
+
 import importlib
 import logging
 import queue
@@ -32,11 +33,11 @@ class PluginManager:
         plugin_factories: Mapping[str, Callable[[], Plugin]] | None = None,
         log: logging.Logger | None = None,
     ) -> None:
-        self._rwlock = threading.RLock()                 # Thread-safe access to all dicts
-        self._plugins: Dict[str, Plugin] = {}           # name → Plugin 实例
-        self._detectors: Dict[str, Detector] = {}       # name → Detector
-        self._notifiers: Dict[str, Notifier] = {}       # name → Notifier
-        self._event_sources: Dict[str, EventSource] = {} # name → EventSource
+        self._rwlock = threading.RLock()  # Thread-safe access to all dicts
+        self._plugins: Dict[str, Plugin] = {}  # name → Plugin 实例
+        self._detectors: Dict[str, Detector] = {}  # name → Detector
+        self._notifiers: Dict[str, Notifier] = {}  # name → Notifier
+        self._event_sources: Dict[str, EventSource] = {}  # name → EventSource
         self._event_handlers: Dict[str, List[Plugin]] = {}  # event_type → [plugins]
         self._enabled: bool = False
         self._config: Dict[str, Any] = {}
@@ -97,8 +98,10 @@ class PluginManager:
 
         self._logger.info(
             "PluginManager: 初始化完成 — %d 插件已加载 (%d detector, %d notifier, %d event_source)",
-            len(self._plugins), len(self._detectors),
-            len(self._notifiers), len(self._event_sources),
+            len(self._plugins),
+            len(self._detectors),
+            len(self._notifiers),
+            len(self._event_sources),
         )
 
         # Start the Fire-and-Forget event worker
@@ -164,9 +167,7 @@ class PluginManager:
                 for event_type in plugin.supported_events:
                     self._event_handlers.setdefault(event_type, []).append(plugin)
 
-                self._logger.info(
-                    "PluginManager: 插件 '%s' v%s 已注册", name, plugin.version
-                )
+                self._logger.info("PluginManager: 插件 '%s' v%s 已注册", name, plugin.version)
                 return True
             except Exception as e:
                 self._logger.error("PluginManager: 插件 '%s' 激活失败: %s", name, e)
@@ -244,7 +245,9 @@ class PluginManager:
             if t.is_alive():
                 self._logger.error(
                     "PluginManager: 插件 '%s' 处理事件 '%s' 超时 (%ss)，跳过",
-                    plugin.name, event.event_type, self._dispatch_timeout,
+                    plugin.name,
+                    event.event_type,
+                    self._dispatch_timeout,
                 )
                 self._abandoned_threads.append((plugin.name, t))
                 self._record_metric("plugin_handler_timeout")
@@ -252,7 +255,9 @@ class PluginManager:
             if exc_container:
                 self._logger.error(
                     "PluginManager: 插件 '%s' 处理事件 '%s' 失败: %s",
-                    plugin.name, event.event_type, exc_container[0],
+                    plugin.name,
+                    event.event_type,
+                    exc_container[0],
                 )
             elif result_container and result_container[0]:
                 new_events.extend(result_container[0])
@@ -261,9 +266,7 @@ class PluginManager:
     def _reap_abandoned(self):
         """清理已完成的被遗弃线程（防止僵尸线程累积）"""
         self._abandoned_threads = [
-            (name, thread)
-            for name, thread in self._abandoned_threads
-            if thread.is_alive()
+            (name, thread) for name, thread in self._abandoned_threads if thread.is_alive()
         ]
         if self._abandoned_threads:
             self._logger.warning(
@@ -274,6 +277,7 @@ class PluginManager:
     def emit(self, event_type: str, source: str, payload: Dict[str, Any]) -> None:
         """Queue an event; use bounded synchronous fallback under overload."""
         import time
+
         event = DomainEvent(
             event_type=event_type,
             timestamp=time.time(),
@@ -331,12 +335,14 @@ class PluginManager:
         with self._rwlock:
             result = []
             for name, p in self._plugins.items():
-                result.append({
-                    "name": name,
-                    "version": p.version,
-                    "type": type(p).__bases__[0].__name__ if type(p).__bases__ else "Plugin",
-                    "events": p.supported_events,
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "version": p.version,
+                        "type": type(p).__bases__[0].__name__ if type(p).__bases__ else "Plugin",
+                        "events": p.supported_events,
+                    }
+                )
             return result
 
     def shutdown(self) -> None:
@@ -375,15 +381,11 @@ class PluginManager:
             plugin_cls = None
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if (isinstance(attr, type) and
-                    issubclass(attr, Plugin) and
-                    attr is not Plugin):
+                if isinstance(attr, type) and issubclass(attr, Plugin) and attr is not Plugin:
                     plugin_cls = attr
                     break
             if plugin_cls is None:
-                self._logger.warning(
-                    "PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name
-                )
+                self._logger.warning("PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name)
                 return None
             instance = plugin_cls()
             self.register(instance)
@@ -401,9 +403,7 @@ class PluginManager:
         try:
             self._metric_recorder(name)
         except Exception:
-            self._logger.debug(
-                "PluginManager: failed to record metric %s", name, exc_info=True
-            )
+            self._logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)
 
 
 def _positive_int(value: Any, *, default: int) -> int:

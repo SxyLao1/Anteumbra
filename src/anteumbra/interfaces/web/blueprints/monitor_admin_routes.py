@@ -18,34 +18,36 @@ from anteumbra.interfaces.web.runtime import get_runtime
 def _registry():
     return get_runtime().registry
 
+
 # -- WAL Management --
 
-@monitor_bp.route('/wal')
+
+@monitor_bp.route("/wal")
 @require_auth
 def wal_manager():
     """WAL management page"""
-    return render_template('admin/wal_manager.html')
+    return render_template("admin/wal_manager.html")
 
 
-@monitor_bp.route('/wal/current')
+@monitor_bp.route("/wal/current")
 @require_auth
 def wal_current():
     """Return current WAL file info"""
     info = get_runtime().wal.get_info()
     if not info:
         return "<p style='color: #ff4444;'>WAL file not found</p>"
-    size_mb = info['size_mb']
+    size_mb = info["size_mb"]
     return f"""
     <div style="background: #2a2a2a; padding: 10px; border-left: 4px solid #00ff00;">
-        <strong>Current WAL:</strong> {info['name']}<br>
+        <strong>Current WAL:</strong> {info["name"]}<br>
         <strong>Size:</strong> {size_mb:.2f} MB<br>
-        <strong>Path:</strong> {info['path']}<br>
+        <strong>Path:</strong> {info["path"]}<br>
         <strong>Status:</strong> {'<span style="color: #00ff00;">Normal</span>' if size_mb < 10 else '<span style="color: #ffaa00;">Near threshold</span>'}
     </div>
     """
 
 
-@monitor_bp.route('/wal/list')
+@monitor_bp.route("/wal/list")
 @require_auth
 def wal_list():
     """Return WAL archive list"""
@@ -54,22 +56,27 @@ def wal_list():
         return "<p style='color: #888;'>No archived WAL files</p>"
     html = ""
     for f in archives[:20]:
-        mtime_str = datetime.fromtimestamp(f['mtime']).strftime('%Y-%m-%d %H:%M:%S')
+        mtime_str = datetime.fromtimestamp(f["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
         html += f"""
         <div style="background: #1a1a1a; padding: 8px; margin: 5px 0; border-left: 4px solid #00ff00;">
-            <strong>{f['name']}</strong> | Size: {f['size_mb']:.2f}MB | Time: {mtime_str}
+            <strong>{f["name"]}</strong> | Size: {f["size_mb"]:.2f}MB | Time: {mtime_str}
         </div>
         """
     return html
 
 
-@monitor_bp.route('/wal/replay', methods=['POST'])
+@monitor_bp.route("/wal/replay", methods=["POST"])
 @require_auth
 def wal_replay():
     """Manual WAL replay trigger"""
     try:
         recovered = get_runtime().registry.replay_wal()
-        log_with_symbol("notice", "info", f"Manual WAL replay done, recovered {recovered} records", current_app.logger)
+        log_with_symbol(
+            "notice",
+            "info",
+            f"Manual WAL replay done, recovered {recovered} records",
+            current_app.logger,
+        )
         return jsonify({"success": True, "recovered": recovered})
     except Exception as e:
         current_app.logger.error(f"WAL replay failed: {e}", exc_info=True)
@@ -78,14 +85,15 @@ def wal_replay():
 
 # -- Registry Monitor --
 
-@monitor_bp.route('/registry')
+
+@monitor_bp.route("/registry")
 @require_auth
 def registry_monitor():
     """Registry monitor page"""
-    return render_template('admin/registry_monitor.html')
+    return render_template("admin/registry_monitor.html")
 
 
-@monitor_bp.route('/registry/count')
+@monitor_bp.route("/registry/count")
 @require_auth
 def registry_count():
     """Return registry record count"""
@@ -94,25 +102,25 @@ def registry_count():
     return f"{active} / {total}"
 
 
-@monitor_bp.route('/registry/queue')
+@monitor_bp.route("/registry/queue")
 @require_auth
 def registry_queue():
     """Return the authoritative Registry persistence mode."""
     return "Synchronous atomic mode"
 
 
-@monitor_bp.route('/registry/last-save')
+@monitor_bp.route("/registry/last-save")
 @require_auth
 def registry_last_save():
     """Return last save timestamp"""
     rp = _registry().path
     if rp and rp.exists():
         mtime = rp.stat().st_mtime
-        return datetime.fromtimestamp(mtime).strftime('%H:%M:%S')
+        return datetime.fromtimestamp(mtime).strftime("%H:%M:%S")
     return "Never saved"
 
 
-@monitor_bp.route('/registry/compact', methods=['POST'])
+@monitor_bp.route("/registry/compact", methods=["POST"])
 @require_auth
 def registry_compact():
     """Manual registry compaction trigger"""
@@ -126,25 +134,26 @@ def registry_compact():
 
 # -- Session Monitor --
 
-@monitor_bp.route('/session')
+
+@monitor_bp.route("/session")
 @require_auth
 def session_manager():
     """Session management page"""
-    return render_template('admin/session_manager.html')
+    return render_template("admin/session_manager.html")
 
 
-@monitor_bp.route('/session/list')
+@monitor_bp.route("/session/list")
 @require_auth
 def session_list():
     """Return session list (paginated)"""
-    session_dir = current_app.config.get('SESSION_FILE_DIR')
+    session_dir = current_app.config.get("SESSION_FILE_DIR")
     if not session_dir:
         return "<p style='color: #888;'>Session storage not configured</p>"
     session_path = Path(session_dir)
     if not session_path.exists():
         return "<p style='color: #888;'>No session files</p>"
 
-    page = max(1, request.args.get('page', 1, type=int))
+    page = max(1, request.args.get("page", 1, type=int))
     config = get_runtime().config.get()
     per_page = config.get("web_admin", {}).get("session_items_per_page", 20)
 
@@ -153,15 +162,17 @@ def session_list():
         if sess_file.is_dir():
             continue
         filename = sess_file.name
-        is_session = re.match(r'^[a-f0-9]{32}$', filename, re.IGNORECASE)
+        is_session = re.match(r"^[a-f0-9]{32}$", filename, re.IGNORECASE)
         if not is_session:
             continue
         stat = sess_file.stat()
-        sessions.append({
-            'name': filename,
-            'size_kb': round(stat.st_size / 1024, 2),
-            'mtime': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-        })
+        sessions.append(
+            {
+                "name": filename,
+                "size_kb": round(stat.st_size / 1024, 2),
+                "mtime": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     if not sessions:
         return "<p style='color: #888;'>No active sessions</p>"
@@ -177,7 +188,7 @@ def session_list():
     for s in paginated:
         html += f"""
         <div style="background: #1a1a1a; padding: 8px; margin: 5px 0; border-left: 4px solid #00ff00;">
-            <strong>{s['name']}</strong> | Size: {s['size_kb']:.2f}KB | Last access: {s['mtime']}
+            <strong>{s["name"]}</strong> | Size: {s["size_kb"]:.2f}KB | Last access: {s["mtime"]}
         </div>
         """
 
@@ -189,17 +200,19 @@ def session_list():
         html += f'<span class="page-info">Page {page} / {total_pages} ({total} total)</span>'
         html += f'<div class="page-jump"><input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{total_pages}" value="{page}" onkeydown="if(event.key===&quot;Enter&quot;){{var p=this.value;htmx.ajax(&quot;GET&quot;,&quot;/admin/session/list?page=&quot;+p,{{target:&quot;#session-list&quot;,swap:&quot;innerHTML&quot;}})}}"></div>'
         html += f'<button class="btn btn-ghost btn-sm" {next_disabled} hx-get="/admin/session/list?page={page + 1}" hx-target="#session-list" hx-swap="innerHTML">Next</button>'
-        html += '</div>'
+        html += "</div>"
     return html
 
 
-@monitor_bp.route('/session/cleanup', methods=['POST'])
+@monitor_bp.route("/session/cleanup", methods=["POST"])
 @require_auth
 def session_cleanup():
     """Clean up expired sessions"""
     try:
-        deleted = cleanup_sessions(current_app.config.get('SESSION_FILE_DIR'), days=7)
-        log_with_symbol("notice", "info", f"Cleaned up expired sessions: {deleted}", current_app.logger)
+        deleted = cleanup_sessions(current_app.config.get("SESSION_FILE_DIR"), days=7)
+        log_with_symbol(
+            "notice", "info", f"Cleaned up expired sessions: {deleted}", current_app.logger
+        )
         return jsonify({"success": True, "deleted": deleted})
     except Exception as e:
         current_app.logger.error(f"Session cleanup failed: {e}", exc_info=True)
@@ -208,19 +221,20 @@ def session_cleanup():
 
 # -- Config Watcher --
 
-@monitor_bp.route('/config')
+
+@monitor_bp.route("/config")
 @require_auth
 def config_watcher_status():
     """Config monitor page"""
-    return render_template('admin/config_watcher.html')
+    return render_template("admin/config_watcher.html")
 
 
-@monitor_bp.route('/config/history')
+@monitor_bp.route("/config/history")
 @require_auth
 def config_history():
     """Return config reload history (paginated)"""
     runtime = get_runtime()
-    page = max(1, request.args.get('page', 1, type=int))
+    page = max(1, request.args.get("page", 1, type=int))
     config = runtime.config.get()
     try:
         per_page = max(
@@ -246,10 +260,7 @@ def config_history():
         text = f"[{record.get('timestamp_display', '')}] Hot reload complete"
         changed_keys = record.get("changed_keys", [])
         if changed_keys:
-            text += (
-                " | Changes: "
-                + ", ".join(str(key) for key in changed_keys[:5])
-            )
+            text += " | Changes: " + ", ".join(str(key) for key in changed_keys[:5])
         duration_ms = record.get("duration_ms")
         if duration_ms is not None:
             text += f" | Duration: {duration_ms}ms"
@@ -266,15 +277,16 @@ def config_history():
         output += f'<span class="page-info">Page {page} / {total_pages} ({total} total)</span>'
         output += f'<div class="page-jump"><input type="number" class="form-input" style="width: 60px; text-align: center;" min="1" max="{total_pages}" value="{page}" onkeydown="if(event.key===&quot;Enter&quot;){{var p=this.value;htmx.ajax(&quot;GET&quot;,&quot;/admin/config/history?page=&quot;+p,{{target:&quot;#config-history&quot;,swap:&quot;innerHTML&quot;}})}}"></div>'
         output += f'<button class="btn btn-ghost btn-sm" {next_disabled} hx-get="/admin/config/history?page={page + 1}" hx-target="#config-history" hx-swap="innerHTML">Next</button>'
-        output += '</div>'
+        output += "</div>"
     return output
 
 
-@monitor_bp.route('/config/signature')
+@monitor_bp.route("/config/signature")
 @require_auth
 def config_signature():
     """Return current config signature for display only."""
     import hashlib
+
     try:
         config_data = json.dumps(get_runtime().config.get(), sort_keys=True)
         md5 = hashlib.md5(config_data.encode(), usedforsecurity=False).hexdigest()[:8]
@@ -285,7 +297,8 @@ def config_signature():
 
 # -- SSE History --
 
-@monitor_bp.route('/sse/history', methods=['GET'])
+
+@monitor_bp.route("/sse/history", methods=["GET"])
 @require_auth
 def sse_history():
     """Return persisted log history"""
@@ -300,20 +313,22 @@ def sse_history():
         return jsonify({"error": str(e)}), 500
 
 
-@monitor_bp.route('/registry/wal-status')
+@monitor_bp.route("/registry/wal-status")
 @require_auth
 def registry_wal_status():
     """Return registry + WAL combined status"""
     try:
         wal_info = get_runtime().wal.get_info()
-        wal_size = wal_info['size_mb'] if wal_info else 0.0
+        wal_size = wal_info["size_mb"] if wal_info else 0.0
         total = len(_registry().get_all(include_deleted=True))
         active = len(_registry().get_all(include_deleted=False))
-        return jsonify({
-            "total": total,
-            "active": active,
-            "wal_size_mb": round(wal_size, 2),
-            "wal_status": "normal" if wal_size < 10 else "warning",
-        })
+        return jsonify(
+            {
+                "total": total,
+                "active": active,
+                "wal_size_mb": round(wal_size, 2),
+                "wal_status": "normal" if wal_size < 10 else "warning",
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500

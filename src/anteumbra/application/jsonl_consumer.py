@@ -22,9 +22,7 @@ class JsonlEventTailer:
         self.path = Path(path)
         self.handler = handler
         self.logger = logger
-        self.dead_letter_path = dead_letter_path or self.path.with_suffix(
-            ".deadletter.jsonl"
-        )
+        self.dead_letter_path = dead_letter_path or self.path.with_suffix(".deadletter.jsonl")
         self.offset = 0
         self._file_identity: tuple[int, int] | None = None
 
@@ -41,8 +39,7 @@ class JsonlEventTailer:
         stat = self.path.stat()
         identity = (stat.st_dev, stat.st_ino)
         if (
-            self._file_identity is not None
-            and identity != self._file_identity
+            self._file_identity is not None and identity != self._file_identity
         ) or stat.st_size < self.offset:
             self.logger.warning(
                 "Profile event file was replaced or truncated; restarting at offset 0: %s",

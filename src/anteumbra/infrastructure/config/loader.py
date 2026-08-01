@@ -7,6 +7,7 @@
 @Motto: HACK THE REAL
 v1.7.8-Patch1：12-Factor 配置模式 — 敏感值从 .env / 环境变量读取
 """
+
 import logging
 import os
 import re
@@ -35,11 +36,11 @@ def _resolve_env_value(value: str) -> str:
         return value
 
     # 匹配 ${VAR} 或 ${VAR:-default} 或 ${VAR:?error}
-    pattern = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([\-?])([^}]*))?\}')
+    pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([\-?])([^}]*))?\}")
 
     def replacer(match):
         var_name = match.group(1)
-        operator = match.group(2)   # '-' 或 '?' 或 None
+        operator = match.group(2)  # '-' 或 '?' 或 None
         default_or_error = match.group(3)  # 默认值或错误信息
 
         env_val = os.environ.get(var_name)
@@ -48,12 +49,16 @@ def _resolve_env_value(value: str) -> str:
             return env_val
 
         # 环境变量不存在
-        if operator == '-':
+        if operator == "-":
             # ${VAR:-default} → 用默认值
-            return default_or_error if default_or_error is not None else ''
-        elif operator == '?':
+            return default_or_error if default_or_error is not None else ""
+        elif operator == "?":
             # ${VAR:?error} → 报错
-            msg = default_or_error if default_or_error else f"Environment variable {var_name} is required"
+            msg = (
+                default_or_error
+                if default_or_error
+                else f"Environment variable {var_name} is required"
+            )
             raise RuntimeError(f"[CONFIG] {msg}")
         else:
             # ${VAR} → 无默认值，保留原样（防止意外空值）
@@ -95,6 +100,7 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
         else:
             try:
                 from anteumbra.infrastructure.config.install_registry import get_install_info
+
                 info = get_install_info()
                 if info:
                     reg_config = Path(info["install_path"]) / "config.toml"
@@ -107,6 +113,7 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
                 )
         if not config_file.exists():
             import anteumbra as _pkg
+
             pkg_dir = Path(_pkg.__file__).resolve().parent
             dev_config = pkg_dir.parent.parent / "config.toml"
             if dev_config.exists():
@@ -126,19 +133,24 @@ def load_toml_config(config_path: str = "config.toml") -> Dict[str, Any]:
     if dotenv_path.exists():
         try:
             from dotenv import load_dotenv
+
             load_dotenv(dotenv_path, override=True)
         except ImportError:
             # 如果 python-dotenv 没安装，跳过（但会打印警告）
-            logger.warning("[CONFIG WARNING] .env file exists but python-dotenv is not installed, skipping env var loading")
+            logger.warning(
+                "[CONFIG WARNING] .env file exists but python-dotenv is not installed, skipping env var loading"
+            )
 
     try:
         # 读取并解析 TOML
         if sys.version_info >= (3, 11):
             import tomllib
+
             with open(config_file, "rb") as f:
                 config = tomllib.load(f)
         else:
             import tomli
+
             with open(config_file, "rb") as f:
                 config = tomli.load(f)
 

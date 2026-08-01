@@ -86,8 +86,7 @@ class QuarantineService:
             site_id = record["site_id"]
             linked_record = self._registry.get(original_path, site_id)
             should_update_registry = bool(
-                linked_record
-                and linked_record.get("quarantine_id") == quarantine_id
+                linked_record and linked_record.get("quarantine_id") == quarantine_id
             )
 
             restored = self._store.restore_file(quarantine_id)

@@ -50,9 +50,7 @@ def refresh_detection_record(
             "deleted_at": None,
             "alerted": False,
             "communication_count": 0,
-            "first_seen_ip": first_seen_ip
-            if first_seen_ip
-            else record.get("first_seen_ip"),
+            "first_seen_ip": first_seen_ip if first_seen_ip else record.get("first_seen_ip"),
             "detected_at": now,
             "features": list(features),
             "detection_source": detection_source
@@ -135,15 +133,10 @@ def project_records(
         copy.deepcopy(record)
         for record in records
         if (include_deleted or bool(record.get("file_exists", True)))
-        and (
-            include_false_positive
-            or not bool(record.get("marked_false_positive", False))
-        )
+        and (include_false_positive or not bool(record.get("marked_false_positive", False)))
         and (site_id is None or record.get("site_id") == site_id)
     ]
-    projected.sort(
-        key=lambda item: str(item.get("detected_at", "")), reverse=True
-    )
+    projected.sort(key=lambda item: str(item.get("detected_at", "")), reverse=True)
     return projected
 
 

@@ -12,7 +12,8 @@ from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
-@admin_bp.route('/metrics/<metric_name>')
+
+@admin_bp.route("/metrics/<metric_name>")
 @require_auth
 def get_metric(metric_name):
     """获取单个指标（v1.7.2修复：返回HTML片段）"""
@@ -21,19 +22,19 @@ def get_metric(metric_name):
         metrics.record_memory_usage()
         data = metrics.get()
 
-        if metric_name == 'scan_total':
+        if metric_name == "scan_total":
             value = data.get("scan_total", 0)
             label = _("Scan Total")
             color = "#00ff00"
-        elif metric_name == 'scan_suspicious':
+        elif metric_name == "scan_suspicious":
             value = data.get("scan_suspicious", 0)
             label = _("High Risk")
             color = "#ffaa00"
-        elif metric_name == 'memory_mb':
+        elif metric_name == "memory_mb":
             value = data.get("memory_mb", 0)
             label = _("Memory")
             color = "#00ff00"
-        elif metric_name == 'uptime_hours':
+        elif metric_name == "uptime_hours":
             value = data.get("uptime_seconds", 0) / 3600
             label = _("Uptime")
             color = "#00ff00"
@@ -42,26 +43,26 @@ def get_metric(metric_name):
             label = _("Unknown")
             color = "#ff0000"
 
-        if metric_name == 'memory_mb':
+        if metric_name == "memory_mb":
             val_str = f"{value:.1f} MB"
-        elif metric_name == 'uptime_hours':
+        elif metric_name == "uptime_hours":
             val_str = f"{value:.1f} h"
         else:
             val_str = str(value)
 
-        return f'''
+        return f"""
         <div class="metric-label">{label}</div>
         <div class="metric-value" style="color: {color};">{val_str}</div>
-        '''
+        """
     except Exception as e:
         err_label = _("Error")
-        return f'''
+        return f"""
         <div class="metric-label">{err_label}</div>
         <div class="metric-value" style="color: #ff0000;">{str(e)}</div>
-        '''
+        """
 
 
-@admin_bp.route('/metrics')
+@admin_bp.route("/metrics")
 @require_auth
 def metrics_page():
     """性能指标页面（完整视图）"""
@@ -80,9 +81,10 @@ def metrics_page():
         "warning_threshold": 1,
         "critical_threshold": 3,
     }
-    return render_template('admin/metrics_panel.html', **ctx)
+    return render_template("admin/metrics_panel.html", **ctx)
 
-@admin_bp.route('/metrics/data')
+
+@admin_bp.route("/metrics/data")
 @require_auth
 def metrics_data():
     """性能指标数据（v1.7.6-Patch12: 移除SSE属性，纯HTMX轮询）"""
@@ -104,14 +106,14 @@ def metrics_data():
         # 关键修复：高危文件颜色计算
         suspicious_count = data.get("scan_suspicious", 0)
         if suspicious_count == 0:
-            color_class = 'safe'
-            color_code = '#00ff00'
+            color_class = "safe"
+            color_code = "#00ff00"
         elif suspicious_count < critical_threshold:
-            color_class = 'warning'
-            color_code = '#ffaa00'
+            color_class = "warning"
+            color_code = "#ffaa00"
         else:
-            color_class = 'critical'
-            color_code = '#ff4444'
+            color_class = "critical"
+            color_code = "#ff4444"
 
         # Render HTML with i18n labels (pre-call _() to avoid f-string backslash issue)
         l_scan = _("Scan Total")
@@ -122,11 +124,13 @@ def metrics_data():
         l_uptime = _("Uptime")
         notification_status = str(data.get("last_notification_status", "never"))
         notification_color = (
-            "#00ff41" if notification_status == "success"
-            else "#ffaa00" if notification_status in {"never", "skipped", "queued"}
+            "#00ff41"
+            if notification_status == "success"
+            else "#ffaa00"
+            if notification_status in {"never", "skipped", "queued"}
             else "#ff4444"
         )
-        return f'''
+        return f"""
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-label">{l_scan}</div>
@@ -161,23 +165,25 @@ def metrics_data():
 
             <div class="metric-card">
                 <div class="metric-label">{l_uptime}</div>
-                <div class="metric-value">{data.get("uptime_seconds", 0)/3600:.1f} h</div>
+                <div class="metric-value">{data.get("uptime_seconds", 0) / 3600:.1f} h</div>
             </div>
         </div>
 
-        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">Registry queue backlog: {data.get("registry_qsize", 0)} items pending save</small></div>' if data.get("registry_qsize", 0) > 0 else ''}
+        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">Registry queue backlog: {data.get("registry_qsize", 0)} items pending save</small></div>' if data.get("registry_qsize", 0) > 0 else ""}
 
-        {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">🚨 告警队列阻塞: {data.get("alert_qsize", 0)} 条待发送</small></div>' if data.get("alert_qsize", 0) > 10 else ''}
-        '''
+        {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">🚨 告警队列阻塞: {data.get("alert_qsize", 0)} 条待发送</small></div>' if data.get("alert_qsize", 0) > 10 else ""}
+        """
     except Exception as e:
         current_app.logger.error(f"[ADMIN][METRICS] 致命错误: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">指标加载失败: {str(e)}</div>', 500
+
 
 # ============================================================================
 # Health Check Endpoint (for Docker / monitoring)
 # ============================================================================
 
-@admin_bp.route('/api/v1/health', methods=['GET'])
+
+@admin_bp.route("/api/v1/health", methods=["GET"])
 def public_health():
     """Public health check for Docker HEALTHCHECK and load balancers.
 
@@ -195,7 +201,7 @@ def public_health():
     return jsonify({"status": health["status"]}), health["http_status"]
 
 
-@admin_bp.route('/health', methods=['GET'])
+@admin_bp.route("/health", methods=["GET"])
 @require_auth
 def admin_health():
     """Authenticated health check with full diagnostics.
@@ -212,12 +218,12 @@ def admin_health():
         registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
     )
     status = {
-        'status': health['status'],
-        'version': get_version(),
-        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'checks': health['checks'],
-        'capabilities': health['capabilities'],
+        "status": health["status"],
+        "version": get_version(),
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "checks": health["checks"],
+        "capabilities": health["capabilities"],
     }
-    if health['errors']:
-        status['errors'] = health['errors']
-    return jsonify(status), health['http_status']
+    if health["errors"]:
+        status["errors"] = health["errors"]
+    return jsonify(status), health["http_status"]

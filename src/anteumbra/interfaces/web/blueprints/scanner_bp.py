@@ -5,6 +5,7 @@ v1.9.0: Scanner Blueprint — 手动扫描器路由
 从 admin_bp.py 拆分。
 路由前缀: /admin/scanner/*
 """
+
 import json as _json
 import queue
 import threading
@@ -29,15 +30,15 @@ from anteumbra.interfaces.web.runtime import get_runtime
 
 # ── Blueprint ──────────────────────────────────────────────
 
-scanner_bp = Blueprint('scanner', __name__, url_prefix='/admin')
+scanner_bp = Blueprint("scanner", __name__, url_prefix="/admin")
 
 _SCAN_JOB_TTL = 3600
 
 
-
 # ── Routes ─────────────────────────────────────────────────
 
-@scanner_bp.route('/scanner')
+
+@scanner_bp.route("/scanner")
 @require_auth
 def scanner_page():
     """主动扫描器页面"""
@@ -55,7 +56,8 @@ def scanner_page():
             if default_site
             else ["cache", "logs", "temp", "data"]
         )
-        return render_template('admin/scanner.html',
+        return render_template(
+            "admin/scanner.html",
             default_dir=default_dir,
             default_extensions=default_extensions,
             exclude_dirs=exclude_dirs,
@@ -66,7 +68,7 @@ def scanner_page():
         )
     except Exception as e:
         current_app.logger.error(f"[SCANNER] page error: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
 def _request_data():
@@ -143,14 +145,19 @@ def _run_scan_job(scan_id: str, runtime) -> None:
 
         def progress_cb(result):
             try:
-                progress_queue.put_nowait(('progress', {
-                    'scanned': result.scanned_files,
-                    'total': result.total_files,
-                    'new_findings': result.new_findings,
-                    'known_findings': result.known_findings,
-                    'clean': result.clean,
-                    'errors': result.errors,
-                }))
+                progress_queue.put_nowait(
+                    (
+                        "progress",
+                        {
+                            "scanned": result.scanned_files,
+                            "total": result.total_files,
+                            "new_findings": result.new_findings,
+                            "known_findings": result.known_findings,
+                            "clean": result.clean,
+                            "errors": result.errors,
+                        },
+                    )
+                )
             except queue.Full:
                 pass
 
@@ -178,7 +185,7 @@ def _run_scan_job(scan_id: str, runtime) -> None:
         except Exception:
             # A completed scan remains usable in memory even when durable history is unavailable.
             scan_logger.exception("Failed to persist manual scan history")
-        progress_queue.put(('complete', result))
+        progress_queue.put(("complete", result))
     except Exception as e:
         scan_logger.error("scanner failed: %s", e, exc_info=True)
         state.update_job(
@@ -186,27 +193,25 @@ def _run_scan_job(scan_id: str, runtime) -> None:
             error=str(e),
             completed_at=time.time(),
         )
-        progress_queue.put(('error', str(e)))
+        progress_queue.put(("error", str(e)))
 
 
-@scanner_bp.route('/scanner/run', methods=['POST'])
+@scanner_bp.route("/scanner/run", methods=["POST"])
 @require_auth
 def scanner_run():
     """Create a manual scanner job. Progress is streamed by /scanner/stream."""
     data = _request_data()
-    target_dir = str(data.get('target_dir', '')).strip()
-    recursive = _is_true(data.get('recursive', '1'))
-    extensions = _parse_extensions(data.get('extensions'))
-    requested_site_id = str(data.get('site_id', '')).strip() or None
+    target_dir = str(data.get("target_dir", "")).strip()
+    recursive = _is_true(data.get("recursive", "1"))
+    extensions = _parse_extensions(data.get("extensions"))
+    requested_site_id = str(data.get("site_id", "")).strip() or None
 
     if not target_dir:
         return jsonify({"success": False, "error": "missing target_dir"}), 400
 
     runtime = get_runtime()
     try:
-        identity = runtime.config.resolve_site_identity(
-            target_dir, site_id=requested_site_id
-        )
+        identity = runtime.config.resolve_site_identity(target_dir, site_id=requested_site_id)
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -236,25 +241,29 @@ def scanner_run():
     job["thread"] = thread
     runtime.scan_state.register_job(scan_id, job)
     thread.start()
-    return jsonify({
-        "success": True,
-        "scan_id": scan_id,
-        "site_id": identity.site_id,
-        "stream_url": f"/admin/scanner/stream?scan_id={scan_id}",
-    })
+    return jsonify(
+        {
+            "success": True,
+            "scan_id": scan_id,
+            "site_id": identity.site_id,
+            "stream_url": f"/admin/scanner/stream?scan_id={scan_id}",
+        }
+    )
 
 
-@scanner_bp.route('/scanner/stream')
+@scanner_bp.route("/scanner/stream")
 @require_auth
 def scanner_stream_sse():
     """SSE stream for an already-created scanner job."""
-    scan_id = request.args.get('scan_id', '')
+    scan_id = request.args.get("scan_id", "")
     job = get_runtime().scan_state.get_job(scan_id)
 
     if not job:
+
         def _err():
             yield f"data: {_json.dumps({'event': 'error', 'message': 'scan not found'})}\n\n"
-        return Response(_err(), status=404, mimetype='text/event-stream')
+
+        return Response(_err(), status=404, mimetype="text/event-stream")
 
     target_dir = job["target_dir"]
     recursive = job["recursive"]
@@ -273,20 +282,20 @@ def scanner_stream_sse():
             try:
                 msg_type, payload = progress_queue.get(timeout=0.3)
 
-                if msg_type == 'progress':
+                if msg_type == "progress":
                     yield f"data: {_json.dumps({'event': 'progress', **payload})}\n\n"
 
-                elif msg_type == 'complete':
+                elif msg_type == "complete":
                     result = payload
                     for finding in result.findings:
-                        key = finding.get('file_path', '')
+                        key = finding.get("file_path", "")
                         if key not in findings_sent:
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
                     yield f"data: {_json.dumps(_complete_payload(result))}\n\n"
                     return
 
-                elif msg_type == 'error':
+                elif msg_type == "error":
                     yield f"data: {_json.dumps({'event': 'error', 'message': str(payload)})}\n\n"
                     return
 
@@ -296,10 +305,10 @@ def scanner_stream_sse():
         while not progress_queue.empty():
             try:
                 msg_type, payload = progress_queue.get_nowait()
-                if msg_type == 'complete':
+                if msg_type == "complete":
                     result = payload
                     for finding in result.findings:
-                        key = finding.get('file_path', '')
+                        key = finding.get("file_path", "")
                         if key not in findings_sent:
                             findings_sent.add(key)
                             yield f"data: {_json.dumps({'event': 'finding', **finding})}\n\n"
@@ -309,15 +318,15 @@ def scanner_stream_sse():
 
     return Response(
         stream_with_context(_generate()),
-        mimetype='text/event-stream',
+        mimetype="text/event-stream",
         headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
-        }
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
-@scanner_bp.route('/scanner/cancel', methods=['POST'])
+@scanner_bp.route("/scanner/cancel", methods=["POST"])
 @require_auth
 def scanner_cancel():
     """Cancel one active scanner job, or all active jobs if no scan_id is sent."""
@@ -327,7 +336,7 @@ def scanner_cancel():
     return jsonify({"success": True, "cancelled": cancelled, "message": "cancel signal sent"})
 
 
-@scanner_bp.route('/scanner/quarantine', methods=['POST'])
+@scanner_bp.route("/scanner/quarantine", methods=["POST"])
 @require_auth
 def scanner_quarantine():
     """从扫描结果中一键隔离新发现文件。
@@ -336,13 +345,11 @@ def scanner_quarantine():
     where the registry record was lost or the finding came from a saved scan.
     """
     try:
-        file_path = request.form.get('file_path', '')
+        file_path = request.form.get("file_path", "")
         if not file_path:
             return jsonify({"error": "缺少 file_path 参数"}), 400
         requested_site_id = request.form.get("site_id") or None
-        identity = get_runtime().config.resolve_site_identity(
-            file_path, site_id=requested_site_id
-        )
+        identity = get_runtime().config.resolve_site_identity(file_path, site_id=requested_site_id)
 
         from anteumbra.application.path_service import normalize_path, path_to_key
 
@@ -366,18 +373,14 @@ def scanner_quarantine():
                         detection_source="active",
                         site=identity,
                     )
-                    current_app.logger.info(
-                        f"[SCANNER] 自动注册后隔离: {file_path}")
+                    current_app.logger.info(f"[SCANNER] 自动注册后隔离: {file_path}")
                     # Re-read registry to get the new record
-                    for r in registry.get_all(
-                        include_deleted=True, site_id=identity.site_id
-                    ):
+                    for r in registry.get_all(include_deleted=True, site_id=identity.site_id):
                         if r.get("file_path") == target:
                             record = r
                             break
                 except Exception as reg_err:
-                    current_app.logger.error(
-                        f"[SCANNER] 自动注册失败: {file_path} | {reg_err}")
+                    current_app.logger.error(f"[SCANNER] 自动注册失败: {file_path} | {reg_err}")
             if not record:
                 return jsonify({"error": "文件不在检测记录中且无法自动注册"}), 404
 
@@ -398,13 +401,14 @@ def scanner_quarantine():
         if result is None:
             return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
 
-        current_app.logger.info(
-            f"[SCANNER] 手动隔离: {file_path} -> {result['quarantine_id']}")
-        return jsonify({
-            "success": True,
-            "quarantine_id": result["quarantine_id"],
-            "message": f"已隔离: {result['quarantine_id']}"
-        })
+        current_app.logger.info(f"[SCANNER] 手动隔离: {file_path} -> {result['quarantine_id']}")
+        return jsonify(
+            {
+                "success": True,
+                "quarantine_id": result["quarantine_id"],
+                "message": f"已隔离: {result['quarantine_id']}",
+            }
+        )
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -413,17 +417,18 @@ def scanner_quarantine():
         return jsonify({"error": str(e)}), 500
 
 
-@scanner_bp.route('/scanner/history')
+@scanner_bp.route("/scanner/history")
 @require_auth
 def scanner_history():
     """扫描历史列表（JSON）"""
     return jsonify({"scans": get_runtime().scan_history.list_summaries()})
 
-@scanner_bp.route('/scanner/results')
+
+@scanner_bp.route("/scanner/results")
 @require_auth
 def scanner_results_json():
     """从磁盘加载完整扫描结果（JSON）"""
-    scan_id = request.args.get('scan_id', '')
+    scan_id = request.args.get("scan_id", "")
     if not scan_id:
         return jsonify({"error": "missing scan_id"}), 400
 
@@ -435,11 +440,12 @@ def scanner_results_json():
         return jsonify({"error": "scan not found"}), 404
     return jsonify(data)
 
-@scanner_bp.route('/scanner/report')
+
+@scanner_bp.route("/scanner/report")
 @require_auth
 def scanner_report():
     """生成可打印扫描报告"""
-    scan_id = request.args.get('scan_id', '')
+    scan_id = request.args.get("scan_id", "")
     result = get_runtime().scan_state.get_result(scan_id)
 
     if not result:
@@ -448,9 +454,9 @@ def scanner_report():
         except ValueError:
             raw = None
         if raw is None:
-            return render_template('admin/error.html',
-                error="扫描结果不存在或已过期"), 404
+            return render_template("admin/error.html", error="扫描结果不存在或已过期"), 404
         from anteumbra.application.scanner_service import ManualScanResult
+
         result = ManualScanResult(
             scan_id=raw.get("scan_id", scan_id),
             target_dir=raw.get("target_dir", ""),
@@ -467,7 +473,8 @@ def scanner_report():
             site_id=raw.get("site_id", ""),
             site_name=raw.get("site_name", ""),
         )
-    return render_template('admin/scanner_report.html',
+    return render_template(
+        "admin/scanner_report.html",
         result=result,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )

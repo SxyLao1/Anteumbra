@@ -7,6 +7,7 @@
 @Motto: HACK THE REAL
 v1.7.0重构：迁移所有硬编码到config.toml
 """
+
 import json
 import logging
 import os
@@ -50,6 +51,7 @@ _mask_secret = _redact_secret
 _mask_url_secret = _redact_url_secret
 _sanitize_log_text = _redact_log_text
 
+
 class Notifier:
     """告警通知器：支持邮件、微信、Webhook三渠道"""
 
@@ -88,7 +90,7 @@ class Notifier:
         self.channels = {
             "email": self._init_email(),
             "wechat": self._init_wechat(),
-            "webhook": self._init_webhook()
+            "webhook": self._init_webhook(),
         }
         self.enabled = self.requested_enabled and any(
             channel["enabled"] for channel in self.channels.values()
@@ -185,18 +187,11 @@ class Notifier:
 
                 max_level = max(
                     levels,
-                    key=lambda value: {"INFO": 0, "WARNING": 1, "CRITICAL": 2}.get(
-                        value, 0
-                    ),
+                    key=lambda value: {"INFO": 0, "WARNING": 1, "CRITICAL": 2}.get(value, 0),
                 )
-                messages = [
-                    message
-                    for message, level, _ in site_batch
-                    if level == max_level
-                ]
+                messages = [message for message, level, _ in site_batch if level == max_level]
                 combined = "\n".join(
-                    f"[{index + 1}] {message[:200]}"
-                    for index, message in enumerate(messages)
+                    f"[{index + 1}] {message[:200]}" for index, message in enumerate(messages)
                 )
                 self.send_alert(
                     f"Batch alerts ({len(site_batch)}, highest={max_level})\n{combined}",
@@ -306,15 +301,20 @@ class Notifier:
         overflow_file = normalize_path("data/alert_overflow.json")
         overflow_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with open(overflow_file, "a", encoding='utf-8', buffering=1) as f:
+            with open(overflow_file, "a", encoding="utf-8", buffering=1) as f:
                 for message, level, site_id in items:
-                    f.write(json.dumps({
-                        "timestamp": datetime.now().isoformat(),
-                        "level": level,
-                        "message": message,
-                        "site_id": site_id,
-                        "dropped": True
-                    }) + "\n")
+                    f.write(
+                        json.dumps(
+                            {
+                                "timestamp": datetime.now().isoformat(),
+                                "level": level,
+                                "message": message,
+                                "site_id": site_id,
+                                "dropped": True,
+                            }
+                        )
+                        + "\n"
+                    )
                 f.flush()
                 os.fsync(f.fileno())
         except Exception as e:
@@ -332,13 +332,18 @@ class Notifier:
         overflow_file.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            with open(overflow_file, "a", encoding='utf-8', buffering=1) as f:
-                f.write(json.dumps({
-                    "timestamp": datetime.now().isoformat(),
-                    "level": level,
-                    "message": message,
-                    "site_id": site_id,
-                }) + "\n")
+            with open(overflow_file, "a", encoding="utf-8", buffering=1) as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": datetime.now().isoformat(),
+                            "level": level,
+                            "message": message,
+                            "site_id": site_id,
+                        }
+                    )
+                    + "\n"
+                )
                 f.flush()
                 os.fsync(f.fileno())
         except Exception as e:
@@ -355,19 +360,22 @@ class Notifier:
         email_password = email_cfg.get("password", "")
         if email_password.startswith("${") or not email_password:
             import os
+
             email_password = os.environ.get("ANTEUMBRA_EMAIL_PASSWORD", "")
 
         recipients = email_cfg.get("to_addrs", [])
         if isinstance(recipients, str):
             recipients = [recipients]
         requested = bool(email_cfg.get("enabled", False))
-        ready = all((
-            str(email_cfg.get("smtp_host", "")).strip(),
-            str(email_cfg.get("username", "")).strip(),
-            str(email_password).strip(),
-            str(email_cfg.get("from_addr", "")).strip(),
-            any(str(address).strip() for address in recipients),
-        ))
+        ready = all(
+            (
+                str(email_cfg.get("smtp_host", "")).strip(),
+                str(email_cfg.get("username", "")).strip(),
+                str(email_password).strip(),
+                str(email_cfg.get("from_addr", "")).strip(),
+                any(str(address).strip() for address in recipients),
+            )
+        )
         if requested and not ready:
             self.logger.warning(
                 "[NOTIFIER][EMAIL] Channel disabled because required credentials are incomplete"
@@ -383,7 +391,7 @@ class Notifier:
             "to_addrs": recipients,
             "use_tls": email_cfg.get("use_tls", True),
             "use_ssl": email_cfg.get("use_ssl", False),
-            "timeout": base_timeout
+            "timeout": base_timeout,
         }
 
     def _init_wechat(self) -> Dict[str, Any]:
@@ -396,9 +404,7 @@ class Notifier:
         send_key = str(wechat_cfg.get("send_key", "")).strip()
         requested = bool(wechat_cfg.get("enabled", False))
         if requested and not send_key:
-            self.logger.warning(
-                "[NOTIFIER][WECHAT] Channel disabled because SendKey is missing"
-            )
+            self.logger.warning("[NOTIFIER][WECHAT] Channel disabled because SendKey is missing")
         return {
             "enabled": requested and bool(send_key),
             "send_key": send_key,
@@ -414,14 +420,12 @@ class Notifier:
         url = str(webhook_cfg.get("url", "")).strip()
         requested = bool(webhook_cfg.get("enabled", False))
         if requested and not url:
-            self.logger.warning(
-                "[NOTIFIER][WEBHOOK] Channel disabled because URL is missing"
-            )
+            self.logger.warning("[NOTIFIER][WEBHOOK] Channel disabled because URL is missing")
         return {
             "enabled": requested and bool(url),
             "url": url,
             "headers": webhook_cfg.get("headers", {}),
-            "timeout": webhook_cfg.get("timeout", 10)
+            "timeout": webhook_cfg.get("timeout", 10),
         }
 
     def send_alert(
@@ -508,7 +512,7 @@ class Notifier:
 
         # 日志输出必须在所有通道尝试后，避免重复
         # 提取核心消息（第一行）用于日志，保持日志简洁
-        core_message = enhanced_message.split('\n')[0].strip()
+        core_message = enhanced_message.split("\n")[0].strip()
         self.logger.critical(f"[NOTIFIER][ALERT][{level}] {core_message}")
         return successes > 0
 
@@ -553,9 +557,7 @@ class Notifier:
         if self._wechat_failure_count >= self._circuit_threshold:
             self._wechat_circuit_enabled = False
             self.logger.critical("[NOTIFIER][WECHAT] 熔断器触发，降级为仅邮件")
-            fallback_message = (
-                f"微信推送熔断已触发！失败次数: {self._wechat_failure_count}"
-            )
+            fallback_message = f"微信推送熔断已触发！失败次数: {self._wechat_failure_count}"
             try:
                 self._send_email(fallback_message, "CRITICAL")
             except Exception as exc:
@@ -570,6 +572,7 @@ class Notifier:
             self.logger,
             requests_module=requests,
         )
+
     def _stop_alert_worker(self):
         """停止告警工作线程"""
         if self._alert_thread and self._alert_thread.is_alive():

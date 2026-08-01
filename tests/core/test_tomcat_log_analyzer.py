@@ -44,7 +44,9 @@ def test_log_analyzer_matches_tomcat_shell_access(tmp_path):
         path=shell_path.parent,
         port=18080,
         enabled=True,
-        scan_options=ScanOptions(access_log_path=str(tmp_path / "logs" / "localhost_access_log.*.txt")),
+        scan_options=ScanOptions(
+            access_log_path=str(tmp_path / "logs" / "localhost_access_log.*.txt")
+        ),
     )
 
     analyzer = LogAnalyzer(website, logging.getLogger("test.tomcat_log_analyzer"))

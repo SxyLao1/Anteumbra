@@ -59,9 +59,7 @@ class LogBuffer:
             return
         try:
             value = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(value, list) or not all(
-                isinstance(item, str) for item in value
-            ):
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 raise ValueError("log buffer must be a JSON array of strings")
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             corrupt = self.path.with_name(f"{self.path.name}.corrupt")
@@ -73,9 +71,7 @@ class LogBuffer:
                     self.path,
                     exc_info=True,
                 )
-            self._logger.warning(
-                "SSE log history was corrupt and moved to %s: %s", corrupt, exc
-            )
+            self._logger.warning("SSE log history was corrupt and moved to %s: %s", corrupt, exc)
             return
         with self._lock:
             self._items.extend(value[-self.max_size :])
@@ -145,12 +141,8 @@ class SSEManager:
         """Read connection limits from the hot-reloadable provider."""
         web_admin = self._config.get().get("web_admin", {})
         return {
-            "per_ip": self._positive_int(
-                web_admin.get("sse_max_clients_per_ip", 5), "per_ip"
-            ),
-            "total": self._positive_int(
-                web_admin.get("sse_max_total_clients", 20), "total"
-            ),
+            "per_ip": self._positive_int(web_admin.get("sse_max_clients_per_ip", 5), "per_ip"),
+            "total": self._positive_int(web_admin.get("sse_max_total_clients", 20), "total"),
         }
 
     def start(self) -> None:
@@ -193,12 +185,8 @@ class SSEManager:
             if len(self._clients) >= limits["total"]:
                 raise SSECapacityError("SSE total client limit reached")
             if normalized_ip and self._count_ip_locked(normalized_ip) >= limits["per_ip"]:
-                raise SSECapacityError(
-                    f"SSE client limit reached for IP {normalized_ip}"
-                )
-            client: queue.Queue[str | None] = queue.Queue(
-                maxsize=self._client_queue_size
-            )
+                raise SSECapacityError(f"SSE client limit reached for IP {normalized_ip}")
+            client: queue.Queue[str | None] = queue.Queue(maxsize=self._client_queue_size)
             client.client_ip = normalized_ip  # type: ignore[attr-defined]
             self._clients.append(client)
             return client
@@ -225,8 +213,7 @@ class SSEManager:
             selected = [
                 client
                 for client in self._clients
-                if not normalized_ip
-                or getattr(client, "client_ip", "") == normalized_ip
+                if not normalized_ip or getattr(client, "client_ip", "") == normalized_ip
             ]
             for client in selected:
                 self._clients.remove(client)
@@ -312,11 +299,7 @@ class SSEManager:
         self._logger.debug("SSE fan-out worker stopped")
 
     def _count_ip_locked(self, client_ip: str) -> int:
-        return sum(
-            1
-            for client in self._clients
-            if getattr(client, "client_ip", "") == client_ip
-        )
+        return sum(1 for client in self._clients if getattr(client, "client_ip", "") == client_ip)
 
     def _drain_updates(self) -> None:
         try:

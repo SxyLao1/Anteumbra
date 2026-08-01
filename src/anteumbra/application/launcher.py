@@ -74,9 +74,6 @@ class RuntimeState:
     sse_started: bool = False
 
 
-
-
-
 class RuntimeLifecycle:
     """Start and stop one complete Anteumbra runtime without global state."""
 
@@ -116,8 +113,7 @@ class RuntimeLifecycle:
                 missing_paths.append(website.path)
         if missing_paths:
             details = "\n".join(
-                f"Website path does not exist: {missing_path}"
-                for missing_path in missing_paths
+                f"Website path does not exist: {missing_path}" for missing_path in missing_paths
             )
             raise RuntimeStartupError(
                 f"{details}\nCreate the directories or update website.path in config.toml."
@@ -146,8 +142,7 @@ class RuntimeLifecycle:
             data_dir.mkdir(parents=True, exist_ok=True)
             state.process_identity = dependencies.process_identity_writer(pid_file, Path.cwd())
             state.warnings.extend(
-                item["message"]
-                for item in assess_runtime_capabilities(config)["warnings"]
+                item["message"] for item in assess_runtime_capabilities(config)["warnings"]
             )
 
             print(f"Anteumbra v{dependencies.version_getter()} - Web Perimeter Security")
@@ -376,15 +371,6 @@ class RuntimeLifecycle:
             state.stopped = True
 
         print("Anteumbra stopped.")
-
-
-
-
-
-
-
-
-
 
 
 def _stop_resource(name: str, callback: Callable[[], Any]) -> None:

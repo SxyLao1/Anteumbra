@@ -11,6 +11,7 @@ Usage:
   anteumbra config           Manage configuration files
   anteumbra --version        Show version
 """
+
 import os
 import subprocess
 import sys
@@ -92,9 +93,7 @@ def _wait_for_process_exit(
     return runtime_support.wait_for_process_exit(
         identity,
         root,
-        process_state=lambda current, current_root: _process_state(
-            current, current_root
-        ),
+        process_state=lambda current, current_root: _process_state(current, current_root),
         time_module=time,
         timeout=timeout,
         interval=interval,
@@ -118,6 +117,7 @@ def _resolve_bind_options(
         default_host=DEFAULT_HOST,
         default_port=DEFAULT_PORT,
     )
+
 
 @click.group(
     invoke_without_command=True,
@@ -156,9 +156,7 @@ def cli(ctx, home):
         if identity and state is ProcessIdentityState.RUNNING:
             click.echo(f"\n  Status: RUNNING (PID {identity.pid})")
         elif identity and state is ProcessIdentityState.UNKNOWN:
-            click.echo(
-                f"\n  Status: UNKNOWN (cannot verify PID {identity.pid} ownership)"
-            )
+            click.echo(f"\n  Status: UNKNOWN (cannot verify PID {identity.pid} ownership)")
         elif identity is None and _pid_path(root).exists():
             click.echo("\n  Status: UNKNOWN (invalid PID identity file)")
         else:
@@ -178,19 +176,17 @@ _lifecycle_commands = lifecycle_commands.register_lifecycle_commands(
             identity, root, **kwargs
         ),
         get_python=lambda: _get_python(),
-        resolve_bind_options=lambda root, host, port: _resolve_bind_options(
-            root, host, port
-        ),
+        resolve_bind_options=lambda root, host, port: _resolve_bind_options(root, host, port),
         os_module=os,
         subprocess_module=subprocess,
         sys_module=sys,
         time_module=time,
     ),
 )
-run = _lifecycle_commands['run']
-start = _lifecycle_commands['start']
-stop = _lifecycle_commands['stop']
-status = _lifecycle_commands['status']
+run = _lifecycle_commands["run"]
+start = _lifecycle_commands["start"]
+stop = _lifecycle_commands["stop"]
+status = _lifecycle_commands["status"]
 
 
 # ── Config management ──────────────────────────────
@@ -234,6 +230,7 @@ def _create_config_template(
         overwrite=overwrite,
     )
 
+
 config = config_commands.register_config_commands(
     cli,
     config_target=lambda config_path=None: _config_target(config_path),
@@ -242,14 +239,14 @@ config = config_commands.register_config_commands(
     ),
     default_port=DEFAULT_PORT,
 )
-config_init = config.commands['init']
-config_set = config.commands['set']
-config_access_log = config.commands['access-log']
-config_env = config.commands['env']
-config_env_set = config_env.commands['set']
-config_validate = config.commands['validate']
-config_reload = config.commands['reload']
-config_wizard = config.commands['wizard']
+config_init = config.commands["init"]
+config_set = config.commands["set"]
+config_access_log = config.commands["access-log"]
+config_env = config.commands["env"]
+config_env_set = config_env.commands["set"]
+config_validate = config.commands["validate"]
+config_reload = config.commands["reload"]
+config_wizard = config.commands["wizard"]
 
 
 install = install_commands.register_install_command(
@@ -259,9 +256,7 @@ install = install_commands.register_install_command(
     find_config_template=lambda: _find_config_template(),
     package_dir=lambda: _package_dir(),
     write_generated_env=lambda env_file: _write_generated_env(env_file),
-    resolve_bind_options=lambda root, host, port: _resolve_bind_options(
-        root, host, port
-    ),
+    resolve_bind_options=lambda root, host, port: _resolve_bind_options(root, host, port),
     load_toml_file=lambda path: _load_toml_file(path),
 )
 

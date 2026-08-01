@@ -5,9 +5,7 @@ import time
 from playwright.sync_api import expect
 
 
-def test_navigation_closes_active_scanner_sse_without_cancelling_job(
-    page, tmp_path, monkeypatch
-):
+def test_navigation_closes_active_scanner_sse_without_cancelling_job(page, tmp_path, monkeypatch):
     target = tmp_path / "scanner-lifecycle"
     target.mkdir()
     for index in range(80):

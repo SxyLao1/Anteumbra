@@ -17,6 +17,7 @@ Config:
   syslog_port = 514
   syslog_protocol = "udp"  # udp | tcp
 """
+
 import logging
 import os
 import socket
@@ -28,6 +29,7 @@ from typing import Any, Dict, List, Optional
 from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter
 
 logger = logging.getLogger(__name__)
+
 
 class SIEMExporter:
     """SIEM export engine — file and/or syslog output."""
@@ -54,9 +56,12 @@ class SIEMExporter:
         if self._syslog_host:
             self._connect_syslog()
 
-        logger.info("SIEMExporter: enabled (format=%s, file=%s, syslog=%s)",
-                    self._format, self._export_path,
-                    f"{self._syslog_host}:{self._syslog_port}" if self._syslog_host else "disabled")
+        logger.info(
+            "SIEMExporter: enabled (format=%s, file=%s, syslog=%s)",
+            self._format,
+            self._export_path,
+            f"{self._syslog_host}:{self._syslog_port}" if self._syslog_host else "disabled",
+        )
 
     @property
     def enabled(self) -> bool:
@@ -127,7 +132,10 @@ class SIEMExporter:
 
     def _check_rotate(self) -> None:
         try:
-            if self._export_path.exists() and self._export_path.stat().st_size > self._rotate_mb * 1024 * 1024:
+            if (
+                self._export_path.exists()
+                and self._export_path.stat().st_size > self._rotate_mb * 1024 * 1024
+            ):
                 backup = self._export_path.with_suffix(f".{datetime.now():%Y%m%d%H%M%S}.jsonl")
                 os.rename(self._export_path, backup)
                 logger.info("SIEMExporter: rotated %s -> %s", self._export_path, backup)
@@ -141,8 +149,11 @@ class SIEMExporter:
             "total_exported": self._total_exported,
             "export_file": str(self._export_path),
             "syslog_active": self._sock is not None,
-            "file_size_mb": round(self._export_path.stat().st_size / 1024 / 1024, 2) if self._export_path.exists() else 0,
+            "file_size_mb": round(self._export_path.stat().st_size / 1024 / 1024, 2)
+            if self._export_path.exists()
+            else 0,
         }
+
     @property
     def export_path(self) -> Path:
         """Return the configured file export path."""
@@ -166,17 +177,21 @@ class SIEMExporter:
         """Export existing detection records as SIEM events."""
         events = []
         for r in records:
-            events.append({
-                "id": r.get("id", ""),
-                "detected_at": r.get("detected_at", ""),
-                "file_path": r.get("file_path", ""),
-                "display_name": r.get("display_name", ""),
-                "features": r.get("features", []),
-                "rule_name": r.get("features", ["unknown"])[0] if r.get("features") else "unknown",
-                "category": category,
-                "severity": "high",
-                "source_ip": r.get("first_seen_ip", "unknown"),
-            })
+            events.append(
+                {
+                    "id": r.get("id", ""),
+                    "detected_at": r.get("detected_at", ""),
+                    "file_path": r.get("file_path", ""),
+                    "display_name": r.get("display_name", ""),
+                    "features": r.get("features", []),
+                    "rule_name": r.get("features", ["unknown"])[0]
+                    if r.get("features")
+                    else "unknown",
+                    "category": category,
+                    "severity": "high",
+                    "source_ip": r.get("first_seen_ip", "unknown"),
+                }
+            )
         return self.emit_batch(events)
 
     def emit_detection(
@@ -185,33 +200,33 @@ class SIEMExporter:
         category: str = "webshell.detected",
     ) -> Optional[str]:
         """Export one Registry detection using the standard SIEM schema."""
-        return self.emit({
-            "id": record.get("id", ""),
-            "detected_at": record.get("detected_at", ""),
-            "file_path": record.get("file_path", ""),
-            "display_name": (
-                Path(record.get("file_path", "")).name
-                if record.get("file_path")
-                else "unknown"
-            ),
-            "features": record.get("features", []),
-            "rule_name": (
-                record.get("features", [None])[0]
-                if record.get("features")
-                else "unknown"
-            ),
-            "category": category,
-            "severity": "high",
-            "source_ip": record.get("first_seen_ip", "unknown"),
-            "confidence": 85,
-            "mitre_tid": "T1505.003",
-            "mitre_tactic": "Persistence",
-        })
+        return self.emit(
+            {
+                "id": record.get("id", ""),
+                "detected_at": record.get("detected_at", ""),
+                "file_path": record.get("file_path", ""),
+                "display_name": (
+                    Path(record.get("file_path", "")).name if record.get("file_path") else "unknown"
+                ),
+                "features": record.get("features", []),
+                "rule_name": (
+                    record.get("features", [None])[0] if record.get("features") else "unknown"
+                ),
+                "category": category,
+                "severity": "high",
+                "source_ip": record.get("first_seen_ip", "unknown"),
+                "confidence": 85,
+                "mitre_tid": "T1505.003",
+                "mitre_tactic": "Persistence",
+            }
+        )
 
     def close(self) -> None:
         if self._sock:
             try:
                 self._sock.close()
             except Exception:
-                logger.debug("Failed to close syslog socket during exporter shutdown", exc_info=True)
+                logger.debug(
+                    "Failed to close syslog socket during exporter shutdown", exc_info=True
+                )
             self._sock = None

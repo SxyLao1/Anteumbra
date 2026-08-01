@@ -7,6 +7,7 @@ Track 3: Built-in SimHash (zero dependency, always available)
 
 Design from PROJECT_MASTER Section 8.
 """
+
 import logging
 
 logger = logging.getLogger("monitor.hash_engine")
@@ -24,7 +25,7 @@ class SimHash:
         v = [0] * 64
         # Use sliding window of 4 bytes
         for i in range(len(data) - 3):
-            chunk = int.from_bytes(data[i:i + 4], 'little')
+            chunk = int.from_bytes(data[i : i + 4], "little")
             for bit in range(64):
                 if chunk & (1 << (bit % 32)):
                     v[bit] += 1
@@ -34,7 +35,7 @@ class SimHash:
         result = 0
         for bit in range(64):
             if v[bit] > 0:
-                result |= (1 << bit)
+                result |= 1 << bit
         return f"{result:016x}"
 
     @staticmethod
@@ -44,9 +45,9 @@ class SimHash:
             return 64
         d = 0
         for i in range(0, len(h1), 16):
-            a = int(h1[i:i + 16], 16)
-            b = int(h2[i:i + 16], 16)
-            d += bin(a ^ b).count('1')
+            a = int(h1[i : i + 16], 16)
+            b = int(h2[i : i + 16], 16)
+            d += bin(a ^ b).count("1")
         return d
 
     @staticmethod
@@ -73,6 +74,7 @@ class HashEngine:
         # Track 1: ssdeep (C library, best performance)
         try:
             import ssdeep
+
             self._ssdeep = ssdeep
             self._active_track = "ssdeep"
             logger.info("[HASH] ssdeep loaded (Track 1 — C)")
@@ -83,6 +85,7 @@ class HashEngine:
         # Track 1.5: ppdeep (pure Python CTPH, same algorithm as ssdeep)
         try:
             import ppdeep
+
             self._ssdeep = ppdeep  # same API, same output format
             self._active_track = "ppdeep"
             logger.info("[HASH] ppdeep loaded (Track 1.5 — pure Python CTPH)")
@@ -93,6 +96,7 @@ class HashEngine:
         # Track 2: py-tlsh
         try:
             import tlsh
+
             self._tlsh = tlsh
             self._active_track = "tlsh"
             logger.info("[HASH] py-tlsh loaded (Track 2)")
@@ -110,7 +114,7 @@ class HashEngine:
     def hash_file(self, file_path: str) -> str:
         """计算文件哈希，返回 track:hash 格式"""
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 data = f.read()
             if len(data) > 5 * 1024 * 1024:  # Skip files > 5MB
                 return "skip:too_large"

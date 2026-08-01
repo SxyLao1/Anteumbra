@@ -1,4 +1,5 @@
 """Tests for core/log_heuristic.py — log parsing and behavior detection."""
+
 from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine, parse_log_line
 
 
@@ -32,7 +33,7 @@ class TestLogParsing:
 
     def test_iis_format(self):
         # IIS W3C: date time s-ip cs-method cs-uri-stem cs-uri-query s-port c-ip cs(User-Agent) sc-status
-        line = '2026-06-28 12:00:01 192.168.1.1 GET /default.aspx - 80 10.0.0.1 Mozilla/5.0 200'
+        line = "2026-06-28 12:00:01 192.168.1.1 GET /default.aspx - 80 10.0.0.1 Mozilla/5.0 200"
         r = parse_log_line(line)
         assert r is None  # Current IIS parser is not fully implemented (captures 6 fields, needs 7)
 

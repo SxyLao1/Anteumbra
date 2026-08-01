@@ -5,6 +5,7 @@ v1.9.0: Detector 抽象接口
 检测器插件契约。所有检测引擎（YARA、静态特征、解码器、
 日志启发式、内存马扫描等）都实现此接口。
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,11 +17,11 @@ from anteumbra.domain.entities import ScanResult  # noqa: F401 - compatibility r
 @dataclass
 class ScanRequest:
     """扫描请求"""
+
     file_path: Path
     mime_type: Optional[str] = None
     file_size: int = 0
     context: dict = field(default_factory=dict)  # 额外上下文（来源IP等）
-
 
 
 class Detector(ABC):

@@ -84,9 +84,7 @@ def _block(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
     if profile_id and not reason:
         graph = get_runtime().threat_graph
         profile = (
-            graph.query_profile(profile_id, site_id=site.site_id)
-            if graph is not None
-            else None
+            graph.query_profile(profile_id, site_id=site.site_id) if graph is not None else None
         )
         if profile is not None:
             tool = profile.tool_signature or "Unknown tool"
@@ -118,7 +116,9 @@ def _block(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
                 broadcast_results=_result_payload(ip_results),
             )
         except Exception as exc:
-            current_app.logger.exception("Block ledger write failed for site=%s ip=%s", site.site_id, ip)
+            current_app.logger.exception(
+                "Block ledger write failed for site=%s ip=%s", site.site_id, ip
+            )
             ledger_errors.append({"ip": ip, "error": str(exc)})
 
     success_count = sum(item.success for item in results)

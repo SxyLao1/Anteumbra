@@ -16,6 +16,7 @@ Design:
   - Outputs DetectionEvent list consumable by ThreatGraph
   - Zero external dependencies
 """
+
 import logging
 import re
 import threading
@@ -35,35 +36,52 @@ _NGINX_RE = re.compile(
 )
 
 # Apache/Tomcat common: 127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] "GET /app HTTP/1.1" 200 2326
-_APACHE_RE = re.compile(
-    r'(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+) \S+" (\d{3}) (?:\d+|-)'
-)
+_APACHE_RE = re.compile(r'(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+) \S+" (\d{3}) (?:\d+|-)')
 
 # IIS W3C: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) sc-status
-_IIS_RE = re.compile(
-    r'(\S+) (\S+) \S+ \S+ (\S+) (\S+) \S+ \S+ (\S+) \S+ (\S+)'
-)
+_IIS_RE = re.compile(r"(\S+) (\S+) \S+ \S+ (\S+) (\S+) \S+ \S+ (\S+) \S+ (\S+)")
 
 
 def parse_log_line(line: str) -> Optional[Dict]:
     """Parse a single access log line. Returns dict with keys:
-       ip, timestamp, method, path, status, user_agent, referer
+    ip, timestamp, method, path, status, user_agent, referer
     """
     for fmt_re, fmt_name in [(_NGINX_RE, "nginx"), (_APACHE_RE, "apache"), (_IIS_RE, "iis")]:
         m = fmt_re.match(line.strip())
         if m:
             if fmt_name == "nginx":
                 ip, ts, method, path, status, referer, ua = m.groups()
-                return {"ip": ip, "timestamp": ts, "method": method, "path": path,
-                        "status": int(status), "user_agent": ua, "referer": referer}
+                return {
+                    "ip": ip,
+                    "timestamp": ts,
+                    "method": method,
+                    "path": path,
+                    "status": int(status),
+                    "user_agent": ua,
+                    "referer": referer,
+                }
             elif fmt_name == "apache":
                 ip, ts, method, path, status = m.groups()
-                return {"ip": ip, "timestamp": ts, "method": method, "path": path,
-                        "status": int(status), "user_agent": "", "referer": ""}
+                return {
+                    "ip": ip,
+                    "timestamp": ts,
+                    "method": method,
+                    "path": path,
+                    "status": int(status),
+                    "user_agent": "",
+                    "referer": "",
+                }
             elif fmt_name == "iis":
                 date, time_str, method, path, ip, ua, status = m.groups()
-                return {"ip": ip, "timestamp": f"{date} {time_str}", "method": method,
-                        "path": path, "status": int(status), "user_agent": ua, "referer": ""}
+                return {
+                    "ip": ip,
+                    "timestamp": f"{date} {time_str}",
+                    "method": method,
+                    "path": path,
+                    "status": int(status),
+                    "user_agent": ua,
+                    "referer": "",
+                }
     return None
 
 
@@ -88,10 +106,31 @@ _TOOL_SIGNATURES = {
 
 # Suspicious file extensions (backup, config, shell)
 _SUSPICIOUS_EXTENSIONS = {
-    ".sql", ".bak", ".backup", ".old", ".save", ".swp", ".swo",
-    ".tar", ".gz", ".zip", ".rar", ".7z",
-    ".env", ".ini", ".conf", ".config", ".yml", ".yaml",
-    ".php5", ".phtml", ".php7", ".php8", ".asp", ".aspx", ".jsp",
+    ".sql",
+    ".bak",
+    ".backup",
+    ".old",
+    ".save",
+    ".swp",
+    ".swo",
+    ".tar",
+    ".gz",
+    ".zip",
+    ".rar",
+    ".7z",
+    ".env",
+    ".ini",
+    ".conf",
+    ".config",
+    ".yml",
+    ".yaml",
+    ".php5",
+    ".phtml",
+    ".php7",
+    ".php8",
+    ".asp",
+    ".aspx",
+    ".jsp",
 }
 
 # Suspicious path patterns (shell upload, config access, traversal)
@@ -112,8 +151,10 @@ _SUSPICIOUS_PATHS = [
 
 # ── IP State Tracking ───────────────────────────────────
 
+
 class _IPState:
     """Per-IP sliding window state"""
+
     def __init__(self):
         self.requests: List[Tuple[float, str, int]] = []  # (timestamp, path, status)
         self.unique_paths: set = set()
@@ -131,11 +172,17 @@ class _IPState:
 
 # ── Heuristic Engine ─────────────────────────────────────
 
+
 class LogHeuristicEngine:
     """Behavior-level detection from web access logs"""
 
-    def __init__(self, window_size: int = 300, brute_threshold: int = 50,
-                 scanner_threshold: int = 20, error_threshold: int = 30):
+    def __init__(
+        self,
+        window_size: int = 300,
+        brute_threshold: int = 50,
+        scanner_threshold: int = 20,
+        error_threshold: int = 30,
+    ):
         """
         Args:
             window_size: sliding window in seconds (default 5 min)

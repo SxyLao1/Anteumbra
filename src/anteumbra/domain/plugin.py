@@ -5,6 +5,7 @@ Plugin abstraction for Anteumbra extension points.
 Detectors, notifiers, event sources, and repositories can implement this
 contract and be registered through PluginManager.
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,7 @@ from typing import Any, Dict, List, Optional
 @dataclass(frozen=True)
 class DomainEvent:
     """统一领域事件结构（v1.9.x 与旧 dict 共存，v2.0 强制使用）"""
+
     event_type: str
     timestamp: float
     source: str

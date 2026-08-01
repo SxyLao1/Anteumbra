@@ -52,9 +52,14 @@ def test_admin_allowlist_supports_ip_and_cidr_without_invalid_entries():
 
 def test_secure_cookie_auto_mode_tracks_trusted_proxy_configuration():
     assert _session_cookie_secure({"session_cookie_secure": "auto"}) is False
-    assert _session_cookie_secure({
-        "session_cookie_secure": "auto",
-        "trusted_proxy_ips": ["127.0.0.1"],
-    }) is True
+    assert (
+        _session_cookie_secure(
+            {
+                "session_cookie_secure": "auto",
+                "trusted_proxy_ips": ["127.0.0.1"],
+            }
+        )
+        is True
+    )
     assert _session_cookie_secure({"session_cookie_secure": False}) is False
     assert _session_cookie_secure({"session_cookie_secure": True}) is True

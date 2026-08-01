@@ -155,6 +155,7 @@ def test_successful_email_updates_notification_metrics(tmp_path, monkeypatch):
     finally:
         notifier._stop_alert_worker()
 
+
 def test_email_transport_starts_tls_before_login(tmp_path, monkeypatch):
     from anteumbra.infrastructure.monitoring import notifier as notifier_module
 

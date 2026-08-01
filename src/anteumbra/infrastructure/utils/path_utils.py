@@ -6,6 +6,7 @@
 @IDE: PyCharm
 @Motto: HACK THE REAL
 """
+
 from pathlib import Path
 from typing import Union  # 必须导入 Union
 
@@ -14,8 +15,9 @@ def normalize_path(path: Union[str, Path]) -> Path:
     """统一路径标准化（解决反斜杠转义问题）"""
     if isinstance(path, str):
         # 将所有反斜杠转为正斜杠
-        path = path.replace('\\', '/')
+        path = path.replace("\\", "/")
     return Path(path).resolve()
+
 
 def path_to_key(path: Union[str, Path]) -> str:
     """
@@ -32,4 +34,4 @@ def path_to_key(path: Union[str, Path]) -> str:
         else:
             path_str = path
         # 统一分隔符并转小写
-        return path_str.replace('\\', '/').lower()
+        return path_str.replace("\\", "/").lower()

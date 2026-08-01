@@ -3,6 +3,7 @@
 Trident Tools Syntax Test
 验证所有 tools/*.py 都能正常 import（不执行功能）
 """
+
 import importlib
 import os
 import sys
@@ -42,6 +43,7 @@ def main():
             failed_details.append((tool, err_msg))
             # 同时打印 traceback 到 stderr，确保 GitHub 日志能看到
             import traceback
+
             traceback.print_exc()
 
     print("=" * 50)

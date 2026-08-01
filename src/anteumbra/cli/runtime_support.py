@@ -50,13 +50,10 @@ def find_project_root(os_module: ModuleType) -> Path:
         has_pid = (directory / "data" / "anteumbra.pid").exists()
         has_runtime_file = (directory / "config.toml").exists() or has_pid
         if has_runtime_file:
-            is_source_checkout = (
-                (directory / "pyproject.toml").is_file()
-                and (directory / "src" / "anteumbra").is_dir()
-            )
-            is_runtime_checkout = (
-                (directory / ".anteumbra_install").is_file() or has_pid
-            )
+            is_source_checkout = (directory / "pyproject.toml").is_file() and (
+                directory / "src" / "anteumbra"
+            ).is_dir()
+            is_runtime_checkout = (directory / ".anteumbra_install").is_file() or has_pid
             if not is_source_checkout or is_runtime_checkout:
                 return directory
             source_checkout = directory

@@ -202,6 +202,7 @@ class ThreatProfileRepositoryPort(Protocol):
     def close(self) -> None:
         """Release repository resources."""
 
+
 class ThreatGraphPort(Protocol):
     """Site-qualified threat-intelligence graph contract."""
 

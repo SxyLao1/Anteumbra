@@ -53,9 +53,7 @@ def test_quarantine_returns_record_after_both_commits(dependencies):
     )
 
     assert result is record
-    registry.mark_quarantined.assert_called_once_with(
-        record["original_path"], "Q-test", "alpha"
-    )
+    registry.mark_quarantined.assert_called_once_with(record["original_path"], "Q-test", "alpha")
     store.rollback_quarantine.assert_not_called()
 
 

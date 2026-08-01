@@ -7,6 +7,7 @@
 @Motto: HACK THE REAL
 v1.7.4增强：通配符`**/access.log`完整递归支持 + 符号配置化日志
 """
+
 import glob
 import logging
 import os
@@ -46,7 +47,7 @@ class LogAnalyzer:
 
     LOG_PATTERNS = [
         r'(?P<ip>\S+)\s+\S+\s+\S+\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d{3})\s+(?P<size>\d+|-)',
-        r'(?P<ip>\S+)\s+\S+\s+\S+\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d{3})\s+(?P<size>\d+|-)\s+"[^"]*"\s+"[^"]*"'
+        r'(?P<ip>\S+)\s+\S+\s+\S+\s*\[(?P<time>[^\]]+)\]\s*"(?P<method>\w+)\s+(?P<url>[^ ]+)\s+[^"]+"\s+(?P<status>\d{3})\s+(?P<size>\d+|-)\s+"[^"]*"\s+"[^"]*"',
     ]
 
     def __init__(self, website: Website, logger: logging.Logger):
@@ -62,9 +63,12 @@ class LogAnalyzer:
 
         # 如果是通配符路径，记录详细解析日志
         if "*" in str(self.website.scan_options.access_log_path):
-            log_with_symbol("notice", "info",
-                            f"通配符路径解析: {self.website.scan_options.access_log_path} -> {self.log_path}",
-                            self.logger)
+            log_with_symbol(
+                "notice",
+                "info",
+                f"通配符路径解析: {self.website.scan_options.access_log_path} -> {self.log_path}",
+                self.logger,
+            )
 
     def _detect_log_type(self) -> str:
         log_path = str(self.log_path).lower()
@@ -87,7 +91,7 @@ class LogAnalyzer:
         self.logger.debug("[LOG][SEARCH] 正在读取配置的日志路径...")
 
         # 从Website配置读取（优先使用scan_options中的配置）
-        access_log_path_cfg = getattr(self.website.scan_options, 'access_log_path', None)
+        access_log_path_cfg = getattr(self.website.scan_options, "access_log_path", None)
 
         # 如果scan_options中没有，尝试从全局配置读取
         if not access_log_path_cfg:
@@ -95,7 +99,9 @@ class LogAnalyzer:
             access_log_path_cfg = log_config.get("access_log_path", "").strip()
 
         if not access_log_path_cfg:
-            log_with_symbol("warning_config_reload", "warning", "access_log_path未配置", self.logger)
+            log_with_symbol(
+                "warning_config_reload", "warning", "access_log_path未配置", self.logger
+            )
             return None
 
         # ============================================================================
@@ -106,22 +112,36 @@ class LogAnalyzer:
                 # 必须指定recursive=True（Python 3.5+支持）
                 matches = glob.glob(access_log_path_cfg, recursive=True)
                 if not matches:
-                    log_with_symbol("warning_config_reload", "warning",
-                                    f"通配符路径无匹配: {access_log_path_cfg}", self.logger)
+                    log_with_symbol(
+                        "warning_config_reload",
+                        "warning",
+                        f"通配符路径无匹配: {access_log_path_cfg}",
+                        self.logger,
+                    )
                     return None
 
                 # 按修改时间降序排序，选择最新的文件
-                sorted_matches = sorted(matches, key=lambda p: Path(p).stat().st_mtime, reverse=True)
+                sorted_matches = sorted(
+                    matches, key=lambda p: Path(p).stat().st_mtime, reverse=True
+                )
                 selected_path = normalize_path(sorted_matches[0])
 
-                log_with_symbol("success", "info",
-                                f"通配符匹配成功: {len(matches)}个文件，选择最新: {selected_path.name}", self.logger)
+                log_with_symbol(
+                    "success",
+                    "info",
+                    f"通配符匹配成功: {len(matches)}个文件，选择最新: {selected_path.name}",
+                    self.logger,
+                )
 
                 return selected_path
 
             except Exception as e:
-                log_with_symbol("error_scan_fail", "error",
-                                f"通配符解析失败: {access_log_path_cfg} - {e}", self.logger)
+                log_with_symbol(
+                    "error_scan_fail",
+                    "error",
+                    f"通配符解析失败: {access_log_path_cfg} - {e}",
+                    self.logger,
+                )
                 return None
 
         # ============================================================================
@@ -131,18 +151,32 @@ class LogAnalyzer:
             try:
                 matches = glob.glob(access_log_path_cfg)
                 if not matches:
-                    log_with_symbol("warning_config_reload", "warning",
-                                    f"通配符路径无匹配: {access_log_path_cfg}", self.logger)
+                    log_with_symbol(
+                        "warning_config_reload",
+                        "warning",
+                        f"通配符路径无匹配: {access_log_path_cfg}",
+                        self.logger,
+                    )
                     return None
 
-                selected_path = normalize_path(sorted(matches, key=lambda p: Path(p).stat().st_mtime, reverse=True)[0])
-                log_with_symbol("success", "info",
-                                f"通配符匹配: {len(matches)}个文件，选择: {selected_path.name}", self.logger)
+                selected_path = normalize_path(
+                    sorted(matches, key=lambda p: Path(p).stat().st_mtime, reverse=True)[0]
+                )
+                log_with_symbol(
+                    "success",
+                    "info",
+                    f"通配符匹配: {len(matches)}个文件，选择: {selected_path.name}",
+                    self.logger,
+                )
                 return selected_path
 
             except Exception as e:
-                log_with_symbol("error_scan_fail", "error",
-                                f"通配符解析失败: {access_log_path_cfg} - {e}", self.logger)
+                log_with_symbol(
+                    "error_scan_fail",
+                    "error",
+                    f"通配符解析失败: {access_log_path_cfg} - {e}",
+                    self.logger,
+                )
                 return None
 
         # ============================================================================
@@ -151,8 +185,9 @@ class LogAnalyzer:
         else:
             fixed_path = normalize_path(access_log_path_cfg)
             if not fixed_path.exists():
-                log_with_symbol("warning_config_reload", "warning",
-                                f"日志文件不存在: {fixed_path}", self.logger)
+                log_with_symbol(
+                    "warning_config_reload", "warning", f"日志文件不存在: {fixed_path}", self.logger
+                )
                 return None
 
             log_with_symbol("success", "info", f"固定路径加载: {fixed_path}", self.logger)
@@ -185,7 +220,9 @@ class LogAnalyzer:
             return 16 <= second_octet <= 31
         return False
 
-    def analyze_shell_access(self, shell_path: Path, time_window_minutes: int = 0) -> Optional[Dict]:
+    def analyze_shell_access(
+        self, shell_path: Path, time_window_minutes: int = 0
+    ) -> Optional[Dict]:
         """
         分析Webshell访问日志（v1.6.6 - 纯URL匹配，无时间窗口限制）
 
@@ -199,15 +236,20 @@ class LogAnalyzer:
 
         # 如果log_path是通过通配符获取的，在分析前重新验证文件存在性
         if not self.log_path.exists():
-            log_with_symbol("warning_wal_fail", "warning",
-                            f"日志文件已不存在，尝试重新解析通配符: {self.website.scan_options.access_log_path}",
-                            self.logger)
+            log_with_symbol(
+                "warning_wal_fail",
+                "warning",
+                f"日志文件已不存在，尝试重新解析通配符: {self.website.scan_options.access_log_path}",
+                self.logger,
+            )
 
             # 重新执行通配符解析
             new_path = self.get_configured_path()
             if new_path and new_path != self.log_path:
                 self.log_path = new_path
-                log_with_symbol("success", "info", f"切换到新日志文件: {self.log_path.name}", self.logger)
+                log_with_symbol(
+                    "success", "info", f"切换到新日志文件: {self.log_path.name}", self.logger
+                )
             else:
                 log_with_symbol("error_scan_fail", "error", "无法找到有效的日志文件", self.logger)
                 return None
@@ -216,13 +258,20 @@ class LogAnalyzer:
         try:
             # Windows共享模式读取
             if sys.platform == "win32":
+
                 def share_mode_opener(filepath, flags):
                     return os.open(filepath, os.O_RDONLY | os.O_BINARY)
 
-                f = open(self.log_path, 'r', encoding='utf-8', errors='ignore',
-                         buffering=1, opener=share_mode_opener)
+                f = open(
+                    self.log_path,
+                    "r",
+                    encoding="utf-8",
+                    errors="ignore",
+                    buffering=1,
+                    opener=share_mode_opener,
+                )
             else:
-                f = open(self.log_path, 'r', encoding='utf-8', errors='ignore', buffering=1)
+                f = open(self.log_path, "r", encoding="utf-8", errors="ignore", buffering=1)
 
             with f:
                 for line_num, line in enumerate(f, 1):
@@ -233,8 +282,12 @@ class LogAnalyzer:
                     # 匹配URL路径
                     if f"/{shell_path.name}" in line:
                         suspicious_ips[ip] = suspicious_ips.get(ip, 0) + 1
-                        log_with_symbol("debug_scan", "debug",
-                                        f"第{line_num}行: {ip} -> {shell_path.name}", self.logger)
+                        log_with_symbol(
+                            "debug_scan",
+                            "debug",
+                            f"第{line_num}行: {ip} -> {shell_path.name}",
+                            self.logger,
+                        )
 
             log_with_symbol("scan_hit", "info", f"发现 {len(suspicious_ips)} 个可疑IP", self.logger)
 
@@ -264,6 +317,6 @@ class LogAnalyzer:
         return None
 
 
-def get_analyzer(website: Website, logger: logging.Logger) -> 'LogAnalyzer':
+def get_analyzer(website: Website, logger: logging.Logger) -> "LogAnalyzer":
     """获取分析器实例"""
     return LogAnalyzer(website, logger)

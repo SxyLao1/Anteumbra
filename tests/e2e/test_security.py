@@ -8,6 +8,7 @@ Covers:
   3. Server response headers do not expose version
   4. Login rate limiting (429 after rapid attempts)
 """
+
 import base64
 import io
 import os
@@ -25,6 +26,7 @@ def _app():
     os.environ.setdefault("ANTEUMBRA_TOOL_MODE", "true")
 
     from anteumbra.interfaces.web.factory import create_app
+
     app = create_app()
     app.config["TESTING"] = True
     # Disable CSRF for test client so we can POST forms
@@ -134,24 +136,19 @@ class TestAuthRequired:
     def test_yara_routes_require_login(self, client):
         """YARA endpoints should return 302 redirect without session."""
         resp = client.get("/admin/yara/rules")
-        assert resp.status_code != 200, (
-            "YARA rules endpoint should not be accessible without login"
-        )
+        assert resp.status_code != 200, "YARA rules endpoint should not be accessible without login"
         assert resp.status_code in (302, 403), (
-            f"Expected 302/403 for unauthenticated YARA access, "
-            f"got {resp.status_code}"
+            f"Expected 302/403 for unauthenticated YARA access, got {resp.status_code}"
         )
 
     def test_yara_validate_requires_login(self, client):
         """YARA validate POST should be rejected without session."""
         resp = client.post(
             "/admin/yara/validate",
-            json={"content": 'rule test { condition: true }'},
+            json={"content": "rule test { condition: true }"},
             content_type="application/json",
         )
-        assert resp.status_code != 200, (
-            "YARA validate endpoint should not work without login"
-        )
+        assert resp.status_code != 200, "YARA validate endpoint should not work without login"
         assert resp.status_code in (302, 403, 401, 400), (
             f"Expected 302/403/401/400, got {resp.status_code}"
         )
@@ -173,14 +170,9 @@ class TestAuthRequired:
             if resp.status_code == 302:
                 location = resp.headers.get("Location", "")
                 if "/login" in location:
-                    pytest.fail(
-                        f"Route {route} is supposed to be public but "
-                        f"redirected to login"
-                    )
+                    pytest.fail(f"Route {route} is supposed to be public but redirected to login")
             # Just verify it doesn't 500 crash
-            assert resp.status_code != 500, (
-                f"Public route {route} crashed with 500"
-            )
+            assert resp.status_code != 500, f"Public route {route} crashed with 500"
 
     def test_debug_routes_lacks_auth(self, client):
         """v1.0.6: /admin/debug/routes is now protected by @require_auth."""
@@ -208,9 +200,7 @@ class TestAuthRequired:
                 json={},
                 content_type="application/json",
             )
-            assert resp.status_code != 200, (
-                f"POST {route} returned 200 without auth — unprotected!"
-            )
+            assert resp.status_code != 200, f"POST {route} returned 200 without auth — unprotected!"
             assert resp.status_code not in (500,), (
                 f"POST {route} crashed with 500 on unauthenticated access"
             )
@@ -253,8 +243,7 @@ class TestPathTraversal:
                 body = resp.get_data(as_text=True)[:500].lower()
                 # Check if we got actual file contents (sensitive leak)
                 dangerous = any(
-                    marker in body
-                    for marker in ("root:", "passwd", "[extensions]", "bin/bash")
+                    marker in body for marker in ("root:", "passwd", "[extensions]", "bin/bash")
                 )
                 if dangerous:
                     pytest.fail(
@@ -266,8 +255,7 @@ class TestPathTraversal:
                     continue
                 # Otherwise flag for review
                 pytest.fail(
-                    f"PATH TRAVERSAL: {pattern} returned 200 with unexpected "
-                    f"content: {body[:200]}"
+                    f"PATH TRAVERSAL: {pattern} returned 200 with unexpected content: {body[:200]}"
                 )
 
             # All other statuses are safe: 302 (redirect to login),
@@ -291,18 +279,14 @@ class TestPathTraversal:
         """Double URL-encoded traversal attempts should be rejected."""
         # %252e%252e%252f decodes to %2e%2e%2f which decodes to ../
         resp = client.get("/admin/%252e%252e%252fetc%252fpasswd")
-        assert resp.status_code != 200, (
-            "Double URL-encoded path traversal should not return 200"
-        )
+        assert resp.status_code != 200, "Double URL-encoded path traversal should not return 200"
 
     def test_yara_rules_read_requires_valid_filename(self, client):
         """YARA rule content endpoint should reject traversal filenames."""
         # Even with auth redirect, the path validation should happen first
         resp = client.get("/admin/yara/rules/../../../etc/passwd")
         # Should be 400/403/404/302 — never 200 with file contents
-        assert resp.status_code != 200, (
-            "YARA rules path with traversal should not return 200"
-        )
+        assert resp.status_code != 200, "YARA rules path with traversal should not return 200"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -319,9 +303,7 @@ class TestServerHeaders:
         server_header = resp.headers.get("Server", "")
         # The _RemoveServerHeaderMiddleware should strip the Server header
         # Werkzeug adds "Werkzeug/x.x.x Python/x.x.x" by default
-        assert "Python" not in server_header, (
-            f"Server header leaks Python version: {server_header}"
-        )
+        assert "Python" not in server_header, f"Server header leaks Python version: {server_header}"
         assert "Werkzeug" not in server_header, (
             f"Server header leaks Werkzeug version: {server_header}"
         )
@@ -334,9 +316,7 @@ class TestServerHeaders:
         """
         resp = client.get("/admin/login")
         powered_by = resp.headers.get("X-Powered-By", "")
-        assert not powered_by, (
-            f"X-Powered-By header present: {powered_by}"
-        )
+        assert not powered_by, f"X-Powered-By header present: {powered_by}"
 
     def test_no_version_in_headers(self, client):
         """No response header should contain a Python/Flask version string."""
@@ -536,9 +516,7 @@ class TestPentestRegressions:
 
         runtime = client.application.extensions["anteumbra.runtime"]
         rules_path = normalize_path(
-            runtime.config.get()
-            .get("paths", {})
-            .get("yara_rules_path", "rules/webshell")
+            runtime.config.get().get("paths", {}).get("yara_rules_path", "rules/webshell")
         )
         escaped_path = (rules_path / ".." / "anteumbra_pentest_escape.yar").resolve()
         if escaped_path.exists():
@@ -569,9 +547,7 @@ class TestPentestRegressions:
 
         runtime = client.application.extensions["anteumbra.runtime"]
         rules_path = normalize_path(
-            runtime.config.get()
-            .get("paths", {})
-            .get("yara_rules_path", "rules/webshell")
+            runtime.config.get().get("paths", {}).get("yara_rules_path", "rules/webshell")
         )
         rules_path.mkdir(parents=True, exist_ok=True)
         rule_file = rules_path / "anteumbra_pentest_xss.yar"
@@ -615,10 +591,9 @@ class TestPentestRegressions:
         scan_id = "a3f1c5d7e9b2a4c6"
         runtime = client.application.extensions["anteumbra.runtime"]
         from anteumbra.infrastructure.utils.path_utils import normalize_path
+
         scan_file = (
-            normalize_path(runtime.config.get()["paths"]["data_dir"])
-            / "scans"
-            / f"{scan_id}.json"
+            normalize_path(runtime.config.get()["paths"]["data_dir"]) / "scans" / f"{scan_id}.json"
         )
 
         class DummyResult:

@@ -10,6 +10,7 @@ automatically via the event bus.
 When a significant profile change is detected (new profile created or
 risk score crosses threshold), emits ``threat_graph_updated``.
 """
+
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -97,12 +98,16 @@ class ThreatGraphHandlerPlugin(Plugin):
         """Emit threat_graph_updated through the injected runtime port."""
         try:
             active = graph.get_active_profiles(site_id=site_id)
-            self._events.publish("threat_graph_updated", self.name, {
-                "active_profile_count": len(active),
-                "top_profile_id": active[0].profile_id if active else None,
-                "top_risk_score": active[0].risk_score if active else 0,
-                "site_id": site_id,
-                "site_name": site_name,
-            })
+            self._events.publish(
+                "threat_graph_updated",
+                self.name,
+                {
+                    "active_profile_count": len(active),
+                    "top_profile_id": active[0].profile_id if active else None,
+                    "top_risk_score": active[0].risk_score if active else 0,
+                    "site_id": site_id,
+                    "site_name": site_name,
+                },
+            )
         except Exception:
             self._logger.debug("ThreatGraphHandler: _emit_updated failed", exc_info=True)

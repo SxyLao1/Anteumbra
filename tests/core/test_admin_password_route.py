@@ -8,9 +8,7 @@ from werkzeug.security import generate_password_hash
 
 
 def test_password_route_uses_runtime_service_and_invalidates_session(monkeypatch):
-    module = importlib.import_module(
-        "anteumbra.interfaces.web.blueprints.admin_bp"
-    )
+    module = importlib.import_module("anteumbra.interfaces.web.blueprints.admin_bp")
     calls: list[str] = []
 
     def set_password(password: str) -> tuple[bool, str]:

@@ -22,17 +22,11 @@ class RegistryEventNotifier:
 
     def notify(self, event_type: str, payload: Mapping[str, Any]) -> None:
         try:
-            self._publisher.publish(
-                event_type, "suspicious_registry", dict(payload)
-            )
+            self._publisher.publish(event_type, "suspicious_registry", dict(payload))
         except Exception:
-            self._logger.warning(
-                "Registry event publish failed: %s", event_type, exc_info=True
-            )
+            self._logger.warning("Registry event publish failed: %s", event_type, exc_info=True)
         if self._change_callback is not None:
             try:
                 self._change_callback()
             except Exception:
-                self._logger.warning(
-                    "Registry change callback failed", exc_info=True
-                )
+                self._logger.warning("Registry change callback failed", exc_info=True)

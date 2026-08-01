@@ -70,22 +70,16 @@ class MemoryShellTracer:
         end_time = self._as_utc(detection_time or datetime.now(timezone.utc))
         start_time = end_time - timedelta(hours=self._lookback_hours)
         selected_paths = (
-            list(log_paths)
-            if log_paths is not None
-            else self._default_log_paths(site_id=site_id)
+            list(log_paths) if log_paths is not None else self._default_log_paths(site_id=site_id)
         )
 
         all_entries: list[dict[str, Any]] = []
         for log_path in selected_paths:
             if log_path.exists():
-                all_entries.extend(
-                    self._extract_entries(log_path, ip, start_time, end_time)
-                )
+                all_entries.extend(self._extract_entries(log_path, ip, start_time, end_time))
 
         write_entries = [
-            entry
-            for entry in all_entries
-            if str(entry.get("method", "")).upper() in WRITE_METHODS
+            entry for entry in all_entries if str(entry.get("method", "")).upper() in WRITE_METHODS
         ]
         candidates = self._rank_candidates(write_entries)
         matched = self._cross_reference(candidates, site_id=site_id)
@@ -128,9 +122,7 @@ class MemoryShellTracer:
         except OSError as exc:
             logger.warning("MemoryShellTracer could not read %s: %s", log_path, exc)
         entries.sort(
-            key=lambda entry: entry.get(
-                "_parsed_ts", datetime.min.replace(tzinfo=timezone.utc)
-            )
+            key=lambda entry: entry.get("_parsed_ts", datetime.min.replace(tzinfo=timezone.utc))
         )
         return entries
 
@@ -244,9 +236,7 @@ class MemoryShellTracer:
             "%Y-%m-%dT%H:%M:%S",
         ):
             try:
-                return MemoryShellTracer._as_utc(
-                    datetime.strptime(value, format_string)
-                )
+                return MemoryShellTracer._as_utc(datetime.strptime(value, format_string))
             except ValueError:
                 continue
         try:
@@ -281,10 +271,7 @@ class MemoryShellTracer:
         matched: dict[str, Any] | None,
     ) -> str:
         if matched:
-            return (
-                f"Memory shell traced to {matched['fp']} "
-                f"(detected {matched['detected']})"
-            )
+            return f"Memory shell traced to {matched['fp']} (detected {matched['detected']})"
         if candidate_count:
             return f"{candidate_count} suspicious upload(s), none matched known records"
         return "No upload activity found in access logs"
@@ -321,9 +308,7 @@ def emit_critical_alert(
     """Emit SIEM and notification output for a memory-shell detection."""
     try:
         matched = trace_result.get("matched")
-        title = "MEMORY SHELL: " + (
-            Path(matched["fp"]).name if matched else trace_result["ip"]
-        )
+        title = "MEMORY SHELL: " + (Path(matched["fp"]).name if matched else trace_result["ip"])
         lines = [
             "IP: " + trace_result["ip"],
             "Time: " + trace_result["time"],
@@ -365,9 +350,7 @@ def emit_critical_alert(
 
         body = "\n".join(lines)
         notifier.send_alert(f"{title}\n{body}", level="CRITICAL")
-        logger.critical(
-            "MemoryShellTracer sent a critical alert for %s", trace_result["ip"]
-        )
+        logger.critical("MemoryShellTracer sent a critical alert for %s", trace_result["ip"])
         return True
     except Exception:
         logger.error("MemoryShellTracer alert failed", exc_info=True)

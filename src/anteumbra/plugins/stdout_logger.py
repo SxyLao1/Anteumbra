@@ -5,6 +5,7 @@ v1.9.3: Stdout Logger Plugin — POC 内置插件
 实现 Plugin + Notifier 接口。
 将所有告警事件以彩色格式输出到终端。
 """
+
 import json
 import logging
 import sys
@@ -16,11 +17,11 @@ from anteumbra.domain import AlertLevel, AlertMessage, DomainEvent, Notifier, Pl
 # 终端颜色
 _COLORS = {
     AlertLevel.CRITICAL: "\033[1;31m",  # 红色加粗
-    AlertLevel.HIGH:     "\033[0;31m",  # 红色
-    AlertLevel.MEDIUM:   "\033[0;33m",  # 黄色
-    AlertLevel.LOW:      "\033[0;36m",  # 青色
-    AlertLevel.INFO:     "\033[0;37m",  # 白色
-    "reset":             "\033[0m",
+    AlertLevel.HIGH: "\033[0;31m",  # 红色
+    AlertLevel.MEDIUM: "\033[0;33m",  # 黄色
+    AlertLevel.LOW: "\033[0;36m",  # 青色
+    AlertLevel.INFO: "\033[0;37m",  # 白色
+    "reset": "\033[0m",
 }
 
 
@@ -40,7 +41,15 @@ class StdoutLoggerPlugin(Plugin, Notifier):
 
     @property
     def supported_events(self) -> List[str]:
-        return ["alert_requested", "file_scanned", "block_executed", "file_quarantined", "threat_graph_updated", "wal_archived", "wal_replayed"]
+        return [
+            "alert_requested",
+            "file_scanned",
+            "block_executed",
+            "file_quarantined",
+            "threat_graph_updated",
+            "wal_archived",
+            "wal_replayed",
+        ]
 
     def activate(self, config: Dict[str, Any]) -> None:
         self._color = config.get("color", True)
