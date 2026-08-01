@@ -153,7 +153,7 @@ def create_app(
     except ImportError:
         pass  # Graceful: works without flask-babel installed
 
-    # v2.0: 注入版本号到所有模板（重命名 trident_ → anteumbra_ 保持模板兼容）
+    # Inject the current Anteumbra version into every template.
     from anteumbra.application.config_service import get_release_date, get_version
 
     @app.context_processor

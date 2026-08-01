@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Trident Mock WAF Server v1.8.1
+Anteumbra Mock WAF Server v1.8.1
 Simulates structured WAF attack events for profiling engine development.
 
 Usage:
@@ -9,7 +9,7 @@ Usage:
 
 API:
     GET  /                    — list scenarios + active status
-    GET  /api/open/events?start=<ts>&end=<ts>  — Trident polls events in time window
+    GET  /api/open/events?start=<ts>&end=<ts>  — Anteumbra polls events in time window
     POST /start?scenario=<name>&speed=<N>      — start scenario at Nx speed
     POST /stop?scenario=<name>                 — stop scenario
     POST /stop/all                              — stop all
@@ -152,7 +152,7 @@ def _scenario_worker(name):
 
 # ── API Endpoints ────────────────────────────────────────────
 INDEX_HTML = """<!DOCTYPE html>
-<html><head><title>Trident Mock WAF</title>
+<html><head><title>Anteumbra Mock WAF</title>
 <style>body{background:#0a0a0a;color:#ccc;font-family:monospace;padding:20px}
 h1{color:#00ff41} .card{background:#111;border:1px solid #1a1a1a;padding:12px;margin:8px 0;border-radius:4px}
 button{background:#000;color:#00ff41;border:1px solid #00ff41;padding:6px 14px;cursor:pointer;margin:4px;font-family:monospace}
@@ -163,7 +163,7 @@ pre{background:#000;padding:8px;overflow-x:auto;max-height:300px;overflow-y:auto
 @keyframes spin{to{transform:rotate(360deg)}}
 input[type=number]{background:#000;color:#ccc;border:1px solid #333;padding:4px;width:60px;font-family:monospace}
 </style></head><body>
-<h1>Trident Mock WAF Server v1.9.0</h1>
+<h1>Anteumbra Mock WAF Server v1.9.0</h1>
 {% for name, cfg in scenarios.items() %}
 <div class="card" id="card-{{ name }}">
 <h3>{{ cfg.name }} <span id="status-{{ name }}" class="{{ statuses.get(name, 'stopped') }}">[{{ statuses.get(name, 'stopped') }}]</span></h3>
@@ -280,7 +280,7 @@ def index():
 
 @app.route("/api/open/events", methods=["GET"])
 def poll_events():
-    """Trident polls events by time range. Only returns events not yet sent."""
+    """Anteumbra polls events by time range. Only returns events not yet sent."""
     start_str = request.args.get("start", "")
     end_str = request.args.get("end", "")
     max_events = int(request.args.get("limit", DEFAULTS["max_events_per_poll"]))
@@ -377,7 +377,7 @@ def status():
 
 # ── Main ─────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Trident Mock WAF Server")
+    parser = argparse.ArgumentParser(description="Anteumbra Mock WAF Server")
     parser.add_argument("--port", type=int, default=DEFAULTS["port"])
     parser.add_argument("--speed", type=int, default=DEFAULTS["speed_multiplier"])
     args = parser.parse_args()

@@ -230,4 +230,4 @@ window.AnteumbraSSEManager = {
     }
   }
 };
-window.TridentSSEManager = window.AnteumbraSSEManager;
+window.TridentSSEManager = window.AnteumbraSSEManager; // Deprecated: remove in 2.0 after legacy extensions migrate.

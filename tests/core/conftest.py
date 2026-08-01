@@ -1,4 +1,4 @@
-# Trident v1.9.5: Shared test fixtures
+# Anteumbra test suite: Shared test fixtures
 import tempfile
 from pathlib import Path
 

@@ -48,7 +48,7 @@ class TestDashboard:
         expect(capability_band).to_contain_text("Notifications")
 
     def test_overview_loads_existing_monitor_history(self, page, server_url, runtime):
-        marker = "CODEX-HISTORY-MARKER"
+        marker = "E2E-HISTORY-MARKER"
         runtime.sse.persist_log_line(f"[2026-07-17 12:00:00] INFO - {marker}")
 
         go(page, f"{server_url}/admin/")

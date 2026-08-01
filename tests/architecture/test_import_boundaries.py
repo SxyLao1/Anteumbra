@@ -89,16 +89,16 @@ KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
 
 KNOWN_LEGACY_BRANDING_LINES: set[tuple[str, str]] = {
     (
-        "interfaces/web/factory.py",
-        "重命名 trident_ → anteumbra_ 保持模板兼容",
+        "application/password_service.py",
+        '"trident",  # Deprecated pre-rename default; remove after the 2.0 credential migration.',
     ),
     (
         "interfaces/web/static/js/sse-manager.js",
-        "window.TridentSSEManager = window.AnteumbraSSEManager;",
+        "window.TridentSSEManager = window.AnteumbraSSEManager; // Deprecated: remove in 2.0 after legacy extensions migrate.",
     ),
     (
         "interfaces/web/static/js/utils.js",
-        "window.TridentUtils = AnteumbraUtils;",
+        "window.TridentUtils = AnteumbraUtils; // Deprecated: remove in 2.0 after legacy extensions migrate.",
     ),
 }
 
@@ -370,7 +370,7 @@ def test_packaged_code_has_no_unscoped_legacy_branding():
     for path in _packaged_text_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "Trident" not in line and "trident_" not in line:
+            if "Trident" not in line and "trident_" not in line and '"trident"' not in line:
                 continue
             if any(
                 rel == allowed_path and allowed_text in line

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Trident Tools Syntax Test
+Anteumbra Tools Syntax Test
 验证所有 tools/*.py 都能正常 import（不执行功能）
 """
 
@@ -18,7 +18,7 @@ SKIP_Syntax = {"generate_demo_data.py", "ci_quick_validator.py"}
 
 
 def main():
-    print("Trident Tools Verification")
+    print("Anteumbra Tools Verification")
     print("=" * 50)
 
     tools = [f for f in os.listdir(TOOLS_DIR) if f.endswith(".py") and not f.startswith("_")]

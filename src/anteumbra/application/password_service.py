@@ -32,7 +32,7 @@ WEAK_PASSWORDS = frozenset(
         "qwertyui",
         "root123",
         "scanner",
-        "trident",
+        "trident",  # Deprecated pre-rename default; remove after the 2.0 credential migration.
         "webshell",
         "welcome",
     }
