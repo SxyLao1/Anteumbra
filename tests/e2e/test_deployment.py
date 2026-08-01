@@ -907,17 +907,24 @@ class TestCliInstall:
         )
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(
-            launcher,
-            "build_runtime_container",
-            lambda **_kwargs: pytest.fail("runtime must not be built before validation"),
+        from dataclasses import replace
+
+        from anteumbra.application.runtime_builder import (
+            build_runtime_lifecycle_dependencies,
         )
 
+        dependencies = replace(
+            build_runtime_lifecycle_dependencies(),
+            container_builder=lambda **_kwargs: pytest.fail(
+                "runtime must not be built before validation"
+            ),
+        )
         with pytest.raises(launcher.RuntimeStartupError) as exc_info:
             launcher.RuntimeLifecycle(
                 host="127.0.0.1",
                 port=8765,
                 config_provider=provider,
+                dependencies=dependencies,
             ).run()
 
         assert "Website path does not exist" in str(exc_info.value)
@@ -1349,10 +1356,18 @@ class TestProcessLifecycle:
         launcher_path = project_root / "src" / "anteumbra" / "application" / "launcher.py"
         assert launcher_path.exists(), "launcher.py not found"
 
-        source = launcher_path.read_text(encoding="utf-8")
-        assert "anteumbra.pid" in source, (
+        builder_path = (
+            project_root
+            / "src"
+            / "anteumbra"
+            / "application"
+            / "runtime_builder.py"
+        )
+        launcher_source = launcher_path.read_text(encoding="utf-8")
+        builder_source = builder_path.read_text(encoding="utf-8")
+
+        assert "anteumbra.pid" in launcher_source, (
             "RuntimeLifecycle should write a PID file (data/anteumbra.pid) at startup"
         )
-        assert "write_process_identity" in source, (
-            "RuntimeLifecycle should persist PID-reuse-resistant process identity"
-        )
+        assert "dependencies.process_identity_writer" in launcher_source
+        assert "process_identity_writer=write_process_identity" in builder_source
