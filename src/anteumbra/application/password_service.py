@@ -15,7 +15,6 @@ from werkzeug.security import generate_password_hash
 
 from anteumbra.domain.runtime import ConfigProviderPort
 
-
 WEAK_PASSWORDS = frozenset(
     {
         "12345678",

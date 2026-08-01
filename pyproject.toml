@@ -95,9 +95,8 @@ line-length = 100
 extend-exclude = ["build", "dist", "data", "logs", "pentest-work", "temp"]
 
 [tool.ruff.lint]
-# Enforce fatal syntax and undefined-name defects project-wide. Broader
-# style cleanup is a touch-on-change rule until the legacy backlog is retired.
-select = ["E9", "F63", "F7", "F82"]
+# Enforce import hygiene, syntax, control-flow style, and Pyflakes defects.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.coverage.report]
 # Stage 0 baseline: non-browser suite measured 61% on 2026-08-01.

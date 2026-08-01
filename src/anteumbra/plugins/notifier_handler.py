@@ -11,9 +11,9 @@ were previously scattered across FileMonitorHandler.
 """
 import logging
 from collections.abc import Callable, Mapping
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.service_ports import NotifierPort
 
 

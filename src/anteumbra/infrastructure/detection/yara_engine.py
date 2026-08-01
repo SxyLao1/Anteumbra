@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from anteumbra.application.yara_service import (
-    get_bundled_rules_path,
+    get_bundled_rules_path,  # noqa: F401 - compatibility re-export
     resolve_yara_rules_path,
 )
 from anteumbra.domain.logging import log_with_symbol

@@ -13,23 +13,20 @@ Config:
   port = 514
   format = "cef"   # cef | modsecurity | cloudflare
 """
-import json
+
 import logging
 import re
 import socket
 import threading
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import StreamEventSource
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin, StreamEventSource
 
 logger = logging.getLogger(__name__)
 
 # CEF header regex: CEF:Version|Device Vendor|Device Product|Device Version|Signature ID|Name|Severity
-_CEF_RE = re.compile(
-    r"CEF:\d+\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|(\d+)"
-)
+_CEF_RE = re.compile(r"CEF:\d+\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|(\d+)")
 
 
 class SyslogWAFReceiver(Plugin, StreamEventSource):
@@ -60,7 +57,9 @@ class SyslogWAFReceiver(Plugin, StreamEventSource):
         self._host = config.get("host", "0.0.0.0")
         self._port = int(config.get("port", 514))
         self._format = config.get("format", "cef")
-        logger.info("SyslogWAF: activated on %s:%d (format=%s)", self._host, self._port, self._format)
+        logger.info(
+            "SyslogWAF: activated on %s:%d (format=%s)", self._host, self._port, self._format
+        )
 
     def deactivate(self) -> None:
         self.stop()
@@ -140,15 +139,17 @@ class SyslogWAFReceiver(Plugin, StreamEventSource):
 
     @staticmethod
     def _extract_ip(msg: str, fallback: str) -> str:
-        m = re.search(r'src=(\d+\.\d+\.\d+\.\d+)', msg)
-        if m: return m.group(1)
-        m = re.search(r'dst=(\d+\.\d+\.\d+\.\d+)', msg)
-        if m: return m.group(1)
+        m = re.search(r"src=(\d+\.\d+\.\d+\.\d+)", msg)
+        if m:
+            return m.group(1)
+        m = re.search(r"dst=(\d+\.\d+\.\d+\.\d+)", msg)
+        if m:
+            return m.group(1)
         return fallback
 
     @staticmethod
     def _extract_field(msg: str, key: str) -> str:
-        m = re.search(fr'{key}=(\S+)', msg)
+        m = re.search(rf"{key}=(\S+)", msg)
         return m.group(1) if m else ""
 
     @staticmethod
@@ -158,8 +159,12 @@ class SyslogWAFReceiver(Plugin, StreamEventSource):
     @staticmethod
     def _classify(msg: str) -> str:
         low = msg.lower()
-        if "webshell" in low or "php" in low: return "webshell"
-        if "sqli" in low or "sql" in low: return "sqli"
-        if "rce" in low or "exec" in low: return "rce"
-        if "scanner" in low: return "scanner"
+        if "webshell" in low or "php" in low:
+            return "webshell"
+        if "sqli" in low or "sql" in low:
+            return "sqli"
+        if "rce" in low or "exec" in low:
+            return "rce"
+        if "scanner" in low:
+            return "scanner"
         return "unknown"

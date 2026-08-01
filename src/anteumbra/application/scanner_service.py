@@ -21,15 +21,16 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
-from anteumbra.domain.site import SiteIdentity
+
+from anteumbra.domain.paths import normalize_path, path_to_key
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
     DetectionRegistryPort,
     MetricsPort,
 )
-from anteumbra.domain.service_ports import ScannerPort
-from anteumbra.domain.paths import normalize_path, path_to_key
 from anteumbra.domain.scan import ScanOptions
+from anteumbra.domain.service_ports import ScannerPort
+from anteumbra.domain.site import SiteIdentity
 
 logger = logging.getLogger("monitor.manual_scanner")
 

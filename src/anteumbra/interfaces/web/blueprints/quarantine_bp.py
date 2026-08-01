@@ -8,7 +8,7 @@
 
 v1.7.9 新增：隔离管理后台蓝图
 """
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime

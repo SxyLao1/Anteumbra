@@ -15,7 +15,6 @@ import requests
 from anteumbra.domain import WAFEvent, WAFEventSource
 from anteumbra.domain.runtime import ConfigProviderPort
 
-
 logger = logging.getLogger("monitor.waf_client")
 
 

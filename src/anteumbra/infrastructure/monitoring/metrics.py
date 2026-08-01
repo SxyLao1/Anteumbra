@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 logger = logging.getLogger("monitor.metrics")
 
 _COUNTER_DEFAULTS: dict[str, Any] = {

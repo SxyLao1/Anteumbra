@@ -13,17 +13,19 @@ v1.8.1-Release: 平台自适应幽灵目录修复（改进版）
 - T-01-B验证: ≥0.01ms即可消除误判，50ms为工程保守设计
 - v1.8.1改进: 采用TTL控制的无限制容量缓存（替代LRU硬编码100）
 """
+import fnmatch
 import importlib
 import logging
 import os
+import queue
 import sys
 import threading
 import time
-import queue
-import fnmatch
 from pathlib import Path
 from typing import Callable, Dict, Set
+
 from watchdog.events import FileSystemEventHandler
+
 from anteumbra.application.detection_workflow import DetectionWorkflow
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import RuntimeServices

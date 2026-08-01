@@ -7,10 +7,12 @@
 @Motto: HACK THE REAL
 Metrics Blueprint：提供健康检查和指标API
 """
-from anteumbra.application.config_service import get_version
 import logging
 import sys
+
 from flask import Blueprint, jsonify
+
+from anteumbra.application.config_service import get_version
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)

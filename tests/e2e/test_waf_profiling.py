@@ -9,10 +9,6 @@ Flow:
   4. Verify profile risk scores increase with more attacks
 """
 import json
-import time
-from pathlib import Path
-
-import pytest
 
 
 class TestWAFProfiling:
@@ -131,7 +127,7 @@ class TestWAFProfiling:
         matching = [p for p in profiles if "10.99.99.1" in p.ip_pool]
 
         assert len(matching) >= 1, (
-            f"Should have a profile for IP 10.99.99.1 after ingest_registry_entry"
+            "Should have a profile for IP 10.99.99.1 after ingest_registry_entry"
         )
 
         profile = matching[0]

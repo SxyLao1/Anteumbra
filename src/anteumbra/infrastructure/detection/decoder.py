@@ -18,7 +18,6 @@ YARA 扫描前自动尝试还原混淆代码为明文，大幅提升命中率。
 """
 
 import base64
-import codecs
 import logging
 import re
 

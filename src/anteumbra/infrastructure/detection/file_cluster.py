@@ -4,6 +4,7 @@ v1.8.3: 文件相似度聚类引擎
 基于 ssdeep/py-tlsh/SimHash 哈希，将相似文件归入同一簇。
 阈值 > 0.80 归为同一文件簇（代表同一工具生成的变种）。
 """
+
 import hashlib
 import logging
 import threading
@@ -54,9 +55,13 @@ class FileCluster:
         if sim < 0.80:
             try:
                 import os as _os
+
                 def _safe_stat(p):
-                    try: return _os.path.getsize(p)
-                    except Exception: return 0
+                    try:
+                        return _os.path.getsize(p)
+                    except Exception:
+                        return 0
+
                 sz_new = _safe_stat(file_path)
                 first_file = next(iter(self.files.keys()))
                 sz_old = _safe_stat(first_file)
@@ -66,9 +71,13 @@ class FileCluster:
                         ext_old = _os.path.splitext(first_file)[1].lower()
                         if ext_new == ext_old:
                             sim = 0.85
-                            logger.info(f"[CLUSTER] Small file fallback: {_os.path.basename(file_path)} ~ {_os.path.basename(first_file)}")
+                            logger.info(
+                                f"[CLUSTER] Small file fallback: {_os.path.basename(file_path)} ~ {_os.path.basename(first_file)}"
+                            )
             except Exception:
-                logger.debug("Small file size fallback check failed in cluster add_file", exc_info=True)
+                logger.debug(
+                    "Small file size fallback check failed in cluster add_file", exc_info=True
+                )
 
         if sim >= 0.80:
             self.files[file_path] = hash_value
@@ -163,9 +172,7 @@ class FileClusterEngine:
         """返回聚类统计"""
         with self._lock:
             total_files = sum(cluster.size for cluster in self._clusters.values())
-            multi_file_clusters = sum(
-                1 for cluster in self._clusters.values() if cluster.size > 1
-            )
+            multi_file_clusters = sum(1 for cluster in self._clusters.values() if cluster.size > 1)
             return {
                 "total_clusters": len(self._clusters),
                 "total_files": total_files,
@@ -173,9 +180,7 @@ class FileClusterEngine:
                 "largest_cluster_size": max(
                     (cluster.size for cluster in self._clusters.values()), default=0
                 ),
-                "avg_files_per_cluster": round(
-                    total_files / max(len(self._clusters), 1), 1
-                ),
+                "avg_files_per_cluster": round(total_files / max(len(self._clusters), 1), 1),
                 "active_track": self.hash_engine.track_name,
             }
 

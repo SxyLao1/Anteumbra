@@ -8,11 +8,11 @@
 v1.7.8-Patch1：12-Factor 配置模式 — 敏感值从 .env / 环境变量读取
 """
 import logging
-import sys
 import os
 import re
+import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 

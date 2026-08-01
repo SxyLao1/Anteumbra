@@ -15,16 +15,15 @@ Config:
   log_group = "/aws/waf/logs"
   poll_interval = 300
 """
+
 import json
 import logging
-import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import PollableEventSource
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin, PollableEventSource
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +70,7 @@ class AWSWAFAdapter(Plugin, PollableEventSource):
     def _init_client(self):
         try:
             import boto3
+
             self._boto3 = boto3
             self._logs_client = boto3.client("logs", region_name=self._region)
         except ImportError:
@@ -79,7 +79,8 @@ class AWSWAFAdapter(Plugin, PollableEventSource):
             logger.error("AWS WAF: client init failed: %s", e)
 
     def start(self) -> None:
-        if self._running: return
+        if self._running:
+            return
         self._running = True
         self._thread = threading.Thread(target=self._poll_loop, daemon=True, name="AWSWAFAdapter")
         self._thread.start()
@@ -109,17 +110,25 @@ class AWSWAFAdapter(Plugin, PollableEventSource):
                 try:
                     entry = json.loads(event.get("message", "{}"))
                     http_req = entry.get("httpRequest", {})
-                    events.append({
-                        "src_ip": http_req.get("clientIp", ""),
-                        "timestamp": datetime.fromtimestamp(event["timestamp"] / 1000, tz=timezone.utc).isoformat(),
-                        "http_method": http_req.get("httpMethod", ""),
-                        "url": http_req.get("uri", ""),
-                        "user_agent": http_req.get("headers", [{}])[0].get("value", "") if http_req.get("headers") else "",
-                        "waf_rule_id": entry.get("ruleGroupList", [{}])[0].get("ruleGroupId", "aws-waf"),
-                        "waf_score": 0.85,
-                        "attack_type": self._classify(http_req),
-                        "source": "aws_waf",
-                    })
+                    events.append(
+                        {
+                            "src_ip": http_req.get("clientIp", ""),
+                            "timestamp": datetime.fromtimestamp(
+                                event["timestamp"] / 1000, tz=timezone.utc
+                            ).isoformat(),
+                            "http_method": http_req.get("httpMethod", ""),
+                            "url": http_req.get("uri", ""),
+                            "user_agent": http_req.get("headers", [{}])[0].get("value", "")
+                            if http_req.get("headers")
+                            else "",
+                            "waf_rule_id": entry.get("ruleGroupList", [{}])[0].get(
+                                "ruleGroupId", "aws-waf"
+                            ),
+                            "waf_score": 0.85,
+                            "attack_type": self._classify(http_req),
+                            "source": "aws_waf",
+                        }
+                    )
                 except json.JSONDecodeError:
                     continue
             return events[:limit]
@@ -143,7 +152,10 @@ class AWSWAFAdapter(Plugin, PollableEventSource):
     @staticmethod
     def _classify(http_req: dict) -> str:
         uri = http_req.get("uri", "").lower()
-        if "php" in uri: return "webshell"
-        if "select" in uri: return "sqli"
-        if "cmd" in uri: return "rce"
+        if "php" in uri:
+            return "webshell"
+        if "select" in uri:
+            return "sqli"
+        if "cmd" in uri:
+            return "rce"
         return "unknown"

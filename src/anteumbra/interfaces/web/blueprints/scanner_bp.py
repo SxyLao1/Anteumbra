@@ -14,13 +14,17 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import (
-    Blueprint, render_template, request, jsonify,
-    Response, current_app, stream_with_context
+    Blueprint,
+    Response,
+    current_app,
+    jsonify,
+    render_template,
+    request,
+    stream_with_context,
 )
 
-from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.path_service import normalize_path
-
+from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
 # ── Blueprint ──────────────────────────────────────────────
@@ -340,7 +344,7 @@ def scanner_quarantine():
             file_path, site_id=requested_site_id
         )
 
-        from anteumbra.application.path_service import path_to_key, normalize_path
+        from anteumbra.application.path_service import normalize_path, path_to_key
 
         registry = get_runtime().registry
         target = path_to_key(file_path)

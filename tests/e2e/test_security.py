@@ -8,16 +8,13 @@ Covers:
   3. Server response headers do not expose version
   4. Login rate limiting (429 after rapid attempts)
 """
-import os
 import base64
 import io
+import os
 import time
-from pathlib import Path
-from urllib.parse import quote
 
 import pytest
 from werkzeug.security import generate_password_hash
-
 
 # ── Flask test client fixtures ──────────────────────────────────────────────
 

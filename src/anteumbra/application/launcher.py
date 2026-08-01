@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
-from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.application.runtime_builder import (
     RuntimeLifecycleDependencies,
     build_runtime_lifecycle_dependencies,
 )
+from anteumbra.application.runtime_container import RuntimeContainer
+from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 from anteumbra.application.runtime_plugins import (
     _start_plugins,
 )
@@ -27,12 +28,9 @@ from anteumbra.application.runtime_workers import (
     _start_sse,
     _start_waf_poller,
 )
-from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
 )
-
-
 
 logger = logging.getLogger(__name__)
 

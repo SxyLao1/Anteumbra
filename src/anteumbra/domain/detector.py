@@ -7,8 +7,10 @@ v1.9.0: Detector 抽象接口
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
+from typing import Optional
+
+from anteumbra.domain.entities import ScanResult  # noqa: F401 - compatibility re-export
 
 
 @dataclass
@@ -19,9 +21,6 @@ class ScanRequest:
     file_size: int = 0
     context: dict = field(default_factory=dict)  # 额外上下文（来源IP等）
 
-
-# v1.0.5: ScanResult unified → canonical definition in domain/entities.py
-from anteumbra.domain.entities import ScanResult  # noqa: F401 — re-export for backward compat
 
 
 class Detector(ABC):

@@ -1,8 +1,5 @@
 """Tests for core/log_heuristic.py — log parsing and behavior detection."""
-import pytest
-from pathlib import Path
-from datetime import datetime
-from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine, parse_log_line, _TOOL_SIGNATURES, _SUSPICIOUS_PATHS
+from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine, parse_log_line
 
 
 class TestLogParsing:

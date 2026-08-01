@@ -7,7 +7,6 @@ import yara
 
 from anteumbra.infrastructure.detection.yara_engine import YaraEngine
 
-
 RULES_DIR = (
     Path(__file__).resolve().parents[2]
     / "src"

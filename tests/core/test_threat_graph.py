@@ -14,7 +14,6 @@ from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
 from anteumbra.infrastructure.detection.hash_engine import HashEngine
 from anteumbra.infrastructure.threat_graph import ThreatGraph
 
-
 # ── Fixtures ──────────────────────────────────────────────────
 
 

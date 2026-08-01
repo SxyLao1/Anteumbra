@@ -7,24 +7,24 @@
 @Motto: HACK THE REAL
 v1.7.0重构：从配置读取冷却策略
 """
-import logging
-import threading
-import sys
-import time
-import re
 import os
+import re
+import sys
+import threading
+import time
 from pathlib import Path
 from threading import Thread
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
+
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
     DetectionRegistryPort,
 )
 from anteumbra.domain.service_ports import NotifierPort
-from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
 from anteumbra.infrastructure.monitoring.notifier import format_alert_message
 from anteumbra.infrastructure.utils.path_utils import normalize_path
+
 
 class LogMonitor:
     """日志监控器（v1.6.6 三层冷却策略）"""
@@ -66,12 +66,12 @@ class LogMonitor:
     def start(self):
         """启动监控（修复状态初始化）"""
         if self._is_running:
-            log_with_symbol("log_monitor_skip_duplicate", "warning", f"重复启动，已忽略", self.logger)
+            log_with_symbol("log_monitor_skip_duplicate", "warning", "重复启动，已忽略", self.logger)
             return
 
         self.log_path = self.analyzer.log_path
         if not self.log_path or not self.log_path.exists():
-            log_with_symbol("log_monitor_start_error", "error", f"启动失败：日志文件不存在", self.logger)
+            log_with_symbol("log_monitor_start_error", "error", "启动失败：日志文件不存在", self.logger)
             return
 
         self._last_size = self.log_path.stat().st_size
@@ -82,7 +82,7 @@ class LogMonitor:
         self._is_running = True
         self._thread = Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
-        log_with_symbol("log_monitor_info", "info", f"监控线程已启动", self.logger)
+        log_with_symbol("log_monitor_info", "info", "监控线程已启动", self.logger)
 
     def stop(self):
         """停止监控"""
@@ -90,7 +90,7 @@ class LogMonitor:
         if self._thread:
             self._thread.join(timeout=2.0)
 
-        log_with_symbol("log_monitor_stop", "info", f"停止监控", self.logger)
+        log_with_symbol("log_monitor_stop", "info", "停止监控", self.logger)
 
     @property
     def is_running(self) -> bool:
@@ -98,7 +98,7 @@ class LogMonitor:
 
     def _monitor_loop(self):
         """监控循环（v1.6.6：增强容错与轮转检测）"""
-        log_with_symbol("log_monitor_info", "info", f"开始监控循环", self.logger)
+        log_with_symbol("log_monitor_info", "info", "开始监控循环", self.logger)
         while self._is_running:
             try:
                 if not self.log_path or not self.log_path.exists():
@@ -122,7 +122,6 @@ class LogMonitor:
 
                 stat_info = self.log_path.stat()
                 current_size = stat_info.st_size
-                current_inode = stat_info.st_ino
 
                 if current_size > self._last_size:
                     self._last_log_scan_complete = False

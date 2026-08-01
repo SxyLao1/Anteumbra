@@ -10,12 +10,11 @@ v1.7.4增强：ScanOptions支持access_log_path配置
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from anteumbra.domain.scan import ScanOptions
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-
 
 # ═══════════════════════════════════════════════════════════════
 # v1.8.3: 画像引擎数据模型（从 threat_graph.py 迁移至此后统一管理）

@@ -2,7 +2,9 @@
 """Shared web authentication helpers for admin blueprints."""
 from functools import wraps
 from ipaddress import ip_address, ip_network
-from flask import request, session, redirect, url_for, make_response
+
+from flask import make_response, redirect, request, session, url_for
+
 from anteumbra.interfaces.web.runtime import get_runtime
 
 

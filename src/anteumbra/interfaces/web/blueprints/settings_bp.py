@@ -8,7 +8,7 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Blueprint, render_template, request, jsonify, current_app, session
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime

@@ -21,9 +21,9 @@ import re
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

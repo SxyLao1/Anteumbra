@@ -22,28 +22,36 @@ Design decisions:
     - IP pool: random octets within configured CIDR pattern
     - URL patterns: {i} placeholder for variant numbering
 """
-import sys, os, json, random, time, threading, uuid, argparse
-from datetime import datetime, timedelta
+
+import argparse
+import json
+import random
+import threading
+import time
+import uuid
+from datetime import datetime
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template_string
+
+from flask import Flask, jsonify, render_template_string, request
 
 app = Flask(__name__)
 
 # ── Load scenarios ──────────────────────────────────────────
 SCENARIOS_FILE = Path(__file__).parent / "mock_waf_scenarios.json"
-with open(SCENARIOS_FILE, encoding='utf-8') as f:
+with open(SCENARIOS_FILE, encoding="utf-8") as f:
     SCENARIO_DATA = json.load(f)
 SCENARIOS = SCENARIO_DATA["scenarios"]
 DEFAULTS = SCENARIO_DATA["defaults"]
 
 # ── Global state ─────────────────────────────────────────────
-_active = {}       # scenario_name -> {config, state}
+_active = {}  # scenario_name -> {config, state}
 _event_buffer = []  # [{timestamp, src_ip, user_agent, url, ...}, ...]
 _buffer_lock = threading.Lock()
 _simulated_start = None  # wall-clock time when scenario started
 
 # ── IP generation ────────────────────────────────────────────
 _ip_cache = {}
+
 
 def _generate_ip_pool(cidr_template, pool_size):
     if cidr_template in _ip_cache:
@@ -53,16 +61,22 @@ def _generate_ip_pool(cidr_template, pool_size):
         oct2 = random.randint(1, 254)
         oct3 = random.randint(1, 254)
         oct4 = random.randint(1, 254)
-        ip = cidr_template.replace("{octet2}", str(oct2)).replace("{octet3}", str(oct3)).replace("{octet4}", str(oct4))
+        ip = (
+            cidr_template.replace("{octet2}", str(oct2))
+            .replace("{octet3}", str(oct3))
+            .replace("{octet4}", str(oct4))
+        )
         ips.append(ip)
     _ip_cache[cidr_template] = ips
     return ips
+
 
 # ── Event generation ─────────────────────────────────────────
 def _generate_url(pattern, variant_index=None):
     if variant_index is not None and "{i}" in pattern:
         return pattern.replace("{i}", str(variant_index))
     return pattern
+
 
 def _generate_event(cfg, sim_timestamp, ip_pool, event_index):
     ip = random.choice(ip_pool)
@@ -88,8 +102,9 @@ def _generate_event(cfg, sim_timestamp, ip_pool, event_index):
         "user_agent": ua,
         "waf_rule_id": rule_id,
         "waf_score": waf_score,
-        "attack_type": cfg.get("attack_type", "unknown")
+        "attack_type": cfg.get("attack_type", "unknown"),
     }
+
 
 def _scenario_worker(name):
     """Background thread: generate events at compressed time rate"""
@@ -115,9 +130,11 @@ def _scenario_worker(name):
         for _ in range(n_events):
             if sim_time >= duration:
                 break
-            sim_dt = datetime.fromtimestamp(
-                _simulated_start.timestamp() + sim_time / speed
-            ) if _simulated_start else datetime.now()
+            sim_dt = (
+                datetime.fromtimestamp(_simulated_start.timestamp() + sim_time / speed)
+                if _simulated_start
+                else datetime.now()
+            )
             event = _generate_event(cfg, sim_dt, ip_pool, event_index)
             with _buffer_lock:
                 _event_buffer.append(event)
@@ -131,6 +148,7 @@ def _scenario_worker(name):
     state["running"] = False
     state["completed"] = True
     print(f"[MOCK_WAF] Scenario '{name}' completed: {event_index} events generated")
+
 
 # ── API Endpoints ────────────────────────────────────────────
 INDEX_HTML = """<!DOCTYPE html>
@@ -240,18 +258,25 @@ setInterval(autoRefresh, 2000);
 def index():
     statuses = {}
     for name, state in _active.items():
-        if state.get("completed"): statuses[name] = "completed"
-        elif state.get("running"): statuses[name] = "running"
-        else: statuses[name] = "stopped"
+        if state.get("completed"):
+            statuses[name] = "completed"
+        elif state.get("running"):
+            statuses[name] = "running"
+        else:
+            statuses[name] = "stopped"
     for name in SCENARIOS:
-        if name not in statuses: statuses[name] = "stopped"
+        if name not in statuses:
+            statuses[name] = "stopped"
 
     preview = ""
     with _buffer_lock:
         for evt in _event_buffer[-5:]:
             preview += json.dumps(evt) + "\n"
 
-    return render_template_string(INDEX_HTML, scenarios=SCENARIOS, statuses=statuses, events_preview=preview)
+    return render_template_string(
+        INDEX_HTML, scenarios=SCENARIOS, statuses=statuses, events_preview=preview
+    )
+
 
 @app.route("/api/open/events", methods=["GET"])
 def poll_events():
@@ -277,19 +302,30 @@ def poll_events():
 
     return jsonify(results)
 
+
 @app.route("/start", methods=["POST"])
 def start_scenario():
     global _simulated_start
     name = request.form.get("scenario") or request.args.get("scenario")
-    speed = int(request.form.get("speed") or request.args.get("speed", DEFAULTS["speed_multiplier"]))
+    speed = int(
+        request.form.get("speed") or request.args.get("speed", DEFAULTS["speed_multiplier"])
+    )
 
     if name not in SCENARIOS:
-        return jsonify({"error": f"Unknown scenario: {name}", "available": list(SCENARIOS.keys())}), 404
+        return jsonify(
+            {"error": f"Unknown scenario: {name}", "available": list(SCENARIOS.keys())}
+        ), 404
 
     if name in _active and _active[name].get("running"):
         return jsonify({"error": f"Scenario '{name}' is already running"}), 409
 
-    _active[name] = {"running": True, "completed": False, "speed": speed, "sim_offset": 0, "event_index": 0}
+    _active[name] = {
+        "running": True,
+        "completed": False,
+        "speed": speed,
+        "sim_offset": 0,
+        "event_index": 0,
+    }
     _simulated_start = datetime.now()
 
     t = threading.Thread(target=_scenario_worker, args=(name,), daemon=True)
@@ -298,6 +334,7 @@ def start_scenario():
 
     print(f"[MOCK_WAF] Started '{name}' at {speed}x speed")
     return jsonify({"success": True, "scenario": name, "speed": speed})
+
 
 @app.route("/stop", methods=["POST"])
 def stop_scenario():
@@ -313,6 +350,7 @@ def stop_scenario():
     _active[name]["running"] = False
     return jsonify({"success": True, "scenario": name})
 
+
 @app.route("/status")
 def status():
     result = {"scenarios": {}}
@@ -325,12 +363,17 @@ def status():
             "events_generated": state.get("event_index", 0),
             "sim_time_elapsed": state.get("sim_offset", 0),
             "total_duration": cfg["duration_seconds"],
-            "progress_pct": round(state.get("sim_offset", 0) / cfg["duration_seconds"] * 100, 1) if cfg["duration_seconds"] > 0 else 0
+            "progress_pct": round(state.get("sim_offset", 0) / cfg["duration_seconds"] * 100, 1)
+            if cfg["duration_seconds"] > 0
+            else 0,
         }
     with _buffer_lock:
         result["_total_events_buffered"] = len(_event_buffer)
-        result["recent_events"] = [{k: v for k, v in evt.items() if k != "_sent"} for evt in _event_buffer[-10:]]
+        result["recent_events"] = [
+            {k: v for k, v in evt.items() if k != "_sent"} for evt in _event_buffer[-10:]
+        ]
     return jsonify(result)
+
 
 # ── Main ─────────────────────────────────────────────────────
 if __name__ == "__main__":

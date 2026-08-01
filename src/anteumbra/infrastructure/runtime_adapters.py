@@ -8,7 +8,6 @@ from typing import Any, Mapping
 
 from anteumbra.domain.runtime import EventPublisherPort
 
-
 logger = logging.getLogger(__name__)
 
 

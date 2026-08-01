@@ -113,7 +113,7 @@ class HashEngine:
             with open(file_path, 'rb') as f:
                 data = f.read()
             if len(data) > 5 * 1024 * 1024:  # Skip files > 5MB
-                return f"skip:too_large"
+                return "skip:too_large"
 
             if self._ssdeep:
                 h = self._ssdeep.hash(data)

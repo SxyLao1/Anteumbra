@@ -9,7 +9,6 @@ from anteumbra.infrastructure.detection.yara_engine import (
     resolve_yara_rules_path,
 )
 
-
 VALID_RULE = r'''
 rule Test_PHP_Dynamic_Execution {
     meta:

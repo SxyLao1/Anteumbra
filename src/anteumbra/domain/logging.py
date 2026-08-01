@@ -7,7 +7,6 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-
 DEFAULT_SYMBOLS: Mapping[str, str] = MappingProxyType({
     "success": "[MONITOR][START][SUCCESS]",
     "critical_start": "[MONITOR][START][CRITICAL]",

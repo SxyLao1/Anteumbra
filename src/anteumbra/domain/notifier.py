@@ -7,8 +7,8 @@ Syslog、CEF）都实现此接口。
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class AlertLevel(str, Enum):

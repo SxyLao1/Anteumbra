@@ -3,9 +3,9 @@
 Trident Tools Syntax Test
 验证所有 tools/*.py 都能正常 import（不执行功能）
 """
+import importlib
 import os
 import sys
-import importlib
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)

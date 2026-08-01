@@ -11,7 +11,6 @@ from typing import Any
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.infrastructure.detection.log_heuristic import parse_log_line
 
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_LOOKBACK_HOURS = 24

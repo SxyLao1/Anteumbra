@@ -10,9 +10,7 @@ Covers:
   5. ssdeep failure → py-tlsh fallback
 """
 import json
-import time
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -325,7 +323,7 @@ class TestHashFallback:
         has_tlsh = False
 
         try:
-            import ppdeep
+            import ppdeep  # noqa: F401 - optional dependency availability probe
             has_ssdeep = True
         except ImportError:
             pass

@@ -6,8 +6,8 @@ v1.9.0: EventSource 抽象接口
 日志文件追踪、文件系统监控）都实现此接口。
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable
 from datetime import datetime
+from typing import Callable, List
 
 
 class EventSource(ABC):

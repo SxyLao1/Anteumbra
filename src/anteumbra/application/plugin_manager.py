@@ -17,7 +17,7 @@ import logging
 import queue
 import threading
 from collections.abc import Callable, Mapping
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from anteumbra.domain import Detector, DomainEvent, EventSource, Notifier, Plugin
 

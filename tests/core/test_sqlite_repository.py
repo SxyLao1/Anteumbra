@@ -1,7 +1,11 @@
 """Tests for core/repositories/sqlite_repository.py"""
 import pytest
-from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository, DualWriteRepository
+
 from anteumbra.infrastructure.persistence.json_repository import JsonRepository
+from anteumbra.infrastructure.persistence.sqlite_repository import (
+    DualWriteRepository,
+    SqliteRepository,
+)
 
 
 @pytest.fixture

@@ -8,23 +8,22 @@
 v1.7.6: YARA规则管理蓝图
 """
 import json
-import os
 import shutil
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from flask import Blueprint, request, jsonify, render_template, abort, current_app
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
 
+from anteumbra.application.path_service import normalize_path
 from anteumbra.application.yara_service import (
     resolve_yara_rules_path,
 )
-from anteumbra.application.path_service import normalize_path
 from anteumbra.domain.logging import log_with_symbol
-from anteumbra.interfaces.web.auth import require_auth, get_admin_credentials
+from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
 try:
@@ -225,7 +224,6 @@ def list_rules():
 def get_rule_content(filename):
     """获取单个规则文件内容（v1.7.9: 加固路径验证）"""
     try:
-        logger = current_app.logger
 
         rules_path = _get_rules_path()
 
@@ -242,7 +240,6 @@ def get_rule_content(filename):
         })
 
     except Exception as e:
-        logger = current_app.logger  # 确保在except中也有logger
         log_with_symbol(
             "error_scan_fail",
             "error",

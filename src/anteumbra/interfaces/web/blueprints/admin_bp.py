@@ -8,16 +8,21 @@
 v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 """
 import base64
-from flask_babel import gettext as _
 import logging
-import time
+import secrets
 
 from flask import (
-    Blueprint, render_template, request, jsonify, current_app, session, redirect, url_for
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash
-import secrets
 
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.domain.logging import log_with_symbol
@@ -390,4 +395,6 @@ def change_password():
 # v1.0.5: _verify_file_in_registry / _verify_file_in_quarantine removed — use _shared.py versions
 
 # Import route registrations after the shared Blueprint is initialized.
-from anteumbra.interfaces.web.blueprints import admin_diagnostic_routes as _admin_diagnostic_routes  # noqa: F401
+from anteumbra.interfaces.web.blueprints import (  # noqa: E402
+    admin_diagnostic_routes as _admin_diagnostic_routes,  # noqa: F401
+)

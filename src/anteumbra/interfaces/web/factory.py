@@ -15,13 +15,13 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_session import Session
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+
+from anteumbra.application.path_service import normalize_path
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.logging import bind_symbols
-from anteumbra.application.path_service import normalize_path
-from flask_wtf.csrf import generate_csrf
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ def create_app(
         pass  # Graceful: works without flask-babel installed
 
     # v2.0: 注入版本号到所有模板（重命名 trident_ → anteumbra_ 保持模板兼容）
-    from anteumbra.application.config_service import get_version, get_release_date
+    from anteumbra.application.config_service import get_release_date, get_version
     @app.context_processor
     def inject_version():
         return {

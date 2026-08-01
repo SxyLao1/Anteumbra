@@ -18,7 +18,6 @@ from typing import Any
 from anteumbra.domain.blocking import BlockDecision, BlockResult, canonical_ip
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger("monitor.ip_blocker")
 
 

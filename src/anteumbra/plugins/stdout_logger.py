@@ -9,10 +9,9 @@ import json
 import logging
 import sys
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import Plugin, DomainEvent
-from anteumbra.domain import Notifier, AlertMessage, AlertLevel
+from anteumbra.domain import AlertLevel, AlertMessage, DomainEvent, Notifier, Plugin
 
 # 终端颜色
 _COLORS = {

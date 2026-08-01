@@ -1,10 +1,12 @@
 """Tests for core/siem_exporter.py and utils/siem_formatter.py"""
 import json
 import logging
+
 import pytest
-from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter, format_event
-from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
+
 from anteumbra.domain import DomainEvent
+from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
+from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter, format_event
 
 
 class TestSIEMFormatter:

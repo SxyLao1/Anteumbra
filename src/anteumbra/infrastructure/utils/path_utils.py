@@ -9,6 +9,7 @@
 from pathlib import Path
 from typing import Union  # 必须导入 Union
 
+
 def normalize_path(path: Union[str, Path]) -> Path:
     """统一路径标准化（解决反斜杠转义问题）"""
     if isinstance(path, str):

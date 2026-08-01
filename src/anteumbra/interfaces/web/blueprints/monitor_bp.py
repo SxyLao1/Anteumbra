@@ -4,23 +4,23 @@ v1.0.6: Monitor Blueprint — extracted from admin_bp.py
 Routes: /stream_logs, /logs/*, /wal/*, /registry/*, /session/*, /sse/*, /config/*
 """
 import base64
-import html
 import hmac
-import json
+import html
 import logging
 import queue
 import re
 import time
-from datetime import datetime
-from pathlib import Path
 
 from flask import (
-    Blueprint, render_template, request, jsonify, abort,
-    Response, current_app, stream_with_context, session,
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    request,
+    session,
+    stream_with_context,
 )
 
-from anteumbra.application.session_service import cleanup_sessions
-from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import (
     get_admin_credentials,
@@ -293,4 +293,6 @@ def access_log_analysis():
     return ''.join(parts)
 
 # Import route registrations after the shared Blueprint is initialized.
-from anteumbra.interfaces.web.blueprints import monitor_admin_routes as _monitor_admin_routes  # noqa: F401
+from anteumbra.interfaces.web.blueprints import (  # noqa: E402
+    monitor_admin_routes as _monitor_admin_routes,  # noqa: F401
+)

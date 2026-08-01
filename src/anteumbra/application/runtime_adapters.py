@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping
 
+from anteumbra.domain.quarantine import QuarantineGuardPort
 from anteumbra.domain.runtime import (
     DetectionRegistryPort,
     EventPublisherPort,
@@ -11,7 +12,6 @@ from anteumbra.domain.runtime import (
     RuntimeContext,
     RuntimeServices,
 )
-from anteumbra.domain.quarantine import QuarantineGuardPort
 
 
 def build_runtime_services(

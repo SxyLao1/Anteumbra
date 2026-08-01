@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, render_template, request, jsonify, current_app, session
+from flask import Blueprint, current_app, render_template, request, session
 
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol

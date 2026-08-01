@@ -12,7 +12,6 @@ from typing import Any
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger(__name__)
 _LOG_TIMESTAMP = re.compile(
     r"^\[(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[,.]\d+)?)\]"

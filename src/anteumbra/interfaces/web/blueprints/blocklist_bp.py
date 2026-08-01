@@ -12,7 +12,6 @@ from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
-
 blocklist_bp = Blueprint("blocklist", __name__, url_prefix="/admin")
 
 

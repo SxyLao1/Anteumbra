@@ -15,11 +15,10 @@ Design Philosophy:
 - Backward compatible: Existing text logs continue to work
 """
 import json
-import time
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class EventSeverity(Enum):

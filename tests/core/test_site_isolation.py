@@ -179,8 +179,8 @@ def test_quarantine_batch_alert_carries_one_site_identity(monkeypatch):
 
 
 def test_threat_graph_handler_preserves_site_identity():
-    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
     from anteumbra.domain import DomainEvent
+    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
 
     ingested = []
     filters = []

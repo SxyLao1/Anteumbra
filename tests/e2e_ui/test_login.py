@@ -8,7 +8,6 @@ Tests:
   - Successful login redirects to dashboard
   - Logout clears session
 """
-import pytest
 from playwright.sync_api import expect
 
 

@@ -20,22 +20,26 @@ def build_runtime_container(
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
     from anteumbra.application.config_history_service import ConfigHistoryLogger
-    from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.log_analysis_service import AccessLogAnalysisService
+    from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
     from anteumbra.application.scan_state_service import ScanRuntimeState
-    from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.block_ledger import BlockLedger
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
+    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
     from anteumbra.infrastructure.detection.scanner import ScannerService
     from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
+    from anteumbra.infrastructure.ip_blocker import IPBlocker
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        resolve_access_log_path,
+    )
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
     from anteumbra.infrastructure.monitoring.notifier import Notifier
     from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
-    from anteumbra.infrastructure.ip_blocker import IPBlocker
     from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository
     from anteumbra.infrastructure.quarantine import QuarantineStore
     from anteumbra.infrastructure.runtime_adapters import EventPublisherRouter
@@ -44,14 +48,6 @@ def build_runtime_container(
     from anteumbra.infrastructure.threat_graph import ThreatGraph
     from anteumbra.infrastructure.utils.logger_factory import RuntimeLoggerFactory
     from anteumbra.infrastructure.utils.path_utils import normalize_path
-    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
-    from anteumbra.infrastructure.monitoring.log_analyzer import (
-        get_analyzer,
-        resolve_access_log_path,
-    )
-    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
-    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
-    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.infrastructure.utils.sse_manager import SSEManager
     from anteumbra.infrastructure.waf_client import build_waf_poller
     from anteumbra.infrastructure.wal_manager import WalManager
@@ -253,19 +249,17 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
     """Assemble concrete lifecycle capabilities at the composition root."""
     from anteumbra.application.runtime_adapters import build_runtime_services
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        get_analyzer,
+    )
+    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
+    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
+    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.infrastructure.process_identity import (
         remove_process_identity,
         write_process_identity,
     )
     from anteumbra.infrastructure.utils.path_utils import normalize_path
-    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
-    from anteumbra.infrastructure.monitoring.log_analyzer import (
-        get_analyzer,
-        resolve_access_log_path,
-    )
-    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
-    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
-    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
     return RuntimeLifecycleDependencies(

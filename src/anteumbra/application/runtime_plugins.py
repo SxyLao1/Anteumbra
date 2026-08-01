@@ -13,7 +13,6 @@ from anteumbra.domain.service_ports import (
     ThreatGraphPort,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

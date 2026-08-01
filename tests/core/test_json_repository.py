@@ -1,7 +1,8 @@
 """Tests for core/repositories/json_repository.py"""
 import json
+
 import pytest
-from pathlib import Path
+
 from anteumbra.infrastructure.persistence.json_repository import JsonRepository
 
 

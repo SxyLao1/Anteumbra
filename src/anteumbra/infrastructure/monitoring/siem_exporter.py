@@ -17,14 +17,13 @@ Config:
   syslog_port = 514
   syslog_protocol = "udp"  # udp | tcp
 """
-import json
 import logging
 import os
 import socket
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from anteumbra.infrastructure.utils.siem_formatter import SIEMFormatter
 

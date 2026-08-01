@@ -5,17 +5,16 @@ E2E UI Tests — shared fixtures (Playwright + Flask test server)
 Each test gets a FRESH Flask server (function scope) to avoid state
 accumulation that causes intermittent timeouts.
 """
-import sys
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from werkzeug.security import generate_password_hash
 from playwright.sync_api import sync_playwright
-
+from werkzeug.security import generate_password_hash
 
 TEST_PASSWORD = "test_anteumbra"
 TEST_HASH = generate_password_hash(TEST_PASSWORD)

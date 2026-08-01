@@ -10,7 +10,6 @@ import secrets
 from pathlib import Path
 from typing import Any, Mapping
 
-
 _SCAN_ID_PATTERN = re.compile(r"^[0-9a-f]{16,64}$", re.IGNORECASE)
 
 

@@ -12,7 +12,7 @@ risk score crosses threshold), emits ``threat_graph_updated``.
 """
 import logging
 import time
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.runtime import EventPublisherPort

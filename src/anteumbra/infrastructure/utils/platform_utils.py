@@ -7,8 +7,10 @@
 @Motto: HACK THE REAL
 """
 import platform
+
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
+
 
 def get_optimal_observer():
     """根据平台选择最优Observer"""

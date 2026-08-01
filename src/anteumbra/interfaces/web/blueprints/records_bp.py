@@ -11,16 +11,14 @@ import logging
 from pathlib import Path
 from urllib.parse import unquote
 
-from flask import (
-    Blueprint, render_template, request, jsonify,
-    current_app, abort
-)
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from markupsafe import escape as html_escape
 
-from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.application.path_service import normalize_path, path_to_key
+from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints._shared import (
-    verify_file_in_registry, verify_file_in_quarantine,
+    verify_file_in_quarantine,
+    verify_file_in_registry,
 )
 from anteumbra.interfaces.web.runtime import get_runtime
 

@@ -1,8 +1,9 @@
 # Trident v1.9.5: Shared test fixtures
-import pytest
 import tempfile
-import os
 from pathlib import Path
+
+import pytest
+
 
 @pytest.fixture
 def temp_dir():

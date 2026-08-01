@@ -2,13 +2,14 @@ import queue
 import threading
 import time
 
-from anteumbra.domain.plugin import Plugin, DomainEvent
-from anteumbra.domain.notifier import Notifier
 from anteumbra.application.plugin_manager import PluginManager
+from anteumbra.domain.notifier import Notifier
+from anteumbra.domain.plugin import DomainEvent, Plugin
 
 
 class _TestPlugin(Plugin):
     """Minimal plugin for testing."""
+
     def __init__(self, name="test_plugin"):
         self._name = name
         self.activated = False
@@ -16,16 +17,23 @@ class _TestPlugin(Plugin):
         self.events = []
 
     @property
-    def name(self): return self._name
+    def name(self):
+        return self._name
 
     @property
-    def version(self): return "0.1.0"
+    def version(self):
+        return "0.1.0"
 
     @property
-    def supported_events(self): return ["test.event"]
+    def supported_events(self):
+        return ["test.event"]
 
-    def activate(self, config): self.activated = True
-    def deactivate(self): self.deactivated = True
+    def activate(self, config):
+        self.activated = True
+
+    def deactivate(self):
+        self.deactivated = True
+
     def on_event(self, event):
         self.events.append(event)
         return [DomainEvent("test.response", 0, self._name, {"echo": event.payload})]
@@ -37,15 +45,29 @@ class _TestNotifier(Plugin, Notifier):
         self.sent = []
 
     @property
-    def name(self): return self._name
+    def name(self):
+        return self._name
+
     @property
-    def version(self): return "0.1.0"
+    def version(self):
+        return "0.1.0"
+
     @property
-    def supported_events(self): return ["alert.send"]
-    def activate(self, c): pass
-    def deactivate(self): pass
-    def on_event(self, e): return None
-    def send(self, msg): self.sent.append(msg); return True
+    def supported_events(self):
+        return ["alert.send"]
+
+    def activate(self, c):
+        pass
+
+    def deactivate(self):
+        pass
+
+    def on_event(self, e):
+        return None
+
+    def send(self, msg):
+        self.sent.append(msg)
+        return True
 
 
 class TestPluginManager:
@@ -172,13 +194,15 @@ class TestPluginManager:
     def test_init_from_config_enabled(self):
         pm = PluginManager()
         # stdout_logger should load from plugins/ directory
-        pm.init_from_config({
-            "plugins": {
-                "enabled": True,
-                "builtin": ["stdout_logger"],
-                "stdout_logger": {"color": False, "verbose": False}
+        pm.init_from_config(
+            {
+                "plugins": {
+                    "enabled": True,
+                    "builtin": ["stdout_logger"],
+                    "stdout_logger": {"color": False, "verbose": False},
+                }
             }
-        })
+        )
         assert pm.is_enabled is True
         plugins = pm.list_all()
         assert any(p["name"] == "stdout_logger" for p in plugins)

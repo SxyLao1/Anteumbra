@@ -17,10 +17,9 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import PollableEventSource
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin, PollableEventSource
 
 logger = logging.getLogger(__name__)
 

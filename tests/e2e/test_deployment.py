@@ -8,19 +8,17 @@ Covers:
   3. Process startup / port listening
   4. Process shutdown / no residue
 """
-import json
 import os
+import socket
 import subprocess
 import sys
-import time
-import socket
 import textwrap
-from types import SimpleNamespace
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
-
 
 # ── Flask test client fixtures ──────────────────────────────────────────────
 
@@ -414,8 +412,8 @@ class TestCliInstall:
 
     def test_install_creates_complete_deployment_instance(self, tmp_path, monkeypatch):
         """anteumbra install should create config, env, rules and registry marker."""
-        from anteumbra.infrastructure.config import install_registry
         from anteumbra.cli.main import cli
+        from anteumbra.infrastructure.config import install_registry
 
         target = tmp_path / "instance"
         registered = {}
@@ -449,8 +447,8 @@ class TestCliInstall:
 
     def test_install_succeeds_when_user_registry_is_read_only(self, tmp_path, monkeypatch):
         """A convenience registry failure must not invalidate a complete instance."""
-        from anteumbra.infrastructure.config import install_registry
         from anteumbra.cli.main import cli
+        from anteumbra.infrastructure.config import install_registry
 
         target = tmp_path / "instance"
 
@@ -498,8 +496,8 @@ class TestCliInstall:
 
     def test_force_install_preserves_existing_config_and_env(self, tmp_path, monkeypatch):
         """Registration replacement must not reset operator config or secrets."""
-        from anteumbra.infrastructure.config import install_registry
         from anteumbra.cli.main import cli
+        from anteumbra.infrastructure.config import install_registry
 
         target = tmp_path / "instance"
         target.mkdir()
@@ -536,6 +534,7 @@ class TestCliInstall:
     def test_config_subcommands_update_config_and_env(self, tmp_path):
         """CLI config subcommands should support scripted first-run setup."""
         import tomli
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -586,6 +585,7 @@ class TestCliInstall:
         """Legacy configs remain valid but explain rename-sensitive derived IDs."""
         import tomli
         import tomli_w
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -606,6 +606,7 @@ class TestCliInstall:
         """The scripted config path must not accidentally split site history."""
         import tomli
         import tomli_w
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -661,6 +662,7 @@ class TestCliInstall:
     def test_config_validate_rejects_reserved_legacy_site_id(self, tmp_path):
         import tomli
         import tomli_w
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -679,6 +681,7 @@ class TestCliInstall:
     def test_config_validate_supports_multiple_websites(self, tmp_path):
         """Every enabled [[website]] entry should be validated independently."""
         import tomli_w
+
         from anteumbra.cli.main import cli
 
         first = tmp_path / "site-a"
@@ -767,6 +770,7 @@ class TestCliInstall:
     def test_config_set_recovers_powershell_expanded_tomcat_wildcards(self, tmp_path):
         """PowerShell can expand *.txt before Click receives the command."""
         import tomli
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -804,6 +808,7 @@ class TestCliInstall:
     def test_config_access_log_tomcat_preset_sets_enabled_wildcard(self, tmp_path):
         """Users should not need to type Tomcat wildcard paths by hand."""
         import tomli
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -829,6 +834,7 @@ class TestCliInstall:
     def test_config_wizard_creates_first_run_configuration(self, tmp_path):
         """Interactive wizard should collect the essential deployment settings."""
         import tomli
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -855,6 +861,7 @@ class TestCliInstall:
     def test_config_wizard_tomcat_access_log_preset(self, tmp_path):
         """Wizard should guide Tomcat users without requiring wildcard typing."""
         import tomli
+
         from anteumbra.cli.main import cli
 
         target = tmp_path / "instance" / "config.toml"
@@ -884,6 +891,7 @@ class TestCliInstall:
     def test_bundled_config_defaults_are_runnable_without_external_services(self):
         """Fresh installs should not require nginx logs or a mock WAF server."""
         import tomli
+
         import anteumbra
 
         config_path = Path(anteumbra.__file__).parent / "config.toml"
@@ -1349,7 +1357,7 @@ class TestProcessLifecycle:
     def test_pid_file_written_by_run_py(self, tmp_path):
         """When run.py starts, a PID file should be created."""
         project_root = Path(__file__).parent.parent.parent
-        pid_file = project_root / "data" / "anteumbra.pid"
+        project_root / "data" / "anteumbra.pid"
 
         # PID writing is owned by RuntimeLifecycle instead of source-tree run.py.
         # Verify the launcher contains the PID file logic

@@ -15,7 +15,6 @@ from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
 from anteumbra.domain.service_ports import YaraEnginePort
 from anteumbra.infrastructure.models import ScanOptions
 
-
 _WEB_EXTENSIONS = {".php", ".php5", ".phtml", ".asp", ".aspx", ".ashx", ".jsp", ".jspx"}
 
 

@@ -14,7 +14,6 @@ from anteumbra.domain.runtime import (
     DetectionRegistryPort,
     RuntimeMetricsPort,
 )
-from anteumbra.domain.site import SiteIdentity
 from anteumbra.domain.service_ports import (
     NotifierPort,
     SIEMExporterPort,
@@ -22,7 +21,7 @@ from anteumbra.domain.service_ports import (
     ThreatGraphPort,
     WAFPollerPort,
 )
-
+from anteumbra.domain.site import SiteIdentity
 
 logger = logging.getLogger(__name__)
 

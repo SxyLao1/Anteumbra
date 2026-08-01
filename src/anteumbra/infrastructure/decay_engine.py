@@ -8,10 +8,10 @@ v1.8.3: 简单衰减引擎 — 后台线程遍历画像表，应用衰减公式
     - 高危(>80) 10min / 中危(20-80) 1h / 低危(<20) 6h
     - 7天无活动内存移除，30天WAL归档
 """
+import logging
 import threading
 import time
-import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional
 
 logger = logging.getLogger("monitor.decay")

@@ -19,7 +19,6 @@ from anteumbra.domain.repository import Repository
 from anteumbra.domain.runtime import EventPublisherPort
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger("monitor.block_ledger")
 
 

@@ -3,7 +3,6 @@
 Minimal smoke test — verifies Flask server starts and basic pages respond.
 Run this FIRST to isolate config/server issues from navigation issues.
 """
-import pytest
 from playwright.sync_api import expect
 
 

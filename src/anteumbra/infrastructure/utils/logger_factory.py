@@ -14,7 +14,6 @@ from anteumbra.domain.logging import bind_symbols
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger(__name__)
 
 

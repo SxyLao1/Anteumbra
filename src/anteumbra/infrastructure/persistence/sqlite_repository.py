@@ -20,11 +20,11 @@ import json
 import logging
 import sqlite3
 import threading
-from pathlib import Path
-from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import Repository, EventRepository
+from anteumbra.domain import EventRepository
 
 logger = logging.getLogger(__name__)
 

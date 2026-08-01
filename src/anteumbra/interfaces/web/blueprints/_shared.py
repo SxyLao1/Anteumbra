@@ -12,8 +12,6 @@ from typing import Optional
 
 from anteumbra.interfaces.web.runtime import get_runtime
 
-
-
 logger = logging.getLogger(__name__)
 
 # ── 文件查看器安全验证 ──────────────────────────────────

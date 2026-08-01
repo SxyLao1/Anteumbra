@@ -6,8 +6,8 @@ Detectors, notifiers, event sources, and repositories can implement this
 contract and be registered through PluginManager.
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,6 @@ from anteumbra.infrastructure.config.loader import load_toml_config
 from anteumbra.infrastructure.models import ScanOptions, Website
 from anteumbra.infrastructure.utils.path_utils import normalize_path
 
-
 logger = logging.getLogger(__name__)
 _RESERVED_CONFIG_SITE_IDS = {"legacy"}
 
