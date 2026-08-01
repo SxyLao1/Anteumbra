@@ -42,6 +42,10 @@ def build_runtime_container(
     from anteumbra.infrastructure.threat_graph import ThreatGraph
     from anteumbra.infrastructure.utils.logger_factory import RuntimeLoggerFactory
     from anteumbra.infrastructure.utils.path_utils import normalize_path
+    from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
+    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
+    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
+    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.infrastructure.utils.sse_manager import SSEManager
     from anteumbra.infrastructure.waf_client import build_waf_poller
     from anteumbra.infrastructure.wal_manager import WalManager
@@ -231,6 +235,10 @@ class RuntimeLifecycleDependencies:
     runtime_services_builder: Callable[..., object]
     app_factory: Callable[..., object]
     server_factory: Callable[..., object]
+    monitor_factory: Callable[..., object]
+    analyzer_factory: Callable[..., object]
+    log_monitor_factory: Callable[..., object]
+    alert_formatter: Callable[[dict[str, object]], str]
 
 
 def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
@@ -243,6 +251,10 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
         write_process_identity,
     )
     from anteumbra.infrastructure.utils.path_utils import normalize_path
+    from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
+    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
+    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
+    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
     return RuntimeLifecycleDependencies(
@@ -255,4 +267,8 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
         runtime_services_builder=build_runtime_services,
         app_factory=create_app,
         server_factory=create_runtime_server,
+        monitor_factory=WebsiteMonitor,
+        analyzer_factory=get_analyzer,
+        log_monitor_factory=LogMonitor,
+        alert_formatter=format_alert_message,
     )

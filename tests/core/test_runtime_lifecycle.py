@@ -261,8 +261,12 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
         runtime_services_builder=lambda *_args, **_kwargs: object(),
         app_factory=lambda **_kwargs: object(),
         server_factory=lambda *_args: object(),
+        monitor_factory=lambda *_args, **_kwargs: object(),
+        analyzer_factory=lambda *_args: object(),
+        log_monitor_factory=lambda *_args, **_kwargs: object(),
+        alert_formatter=lambda _context: "",
     )
-    monkeypatch.setattr(launcher, "_start_plugins", lambda *_args: manager)
+    monkeypatch.setattr(launcher, "_start_plugins", lambda *_args, **_kwargs: manager)
     monkeypatch.setattr(launcher, "assess_runtime_capabilities", lambda _config: {"warnings": []})
     monkeypatch.setattr(launcher, "_start_site_monitors", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")))
 

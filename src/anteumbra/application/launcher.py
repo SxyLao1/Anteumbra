@@ -169,6 +169,7 @@ class RuntimeLifecycle:
                 container.threat_graph,
                 container.quarantine,
                 container.logging.get_logger,
+                alert_formatter=dependencies.alert_formatter,
             )
             container.plugin_manager = plugin_manager
             container.events.bind(plugin_manager)
@@ -196,6 +197,9 @@ class RuntimeLifecycle:
                 notifier=container.notifier,
                 registry=container.registry,
                 scan_callback=container.scanner.scan,
+                monitor_factory=dependencies.monitor_factory,
+                analyzer_factory=dependencies.analyzer_factory,
+                log_monitor_factory=dependencies.log_monitor_factory,
             )
             state.monitors = monitors
             state.log_monitors = log_monitors

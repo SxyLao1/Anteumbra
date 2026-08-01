@@ -70,21 +70,15 @@ def _start_site_monitors(
     registry: DetectionRegistryPort | None = None,
 ) -> tuple[list[MonitorResourcePort], list[MonitorResourcePort], list[str]]:
     if monitor_factory is None:
-        from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
-
-        monitor_factory = WebsiteMonitor
+        raise ValueError("monitor_factory must be supplied by the composition root")
     if logger_factory is None:
         raise ValueError("logger_factory must be supplied by the composition root")
     if scan_callback is None:
         raise ValueError("scan_callback must be supplied by the composition root")
     if analyzer_factory is None:
-        from anteumbra.infrastructure.monitoring.log_analyzer import get_analyzer
-
-        analyzer_factory = get_analyzer
+        raise ValueError("analyzer_factory must be supplied by the composition root")
     if log_monitor_factory is None:
-        from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
-
-        log_monitor_factory = LogMonitor
+        raise ValueError("log_monitor_factory must be supplied by the composition root")
 
     monitors: list[MonitorResourcePort] = []
     log_monitors: list[MonitorResourcePort] = []
