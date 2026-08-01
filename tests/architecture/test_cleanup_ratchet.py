@@ -25,7 +25,6 @@ TEMPORARY_APPLICATION_TO_INFRASTRUCTURE = {
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.monitor"),
-    ("application/yara_service.py", "anteumbra.infrastructure.detection.yara_engine"),
 }
 
 RUNTIME_BUILDER_IMPORTS = {
@@ -158,7 +157,6 @@ TEMPORARY_APPLICATION_TO_INFRASTRUCTURE_RATIONALES = {
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "inject worker analyzer factory",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"): "inject log monitor factory",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.monitor"): "inject site monitor factory",
-    ("application/yara_service.py", "anteumbra.infrastructure.detection.yara_engine"): "define YARA scan port",
 }
 
 
