@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from anteumbra.application.config_service import get_version
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.domain.service_ports import PluginManagerPort
@@ -245,7 +246,6 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
     """Assemble concrete lifecycle capabilities at the composition root."""
     from anteumbra.application.runtime_adapters import build_runtime_services
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
-    from anteumbra.infrastructure.config.version import get_version
     from anteumbra.infrastructure.process_identity import (
         remove_process_identity,
         write_process_identity,

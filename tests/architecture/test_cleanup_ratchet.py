@@ -13,14 +13,11 @@ PACKAGE_ROOT = PROJECT_ROOT / "src" / "anteumbra"
 # runtime_builder is the explicit composition root. Every other entry is
 # temporary Stage 1 debt, documented so the allowlist can only shrink.
 TEMPORARY_APPLICATION_TO_INFRASTRUCTURE = {
-    ("application/config_service.py", "anteumbra.infrastructure.config.version"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.config.provider"),
-    ("application/runtime_builder.py", "anteumbra.infrastructure.config.version"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.process_identity"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
-    ("application/platform_service.py", "anteumbra.infrastructure.utils.platform_utils"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.notifier"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"),
@@ -145,14 +142,11 @@ def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication()
     }
 
 TEMPORARY_APPLICATION_TO_INFRASTRUCTURE_RATIONALES = {
-    ("application/config_service.py", "anteumbra.infrastructure.config.version"): "configuration metadata port",
     ("application/runtime_builder.py", "anteumbra.infrastructure.config.provider"): "inject default provider",
-    ("application/runtime_builder.py", "anteumbra.infrastructure.config.version"): "inject startup version",
     ("application/runtime_builder.py", "anteumbra.infrastructure.process_identity"): "extract process identity port",
     ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"): "move path normalization to assembly",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"): "define detection port",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "define log-analysis port",
-    ("application/platform_service.py", "anteumbra.infrastructure.utils.platform_utils"): "define OS capability boundary",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.notifier"): "inject plugin formatter",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "inject worker analyzer factory",
     ("application/runtime_builder.py", "anteumbra.infrastructure.monitoring.log_monitor"): "inject log monitor factory",
