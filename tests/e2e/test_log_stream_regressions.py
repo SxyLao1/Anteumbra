@@ -126,10 +126,20 @@ def test_access_log_analysis_is_available_from_log_analyzer():
         "blueprints",
         "monitor_bp.py",
     )
-    dashboard_js = read_source("src", "anteumbra", "interfaces", "web", "static", "js", "dashboard.js")
-    overview = read_source("src", "anteumbra", "interfaces", "web", "templates", "admin", "overview.html")
+    dashboard_js = read_source(
+        "src", "anteumbra", "interfaces", "web", "static", "js", "dashboard.js"
+    )
+    overview = read_source(
+        "src", "anteumbra", "interfaces", "web", "templates", "admin", "overview.html"
+    )
 
-    assert "@monitor_bp.route('/logs/access-analysis')" in monitor_bp
+    assert any(
+        marker in monitor_bp
+        for marker in (
+            '@monitor_bp.route("/logs/access-analysis")',
+            "@monitor_bp.route('/logs/access-analysis')",
+        )
+    )
     assert "runtime.log_analysis.analyze" in monitor_bp
     assert "function loadAccessLogAnalysis()" in dashboard_js
     assert "/admin/logs/access-analysis" in dashboard_js
