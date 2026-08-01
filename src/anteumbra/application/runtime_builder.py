@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.runtime import ConfigProviderPort
@@ -213,4 +215,44 @@ def build_runtime_container(
         registry=registry,
         quarantine=quarantine,
         waf_poller=waf_poller,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeLifecycleDependencies:
+    """Concrete runtime capabilities assembled outside lifecycle orchestration."""
+
+    config_provider_factory: Callable[[], ConfigProviderPort]
+    path_normalizer: Callable[[str | Path], Path]
+    version_getter: Callable[[], str]
+    process_identity_writer: Callable[[Path, Path], object]
+    process_identity_remover: Callable[[Path, object], None]
+    container_builder: Callable[..., RuntimeContainer]
+    runtime_services_builder: Callable[..., object]
+    app_factory: Callable[..., object]
+    server_factory: Callable[..., object]
+
+
+def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
+    """Assemble concrete lifecycle capabilities at the composition root."""
+    from anteumbra.application.runtime_adapters import build_runtime_services
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
+    from anteumbra.infrastructure.config.version import get_version
+    from anteumbra.infrastructure.process_identity import (
+        remove_process_identity,
+        write_process_identity,
+    )
+    from anteumbra.infrastructure.utils.path_utils import normalize_path
+    from anteumbra.interfaces.web.factory import create_app, create_runtime_server
+
+    return RuntimeLifecycleDependencies(
+        config_provider_factory=TomlConfigProvider,
+        path_normalizer=normalize_path,
+        version_getter=get_version,
+        process_identity_writer=write_process_identity,
+        process_identity_remover=remove_process_identity,
+        container_builder=build_runtime_container,
+        runtime_services_builder=build_runtime_services,
+        app_factory=create_app,
+        server_factory=create_runtime_server,
     )

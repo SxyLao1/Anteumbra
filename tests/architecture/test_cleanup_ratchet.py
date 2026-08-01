@@ -14,10 +14,10 @@ PACKAGE_ROOT = PROJECT_ROOT / "src" / "anteumbra"
 # temporary Stage 1 debt, documented so the allowlist can only shrink.
 TEMPORARY_APPLICATION_TO_INFRASTRUCTURE = {
     ("application/config_service.py", "anteumbra.infrastructure.config.version"),
-    ("application/launcher.py", "anteumbra.infrastructure.config.provider"),
-    ("application/launcher.py", "anteumbra.infrastructure.config.version"),
-    ("application/launcher.py", "anteumbra.infrastructure.process_identity"),
-    ("application/launcher.py", "anteumbra.infrastructure.utils.path_utils"),
+    ("application/runtime_builder.py", "anteumbra.infrastructure.config.provider"),
+    ("application/runtime_builder.py", "anteumbra.infrastructure.config.version"),
+    ("application/runtime_builder.py", "anteumbra.infrastructure.process_identity"),
+    ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"),
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"),
     ("application/path_service.py", "anteumbra.infrastructure.utils.path_utils"),
@@ -96,7 +96,7 @@ def test_stage_one_must_retire_the_only_application_to_interface_edge():
         for edge in _internal_import_edges()
         if edge.source_layer == "application" and edge.imported_layer == "interfaces"
     }
-    assert edges == {("application/launcher.py", "anteumbra.interfaces.web.factory")}
+    assert edges == {("application/runtime_builder.py", "anteumbra.interfaces.web.factory")}
 
 
 def _route_contract(filename: str, blueprint: str) -> set[tuple[str, tuple[str, ...], bool]]:
@@ -150,10 +150,10 @@ def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication()
 
 TEMPORARY_APPLICATION_TO_INFRASTRUCTURE_RATIONALES = {
     ("application/config_service.py", "anteumbra.infrastructure.config.version"): "configuration metadata port",
-    ("application/launcher.py", "anteumbra.infrastructure.config.provider"): "inject default provider",
-    ("application/launcher.py", "anteumbra.infrastructure.config.version"): "inject startup version",
-    ("application/launcher.py", "anteumbra.infrastructure.process_identity"): "extract process identity port",
-    ("application/launcher.py", "anteumbra.infrastructure.utils.path_utils"): "move path normalization to assembly",
+    ("application/runtime_builder.py", "anteumbra.infrastructure.config.provider"): "inject default provider",
+    ("application/runtime_builder.py", "anteumbra.infrastructure.config.version"): "inject startup version",
+    ("application/runtime_builder.py", "anteumbra.infrastructure.process_identity"): "extract process identity port",
+    ("application/runtime_builder.py", "anteumbra.infrastructure.utils.path_utils"): "move path normalization to assembly",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.detection.log_heuristic"): "define detection port",
     ("application/log_analysis_service.py", "anteumbra.infrastructure.monitoring.log_analyzer"): "define log-analysis port",
     ("application/path_service.py", "anteumbra.infrastructure.utils.path_utils"): "relocate neutral path helper",

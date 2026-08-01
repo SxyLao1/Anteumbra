@@ -84,7 +84,7 @@ def _format_edges(edges: Iterable[ImportEdge]) -> str:
 
 # The launcher is the composition root and may start the web interface.
 KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
-    ("application/launcher.py", "anteumbra.interfaces.web.factory"),
+    ("application/runtime_builder.py", "anteumbra.interfaces.web.factory"),
 }
 
 
@@ -409,7 +409,7 @@ def test_runtime_composition_is_split_from_lifecycle():
     application_root = PACKAGE_ROOT / "application"
     launcher = (application_root / "launcher.py").read_text(encoding="utf-8")
 
-    assert "from anteumbra.application.runtime_builder import build_runtime_container" in launcher
+    assert "from anteumbra.application.runtime_builder import (" in launcher
     assert "from anteumbra.application.runtime_plugins import (" in launcher
     assert "from anteumbra.application.runtime_workers import (" in launcher
     for helper in (

@@ -203,9 +203,7 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
     import pytest
 
     from anteumbra.application import launcher
-    from anteumbra.infrastructure import process_identity
-    from anteumbra.interfaces.web import factory
-    from anteumbra.application import runtime_adapters
+    from anteumbra.application.runtime_builder import RuntimeLifecycleDependencies
 
     calls = []
 
@@ -253,17 +251,22 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
         ],
     )
 
-    monkeypatch.setattr(launcher, "build_runtime_container", lambda **_kwargs: container)
+    dependencies = RuntimeLifecycleDependencies(
+        config_provider_factory=lambda: provider,
+        path_normalizer=lambda value: value if hasattr(value, "exists") else tmp_path / value,
+        version_getter=lambda: "test",
+        process_identity_writer=lambda *_args: object(),
+        process_identity_remover=lambda *_args: calls.append("pid"),
+        container_builder=lambda **_kwargs: container,
+        runtime_services_builder=lambda *_args, **_kwargs: object(),
+        app_factory=lambda **_kwargs: object(),
+        server_factory=lambda *_args: object(),
+    )
     monkeypatch.setattr(launcher, "_start_plugins", lambda *_args: manager)
     monkeypatch.setattr(launcher, "assess_runtime_capabilities", lambda _config: {"warnings": []})
     monkeypatch.setattr(launcher, "_start_site_monitors", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")))
-    monkeypatch.setattr(runtime_adapters, "build_runtime_services", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(factory, "create_app", lambda **_kwargs: object())
-    monkeypatch.setattr(factory, "create_runtime_server", lambda *_args: object())
-    monkeypatch.setattr(process_identity, "write_process_identity", lambda *_args: object())
-    monkeypatch.setattr(process_identity, "remove_process_identity", lambda *_args: calls.append("pid"))
 
-    lifecycle = launcher.RuntimeLifecycle(config_provider=provider)
+    lifecycle = launcher.RuntimeLifecycle(config_provider=provider, dependencies=dependencies)
     with pytest.raises(launcher.RuntimeStartupError, match="Runtime startup failed"):
         lifecycle.run()
 
