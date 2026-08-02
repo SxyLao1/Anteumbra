@@ -10,6 +10,7 @@ Covers:
 """
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -265,6 +266,23 @@ class TestVersionSource:
         )
         # Version should look like a semver (e.g., "1.0.4")
         assert "." in v, f"Version '{v}' does not look like a semver"
+
+    def test_docker_image_version_label_matches_package(self):
+        """The OCI image label must describe the package installed in the image."""
+        import anteumbra
+
+        project_root = Path(__file__).parent.parent.parent
+        dockerfile = (project_root / "Dockerfile").read_text(encoding="utf-8")
+        match = re.search(
+            r'org\.opencontainers\.image\.version="([^"]+)"',
+            dockerfile,
+        )
+
+        assert match, "Dockerfile must declare org.opencontainers.image.version"
+        assert match.group(1) == anteumbra.__version__, (
+            "Docker image version label must match anteumbra.__version__: "
+            f"{match.group(1)} != {anteumbra.__version__}"
+        )
 
     def test_dockerfile_quotes_every_base_runtime_requirement(self):
         """Docker's shell must receive the same constrained dependencies as pip."""
