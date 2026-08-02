@@ -6,7 +6,7 @@
 
 ---
 
-## [Unreleased]
+## [1.0.35] - 2026-08-02
 
 ### Changed
 - Decoupled the admin frontend from template-bound global JavaScript calls. `app.js`
@@ -46,7 +46,7 @@
   the runtime package version, and removed an expired browser-configuration note.
 
 ### Tests
-- Passed 544 non-browser tests at 62.24% coverage and 43 Playwright UI tests,
+- Passed 544 non-browser tests at 62.22% coverage and 43 Playwright UI tests,
   including architecture boundaries, runtime lifecycle, scan history, scanner
   SSE teardown, YARA batch failures, action contracts, and detection workflows.
 - Verified 116 package imports, 142/233-file Wheel parity, clean Wheel

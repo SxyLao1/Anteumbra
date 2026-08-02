@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.33-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.35-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -187,5 +187,5 @@ MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.33 · MIT License</sub>
+  <sub>Anteumbra v1.0.35 · MIT License</sub>
 </div>
