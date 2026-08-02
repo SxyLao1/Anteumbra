@@ -11,7 +11,6 @@ from typing import Any, Callable, Protocol
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
 from anteumbra.application.runtime_builder import (
     RuntimeLifecycleDependencies,
-    build_runtime_lifecycle_dependencies,
 )
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.application.runtime_health_service import assess_runtime_capabilities
@@ -88,7 +87,7 @@ class RuntimeLifecycle:
         self.host = host
         self.port = port
         self._config_provider = config_provider
-        self._dependencies = dependencies or build_runtime_lifecycle_dependencies()
+        self._dependencies = dependencies
         self._lock = threading.RLock()
         self._state = RuntimeState()
 
@@ -99,6 +98,8 @@ class RuntimeLifecycle:
                 raise RuntimeError("Runtime lifecycle is already active")
 
         dependencies = self._dependencies
+        if dependencies is None:
+            raise RuntimeStartupError("Runtime dependencies were not supplied")
         provider = self._config_provider or dependencies.config_provider_factory()
         config = provider.get()
         data_dir = dependencies.path_normalizer(config.get("paths", {}).get("data_dir", "data"))
