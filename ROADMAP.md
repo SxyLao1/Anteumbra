@@ -2,9 +2,9 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.33 (release validation completed, 2026-07-20)
+> **Latest Release**: v1.0.35 (release candidate validated, 2026-08-02)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` matches the validated v1.0.33 release: 520 non-browser tests, 41 browser tests, Ruff, 118/205-file Wheel parity, Windows runtime, Docker PID identity/health, and the official PyPI Wheel clean-install/import checks pass.
+> **Source Status**: `main` matches the validated v1.0.35 candidate: 544 non-browser tests, 43 browser tests, expanded Ruff and formatter checks, 142/233-file Wheel parity, 116-module imports, Windows runtime, and Docker health/login/non-root/functional smoke pass.
 
 ---
 
@@ -33,14 +33,14 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 ### Known Truths
 
 - The project is usable as a single-host security operations tool, but should not be described as a replacement for a production WAF, EDR, SIEM, centralized fleet manager, or distributed HA platform.
-- The architecture is a modular monolith: `launcher.py` is the sole composition root, while independently replaceable services implement contracts from `domain/runtime.py` and `domain/service_ports.py`.
+- The architecture is a modular monolith: `runtime_builder.py` is the explicit composition root, `launcher.py` owns lifecycle orchestration, and replaceable services implement contracts from `domain/runtime.py` and `domain/service_ports.py`.
 - Site ownership is complete in Registry, metrics, notifications, quarantine, scanner history, dashboard summaries, ThreatGraph profiles/reputation, and SQLite shadow keys. Stable `website.id` ownership survives display-name changes; historical unassigned data remains explicitly `legacy`.
 - Login-attempt throttling is owned by each app runtime through `LoginRateLimiter`. Its in-memory backend fits the current single-process product; multi-worker or distributed deployment would require a shared backend.
 - Docker fuzzy hashing is best-effort: `yara-python` is installed, while `py-tlsh` and `ssdeep` are optional and may degrade gracefully depending on Python/base-image compatibility.
 
 ---
 
-## v1.0.20 - v1.0.33 Cleanup Line
+## v1.0.20 - v1.0.35 Cleanup Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
@@ -58,6 +58,8 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.31 | Safe CLI runtime selection, non-destructive config/install behavior, complete help, and local environment convergence | Released to PyPI |
 | 1.0.32 | Truthful configured-admin identity and password preservation/reset semantics in the install summary | Released to PyPI |
 | 1.0.33 | PID-reuse-safe runtime ownership and environment-neutral installation guidance | Released to PyPI |
+| 1.0.34 | Admin frontend modules, delegated actions, and symmetric HTMX lifecycle ownership | Included in v1.0.35 |
+| 1.0.35 | Dependency inversion, focused Web/CLI/Notifier/ThreatGraph/Registry/Monitor modules, expanded quality gates, and release-candidate validation | Candidate validated |
 
 ---
 
@@ -67,20 +69,20 @@ Before a wider user push or PyPI release, complete this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.33 |
-| P0 | Verify release wheel clean install in a fresh runtime directory | Done: 118 Python / 205 package files; dependencies and imports passed |
-| P0 | Verify source editable install in a fresh runtime directory | Done: instance, config preservation, startup, and health passed |
+| P0 | Update English and Chinese changelog/docs for release source | Done for v1.0.35 |
+| P0 | Verify release wheel clean install in a fresh runtime directory | Done: 142 Python / 233 package files; dependencies, YARA, and 116-module imports passed |
+| P0 | Verify source and Wheel runtime lifecycle | Done: clean instance, config validation, Windows start/status/health/stop, and PID identity passed |
 | P0 | Verify Docker build/run/health/detection path | Done: health, login, detection, quarantine, and restore passed |
 | P0 | Confirm README commands match real CLI output | Done in Wheel/source/dedicated-venv smoke |
-| P1 | Run deployment, architecture, and relevant web regression tests | Done: 520 non-browser; 41 UI |
-| P1 | Tag release only after every check above passes from a clean tree | v1.0.33 release gate complete |
-| P1 | Verify trusted PyPI publishing and install the published artifact | v1.0.33 official Wheel digest, contents, clean install, and 117-module import sweep confirmed |
+| P1 | Run deployment, architecture, and relevant web regression tests | Done: 544 non-browser at 62.22% coverage; 43 UI |
+| P1 | Tag release only after every check above passes from a clean tree | Ready for v1.0.35 tag after the release commit |
+| P1 | Verify trusted PyPI publishing and install the published artifact | Pending v1.0.35 tag; v1.0.33 publishing was previously verified |
 
 ---
 
 ## Architecture Closure Before v1.1.0
 
-Goal: make the project easier for one AI or one engineer to implement a module independently, without accidentally coupling to global process state.
+Goal: make the project easier for an engineer or small team to implement a module independently, without accidentally coupling to global process state.
 
 | Priority | Work Item | Status | Why |
 |----------|-----------|--------|-----|
