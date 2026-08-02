@@ -2,9 +2,9 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.35 (release candidate validated, 2026-08-02)
+> **Latest Release**: v1.0.35 (released, 2026-08-02)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` matches the validated v1.0.35 candidate: 544 non-browser tests, 43 browser tests, expanded Ruff and formatter checks, 142/233-file Wheel parity, 116-module imports, Windows runtime, and Docker health/login/non-root/functional smoke pass.
+> **Source Status**: `main` matches the released v1.0.35 tag: 544 non-browser tests, 43 browser tests, expanded Ruff and formatter checks, 142/233-file Wheel parity, Windows runtime, Docker health/login/non-root/functional smoke, and the official PyPI Wheel's 141 installed submodules passed validation.
 
 ---
 
@@ -59,13 +59,13 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.32 | Truthful configured-admin identity and password preservation/reset semantics in the install summary | Released to PyPI |
 | 1.0.33 | PID-reuse-safe runtime ownership and environment-neutral installation guidance | Released to PyPI |
 | 1.0.34 | Admin frontend modules, delegated actions, and symmetric HTMX lifecycle ownership | Included in v1.0.35 |
-| 1.0.35 | Dependency inversion, focused Web/CLI/Notifier/ThreatGraph/Registry/Monitor modules, expanded quality gates, and release-candidate validation | Candidate validated |
+| 1.0.35 | Dependency inversion, focused Web/CLI/Notifier/ThreatGraph/Registry/Monitor modules, expanded quality gates, and release validation | Released to PyPI |
 
 ---
 
 ## Release Readiness Checklist
 
-Before a wider user push or PyPI release, complete this checklist.
+The v1.0.35 release completed this checklist.
 
 | Priority | Item | Status |
 |----------|------|--------|
@@ -75,8 +75,8 @@ Before a wider user push or PyPI release, complete this checklist.
 | P0 | Verify Docker build/run/health/detection path | Done: health, login, detection, quarantine, and restore passed |
 | P0 | Confirm README commands match real CLI output | Done in Wheel/source/dedicated-venv smoke |
 | P1 | Run deployment, architecture, and relevant web regression tests | Done: 544 non-browser at 62.22% coverage; 43 UI |
-| P1 | Tag release only after every check above passes from a clean tree | Ready for v1.0.35 tag after the release commit |
-| P1 | Verify trusted PyPI publishing and install the published artifact | Pending v1.0.35 tag; v1.0.33 publishing was previously verified |
+| P1 | Tag release only after every check above passes from a clean tree | Done: `v1.0.35` tagged from clean `main` after all local release gates passed |
+| P1 | Verify trusted PyPI publishing and install the published artifact | Done: OIDC publishing passed; the official Wheel's SHA-256, metadata, YARA, 141 submodules, clean install, Windows lifecycle, and deployment health were verified |
 
 ---
 
