@@ -40,21 +40,27 @@ def assess_runtime_capabilities(config: Mapping[str, Any]) -> dict[str, Any]:
 
     warnings: list[dict[str, str]] = []
     if yara_enabled and not yara_available:
-        warnings.append({
-            "code": "yara_unavailable",
-            "message": "YARA scanning is enabled but yara-python is not installed; emergency signatures only.",
-        })
+        warnings.append(
+            {
+                "code": "yara_unavailable",
+                "message": "YARA scanning is enabled but yara-python is not installed; emergency signatures only.",
+            }
+        )
     if notifier_enabled and not configured_channels:
-        warnings.append({
-            "code": "notifier_local_only",
-            "message": "No external notification channel is ready; alerts are recorded in local logs only.",
-        })
+        warnings.append(
+            {
+                "code": "notifier_local_only",
+                "message": "No external notification channel is ready; alerts are recorded in local logs only.",
+            }
+        )
     if incomplete_channels:
-        warnings.append({
-            "code": "notifier_incomplete",
-            "message": "Enabled notification channels are missing required credentials: "
-            + ", ".join(sorted(incomplete_channels)),
-        })
+        warnings.append(
+            {
+                "code": "notifier_incomplete",
+                "message": "Enabled notification channels are missing required credentials: "
+                + ", ".join(sorted(incomplete_channels)),
+            }
+        )
 
     siem_config = config.get("siem", {})
     if not isinstance(siem_config, Mapping):
@@ -75,10 +81,12 @@ def assess_runtime_capabilities(config: Mapping[str, Any]) -> dict[str, Any]:
         and siem_handler_config.get("enabled", True)
     )
     if siem_enabled and not siem_bridge_ready:
-        warnings.append({
-            "code": "siem_event_bridge_missing",
-            "message": "SIEM export is enabled but the siem_handler event bridge is disabled; file detections will stay local.",
-        })
+        warnings.append(
+            {
+                "code": "siem_event_bridge_missing",
+                "message": "SIEM export is enabled but the siem_handler event bridge is disabled; file detections will stay local.",
+            }
+        )
 
     return {
         "status": "degraded" if warnings else "healthy",
@@ -129,9 +137,7 @@ def assess_system_health(
             errors[name] = str(exc)
 
     critical_failure = bool(errors)
-    optional_degraded = bool(
-        capabilities and capabilities.get("status") == "degraded"
-    )
+    optional_degraded = bool(capabilities and capabilities.get("status") == "degraded")
     return {
         "status": "degraded" if critical_failure or optional_degraded else "healthy",
         "http_status": 503 if critical_failure else 200,
@@ -149,13 +155,15 @@ def _email_ready(config: Mapping[str, Any]) -> bool:
     recipients = config.get("to_addrs", [])
     if isinstance(recipients, str):
         recipients = [recipients]
-    return all((
-        str(config.get("smtp_host", "")).strip(),
-        str(config.get("username", "")).strip(),
-        str(config.get("password", "")).strip(),
-        str(config.get("from_addr", "")).strip(),
-        any(str(address).strip() for address in recipients),
-    ))
+    return all(
+        (
+            str(config.get("smtp_host", "")).strip(),
+            str(config.get("username", "")).strip(),
+            str(config.get("password", "")).strip(),
+            str(config.get("from_addr", "")).strip(),
+            any(str(address).strip() for address in recipients),
+        )
+    )
 
 
 def _webhook_ready(config: Mapping[str, Any]) -> bool:

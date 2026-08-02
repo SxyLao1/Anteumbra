@@ -7,12 +7,13 @@ v1.9.0: JSON 文件仓库实现
 
 v1.9.1 将新增 SqliteRepository，通过相同的 Repository 接口切换。
 """
+
 import json
+import logging
 import os
 import threading
-import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from anteumbra.domain import Repository
 
@@ -22,8 +23,7 @@ logger = logging.getLogger(__name__)
 class JsonRepository(Repository):
     """基于 JSON 文件的数据仓库"""
 
-    def __init__(self, file_path: Path, key_field: str = "id",
-                 auto_save: bool = True):
+    def __init__(self, file_path: Path, key_field: str = "id", auto_save: bool = True):
         """
         Args:
             file_path: JSON 文件路径
@@ -60,8 +60,9 @@ class JsonRepository(Repository):
                 self._data = raw
             else:
                 self._data = {}
-            logger.info("JsonRepository: loaded %d records from %s",
-                        len(self._data), self._file_path)
+            logger.info(
+                "JsonRepository: loaded %d records from %s", len(self._data), self._file_path
+            )
         except (json.JSONDecodeError, OSError) as e:
             logger.error("JsonRepository: failed to load %s: %s", self._file_path, e)
             self._data = {}
@@ -97,10 +98,11 @@ class JsonRepository(Repository):
         """分页列出所有记录"""
         with self._lock:
             items = list(self._data.values())
-            return items[offset:offset + limit]
+            return items[offset : offset + limit]
 
-    def query(self, filters: Dict[str, Any],
-              limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def query(
+        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         """条件查询（简单等值匹配）"""
         with self._lock:
             results = []
@@ -112,7 +114,7 @@ class JsonRepository(Repository):
                         break
                 if match:
                     results.append(item)
-            return results[offset:offset + limit]
+            return results[offset : offset + limit]
 
     def delete(self, record_id: str) -> bool:
         """删除一条记录"""

@@ -149,9 +149,7 @@ def write_process_identity(
         "process_start_token": identity.process_start_token,
         "runtime_root": identity.runtime_root,
     }
-    temp_path = identity_path.with_name(
-        f".{identity_path.name}.{identity.pid}.tmp"
-    )
+    temp_path = identity_path.with_name(f".{identity_path.name}.{identity.pid}.tmp")
     try:
         temp_path.write_text(
             json.dumps(payload, indent=2, sort_keys=True) + "\n",
@@ -173,11 +171,15 @@ def _is_anteumbra_run_command(command: list[str]) -> bool:
 
     for index in range(max(0, len(normalized) - 1)):
         executable_name = normalized[index].replace("\\", "/").rsplit("/", 1)[-1]
-        if executable_name in {
-            "anteumbra",
-            "anteumbra.exe",
-            "anteumbra-script.py",
-        } and normalized[index + 1] == "run":
+        if (
+            executable_name
+            in {
+                "anteumbra",
+                "anteumbra.exe",
+                "anteumbra-script.py",
+            }
+            and normalized[index + 1] == "run"
+        ):
             return True
     return False
 

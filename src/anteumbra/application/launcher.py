@@ -6,11 +6,15 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
+from anteumbra.application.runtime_builder import (
+    RuntimeLifecycleDependencies,
+    build_runtime_lifecycle_dependencies,
+)
 from anteumbra.application.runtime_container import RuntimeContainer
-from anteumbra.application.runtime_builder import build_runtime_container
+from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 from anteumbra.application.runtime_plugins import (
     _start_plugins,
 )
@@ -24,14 +28,9 @@ from anteumbra.application.runtime_workers import (
     _start_sse,
     _start_waf_poller,
 )
-from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
 )
-
-if TYPE_CHECKING:
-    from anteumbra.infrastructure.process_identity import ProcessIdentity
-
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +67,11 @@ class RuntimeState:
     stop_event: threading.Event = field(default_factory=threading.Event)
     container: RuntimeContainer | None = None
     pid_file: Path | None = None
-    process_identity: ProcessIdentity | None = None
+    process_identity: object | None = None
     web_server: RuntimeServerPort | None = None
     web_thread: threading.Thread | None = None
     profile_tailer: JsonlEventTailer | None = None
     sse_started: bool = False
-
-
-
 
 
 class RuntimeLifecycle:
@@ -87,46 +83,44 @@ class RuntimeLifecycle:
         port: int = 8080,
         *,
         config_provider: ConfigProviderPort | None = None,
+        dependencies: RuntimeLifecycleDependencies | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self._config_provider = config_provider
+        self._dependencies = dependencies or build_runtime_lifecycle_dependencies()
         self._lock = threading.RLock()
         self._state = RuntimeState()
 
     def run(self) -> None:
         """Start all runtime components and block until interrupted."""
-        from anteumbra.infrastructure.config.provider import TomlConfigProvider
-        from anteumbra.infrastructure.config.version import get_version
-        from anteumbra.infrastructure.utils.path_utils import normalize_path
-
         with self._lock:
             if self._state.running or self._state.stopping:
                 raise RuntimeError("Runtime lifecycle is already active")
 
-        provider = self._config_provider or TomlConfigProvider()
+        dependencies = self._dependencies
+        provider = self._config_provider or dependencies.config_provider_factory()
         config = provider.get()
-        data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
+        data_dir = dependencies.path_normalizer(config.get("paths", {}).get("data_dir", "data"))
         websites = provider.get_enabled_websites()
         if not websites:
             raise RuntimeStartupError("No enabled websites in config.toml")
 
         missing_paths: list[Path] = []
         for website in websites:
-            website.path = normalize_path(website.path)
+            website.path = dependencies.path_normalizer(website.path)
             if not website.path.exists():
                 missing_paths.append(website.path)
         if missing_paths:
             details = "\n".join(
-                f"Website path does not exist: {missing_path}"
-                for missing_path in missing_paths
+                f"Website path does not exist: {missing_path}" for missing_path in missing_paths
             )
             raise RuntimeStartupError(
                 f"{details}\nCreate the directories or update website.path in config.toml."
             )
 
         try:
-            container = build_runtime_container(config_provider=provider)
+            container = dependencies.container_builder(config_provider=provider)
         except Exception as exc:
             logger.exception("Anteumbra runtime initialization failed")
             raise RuntimeStartupError(
@@ -145,16 +139,13 @@ class RuntimeLifecycle:
 
         runtime_logger = container.logging.get_logger("Anteumbra")
         try:
-            from anteumbra.infrastructure.process_identity import write_process_identity
-
             data_dir.mkdir(parents=True, exist_ok=True)
-            state.process_identity = write_process_identity(pid_file, Path.cwd())
+            state.process_identity = dependencies.process_identity_writer(pid_file, Path.cwd())
             state.warnings.extend(
-                item["message"]
-                for item in assess_runtime_capabilities(config)["warnings"]
+                item["message"] for item in assess_runtime_capabilities(config)["warnings"]
             )
 
-            print(f"Anteumbra v{get_version()} - Web Perimeter Security")
+            print(f"Anteumbra v{dependencies.version_getter()} - Web Perimeter Security")
             for website in websites:
                 print(f"  Website: {website.name}")
                 print(f"  Watch:   {website.path}")
@@ -171,15 +162,14 @@ class RuntimeLifecycle:
                 container.threat_graph,
                 container.quarantine,
                 container.logging.get_logger,
+                alert_formatter=dependencies.alert_formatter,
             )
             container.plugin_manager = plugin_manager
             container.events.bind(plugin_manager)
             if container.ip_blocker is not None:
                 container.ip_blocker.start()
 
-            from anteumbra.application.runtime_adapters import build_runtime_services
-
-            runtime_services = build_runtime_services(
+            runtime_services = dependencies.runtime_services_builder(
                 config,
                 websites,
                 event_publisher=container.events,
@@ -188,10 +178,8 @@ class RuntimeLifecycle:
                 quarantine=container.quarantine,
             )
 
-            from anteumbra.interfaces.web.factory import create_app, create_runtime_server
-
-            app = create_app(runtime=container)
-            state.web_server = create_runtime_server(app, self.host, self.port)
+            app = dependencies.app_factory(runtime=container)
+            state.web_server = dependencies.server_factory(app, self.host, self.port)
 
             _migrate_site_metadata(container, state.warnings)
             monitors, log_monitors, site_warnings = _start_site_monitors(
@@ -202,6 +190,9 @@ class RuntimeLifecycle:
                 notifier=container.notifier,
                 registry=container.registry,
                 scan_callback=container.scanner.scan,
+                monitor_factory=dependencies.monitor_factory,
+                analyzer_factory=dependencies.analyzer_factory,
+                log_monitor_factory=dependencies.log_monitor_factory,
             )
             state.monitors = monitors
             state.log_monitors = log_monitors
@@ -361,11 +352,7 @@ class RuntimeLifecycle:
 
         try:
             if state.pid_file and state.process_identity:
-                from anteumbra.infrastructure.process_identity import (
-                    remove_process_identity,
-                )
-
-                remove_process_identity(state.pid_file, state.process_identity)
+                self._dependencies.process_identity_remover(state.pid_file, state.process_identity)
         except OSError:
             logger.exception("Failed to remove PID file")
 
@@ -384,15 +371,6 @@ class RuntimeLifecycle:
             state.stopped = True
 
         print("Anteumbra stopped.")
-
-
-
-
-
-
-
-
-
 
 
 def _stop_resource(name: str, callback: Callable[[], Any]) -> None:

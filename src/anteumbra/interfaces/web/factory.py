@@ -7,6 +7,7 @@
 @Motto: HACK THE REAL
 Flask应用工厂：v1.7.3分离access.log与monitor.log
 """
+
 import logging
 import os
 import secrets
@@ -15,13 +16,13 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_session import Session
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+
+from anteumbra.application.path_service import normalize_path
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.logging import bind_symbols
-from anteumbra.application.path_service import normalize_path
-from flask_wtf.csrf import generate_csrf
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def create_app(
         config_path: config.toml 路径。None 时自动探测（CWD > 源码树 > 父目录）。
     """
     if runtime is None:
-        from anteumbra.application.launcher import build_runtime_container
+        from anteumbra.application.runtime_builder import build_runtime_container
 
         runtime = build_runtime_container(
             config_path,
@@ -112,51 +113,56 @@ def create_app(
     )
 
     # v2.0: Flask-Babel i18n (language from ?lang= or cookie or Accept-Language)
-    app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+    app.config["BABEL_DEFAULT_LOCALE"] = "en"
     # v1.0.9: 包内翻译路径 — translations/ 已移入 src/anteumbra/translations/
     import anteumbra as _anteumbra_pkg
+
     _translations_dir = os.path.join(os.path.dirname(_anteumbra_pkg.__file__), "translations")
-    app.config['BABEL_TRANSLATION_DIRECTORIES'] = _translations_dir
+    app.config["BABEL_TRANSLATION_DIRECTORIES"] = _translations_dir
     try:
+
         def _select_locale():
             """v2.0 fix: Auto-detect locale from query param → cookie → Accept-Language header."""
-            lang = request.args.get('lang')
-            if lang and lang in ('en', 'zh'):
+            lang = request.args.get("lang")
+            if lang and lang in ("en", "zh"):
                 return lang
-            lang = request.cookies.get('lang')
-            if lang and lang in ('en', 'zh'):
+            lang = request.cookies.get("lang")
+            if lang and lang in ("en", "zh"):
                 return lang
-            best = request.accept_languages.best_match(['zh', 'en'])
-            return best or 'en'
+            best = request.accept_languages.best_match(["zh", "en"])
+            return best or "en"
 
         from flask_babel import Babel
+
         Babel(app, locale_selector=_select_locale)
 
         # v2.0: After-request hook to set lang cookie based on detected locale
         @app.after_request
         def _set_lang_cookie(response):
             # Only set if not already present and user hasn't explicitly set ?lang=
-            if not request.cookies.get('lang') and not request.args.get('lang'):
-                best = request.accept_languages.best_match(['zh', 'en'])
+            if not request.cookies.get("lang") and not request.args.get("lang"):
+                best = request.accept_languages.best_match(["zh", "en"])
                 if best:
-                    response.set_cookie('lang', best, max_age=365*24*3600, samesite='Lax')
-            elif request.args.get('lang'):
+                    response.set_cookie("lang", best, max_age=365 * 24 * 3600, samesite="Lax")
+            elif request.args.get("lang"):
                 # User explicitly chose a language — persist it
-                lang = request.args.get('lang')
-                if lang in ('en', 'zh'):
-                    response.set_cookie('lang', lang, max_age=365*24*3600, samesite='Lax')
+                lang = request.args.get("lang")
+                if lang in ("en", "zh"):
+                    response.set_cookie("lang", lang, max_age=365 * 24 * 3600, samesite="Lax")
             return response
     except ImportError:
         pass  # Graceful: works without flask-babel installed
 
-    # v2.0: 注入版本号到所有模板（重命名 trident_ → anteumbra_ 保持模板兼容）
-    from anteumbra.application.config_service import get_version, get_release_date
+    # Inject the current Anteumbra version into every template.
+    from anteumbra.application.config_service import get_release_date, get_version
+
     @app.context_processor
     def inject_version():
         return {
-            'anteumbra_version': get_version(),
-            'anteumbra_release_date': get_release_date(),
+            "anteumbra_version": get_version(),
+            "anteumbra_release_date": get_release_date(),
         }
+
     security_config = resolved_config.get("security", {})
     configured_secret = str(security_config.get("secret_key", "")).strip()
     if not configured_secret:
@@ -164,33 +170,31 @@ def create_app(
     if not configured_secret:
         configured_secret = secrets.token_urlsafe(48)
         logger.warning("No persistent session secret was configured; using an ephemeral key")
-    app.config['SECRET_KEY'] = configured_secret
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.config["SECRET_KEY"] = configured_secret
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     # === 新增Session配置 ===
     session_type = web_admin_config.get("session_type", "filesystem")
-    session_dir = normalize_path(
-        web_admin_config.get("session_dir", "data/sessions")
-    )
+    session_dir = normalize_path(web_admin_config.get("session_dir", "data/sessions"))
     if session_type == "filesystem":
         from cachelib.file import FileSystemCache
 
-        app.config['SESSION_TYPE'] = 'cachelib'
-        app.config['SESSION_CACHELIB'] = FileSystemCache(
+        app.config["SESSION_TYPE"] = "cachelib"
+        app.config["SESSION_CACHELIB"] = FileSystemCache(
             cache_dir=str(session_dir),
             threshold=int(web_admin_config.get("session_file_threshold", 500)),
             mode=0o600,
         )
     else:
-        app.config['SESSION_TYPE'] = session_type
-    app.config['SESSION_PERMANENT'] = web_admin_config.get("session_permanent", False)
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
+        app.config["SESSION_TYPE"] = session_type
+    app.config["SESSION_PERMANENT"] = web_admin_config.get("session_permanent", False)
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
         seconds=web_admin_config.get("session_lifetime", 3600)
     )
-    app.config['SESSION_COOKIE_SECURE'] = _session_cookie_secure(web_admin_config)
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config["SESSION_COOKIE_SECURE"] = _session_cookie_secure(web_admin_config)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # 初始化Session
     Session(app)
@@ -200,7 +204,7 @@ def create_app(
     flask_runtime_logger = runtime.logging.get_application_logger()
 
     # 配置werkzeug logger将访问日志写入access.log
-    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.handlers = access_logger.handlers
     werkzeug_logger.setLevel(logging.INFO)
     werkzeug_logger.propagate = False
@@ -218,11 +222,16 @@ def create_app(
     # v2.0 fix: Return JSON for CSRF errors so frontend JS can handle them
     @app.errorhandler(400)
     def _csrf_error_json(e):
-        if request.path.startswith('/admin/'):
+        if request.path.startswith("/admin/"):
             # Check if it's actually a CSRF error
             desc = str(e)
-            if 'csrf' in desc.lower() or 'token' in desc.lower():
-                return jsonify({"error": "CSRF token expired. Please refresh the page.", "code": "csrf_expired"}), 400
+            if "csrf" in desc.lower() or "token" in desc.lower():
+                return jsonify(
+                    {
+                        "error": "CSRF token expired. Please refresh the page.",
+                        "code": "csrf_expired",
+                    }
+                ), 400
         return jsonify({"error": str(e), "code": "bad_request"}), 400
 
     # v1.7.9: V-005修复 — WSGI中间件级隐藏服务器指纹
@@ -230,11 +239,14 @@ def create_app(
     class _RemoveServerHeaderMiddleware:
         def __init__(self, wsgi_app):
             self.wsgi_app = wsgi_app
+
         def __call__(self, environ, start_response):
             def _start_response(status, headers, exc_info=None):
-                headers = [(k, v) for k, v in headers if k.lower() != 'server']
+                headers = [(k, v) for k, v in headers if k.lower() != "server"]
                 return start_response(status, headers, exc_info)
+
             return self.wsgi_app(environ, _start_response)
+
     app.wsgi_app = _RemoveServerHeaderMiddleware(app.wsgi_app)
 
     @app.after_request
@@ -246,6 +258,7 @@ def create_app(
 
     # 注册Blueprint
     from anteumbra.interfaces.web.blueprints import register_blueprints
+
     register_blueprints(app)
 
     # CSRF token for all templates (belt-and-suspenders: CSRFProtect also provides this)

@@ -7,7 +7,6 @@ import pytest
 from anteumbra.application.scan_history_service import ScanHistoryService
 from anteumbra.infrastructure.scan_history import FileScanHistoryStore
 
-
 _SCAN_ID = "a3f1c5d7e9b2a4c6"
 
 

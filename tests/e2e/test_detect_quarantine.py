@@ -92,9 +92,7 @@ def test_registered_quarantine_and_restore_remain_consistent(
     detection_runtime,
 ):
     target = monitor_target / "base64_decode.php"
-    original_content = (webshell_samples / "base64_decode.php").read_text(
-        encoding="utf-8"
-    )
+    original_content = (webshell_samples / "base64_decode.php").read_text(encoding="utf-8")
     target.write_text(original_content, encoding="utf-8")
     detection_runtime.registry.add(
         target,
@@ -117,9 +115,7 @@ def test_registered_quarantine_and_restore_remain_consistent(
     assert linked["quarantine_id"] == quarantined["quarantine_id"]
     assert linked["file_exists"] is False
 
-    restored = detection_runtime.quarantine.restore_file(
-        quarantined["quarantine_id"]
-    )
+    restored = detection_runtime.quarantine.restore_file(quarantined["quarantine_id"])
 
     assert restored["status"] == "restored"
     assert target.read_text(encoding="utf-8") == original_content

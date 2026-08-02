@@ -7,17 +7,23 @@
 @Motto: HACK THE REAL
 v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 """
+
 import base64
-from flask_babel import gettext as _
 import logging
-import time
+import secrets
 
 from flask import (
-    Blueprint, render_template, request, jsonify, current_app, session, redirect, url_for
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash
-import secrets
 
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.domain.logging import log_with_symbol
@@ -35,13 +41,15 @@ from anteumbra.interfaces.web.runtime import get_runtime
 logger = logging.getLogger(__name__)
 
 # 创建Blueprint
-admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 # v1.9.0: 扫描结果缓存（供报告生成使用，1小时TTL）
+
 
 @admin_bp.context_processor
 def inject_csrf_token():
     return dict(csrf_token=generate_csrf)
+
 
 def generate_secure_sse_token(username: str) -> str:
     random_part = secrets.token_urlsafe(16)
@@ -87,43 +95,43 @@ def _website_info(websites):
     }
 
 
-@admin_bp.route('/')
+@admin_bp.route("/")
 @require_auth
 def dashboard_index():
     try:
-        username = session.get('username')
+        username = session.get("username")
         if not username:
             username, _, _ = get_admin_credentials()
-            session['username'] = username
-        auth_header = session.get('sse_token')
+            session["username"] = username
+        auth_header = session.get("sse_token")
         if not auth_header:
             auth_header = generate_secure_sse_token(username)
-            session['sse_token'] = auth_header
+            session["sse_token"] = auth_header
         client_ip = request.remote_addr
         websites = get_runtime().config.get_enabled_websites()
         website_info = _website_info(websites)
         return render_template(
-            'admin/dashboard.html',
+            "admin/dashboard.html",
             auth_header=auth_header,
             username=username,
             client_ip=client_ip,
-            website_info=website_info
+            website_info=website_info,
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] dashboard_index失败: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-@admin_bp.route('/overview')
+@admin_bp.route("/overview")
 @require_auth
 def overview():
     """v1.8.0: Overview — 安全态势首页，合并Dashboard+Monitor"""
     try:
-        auth_header = session.get('sse_token')
-        username = session.get('username', 'admin')
+        auth_header = session.get("sse_token")
+        username = session.get("username", "admin")
         if not auth_header:
             auth_header = generate_secure_sse_token(username)
-            session['sse_token'] = auth_header
+            session["sse_token"] = auth_header
 
         runtime = get_runtime()
         log_history_html = render_log_history(
@@ -133,28 +141,31 @@ def overview():
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
         runtime_capabilities = assess_runtime_capabilities(runtime.config.get())
-        return render_template('admin/overview.html',
-            auth_header=auth_header, username=username,
-            client_ip=request.remote_addr, log_history=log_history_html,
-            runtime_capabilities=runtime_capabilities)
+        return render_template(
+            "admin/overview.html",
+            auth_header=auth_header,
+            username=username,
+            client_ip=request.remote_addr,
+            log_history=log_history_html,
+            runtime_capabilities=runtime_capabilities,
+        )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] overview失败: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-@admin_bp.route('/threats')
+@admin_bp.route("/threats")
 @require_auth
 def threats():
     """v1.8.0: Threats — 检测记录+隔离管理合并视图"""
     try:
-        return render_template('admin/threats.html')
+        return render_template("admin/threats.html")
     except Exception as e:
         current_app.logger.error(f"[ADMIN] threats失败: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-
-@admin_bp.route('/dashboard_content')
+@admin_bp.route("/dashboard_content")
 @require_auth
 def dashboard_content():
     """v1.7.9: 安全报告 Dashboard"""
@@ -173,27 +184,27 @@ def dashboard_content():
         recent = summary["recent_events"]
 
         return render_template(
-            'admin/dashboard_content.html',
+            "admin/dashboard_content.html",
             stats=stats,
             recent_events=recent,
             site_summaries=summary["sites"],
-            compact=request.args.get('compact') == '1'
+            compact=request.args.get("compact") == "1",
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] dashboard_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
 
-@admin_bp.route('/monitor_content')
+@admin_bp.route("/monitor_content")
 @require_auth
 def monitor_content():
     """v1.7.9: 监测模块（原 Dashboard 内容）"""
     try:
-        auth_header = session.get('sse_token')
+        auth_header = session.get("sse_token")
         if not auth_header:
-            username = session.get('username', 'admin')
+            username = session.get("username", "admin")
             auth_header = generate_secure_sse_token(username)
-            session['sse_token'] = auth_header
+            session["sse_token"] = auth_header
         runtime = get_runtime()
         websites = runtime.config.get_enabled_websites()
         log_history_html = render_log_history(
@@ -202,33 +213,34 @@ def monitor_content():
 
         website_info = _website_info(websites)
         return render_template(
-            'admin/monitor_content.html',
+            "admin/monitor_content.html",
             auth_header=auth_header,
-            username=session.get('username'),
+            username=session.get("username"),
             client_ip=request.remote_addr,
             website_info=website_info,
             log_history=log_history_html,
-            compact=request.args.get('compact') == '1'
+            compact=request.args.get("compact") == "1",
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] monitor_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
-@admin_bp.route('/login', methods=['GET', 'POST'])
+
+@admin_bp.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'GET':
-        if session.get('authenticated'):
-            return redirect(url_for('admin.dashboard_index'))
-        return render_template('admin/login.html')
-    username = request.form.get('username')
-    password = request.form.get('password')
+    if request.method == "GET":
+        if session.get("authenticated"):
+            return redirect(url_for("admin.dashboard_index"))
+        return render_template("admin/login.html")
+    username = request.form.get("username")
+    password = request.form.get("password")
     client_ip = request.remote_addr or "unknown"
 
     # v1.7.9: 过滤空用户名的无效POST（浏览器/扩展自动请求等噪音）
     if not username:
-        return render_template('admin/login.html', error="请输入用户名"), 400
+        return render_template("admin/login.html", error="请输入用户名"), 400
     if not password:
-        return render_template('admin/login.html', error="请输入密码"), 400
+        return render_template("admin/login.html", error="请输入密码"), 400
 
     expected_username, password_hash, allowed_ips = get_admin_credentials()
     login_rate_limiter = get_runtime().login_rate_limiter
@@ -242,7 +254,7 @@ def login():
         )
         error = f"登录尝试过于频繁，请 {rate_decision.retry_after_seconds} 秒后重试"
         return (
-            render_template('admin/login.html', error=error),
+            render_template("admin/login.html", error=error),
             429,
             {"Retry-After": str(rate_decision.retry_after_seconds)},
         )
@@ -254,249 +266,87 @@ def login():
             f"登录IP被拒绝: {client_ip}",
             current_app.logger,
         )
-        return render_template('admin/login.html', error=f"IP {client_ip} 被拒绝访问"), 403
+        return render_template("admin/login.html", error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
         login_rate_limiter.reset(client_ip)
-        session['authenticated'] = True
-        session['username'] = username
-        session.permanent = current_app.config.get('SESSION_PERMANENT', False)
-        session['sse_token'] = generate_secure_sse_token(username)
-        log_with_symbol(
-            "success", "info", f"用户 {username} 登录成功", current_app.logger
-        )
-        return redirect(url_for('admin.dashboard_index'))
-    log_with_symbol(
-        "critical_permission", "critical", f"登录失败: {username}", current_app.logger
-    )
-    return render_template('admin/login.html', error="用户名或密码错误"), 401
+        session["authenticated"] = True
+        session["username"] = username
+        session.permanent = current_app.config.get("SESSION_PERMANENT", False)
+        session["sse_token"] = generate_secure_sse_token(username)
+        log_with_symbol("success", "info", f"用户 {username} 登录成功", current_app.logger)
+        return redirect(url_for("admin.dashboard_index"))
+    log_with_symbol("critical_permission", "critical", f"登录失败: {username}", current_app.logger)
+    return render_template("admin/login.html", error="用户名或密码错误"), 401
 
 
-@admin_bp.route('/logout')
+@admin_bp.route("/logout")
 @require_auth
 def logout():
-    username = session.get('username', 'unknown')
-    session.pop('authenticated', None)
-    session.pop('username', None)
-    session.pop('sse_token', None)
+    username = session.get("username", "unknown")
+    session.pop("authenticated", None)
+    session.pop("username", None)
+    session.pop("sse_token", None)
     session.clear()
-    response = redirect(url_for('admin.login'))
-    response.set_cookie('session', '', expires=0)
+    response = redirect(url_for("admin.login"))
+    response.set_cookie("session", "", expires=0)
     log_with_symbol("success", "info", f"用户 {username} 已登出", current_app.logger)
     return response
-@admin_bp.route('/dashboard')
+
+
+@admin_bp.route("/dashboard")
 @require_auth
 def dashboard():
     """返回完整仪表盘（与主页面一致）"""
-    auth_header = session.get('sse_token')
+    auth_header = session.get("sse_token")
     if not auth_header:
-        username = session.get('username', 'admin')
+        username = session.get("username", "admin")
         auth_str = f"{username}:session_fallback"
-        auth_bytes = auth_str.encode('utf-8')
-        auth_header = base64.b64encode(auth_bytes).decode('utf-8')
-        session['sse_token'] = auth_header
+        auth_bytes = auth_str.encode("utf-8")
+        auth_header = base64.b64encode(auth_bytes).decode("utf-8")
+        session["sse_token"] = auth_header
     websites = get_runtime().config.get_enabled_websites()
     website_info = _website_info(websites)
     return render_template(
-        'admin/dashboard.html',
+        "admin/dashboard.html",
         auth_header=auth_header,
-        username=session.get('username'),
+        username=session.get("username"),
         client_ip=request.remote_addr,
-        website_info=website_info
+        website_info=website_info,
     )
 
 
-@admin_bp.route('/metrics/<metric_name>')
-@require_auth
-def get_metric(metric_name):
-    """获取单个指标（v1.7.2修复：返回HTML片段）"""
-    try:
-        metrics = get_runtime().metrics
-        metrics.record_memory_usage()
-        data = metrics.get()
-
-        if metric_name == 'scan_total':
-            value = data.get("scan_total", 0)
-            label = _("Scan Total")
-            color = "#00ff00"
-        elif metric_name == 'scan_suspicious':
-            value = data.get("scan_suspicious", 0)
-            label = _("High Risk")
-            color = "#ffaa00"
-        elif metric_name == 'memory_mb':
-            value = data.get("memory_mb", 0)
-            label = _("Memory")
-            color = "#00ff00"
-        elif metric_name == 'uptime_hours':
-            value = data.get("uptime_seconds", 0) / 3600
-            label = _("Uptime")
-            color = "#00ff00"
-        else:
-            value = 0
-            label = _("Unknown")
-            color = "#ff0000"
-
-        if metric_name == 'memory_mb':
-            val_str = f"{value:.1f} MB"
-        elif metric_name == 'uptime_hours':
-            val_str = f"{value:.1f} h"
-        else:
-            val_str = str(value)
-
-        return f'''
-        <div class="metric-label">{label}</div>
-        <div class="metric-value" style="color: {color};">{val_str}</div>
-        '''
-    except Exception as e:
-        err_label = _("Error")
-        return f'''
-        <div class="metric-label">{err_label}</div>
-        <div class="metric-value" style="color: #ff0000;">{str(e)}</div>
-        '''
-
-
-@admin_bp.route('/metrics')
-@require_auth
-def metrics_page():
-    """性能指标页面（完整视图）"""
-    # v1.9.6: Always pass explicit context dict to prevent Jinja2 UndefinedError.
-    # Jinja2 raises UndefinedError when accessing attributes on an undefined
-    # variable BEFORE the |default filter can run. Using .get() in the template
-    # is safe because dict.get() handles missing keys gracefully.
-    data = {}
-    try:
-        m = get_runtime().metrics
-        data = m.get()
-    except Exception:
-        logger.debug("Failed to fetch metrics data for metrics_page", exc_info=True)
-    ctx = {
-        "metrics": data,
-        "warning_threshold": 1,
-        "critical_threshold": 3,
-    }
-    return render_template('admin/metrics_panel.html', **ctx)
-
-@admin_bp.route('/metrics/data')
-@require_auth
-def metrics_data():
-    """性能指标数据（v1.7.6-Patch12: 移除SSE属性，纯HTMX轮询）"""
-    try:
-        metrics = get_runtime().metrics
-        metrics.record_memory_usage()
-        data = metrics.get()
-
-        # 安全获取阈值配置
-        try:
-            config = get_runtime().config.get()
-            thresholds = config.get("thresholds", {})
-            visual_alert = thresholds.get("visual_alert", {})
-            critical_threshold = visual_alert.get("critical_threshold", 3)
-        except Exception as e:
-            current_app.logger.warning(f"[METRICS] 阈值配置读取失败: {e}")
-            critical_threshold = 3
-
-        # 关键修复：高危文件颜色计算
-        suspicious_count = data.get("scan_suspicious", 0)
-        if suspicious_count == 0:
-            color_class = 'safe'
-            color_code = '#00ff00'
-        elif suspicious_count < critical_threshold:
-            color_class = 'warning'
-            color_code = '#ffaa00'
-        else:
-            color_class = 'critical'
-            color_code = '#ff4444'
-
-        # Render HTML with i18n labels (pre-call _() to avoid f-string backslash issue)
-        l_scan = _("Scan Total")
-        l_risk = _("High Risk")
-        l_alerts = _("Alerts")
-        l_notification = _("Notification")
-        l_mem = _("Memory")
-        l_uptime = _("Uptime")
-        notification_status = str(data.get("last_notification_status", "never"))
-        notification_color = (
-            "#00ff41" if notification_status == "success"
-            else "#ffaa00" if notification_status in {"never", "skipped", "queued"}
-            else "#ff4444"
-        )
-        return f'''
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-label">{l_scan}</div>
-                <div class="metric-value">{data.get("scan_total", 0)}</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-label">{l_risk}</div>
-                <div class="metric-value {color_class}" style="color: {color_code};">
-                    {suspicious_count}
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-label">{l_alerts}</div>
-                <div class="metric-value">{data.get("alert_total", 0)}</div>
-                <div class="metric-subtitle">registry {data.get("registry_size", 0)}</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-label">{l_notification}</div>
-                <div class="metric-value" style="color: {notification_color}; font-size: 18px;">
-                    {notification_status.upper()}
-                </div>
-                <div class="metric-subtitle">ok {data.get("notification_success", 0)} / failed {data.get("notification_failed", 0)} / skipped {data.get("notification_skipped", 0)}</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-label">{l_mem}</div>
-                <div class="metric-value">{data.get("memory_mb", 0):.1f} MB</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-label">{l_uptime}</div>
-                <div class="metric-value">{data.get("uptime_seconds", 0)/3600:.1f} h</div>
-            </div>
-        </div>
-
-        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">Registry queue backlog: {data.get("registry_qsize", 0)} items pending save</small></div>' if data.get("registry_qsize", 0) > 0 else ''}
-
-        {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">🚨 告警队列阻塞: {data.get("alert_qsize", 0)} 条待发送</small></div>' if data.get("alert_qsize", 0) > 10 else ''}
-        '''
-    except Exception as e:
-        current_app.logger.error(f"[ADMIN][METRICS] 致命错误: {e}", exc_info=True)
-        return f'<div style="color: #ff4444;">指标加载失败: {str(e)}</div>', 500
-@admin_bp.route('/test')
+@admin_bp.route("/test")
 @require_auth
 def test():
     return "SSE Test <script>alert('JS working');</script>"
 
 
-@admin_bp.route('/debug/routes')
+@admin_bp.route("/debug/routes")
 @require_auth
 def debug_routes():
     """调试：查看所有已注册路由"""
     routes = []
     for rule in current_app.url_map.iter_rules():
-        if rule.rule.startswith('/admin'):
+        if rule.rule.startswith("/admin"):
             routes.append(f"{rule.rule} → {rule.endpoint}")
     return jsonify(routes)
 
 
-@admin_bp.app_template_filter('to_hash')
+@admin_bp.app_template_filter("to_hash")
 def to_hash(value):
     import hashlib
+
     return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
-
-@admin_bp.route('/account', methods=['GET'])
+@admin_bp.route("/account", methods=["GET"])
 @require_auth
 def account_page():
     """账户设置页面"""
-    return render_template('admin/account.html', username=session.get('username'))
+    return render_template("admin/account.html", username=session.get("username"))
 
 
-@admin_bp.route('/account/password', methods=['POST'])
+@admin_bp.route("/account/password", methods=["POST"])
 @require_auth
 def change_password():
     """修改密码API"""
@@ -505,8 +355,8 @@ def change_password():
         data = request.get_json(silent=True) or {}
         if not data:
             data = request.form.to_dict()
-        current_password = data.get('current_password')
-        new_password = data.get('new_password')
+        current_password = data.get("current_password")
+        new_password = data.get("new_password")
 
         # 验证必填
         if not current_password or not new_password:
@@ -543,58 +393,13 @@ def change_password():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ============================================================================
-# Health Check Endpoint (for Docker / monitoring)
-# ============================================================================
-
-@admin_bp.route('/api/v1/health', methods=['GET'])
-def public_health():
-    """Public health check for Docker HEALTHCHECK and load balancers.
-
-    Intentionally open - no auth required. Returns minimal status only,
-    no version numbers or sensitive data (attack surface reduction).
-    """
-    from anteumbra.application.runtime_health_service import assess_system_health
-
-    runtime = get_runtime()
-    health = assess_system_health(
-        config_loader=runtime.config.get,
-        wal_probe=runtime.wal.get_info,
-        registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
-    )
-    return jsonify({"status": health["status"]}), health["http_status"]
-
-
-@admin_bp.route('/health', methods=['GET'])
-@require_auth
-def admin_health():
-    """Authenticated health check with full diagnostics.
-
-    Requires login. Returns version, component status, and detailed checks.
-    """
-    from anteumbra.application.config_service import get_version
-    from anteumbra.application.runtime_health_service import assess_system_health
-
-    runtime = get_runtime()
-    health = assess_system_health(
-        config_loader=runtime.config.get,
-        wal_probe=runtime.wal.get_info,
-        registry_probe=lambda: runtime.registry.get_all(include_deleted=False),
-    )
-    status = {
-        'status': health['status'],
-        'version': get_version(),
-        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'checks': health['checks'],
-        'capabilities': health['capabilities'],
-    }
-    if health['errors']:
-        status['errors'] = health['errors']
-    return jsonify(status), health['http_status']
-
-
 # ═══════════════════════════════════════════════════════════════
 # v1.8.4: 安全文件内容查看器
 # ═══════════════════════════════════════════════════════════════
 
 # v1.0.5: _verify_file_in_registry / _verify_file_in_quarantine removed — use _shared.py versions
+
+# Import route registrations after the shared Blueprint is initialized.
+from anteumbra.interfaces.web.blueprints import (  # noqa: E402
+    admin_diagnostic_routes as _admin_diagnostic_routes,  # noqa: F401
+)

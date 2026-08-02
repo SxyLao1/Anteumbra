@@ -15,7 +15,6 @@ from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
 from anteumbra.domain.service_ports import YaraEnginePort
 from anteumbra.infrastructure.models import ScanOptions
 
-
 _WEB_EXTENSIONS = {".php", ".php5", ".phtml", ".asp", ".aspx", ".ashx", ".jsp", ".jspx"}
 
 
@@ -82,9 +81,7 @@ class StaticScanner(BaseScanner):
         except OSError as exc:
             return ScanResult(file_path, False, [], engine=self.name, error=str(exc))
         matches = [
-            pattern
-            for pattern, regex in zip(self.patterns, self._regexes)
-            if regex.search(content)
+            pattern for pattern, regex in zip(self.patterns, self._regexes) if regex.search(content)
         ]
         return ScanResult(
             file_path=file_path,
@@ -111,9 +108,8 @@ class YaraScanner(BaseScanner):
         return "yara"
 
     def can_scan(self, file_path: Path, scan_options: ScanOptions) -> bool:
-        return (
-            file_path.suffix.lower() in _WEB_EXTENSIONS
-            and _within_size_limit(file_path, scan_options, self.config_provider.get())
+        return file_path.suffix.lower() in _WEB_EXTENSIONS and _within_size_limit(
+            file_path, scan_options, self.config_provider.get()
         )
 
     def scan(
@@ -169,9 +165,8 @@ class EmergencyScanner(BaseScanner):
         return "emergency"
 
     def can_scan(self, file_path: Path, scan_options: ScanOptions) -> bool:
-        return (
-            file_path.suffix.lower() in _WEB_EXTENSIONS
-            and _within_size_limit(file_path, scan_options, self.config_provider.get())
+        return file_path.suffix.lower() in _WEB_EXTENSIONS and _within_size_limit(
+            file_path, scan_options, self.config_provider.get()
         )
 
     def scan(

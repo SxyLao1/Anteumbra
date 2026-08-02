@@ -13,7 +13,6 @@ from anteumbra.domain.service_ports import (
     ThreatGraphPort,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -26,10 +25,13 @@ def _start_plugins(
     threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
+    *,
+    alert_formatter: Callable[[dict[str, object]], str],
 ) -> PluginManagerPort | None:
     manager = None
     try:
         from anteumbra.application.plugin_manager import PluginManager
+
         manager = PluginManager(
             metric_recorder=lambda name: metrics.increment(name),
             log=logger_factory("plugin_manager"),
@@ -43,6 +45,7 @@ def _start_plugins(
                 threat_graph,
                 quarantine,
                 logger_factory,
+                alert_formatter=alert_formatter,
             )
         )
         manager.init_from_config(config)
@@ -70,9 +73,10 @@ def _build_builtin_plugin_factories(
     threat_graph: ThreatGraphPort,
     quarantine,
     logger_factory: Callable[[str], logging.Logger],
+    *,
+    alert_formatter: Callable[[dict[str, object]], str],
 ) -> dict[str, Callable[[], Any]]:
     """Wire official plugins without allowing them to locate runtime services."""
-    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
     from anteumbra.plugins.notifier_handler import NotifierHandlerPlugin
     from anteumbra.plugins.quarantine_handler import QuarantineHandlerPlugin
     from anteumbra.plugins.siem_handler import SIEMHandlerPlugin
@@ -85,7 +89,7 @@ def _build_builtin_plugin_factories(
         ),
         "notifier_handler": lambda: NotifierHandlerPlugin(
             notifier,
-            format_alert_message,
+            alert_formatter,
             config,
             log=logger_factory("plugin.notifier_handler"),
         ),

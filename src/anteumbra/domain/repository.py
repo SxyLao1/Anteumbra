@@ -8,9 +8,10 @@ ThreatGraph 等所有持久化层的 CRUD 操作。
 v1.9.x 提供 JSON 和 SQLite 两种实现。
 v2.0 可扩展 PostgreSQL/MySQL 实现。
 """
+
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, Iterator
 from contextlib import contextmanager
+from typing import Any, Dict, Iterator, List, Optional
 
 
 class Repository(ABC):
@@ -32,8 +33,9 @@ class Repository(ABC):
         ...
 
     @abstractmethod
-    def query(self, filters: Dict[str, Any],
-              limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def query(
+        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         """条件查询"""
         ...
 

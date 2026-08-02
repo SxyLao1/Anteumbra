@@ -9,11 +9,12 @@ and dispatches it through the concrete ``Notifier`` instance.
 This plugin replaces inline notifier calls that
 were previously scattered across FileMonitorHandler.
 """
+
 import logging
 from collections.abc import Callable, Mapping
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin
 from anteumbra.domain.service_ports import NotifierPort
 
 
@@ -62,16 +63,19 @@ class NotifierHandlerPlugin(Plugin):
         level = payload.get("level", "WARNING")
         self._logger.info(
             "NotifierHandler: received alert_requested type=%s level=%s source=%s file=%s",
-            alert_type, level, event.source, payload.get("file_path", ""),
+            alert_type,
+            level,
+            event.source,
+            payload.get("file_path", ""),
         )
 
         # Build context dict for format_alert_message()
         ctx = dict(payload)
 
         # Enrich with system status
-        ctx["auto_quarantine_enabled"] = self._runtime_config.get(
-            "quarantine", {}
-        ).get("auto_quarantine_enabled", True)
+        ctx["auto_quarantine_enabled"] = self._runtime_config.get("quarantine", {}).get(
+            "auto_quarantine_enabled", True
+        )
         blocker_cfg = self._runtime_config.get("ip_blocker", {})
         ctx["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
         ctx["block_device_count"] = len(blocker_cfg.get("devices", []))

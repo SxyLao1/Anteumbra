@@ -3,7 +3,7 @@
 Minimal smoke test — verifies Flask server starts and basic pages respond.
 Run this FIRST to isolate config/server issues from navigation issues.
 """
-import pytest
+
 from playwright.sync_api import expect
 
 
@@ -29,11 +29,12 @@ def test_login_form_exists(unauthenticated_page, server_url):
     # Check page title at minimum
     title = pg.title()
     content = pg.content()
-    assert any(kw in title or kw in content for kw in ("Anteumbra", "ANTEUMBRA", "Login", "login")), \
-        f"Login page title/content unexpected: '{title}'"
+    assert any(
+        kw in title or kw in content for kw in ("Anteumbra", "ANTEUMBRA", "Login", "login")
+    ), f"Login page title/content unexpected: '{title}'"
     # Print page content for debugging (encode-safe)
     body = pg.locator("body").inner_text()
-    safe_body = body.encode('ascii', errors='replace').decode('ascii')
+    safe_body = body.encode("ascii", errors="replace").decode("ascii")
     print(f"\n[SMOKE] Login page body ({len(body)} chars): {safe_body[:300]}")
 
 
@@ -50,10 +51,11 @@ def test_login_success_redirects(page, server_url):
     """After login, we should see authenticated dashboard content."""
     pg = page
     # page fixture already logged in — just check we're not on login page anymore
-    assert "/login" not in pg.url.lower(), \
+    assert "/login" not in pg.url.lower(), (
         f"After login, URL should not be login page, got: {pg.url}"
+    )
     body = pg.locator("body").inner_text()
-    safe_body = body.encode('ascii', errors='replace').decode('ascii')
+    safe_body = body.encode("ascii", errors="replace").decode("ascii")
     print(f"\n[SMOKE] Dashboard body ({len(body)} chars): {safe_body[:300]}")
     # Brand should be visible
     expect(pg.locator(".brand")).to_be_visible(timeout=3000)

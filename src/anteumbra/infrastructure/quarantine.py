@@ -84,10 +84,7 @@ class QuarantineStore:
                 raise ValueError(f"quarantine source is not a file: {source}")
 
             now = datetime.now(timezone.utc)
-            quarantine_id = (
-                f"Q-{now.strftime('%Y%m%d%H%M%S')}-"
-                f"{uuid.uuid4().hex[:8].upper()}"
-            )
+            quarantine_id = f"Q-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8].upper()}"
             target_dir = self.directory / now.strftime("%Y-%m-%d")
             target_dir.mkdir(parents=True, exist_ok=True)
             target = target_dir / f"{quarantine_id}_{source.name}"
@@ -134,17 +131,13 @@ class QuarantineStore:
             index = self._index_for(quarantine_id)
             record = self._records[index]
             if record.get("status") != "quarantined":
-                raise ValueError(
-                    f"quarantine cannot be rolled back from {record.get('status')}"
-                )
+                raise ValueError(f"quarantine cannot be rolled back from {record.get('status')}")
             quarantine_path = normalize_path(record["quarantine_path"])
             original_path = normalize_path(record["original_path"])
             self._validate_move(quarantine_path, original_path, "roll back quarantine")
             previous = self._records
             records = [
-                copy.deepcopy(item)
-                for position, item in enumerate(previous)
-                if position != index
+                copy.deepcopy(item) for position, item in enumerate(previous) if position != index
             ]
             original_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(quarantine_path), str(original_path))
@@ -169,9 +162,7 @@ class QuarantineStore:
             index = self._index_for(quarantine_id)
             current = self._records[index]
             if current.get("status") != "quarantined":
-                raise ValueError(
-                    f"file is not quarantined: {current.get('status')}"
-                )
+                raise ValueError(f"file is not quarantined: {current.get('status')}")
             quarantine_path = normalize_path(current["quarantine_path"])
             original_path = normalize_path(current["original_path"])
             self._validate_move(quarantine_path, original_path, "restore quarantine")
@@ -210,9 +201,7 @@ class QuarantineStore:
             index = self._index_for(quarantine_id)
             current = self._records[index]
             if current.get("status") != "restored":
-                raise ValueError(
-                    f"restore cannot be rolled back from {current.get('status')}"
-                )
+                raise ValueError(f"restore cannot be rolled back from {current.get('status')}")
             quarantine_path = normalize_path(current["quarantine_path"])
             original_path = normalize_path(current["original_path"])
             self._validate_move(original_path, quarantine_path, "roll back restore")
@@ -306,14 +295,9 @@ class QuarantineStore:
                 copy.deepcopy(record)
                 for record in self._records
                 if (status is None or record.get("status") == status)
-                and (
-                    normalized_site is None
-                    or record.get("site_id") == normalized_site
-                )
+                and (normalized_site is None or record.get("site_id") == normalized_site)
             ]
-        records.sort(
-            key=lambda item: str(item.get("quarantine_time", "")), reverse=True
-        )
+        records.sort(key=lambda item: str(item.get("quarantine_time", "")), reverse=True)
         return records[offset : offset + limit]
 
     def get_detail(self, quarantine_id: str) -> dict[str, Any] | None:
@@ -329,9 +313,7 @@ class QuarantineStore:
         records = self.list_records(limit=1_000_000, site_id=site_id)
         return {
             "total": len(records),
-            "quarantined": sum(
-                record.get("status") == "quarantined" for record in records
-            ),
+            "quarantined": sum(record.get("status") == "quarantined" for record in records),
             "restored": sum(record.get("status") == "restored" for record in records),
             "deleted": sum(record.get("status") == "deleted" for record in records),
         }
@@ -416,8 +398,7 @@ class QuarantineStore:
                 failures.append(f"shadow: {exc}")
         if failures:
             raise QuarantineDataError(
-                "quarantine metadata has no valid recovery source: "
-                + "; ".join(failures)
+                "quarantine metadata has no valid recovery source: " + "; ".join(failures)
             )
         return [], False
 
@@ -440,9 +421,7 @@ class QuarantineStore:
             if not quarantine_id:
                 raise QuarantineDataError(f"quarantine record {index} has no ID")
             if not record.get("original_path") or not record.get("quarantine_path"):
-                raise QuarantineDataError(
-                    f"quarantine record {quarantine_id} has incomplete paths"
-                )
+                raise QuarantineDataError(f"quarantine record {quarantine_id} has incomplete paths")
             status = str(record.get("status") or "quarantined")
             if status not in self._VALID_STATUSES:
                 raise QuarantineDataError(
@@ -528,9 +507,7 @@ class QuarantineStore:
             "(recovered)"
         ):
             score += 4
-        if record.get("rule_name") and not str(record["rule_name"]).startswith(
-            "(auto-recovered"
-        ):
+        if record.get("rule_name") and not str(record["rule_name"]).startswith("(auto-recovered"):
             score += 2
         if record.get("features") not in (None, [], ["(recovered)"]):
             score += 1

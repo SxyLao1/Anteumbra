@@ -92,4 +92,6 @@ def test_unblock_route_retains_audit_record(blocking_client):
 
     assert response.status_code == 200
     assert not device.is_blocked("10.10.0.5")
-    assert runtime.block_ledger.get_by_ip("10.10.0.5", site_id=site.site_id)["status"] == "unblocked"
+    assert (
+        runtime.block_ledger.get_by_ip("10.10.0.5", site_id=site.site_id)["status"] == "unblocked"
+    )

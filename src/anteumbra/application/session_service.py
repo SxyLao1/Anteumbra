@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from anteumbra.infrastructure.utils.path_utils import normalize_path
+from anteumbra.domain.paths import normalize_path
 
 
 def cleanup_sessions(session_dir: str | Path | None = None, days: int = 7) -> int:

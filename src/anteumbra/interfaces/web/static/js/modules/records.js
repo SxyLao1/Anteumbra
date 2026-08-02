@@ -3,7 +3,20 @@
   'use strict';
 
   var app = window.Anteumbra;
-  var state = { records: new Set(), quarantine: new Set(), lineWrap: false };
+  var selectionFactory = window.AnteumbraSelectionController;
+  var state = {
+    records: selectionFactory.create({
+      checkboxSelector: '.rec-checkbox', countSelector: '.rec-count',
+      buttonSelector: '.rec-batch-btn', datasetKey: 'allPaths',
+      onInvalidMetadata: function () { app.ui.toast('Selection metadata is invalid.', 'error'); }
+    }),
+    quarantine: selectionFactory.create({
+      checkboxSelector: '.q-checkbox', countSelector: '.q-count',
+      buttonSelector: '.q-batch-btn', datasetKey: 'allQids',
+      onInvalidMetadata: function () { app.ui.toast('Selection metadata is invalid.', 'error'); }
+    }),
+    lineWrap: false
+  };
   var dangerousTokens = /(eval|assert|system|exec|passthru|shell_exec|popen|proc_open)\s*\(|\b(base64_decode|gzinflate|str_rot13|gzuncompress)\s*\(|\b(file_get_contents|file_put_contents|move_uploaded_file)\s*\(|\b\$_(?:GET|POST|REQUEST|SERVER|FILES|COOKIE)\b/gi;
 
   function containerFor(element, selector) {

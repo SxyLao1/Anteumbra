@@ -6,7 +6,6 @@ from flask import current_app
 
 from anteumbra.application.runtime_container import RuntimeContainer
 
-
 _RUNTIME_EXTENSION = "anteumbra.runtime"
 
 

@@ -1,14 +1,16 @@
-# Trident v1.9.5: Shared test fixtures
-import pytest
+# Anteumbra test suite: Shared test fixtures
 import tempfile
-import os
 from pathlib import Path
+
+import pytest
+
 
 @pytest.fixture
 def temp_dir():
     """Temporary directory for file-based tests."""
     with tempfile.TemporaryDirectory() as d:
         yield Path(d)
+
 
 @pytest.fixture
 def sample_log_file(temp_dir):
@@ -23,14 +25,25 @@ def sample_log_file(temp_dir):
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return p
 
+
 @pytest.fixture
 def sample_registry_entries():
     """Sample detection records for cross-reference tests."""
     return [
-        {"file_path": "E:\\www\\uploads\\shell.php", "display_name": "shell.php",
-         "detected_at": "2026-06-28T08:20:00", "features": ["php_eval", "base64_decode"],
-         "file_exists": True, "quarantine_id": ""},
-        {"file_path": "/var/www/html/backdoor.jsp", "display_name": "backdoor.jsp",
-         "detected_at": "2026-06-27T12:00:00", "features": ["java_runtime_exec"],
-         "file_exists": True, "quarantine_id": "q-abc123"},
+        {
+            "file_path": "E:\\www\\uploads\\shell.php",
+            "display_name": "shell.php",
+            "detected_at": "2026-06-28T08:20:00",
+            "features": ["php_eval", "base64_decode"],
+            "file_exists": True,
+            "quarantine_id": "",
+        },
+        {
+            "file_path": "/var/www/html/backdoor.jsp",
+            "display_name": "backdoor.jsp",
+            "detected_at": "2026-06-27T12:00:00",
+            "features": ["java_runtime_exec"],
+            "file_exists": True,
+            "quarantine_id": "q-abc123",
+        },
     ]

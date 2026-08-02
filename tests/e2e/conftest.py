@@ -4,6 +4,7 @@ E2E Test Suite — shared fixtures
 
 All tests use isolated temp directories. No running server required.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -327,40 +328,105 @@ def waf_events_file(tmp_path):
     events_file = tmp_path / "waf_events.jsonl"
     events = [
         # Attacker 1: 10.99.99.1 — SQLMap scan
-        {"timestamp": "2026-07-01T10:00:01", "src_ip": "10.99.99.1", "method": "GET",
-         "url": "/products.php?id=1' OR '1'='1", "waf_score": 85, "user_agent": "sqlmap/1.6"},
-        {"timestamp": "2026-07-01T10:00:05", "src_ip": "10.99.99.1", "method": "GET",
-         "url": "/products.php?id=1 UNION SELECT NULL", "waf_score": 90, "user_agent": "sqlmap/1.6"},
-        {"timestamp": "2026-07-01T10:00:10", "src_ip": "10.99.99.1", "method": "POST",
-         "url": "/login.php", "waf_score": 70, "user_agent": "sqlmap/1.6",
-         "body": "user=admin'--&pass=x"},
-        {"timestamp": "2026-07-01T10:00:15", "src_ip": "10.99.99.1", "method": "GET",
-         "url": "/admin/config.php?file=../../etc/passwd", "waf_score": 95, "user_agent": "sqlmap/1.6"},
+        {
+            "timestamp": "2026-07-01T10:00:01",
+            "src_ip": "10.99.99.1",
+            "method": "GET",
+            "url": "/products.php?id=1' OR '1'='1",
+            "waf_score": 85,
+            "user_agent": "sqlmap/1.6",
+        },
+        {
+            "timestamp": "2026-07-01T10:00:05",
+            "src_ip": "10.99.99.1",
+            "method": "GET",
+            "url": "/products.php?id=1 UNION SELECT NULL",
+            "waf_score": 90,
+            "user_agent": "sqlmap/1.6",
+        },
+        {
+            "timestamp": "2026-07-01T10:00:10",
+            "src_ip": "10.99.99.1",
+            "method": "POST",
+            "url": "/login.php",
+            "waf_score": 70,
+            "user_agent": "sqlmap/1.6",
+            "body": "user=admin'--&pass=x",
+        },
+        {
+            "timestamp": "2026-07-01T10:00:15",
+            "src_ip": "10.99.99.1",
+            "method": "GET",
+            "url": "/admin/config.php?file=../../etc/passwd",
+            "waf_score": 95,
+            "user_agent": "sqlmap/1.6",
+        },
         # Same tool and time window through a second address: must aggregate.
-        {"timestamp": "2026-07-01T10:00:20", "src_ip": "10.99.99.2", "method": "GET",
-         "url": "/search.php?q=1 UNION SELECT password", "waf_score": 88,
-         "user_agent": "sqlmap/1.6"},
+        {
+            "timestamp": "2026-07-01T10:00:20",
+            "src_ip": "10.99.99.2",
+            "method": "GET",
+            "url": "/search.php?q=1 UNION SELECT password",
+            "waf_score": 88,
+            "user_agent": "sqlmap/1.6",
+        },
         # Attacker 2: 10.88.77.2 — AntSword webshell upload
-        {"timestamp": "2026-07-01T10:01:00", "src_ip": "10.88.77.2", "method": "POST",
-         "url": "/upload.php", "waf_score": 80, "user_agent": "AntSword/v2.1",
-         "body": "<?php @eval($_POST['ant']); ?>"},
-        {"timestamp": "2026-07-01T10:01:05", "src_ip": "10.88.77.2", "method": "POST",
-         "url": "/images/shell.php", "waf_score": 95, "user_agent": "AntSword/v2.1",
-         "body": "ant=system('ls -la');"},
-        {"timestamp": "2026-07-01T10:01:10", "src_ip": "10.88.77.2", "method": "POST",
-         "url": "/images/shell.php", "waf_score": 90, "user_agent": "AntSword/v2.1",
-         "body": "ant=system('cat /etc/passwd');"},
+        {
+            "timestamp": "2026-07-01T10:01:00",
+            "src_ip": "10.88.77.2",
+            "method": "POST",
+            "url": "/upload.php",
+            "waf_score": 80,
+            "user_agent": "AntSword/v2.1",
+            "body": "<?php @eval($_POST['ant']); ?>",
+        },
+        {
+            "timestamp": "2026-07-01T10:01:05",
+            "src_ip": "10.88.77.2",
+            "method": "POST",
+            "url": "/images/shell.php",
+            "waf_score": 95,
+            "user_agent": "AntSword/v2.1",
+            "body": "ant=system('ls -la');",
+        },
+        {
+            "timestamp": "2026-07-01T10:01:10",
+            "src_ip": "10.88.77.2",
+            "method": "POST",
+            "url": "/images/shell.php",
+            "waf_score": 90,
+            "user_agent": "AntSword/v2.1",
+            "body": "ant=system('cat /etc/passwd');",
+        },
         # Attacker 3: 10.66.55.4 — BurpSuite probing
-        {"timestamp": "2026-07-01T10:02:00", "src_ip": "10.66.55.4", "method": "GET",
-         "url": "/.env", "waf_score": 60, "user_agent": "Mozilla/5.0"},
-        {"timestamp": "2026-07-01T10:02:05", "src_ip": "10.66.55.4", "method": "GET",
-         "url": "/.git/config", "waf_score": 65, "user_agent": "Mozilla/5.0"},
-        {"timestamp": "2026-07-01T10:02:10", "src_ip": "10.66.55.4", "method": "GET",
-         "url": "/wp-admin/install.php", "waf_score": 50, "user_agent": "Mozilla/5.0"},
+        {
+            "timestamp": "2026-07-01T10:02:00",
+            "src_ip": "10.66.55.4",
+            "method": "GET",
+            "url": "/.env",
+            "waf_score": 60,
+            "user_agent": "Mozilla/5.0",
+        },
+        {
+            "timestamp": "2026-07-01T10:02:05",
+            "src_ip": "10.66.55.4",
+            "method": "GET",
+            "url": "/.git/config",
+            "waf_score": 65,
+            "user_agent": "Mozilla/5.0",
+        },
+        {
+            "timestamp": "2026-07-01T10:02:10",
+            "src_ip": "10.66.55.4",
+            "method": "GET",
+            "url": "/wp-admin/install.php",
+            "waf_score": 50,
+            "user_agent": "Mozilla/5.0",
+        },
     ]
 
-    with open(str(events_file), 'w', encoding='utf-8') as f:
+    with open(str(events_file), "w", encoding="utf-8") as f:
         for evt in events:
-            f.write(json.dumps(evt, ensure_ascii=False) + '\n')
+            f.write(json.dumps(evt, ensure_ascii=False) + "\n")
 
     return events_file

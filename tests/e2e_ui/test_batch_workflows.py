@@ -129,22 +129,20 @@ def _wait_for_message(page, expected: str, timeout_ms: int = 10000):
     )
 
 
-def test_cross_page_batch_false_positive_quarantine_and_restore(
-    page, tmp_path, runtime
-):
+def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path, runtime):
     browser_errors = []
     page.on("console", lambda msg: browser_errors.append(f"{msg.type}: {msg.text}"))
     page.on("pageerror", lambda exc: browser_errors.append(f"pageerror: {exc}"))
     _stub_dialogs(page)
 
-    _seed_records(runtime, tmp_path, "codex_e2e_fp", 8)
-    _seed_records(runtime, tmp_path, "codex_e2e_q", 8)
-    _seed_quarantine_records(runtime, tmp_path, "codex_e2e_qrestore", 8)
+    _seed_records(runtime, tmp_path, "batch_e2e_fp", 8)
+    _seed_records(runtime, tmp_path, "batch_e2e_q", 8)
+    _seed_quarantine_records(runtime, tmp_path, "batch_e2e_qrestore", 8)
 
     page.request.get(page.url.rstrip("/") + "/records?force=true")
     _open_threats(page)
 
-    assert _select_matching_records(page, "codex_e2e_fp", 4) == 4
+    assert _select_matching_records(page, "batch_e2e_fp", 4) == 4
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 4
     fp_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="FP Sel")
     expect(fp_button).to_be_enabled()
@@ -153,8 +151,12 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
         _wait_for_message(page, "4 success")
     except Exception as exc:
         messages = page.evaluate("window.__batchMessages || []")
-        raise AssertionError(f"FP batch did not complete; messages={messages!r}; browser_errors={browser_errors!r}") from exc
-    expect(page.locator("#records-table-container .rec-count")).to_contain_text("0 selected", timeout=8000)
+        raise AssertionError(
+            f"FP batch did not complete; messages={messages!r}; browser_errors={browser_errors!r}"
+        ) from exc
+    expect(page.locator("#records-table-container .rec-count")).to_contain_text(
+        "0 selected", timeout=8000
+    )
 
     fp_records = {
         Path(item["file_path"]).name: item
@@ -162,17 +164,19 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
             include_deleted=True,
             include_false_positive=True,
         )
-        if "codex_e2e_fp" in item.get("file_path", "")
+        if "batch_e2e_fp" in item.get("file_path", "")
     }
     assert sum(bool(item.get("marked_false_positive")) for item in fp_records.values()) == 4
 
-    assert _select_matching_records(page, "codex_e2e_q", 8) == 8
+    assert _select_matching_records(page, "batch_e2e_q", 8) == 8
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 8
     q_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="Quar Sel")
     expect(q_button).to_be_enabled()
     q_button.click()
     _wait_for_message(page, "8 success")
-    expect(page.locator("#records-table-container .rec-count")).to_contain_text("0 selected", timeout=10000)
+    expect(page.locator("#records-table-container .rec-count")).to_contain_text(
+        "0 selected", timeout=10000
+    )
 
     quarantined_registry = [
         item
@@ -180,43 +184,47 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
             include_deleted=True,
             include_false_positive=True,
         )
-        if Path(item.get("file_path", "")).name.startswith("codex_e2e_q_")
+        if Path(item.get("file_path", "")).name.startswith("batch_e2e_q_")
     ]
     assert len(quarantined_registry) == 8
     assert all(item.get("quarantine_id") for item in quarantined_registry)
     assert all(not Path(item["file_path"]).exists() for item in quarantined_registry)
 
-    quarantine_records = runtime.quarantine.list_records(
-        status="quarantined", limit=1000
-    )
+    quarantine_records = runtime.quarantine.list_records(status="quarantined", limit=1000)
     stored_ids = {item["quarantine_id"] for item in quarantine_records}
     assert {item["quarantine_id"] for item in quarantined_registry} <= stored_ids
 
     _switch_tab(page, "quarantine")
     page.wait_for_selector("#quarantine-list-container", timeout=10000)
-    assert _select_matching_quarantine(page, "codex_e2e_qrestore", 8) == 8
+    assert _select_matching_quarantine(page, "batch_e2e_qrestore", 8) == 8
     assert page.evaluate("window.Anteumbra.module('records').selectedQuarantine().size") == 8
-    restore_button = page.locator("#quarantine-list-container .q-batch-btn").filter(has_text="Restore Sel")
+    restore_button = page.locator("#quarantine-list-container .q-batch-btn").filter(
+        has_text="Restore Sel"
+    )
     expect(restore_button).to_be_enabled()
     restore_button.click()
     _wait_for_message(page, "8 success")
-    expect(page.locator("#quarantine-list-container .q-count")).to_contain_text("0 selected", timeout=10000)
+    expect(page.locator("#quarantine-list-container .q-count")).to_contain_text(
+        "0 selected", timeout=10000
+    )
 
     restored_records = [
         item
         for item in runtime.quarantine.list_records(status="restored", limit=1000)
-        if "codex_e2e_qrestore" in item.get("original_path", "")
+        if "batch_e2e_qrestore" in item.get("original_path", "")
     ]
     assert len(restored_records) == 8
     assert all(Path(item["original_path"]).exists() for item in restored_records)
 
     _switch_tab(page, "audit")
     page.wait_for_selector("#records-table-container-audit", timeout=10000)
-    assert _select_matching_records(page, "codex_e2e_fp", 2, audit=True) == 2
+    assert _select_matching_records(page, "batch_e2e_fp", 2, audit=True) == 2
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 2
     page.locator("#records-table-container-audit .rec-batch-btn").filter(has_text="Del Sel").click()
     _wait_for_message(page, "2 success")
-    expect(page.locator("#records-table-container-audit input.rec-checkbox:checked")).to_have_count(0, timeout=10000)
+    expect(page.locator("#records-table-container-audit input.rec-checkbox:checked")).to_have_count(
+        0, timeout=10000
+    )
 
     deleted_fp = [
         item
@@ -224,7 +232,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(
             include_deleted=True,
             include_false_positive=True,
         )
-        if "codex_e2e_fp" in item.get("file_path", "") and item.get("deleted_at")
+        if "batch_e2e_fp" in item.get("file_path", "") and item.get("deleted_at")
     ]
     assert len(deleted_fp) == 2
     assert not [entry for entry in browser_errors if entry.startswith("pageerror:")]

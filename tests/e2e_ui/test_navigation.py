@@ -8,9 +8,8 @@ Tests:
   - Mobile sidebar toggle works
   - Brand header is visible
 """
-import pytest
-from playwright.sync_api import expect
 
+from playwright.sync_api import expect
 
 NAV_ITEMS = [
     ("overview", "Overview"),
@@ -41,8 +40,9 @@ class TestNavigation:
         """Clicking Overview should load dashboard content."""
         page.click("a.nav-link[data-path='overview']")
         # Content area should load something
-        page.wait_for_selector("#dashboard-content, #overview-content, .dashboard-grid",
-                               timeout=5000)
+        page.wait_for_selector(
+            "#dashboard-content, #overview-content, .dashboard-grid", timeout=5000
+        )
         # At minimum, the brand header should still be visible
         expect(page.locator(".brand")).to_be_visible()
 
@@ -51,7 +51,7 @@ class TestNavigation:
         page.click("a.nav-link[data-path='threats']")
         page.wait_for_timeout(1000)  # HTMX load
         # Should have some content — threats page includes a table or placeholder
-        content = page.locator("#main-content, .table-container, table").first
+        page.locator("#main-content, .table-container, table").first
         # Just verify the page doesn't crash
         expect(page.locator(".brand")).to_be_visible()
 

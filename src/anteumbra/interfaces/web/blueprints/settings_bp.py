@@ -3,54 +3,56 @@
 v1.0.6: Settings Blueprint — extracted from admin_bp.py
 Routes: /settings/* (11) + /siem/* (2)
 """
+
 import json
 import logging
 import os
 from pathlib import Path
 
-from flask import Blueprint, render_template, request, jsonify, current_app, session
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
-settings_bp = Blueprint('settings', __name__, url_prefix='/admin')
+settings_bp = Blueprint("settings", __name__, url_prefix="/admin")
 
 
 def _siem_exporter():
     return get_runtime().siem_exporter
 
 
-@settings_bp.route('/settings')
+@settings_bp.route("/settings")
 @require_auth
 def settings_page():
     """v1.8.0: Settings -- system + account + notification config merged view"""
     try:
-        return render_template('admin/settings.html')
+        return render_template("admin/settings.html")
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] settings failed: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-@settings_bp.route('/settings/notifications')
+@settings_bp.route("/settings/notifications")
 @require_auth
 def settings_notifications():
     """v1.8.0: Web Config Panel -- notification config form"""
     try:
         cfg = get_runtime().config.get()
-        notifier = cfg.get('notifier', {})
-        email = notifier.get('email', {})
-        wechat = notifier.get('wechat', {})
-        webhook = notifier.get('webhook', {})
-        return render_template('admin/panels/notify_config.html',
-            email=email, wechat=wechat, webhook=webhook)
+        notifier = cfg.get("notifier", {})
+        email = notifier.get("email", {})
+        wechat = notifier.get("wechat", {})
+        webhook = notifier.get("webhook", {})
+        return render_template(
+            "admin/panels/notify_config.html", email=email, wechat=wechat, webhook=webhook
+        )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] notifications failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Load failed: {e}</div>', 500
 
 
-@settings_bp.route('/settings/config/editor')
+@settings_bp.route("/settings/config/editor")
 @require_auth
 def settings_config_editor():
     """v1.8.0: Dynamic config.toml editor -- server-side struct parsing, template rendering"""
@@ -60,102 +62,120 @@ def settings_config_editor():
         current_section = None
         pending_desc = None
 
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         for line in lines:
             stripped = line.strip()
-            if stripped.startswith('# @desc:'):
-                pending_desc = stripped.split('@desc:', 1)[1].strip()
+            if stripped.startswith("# @desc:"):
+                pending_desc = stripped.split("@desc:", 1)[1].strip()
                 continue
-            if stripped.startswith('#') or not stripped:
+            if stripped.startswith("#") or not stripped:
                 continue
-            if stripped.startswith('[') and stripped.endswith(']'):
+            if stripped.startswith("[") and stripped.endswith("]"):
                 current_section = stripped[1:-1]
                 sections[current_section] = []
                 continue
-            if '=' in stripped and current_section:
-                key, _, value = stripped.partition('=')
+            if "=" in stripped and current_section:
+                key, _, value = stripped.partition("=")
                 key = key.strip()
-                raw = value.strip().rstrip('#').strip()
-                is_env = '${' in raw and '}' in raw
+                raw = value.strip().rstrip("#").strip()
+                is_env = "${" in raw and "}" in raw
                 if raw.startswith('"') and raw.endswith('"'):
-                    ftype, fval = 'string', raw[1:-1]
-                elif raw.lower() in ('true', 'false'):
-                    ftype, fval = 'bool', raw.lower() == 'true'
-                elif raw.startswith('['):
-                    ftype, fval = 'array', raw
-                elif raw.replace('.', '').replace('-', '').isdigit() or (raw.startswith('-') and raw[1:].replace('.', '').isdigit()):
-                    ftype = 'float' if '.' in raw else 'int'
-                    fval = float(raw) if '.' in raw else int(raw)
+                    ftype, fval = "string", raw[1:-1]
+                elif raw.lower() in ("true", "false"):
+                    ftype, fval = "bool", raw.lower() == "true"
+                elif raw.startswith("["):
+                    ftype, fval = "array", raw
+                elif raw.replace(".", "").replace("-", "").isdigit() or (
+                    raw.startswith("-") and raw[1:].replace(".", "").isdigit()
+                ):
+                    ftype = "float" if "." in raw else "int"
+                    fval = float(raw) if "." in raw else int(raw)
                 else:
-                    ftype, fval = 'string', raw
-                sections[current_section].append({
-                    'key': key, 'value': fval, 'type': ftype, 'raw': raw,
-                    'desc': pending_desc or '', 'is_env': is_env,
-                    'display': ('(env: ' + raw[2:-1].split(':-')[0] + ')' if is_env else fval)
-                })
+                    ftype, fval = "string", raw
+                sections[current_section].append(
+                    {
+                        "key": key,
+                        "value": fval,
+                        "type": ftype,
+                        "raw": raw,
+                        "desc": pending_desc or "",
+                        "is_env": is_env,
+                        "display": ("(env: " + raw[2:-1].split(":-")[0] + ")" if is_env else fval),
+                    }
+                )
                 pending_desc = None
 
         levels = {}
         for sec_name in sections:
-            depth = sec_name.count('.')
+            depth = sec_name.count(".")
             levels[sec_name] = depth
 
         env_vars = {}
-        env_path = os.path.join(os.path.dirname(config_path), '.env')
+        env_path = os.path.join(os.path.dirname(config_path), ".env")
         if os.path.exists(env_path):
-            with open(env_path, 'r', encoding='utf-8') as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if '=' in line and not line.startswith('#'):
-                        k, v = line.split('=', 1)
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
                         env_vars[k.strip()] = v.strip()
 
-        return render_template('admin/panels/config_editor.html',
-            sections=sections, sections_levels=levels,
-            config_path=str(config_path), env_vars=env_vars, os=os)
+        return render_template(
+            "admin/panels/config_editor.html",
+            sections=sections,
+            sections_levels=levels,
+            config_path=str(config_path),
+            env_vars=env_vars,
+            os=os,
+        )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] config editor failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Config load error: {e}</div>', 500
 
 
-@settings_bp.route('/settings/config/save', methods=['POST'])
+@settings_bp.route("/settings/config/save", methods=["POST"])
 @require_auth
 def settings_config_save():
     """v1.9.5: Fix -- use tomli_w for proper TOML serialization"""
     try:
         import tomli_w
+
         data = request.get_json()
-        changes = data.get('changes', {})
+        changes = data.get("changes", {})
         if not changes:
-            return jsonify({'success': False, 'error': 'No changes'}), 400
+            return jsonify({"success": False, "error": "No changes"}), 400
         config_path = get_runtime().config.path
         raw = get_runtime().config.get()
         for full_key, new_val in changes.items():
-            parts = full_key.split('.')
+            parts = full_key.split(".")
             target = raw
             for part in parts[:-1]:
                 if part not in target:
                     target[part] = {}
                 target = target[part]
             key = parts[-1]
-            s = str(new_val).strip() if not isinstance(new_val, (bool, int, float, list)) else new_val
+            s = (
+                str(new_val).strip()
+                if not isinstance(new_val, (bool, int, float, list))
+                else new_val
+            )
             if isinstance(s, bool):
                 target[key] = s
             elif isinstance(s, (int, float)):
                 target[key] = s
             elif isinstance(s, str):
-                if s.lower() in ('true', 'false'):
-                    target[key] = s.lower() == 'true'
-                elif s.startswith('[') and s.endswith(']'):
+                if s.lower() in ("true", "false"):
+                    target[key] = s.lower() == "true"
+                elif s.startswith("[") and s.endswith("]"):
                     try:
                         target[key] = json.loads(s)
                     except Exception:
                         target[key] = s
                 else:
                     try:
-                        if '.' in s:
+                        if "." in s:
                             target[key] = float(s)
                         else:
                             target[key] = int(s)
@@ -163,19 +183,19 @@ def settings_config_save():
                         target[key] = s
             else:
                 target[key] = new_val
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             f.write(tomli_w.dumps(raw))
         try:
             get_runtime().config.reload()
         except Exception:
             logger.debug("Runtime config reload failed after config save", exc_info=True)
-        return jsonify({'success': True, 'message': 'Config saved'})
+        return jsonify({"success": True, "message": "Config saved"})
     except Exception as e:
-        current_app.logger.error(f'[SETTINGS] config save failed: {e}', exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        current_app.logger.error(f"[SETTINGS] config save failed: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-@settings_bp.route('/settings/config/data')
+@settings_bp.route("/settings/config/data")
 @require_auth
 def settings_config_data():
     """v1.8.0: Return config.toml structured data + comment descriptions"""
@@ -185,75 +205,77 @@ def settings_config_data():
         current_section = None
         pending_desc = None
 
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         for line in lines:
             stripped = line.strip()
-            if stripped.startswith('# @desc:'):
-                pending_desc = stripped.split('@desc:', 1)[1].strip()
+            if stripped.startswith("# @desc:"):
+                pending_desc = stripped.split("@desc:", 1)[1].strip()
                 continue
-            if stripped.startswith('#') or not stripped:
+            if stripped.startswith("#") or not stripped:
                 continue
-            if stripped.startswith('[') and stripped.endswith(']'):
+            if stripped.startswith("[") and stripped.endswith("]"):
                 current_section = stripped[1:-1]
-                sections[current_section] = {'title': current_section, 'fields': {}}
+                sections[current_section] = {"title": current_section, "fields": {}}
                 continue
-            if '=' in stripped and current_section:
-                key, _, value = stripped.partition('=')
+            if "=" in stripped and current_section:
+                key, _, value = stripped.partition("=")
                 key = key.strip()
-                value = value.strip().rstrip('#').strip()
+                value = value.strip().rstrip("#").strip()
                 if value.startswith('"') and value.endswith('"'):
-                    ftype, fval = 'string', value[1:-1]
-                elif value.lower() in ('true', 'false'):
-                    ftype, fval = 'bool', value.lower() == 'true'
-                elif value.startswith('['):
-                    ftype, fval = 'array', value
-                elif value.replace('.', '').replace('-', '').isdigit() or (value.startswith('-') and value[1:].replace('.', '').isdigit()):
-                    ftype = 'float' if '.' in value else 'int'
-                    fval = float(value) if '.' in value else int(value)
+                    ftype, fval = "string", value[1:-1]
+                elif value.lower() in ("true", "false"):
+                    ftype, fval = "bool", value.lower() == "true"
+                elif value.startswith("["):
+                    ftype, fval = "array", value
+                elif value.replace(".", "").replace("-", "").isdigit() or (
+                    value.startswith("-") and value[1:].replace(".", "").isdigit()
+                ):
+                    ftype = "float" if "." in value else "int"
+                    fval = float(value) if "." in value else int(value)
                 else:
-                    ftype, fval = 'string', value
-                sections[current_section]['fields'][key] = {
-                    'value': fval if ftype != 'array' else value,
-                    'type': ftype,
-                    'desc': pending_desc or ''
+                    ftype, fval = "string", value
+                sections[current_section]["fields"][key] = {
+                    "value": fval if ftype != "array" else value,
+                    "type": ftype,
+                    "desc": pending_desc or "",
                 }
                 pending_desc = None
 
-        return jsonify({'sections': sections, 'path': str(config_path)})
+        return jsonify({"sections": sections, "path": str(config_path)})
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] config data failed: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@settings_bp.route('/settings/env/save', methods=['POST'])
+@settings_bp.route("/settings/env/save", methods=["POST"])
 @require_auth
 def settings_env_save():
     """v1.8.0: Save .env file (structured variables)"""
     try:
         data = request.get_json()
-        vars_data = data.get('vars', {})
+        vars_data = data.get("vars", {})
         config_path = get_runtime().config.path
-        env_path = os.path.join(os.path.dirname(config_path), '.env')
+        env_path = os.path.join(os.path.dirname(config_path), ".env")
 
         existing = {}
         if os.path.exists(env_path):
-            with open(env_path, 'r', encoding='utf-8') as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if '=' in line and not line.startswith('#'):
-                        k, v = line.split('=', 1)
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
                         existing[k.strip()] = line
 
         for k, v in vars_data.items():
             if v:
-                existing[k] = f'{k}={v}'
+                existing[k] = f"{k}={v}"
 
-        with open(env_path, 'w', encoding='utf-8') as f:
-            f.write('# Anteumbra .env -- managed via Settings UI\n')
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write("# Anteumbra .env -- managed via Settings UI\n")
             for k in sorted(existing.keys()):
-                f.write(existing[k] + '\n')
+                f.write(existing[k] + "\n")
 
         for k, v in vars_data.items():
             if v:
@@ -263,59 +285,60 @@ def settings_env_save():
         except Exception:
             logger.debug("Runtime config reload failed after .env save", exc_info=True)
 
-        return jsonify({'success': True, 'message': '.env saved + config reloaded'})
+        return jsonify({"success": True, "message": ".env saved + config reloaded"})
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] env save failed: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-@settings_bp.route('/settings/env/hash', methods=['POST'])
+@settings_bp.route("/settings/env/hash", methods=["POST"])
 @require_auth
 def settings_env_hash():
     """v1.8.0: Generate scrypt password hash"""
     try:
         data = request.get_json()
-        password = data.get('password', '')
+        password = data.get("password", "")
         if not password or len(password) < 6:
-            return jsonify({'error': 'Password too short (min 6 chars)'}), 400
+            return jsonify({"error": "Password too short (min 6 chars)"}), 400
         from werkzeug.security import generate_password_hash
-        h = generate_password_hash(password, method='scrypt:32768:8:1')
-        return jsonify({'hash': h})
+
+        h = generate_password_hash(password, method="scrypt:32768:8:1")
+        return jsonify({"hash": h})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@settings_bp.route('/settings/notifications/save', methods=['POST'])
+@settings_bp.route("/settings/notifications/save", methods=["POST"])
 @require_auth
 def settings_notifications_save():
     """v1.8.0: Save notification toggle state to config.toml"""
     try:
-        section = request.form.get('section', '')
-        key = request.form.get('key', '')
-        value = request.form.get('value', 'on')
+        section = request.form.get("section", "")
+        key = request.form.get("key", "")
+        value = request.form.get("value", "on")
 
-        if section not in ('email', 'wechat', 'webhook') or key not in ('enabled',):
+        if section not in ("email", "wechat", "webhook") or key not in ("enabled",):
             return jsonify({"error": "Invalid parameters"}), 400
 
         config_path = get_runtime().config.path
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         in_target_section = False
-        section_header = f'[notifier.{section}]'
+        section_header = f"[notifier.{section}]"
         for i, line in enumerate(lines):
             if line.strip() == section_header:
                 in_target_section = True
                 continue
             if in_target_section:
-                if line.strip().startswith('['):
+                if line.strip().startswith("["):
                     break
-                if line.strip().startswith(f'{key} =') or line.strip().startswith(f'{key}='):
-                    new_val = 'true' if value == 'on' else 'false'
-                    lines[i] = f'{key} = {new_val}\n'
+                if line.strip().startswith(f"{key} =") or line.strip().startswith(f"{key}="):
+                    new_val = "true" if value == "on" else "false"
+                    lines[i] = f"{key} = {new_val}\n"
                     break
 
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
         return jsonify({"success": True, "message": f"{section}.{key} updated"})
@@ -326,11 +349,12 @@ def settings_notifications_save():
 
 # -- SIEM Export endpoints --
 
-@settings_bp.route('/siem/export')
+
+@settings_bp.route("/siem/export")
 @require_auth
 def siem_export():
     """Export detection records as SIEM-formatted events (JSON Lines / CEF)."""
-    fmt = request.args.get('format', '')
+    fmt = request.args.get("format", "")
     try:
         exporter = _siem_exporter()
         if fmt:
@@ -338,19 +362,21 @@ def siem_export():
         records = get_runtime().registry.get_all(include_deleted=False)
         count = exporter.export_existing(records)
         export_path = exporter.export_path
-        return jsonify({
-            "success": True,
-            "exported": count,
-            "format": exporter.format,
-            "file": str(export_path),
-            "size_bytes": export_path.stat().st_size if export_path.exists() else 0,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "exported": count,
+                "format": exporter.format,
+                "file": str(export_path),
+                "size_bytes": export_path.stat().st_size if export_path.exists() else 0,
+            }
+        )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] SIEM export failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
-@settings_bp.route('/siem/stats')
+@settings_bp.route("/siem/stats")
 @require_auth
 def siem_stats():
     """Get SIEM exporter statistics."""
@@ -362,7 +388,8 @@ def siem_stats():
 
 # -- Settings status panels --
 
-@settings_bp.route('/settings/siem-status')
+
+@settings_bp.route("/settings/siem-status")
 @require_auth
 def settings_siem_status():
     """SIEM export status panel for Settings page."""
@@ -371,16 +398,21 @@ def settings_siem_status():
         s = e.get_stats()
         export_path = Path(s["export_file"])
         has_data = export_path.exists() and export_path.stat().st_size > 0
-        return render_template('admin/panels/siem_status.html',
-            enabled=s["enabled"], format=s["format"],
-            total_exported=s["total_exported"], file_size_mb=s["file_size_mb"],
-            syslog_active=s["syslog_active"], has_data=has_data,
-            export_file=str(export_path))
+        return render_template(
+            "admin/panels/siem_status.html",
+            enabled=s["enabled"],
+            format=s["format"],
+            total_exported=s["total_exported"],
+            file_size_mb=s["file_size_mb"],
+            syslog_active=s["syslog_active"],
+            has_data=has_data,
+            export_file=str(export_path),
+        )
     except Exception as e:
         return f'<div style="color:#ff4444;">Error: {e}</div>'
 
 
-@settings_bp.route('/settings/storage-status')
+@settings_bp.route("/settings/storage-status")
 @require_auth
 def settings_storage_status():
     """Storage backend status panel for Settings page."""
@@ -397,14 +429,19 @@ def settings_storage_status():
             if f.exists():
                 json_size += f.stat().st_size
         json_mb = round(json_size / 1024 / 1024, 2)
-        return render_template('admin/panels/storage_status.html',
-            backend=backend, db_exists=db_exists, db_size=db_size,
-            json_mb=json_mb, json_files=len(json_files))
+        return render_template(
+            "admin/panels/storage_status.html",
+            backend=backend,
+            db_exists=db_exists,
+            db_size=db_size,
+            json_mb=json_mb,
+            json_files=len(json_files),
+        )
     except Exception as e:
         return f'<div style="color:#ff4444;">Error: {e}</div>'
 
 
-@settings_bp.route('/settings/plugin-status')
+@settings_bp.route("/settings/plugin-status")
 @require_auth
 def settings_plugin_status():
     """Plugin system status panel for Settings page."""
@@ -412,7 +449,7 @@ def settings_plugin_status():
         pm = current_app.extensions.get("anteumbra.plugin_manager")
         if pm is None:
             return render_template(
-                'admin/panels/plugin_status.html',
+                "admin/panels/plugin_status.html",
                 enabled=False,
                 plugins=[],
                 detector_count=0,
@@ -423,9 +460,13 @@ def settings_plugin_status():
         detector_count = len(pm.detectors)
         notifier_count = len(pm.notifiers)
         source_count = len(pm.event_sources)
-        return render_template('admin/panels/plugin_status.html',
-            enabled=pm.is_enabled, plugins=plugins,
-            detector_count=detector_count, notifier_count=notifier_count,
-            source_count=source_count)
+        return render_template(
+            "admin/panels/plugin_status.html",
+            enabled=pm.is_enabled,
+            plugins=plugins,
+            detector_count=detector_count,
+            notifier_count=notifier_count,
+            source_count=source_count,
+        )
     except Exception as e:
         return f'<div style="color:#ff4444;">Error: {e}</div>'

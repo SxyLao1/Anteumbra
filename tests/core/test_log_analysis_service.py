@@ -4,7 +4,9 @@ from types import SimpleNamespace
 
 
 def test_analyzes_each_enabled_log_configuration(tmp_path):
-    from anteumbra.application.log_analysis_service import analyze_access_logs
+    from anteumbra.application.log_analysis_service import AccessLogAnalysisService
+    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
+    from anteumbra.infrastructure.monitoring.log_analyzer import resolve_access_log_path
 
     nginx_log = tmp_path / "nginx-access.log"
     tomcat_log = tmp_path / "localhost_access_log.2026-07-17.txt"
@@ -37,7 +39,10 @@ def test_analyzes_each_enabled_log_configuration(tmp_path):
         ),
     ]
 
-    results = analyze_access_logs(websites)
+    results = AccessLogAnalysisService(
+        resolve_access_log_path,
+        LogHeuristicEngine,
+    ).analyze(websites)
 
     assert [result["website"] for result in results] == ["Nginx", "Tomcat", "Disabled"]
     assert [result["status"] for result in results] == ["ok", "ok", "disabled"]

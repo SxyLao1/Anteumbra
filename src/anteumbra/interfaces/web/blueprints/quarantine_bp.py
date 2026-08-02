@@ -8,12 +8,13 @@
 
 v1.7.9 新增：隔离管理后台蓝图
 """
-from flask import Blueprint, render_template, request, jsonify, current_app
+
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
-quarantine_bp = Blueprint('quarantine', __name__, url_prefix='/admin')
+quarantine_bp = Blueprint("quarantine", __name__, url_prefix="/admin")
 
 
 def _requested_site_id():
@@ -23,23 +24,21 @@ def _requested_site_id():
 
 def _record_matches_site(record, site_id):
     """Avoid acting on a quarantine item outside the requested site boundary."""
-    return not site_id or (
-        record and record.get("site_id") == str(site_id).strip().lower()
-    )
+    return not site_id or (record and record.get("site_id") == str(site_id).strip().lower())
 
 
 def _quarantine_service():
     return get_runtime().quarantine
 
 
-@quarantine_bp.route('/quarantine', methods=['GET'])
+@quarantine_bp.route("/quarantine", methods=["GET"])
 @require_auth
 def quarantine_list():
     """隔离文件列表"""
     try:
-        status = request.args.get('status', 'quarantined')
-        site_id = request.args.get('site_id') or None
-        page_str = request.args.get('page', '1')
+        status = request.args.get("status", "quarantined")
+        site_id = request.args.get("site_id") or None
+        page_str = request.args.get("page", "1")
         try:
             page = max(1, int(page_str))
         except (ValueError, TypeError):
@@ -50,18 +49,21 @@ def quarantine_list():
 
         service = _quarantine_service()
         all_records = service.list_records(
-            status=status if status != 'all' else None,
+            status=status if status != "all" else None,
             site_id=site_id,
         )
 
         # v1.8.4: 搜索过滤
-        q = request.args.get('q', '').lower()
+        q = request.args.get("q", "").lower()
         if q:
-            all_records = [r for r in all_records
-                if q in r.get('quarantine_id', '').lower()
-                or q in r.get('original_path', '').lower()
-                or q in r.get('quarantine_path', '').lower()
-                or q in r.get('rule_name', '').lower()]
+            all_records = [
+                r
+                for r in all_records
+                if q in r.get("quarantine_id", "").lower()
+                or q in r.get("original_path", "").lower()
+                or q in r.get("quarantine_path", "").lower()
+                or q in r.get("rule_name", "").lower()
+            ]
 
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -73,12 +75,12 @@ def quarantine_list():
 
         stats = service.get_stats(site_id=site_id)
 
-        all_qids = [r.get('quarantine_id', '') for r in all_records if r.get('quarantine_id')]
+        all_qids = [r.get("quarantine_id", "") for r in all_records if r.get("quarantine_id")]
 
-        compact = request.args.get('compact') == '1'
-        if request.headers.get('HX-Request'):
+        compact = request.args.get("compact") == "1"
+        if request.headers.get("HX-Request"):
             return render_template(
-                'admin/quarantine_list.html',
+                "admin/quarantine_list.html",
                 records=paginated,
                 stats=stats,
                 page=page,
@@ -91,27 +93,27 @@ def quarantine_list():
             )
         else:
             return render_template(
-                'admin/quarantine.html',
+                "admin/quarantine.html",
                 records=paginated,
                 stats=stats,
                 page=page,
                 total_pages=total_pages,
                 total=total,
                 per_page=per_page,
-                current_status=status
+                current_status=status,
             )
 
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][LIST] 错误: {e}", exc_info=True)
-        return render_template('admin/error.html', error=str(e)), 500
+        return render_template("admin/error.html", error=str(e)), 500
 
 
-@quarantine_bp.route('/quarantine/detail', methods=['GET'])
+@quarantine_bp.route("/quarantine/detail", methods=["GET"])
 @require_auth
 def quarantine_detail():
     """隔离详情"""
     try:
-        qid = request.args.get('qid', '')
+        qid = request.args.get("qid", "")
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
@@ -119,8 +121,8 @@ def quarantine_detail():
         if not record or not _record_matches_site(record, _requested_site_id()):
             return jsonify({"error": "记录不存在"}), 404
 
-        if request.headers.get('HX-Request'):
-            return render_template('admin/quarantine_detail.html', record=record)
+        if request.headers.get("HX-Request"):
+            return render_template("admin/quarantine_detail.html", record=record)
         else:
             return jsonify(record)
 
@@ -139,17 +141,24 @@ def _render_quarantine_list(status=None, site_id=None):
     total_pages = max(1, (total + per_page - 1) // per_page)
     paginated = all_records[:per_page]
     stats = runtime.quarantine.get_stats(site_id=site_id)
-    return render_template('admin/quarantine_list.html',
-        records=paginated, stats=stats, page=1, total_pages=total_pages,
-        total=total, per_page=per_page, current_status=status or 'all')
+    return render_template(
+        "admin/quarantine_list.html",
+        records=paginated,
+        stats=stats,
+        page=1,
+        total_pages=total_pages,
+        total=total,
+        per_page=per_page,
+        current_status=status or "all",
+    )
 
 
-@quarantine_bp.route('/quarantine/restore', methods=['POST'])
+@quarantine_bp.route("/quarantine/restore", methods=["POST"])
 @require_auth
 def quarantine_restore():
     """恢复隔离文件 — v1.7.9: 返回刷新后的列表HTML"""
     try:
-        qid = request.form.get('qid', '') or request.args.get('qid', '')
+        qid = request.form.get("qid", "") or request.args.get("qid", "")
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
@@ -168,12 +177,12 @@ def quarantine_restore():
         return jsonify({"error": str(e)}), 500
 
 
-@quarantine_bp.route('/quarantine/delete', methods=['POST'])
+@quarantine_bp.route("/quarantine/delete", methods=["POST"])
 @require_auth
 def quarantine_delete():
     """永久删除隔离文件 — v1.7.9: 返回刷新后的列表HTML"""
     try:
-        qid = request.form.get('qid', '') or request.args.get('qid', '')
+        qid = request.form.get("qid", "") or request.args.get("qid", "")
         if not qid:
             return jsonify({"error": "缺少 qid 参数"}), 400
 
@@ -191,13 +200,13 @@ def quarantine_delete():
         return jsonify({"error": str(e)}), 500
 
 
-@quarantine_bp.route('/quarantine/batch', methods=['POST'])
+@quarantine_bp.route("/quarantine/batch", methods=["POST"])
 @require_auth
 def quarantine_batch():
     """v1.9.0: 批量操作 — restore / delete"""
     try:
-        action = request.form.get('action', '')
-        qids = request.form.getlist('qids[]')
+        action = request.form.get("action", "")
+        qids = request.form.getlist("qids[]")
         if not qids:
             return jsonify({"error": "missing qids"}), 400
 
@@ -211,12 +220,12 @@ def quarantine_batch():
                 if not record or not _record_matches_site(record, site_id):
                     results["skipped"] += 1
                     continue
-                if action == 'restore':
+                if action == "restore":
                     if service.restore_file(qid):
                         results["success"] += 1
                     else:
                         results["failed"] += 1
-                elif action == 'delete':
+                elif action == "delete":
                     service.delete_quarantine(qid)
                     results["success"] += 1
                 else:
@@ -226,12 +235,15 @@ def quarantine_batch():
                 results["errors"].append({"quarantine_id": qid, "error": str(exc)})
                 current_app.logger.error(
                     "[QUARANTINE][BATCH] %s failed for %s: %s",
-                    action, qid, exc, exc_info=True,
+                    action,
+                    qid,
+                    exc,
+                    exc_info=True,
                 )
 
         # v2.0 fix: Trigger stats refresh in dashboard via HTMX header
         resp = jsonify(results)
-        resp.headers['HX-Trigger'] = 'anteumbra:statsRefresh'
+        resp.headers["HX-Trigger"] = "anteumbra:statsRefresh"
         return resp, 207 if results["failed"] else 200
     except Exception as e:
         current_app.logger.error(f"[QUARANTINE][BATCH] error: {e}", exc_info=True)

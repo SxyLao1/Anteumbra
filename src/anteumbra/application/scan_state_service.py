@@ -47,8 +47,7 @@ class ScanRuntimeState:
             stale = [
                 scan_id
                 for scan_id, job in self._jobs.items()
-                if job.get("completed_at") is not None
-                and float(job["completed_at"]) < cutoff
+                if job.get("completed_at") is not None and float(job["completed_at"]) < cutoff
             ]
             for scan_id in stale:
                 del self._jobs[scan_id]
@@ -59,11 +58,7 @@ class ScanRuntimeState:
         with self._lock:
             if self._closed:
                 return 0
-            jobs = (
-                [self._jobs.get(scan_id)]
-                if scan_id
-                else list(self._jobs.values())
-            )
+            jobs = [self._jobs.get(scan_id)] if scan_id else list(self._jobs.values())
             cancelled = 0
             for job in jobs:
                 if job and job.get("completed_at") is None:
@@ -118,11 +113,7 @@ class ScanRuntimeState:
         current = threading.current_thread()
         for job in jobs:
             thread = job.get("thread")
-            if (
-                thread is None
-                or thread is current
-                or not thread.is_alive()
-            ):
+            if thread is None or thread is current or not thread.is_alive():
                 continue
             thread.join(timeout=max(0.0, deadline - time.monotonic()))
 

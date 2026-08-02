@@ -14,7 +14,6 @@ from anteumbra.domain.logging import bind_symbols
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -50,10 +49,7 @@ class RuntimeLoggerFactory:
             return self._get_monitor_logger(
                 key=key,
                 path=self.get_site_log_path(site),
-                formatter=(
-                    "[%(asctime)s] %(levelname)s - "
-                    f"[site={site.site_id}] %(message)s"
-                ),
+                formatter=(f"[%(asctime)s] %(levelname)s - [site={site.site_id}] %(message)s"),
             )
 
     def get_site_log_path(self, site: SiteIdentity) -> Path:
@@ -71,9 +67,7 @@ class RuntimeLoggerFactory:
             if directory_key in seen or not directory.is_dir():
                 continue
             seen.add(directory_key)
-            paths.extend(
-                path for path in directory.glob("monitor.log*") if path.is_file()
-            )
+            paths.extend(path for path in directory.glob("monitor.log*") if path.is_file())
         return tuple(sorted(paths, key=self._history_sort_key))
 
     def get_access_logger(self) -> logging.Logger:
@@ -93,12 +87,8 @@ class RuntimeLoggerFactory:
                 level=logging.INFO,
                 file_level=logging.INFO,
                 console_level=None,
-                max_bytes=self._megabytes(
-                    flask_config.get("flask_log_rotation_mb", 10), 10
-                ),
-                backup_count=self._positive_int(
-                    flask_config.get("flask_log_backup_count", 5), 5
-                ),
+                max_bytes=self._megabytes(flask_config.get("flask_log_rotation_mb", 10), 10),
+                backup_count=self._positive_int(flask_config.get("flask_log_backup_count", 5), 5),
                 formatter="%(message)s",
                 config=config,
             )
@@ -114,21 +104,15 @@ class RuntimeLoggerFactory:
                 return existing
             config = self._config.get()
             filesizes = config.get("filesizes", {})
-            base = self._resolve_path(
-                config.get("paths", {}).get("log_base_dir", "logs")
-            )
+            base = self._resolve_path(config.get("paths", {}).get("log_base_dir", "logs"))
             logger = self._build_logger(
                 key,
                 path=base / "Anteumbra" / "flask_runtime.log",
                 level=logging.DEBUG,
                 file_level=logging.DEBUG,
                 console_level=logging.ERROR if _is_tool_mode() else logging.INFO,
-                max_bytes=self._megabytes(
-                    filesizes.get("log_rotation_size_mb", 100), 100
-                ),
-                backup_count=self._positive_int(
-                    filesizes.get("log_backup_count", 5), 5
-                ),
+                max_bytes=self._megabytes(filesizes.get("log_rotation_size_mb", 100), 100),
+                backup_count=self._positive_int(filesizes.get("log_backup_count", 5), 5),
                 formatter="[%(asctime)s] %(levelname)s - [%(name)s] %(message)s",
                 config=config,
             )
@@ -154,12 +138,8 @@ class RuntimeLoggerFactory:
                 level=logging.DEBUG,
                 file_level=logging.DEBUG,
                 console_level=logging.WARNING if _is_tool_mode() else logging.INFO,
-                max_bytes=self._megabytes(
-                    filesizes.get("log_rotation_size_mb", 100), 100
-                ),
-                backup_count=self._positive_int(
-                    filesizes.get("log_backup_count", 5), 5
-                ),
+                max_bytes=self._megabytes(filesizes.get("log_rotation_size_mb", 100), 100),
+                backup_count=self._positive_int(filesizes.get("log_backup_count", 5), 5),
                 formatter=formatter,
                 config=config,
             )
@@ -171,19 +151,13 @@ class RuntimeLoggerFactory:
 
     def _monitor_log_base(self) -> Path:
         config = self._config.get()
-        return self._resolve_path(
-            config.get("paths", {}).get("log_base_dir", "logs")
-        )
+        return self._resolve_path(config.get("paths", {}).get("log_base_dir", "logs"))
 
     def _legacy_site_log_dirs(self, site: SiteIdentity) -> tuple[Path, ...]:
         base = self._monitor_log_base()
         candidates = [base / self._safe_scope(site.site_name)]
         raw_name = str(site.site_name).strip()
-        if (
-            raw_name not in {"", ".", ".."}
-            and "/" not in raw_name
-            and "\\" not in raw_name
-        ):
+        if raw_name not in {"", ".", ".."} and "/" not in raw_name and "\\" not in raw_name:
             candidates.append(base / raw_name)
 
         directories: list[Path] = []

@@ -12,7 +12,6 @@ import re
 from dataclasses import dataclass
 from typing import Iterable
 
-
 _SITE_ID_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62})?$")
 
 

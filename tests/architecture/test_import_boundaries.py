@@ -76,30 +76,29 @@ def _internal_import_edges() -> list[ImportEdge]:
 
 def _format_edges(edges: Iterable[ImportEdge]) -> str:
     return "\n".join(
-        f"{edge.source}:{edge.line}: {edge.imported}" for edge in sorted(
-            edges, key=lambda item: (item.source, item.line, item.imported)
-        )
+        f"{edge.source}:{edge.line}: {edge.imported}"
+        for edge in sorted(edges, key=lambda item: (item.source, item.line, item.imported))
     )
 
 
 # The launcher is the composition root and may start the web interface.
 KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
-    ("application/launcher.py", "anteumbra.interfaces.web.factory"),
+    ("application/runtime_builder.py", "anteumbra.interfaces.web.factory"),
 }
 
 
 KNOWN_LEGACY_BRANDING_LINES: set[tuple[str, str]] = {
     (
-        "interfaces/web/factory.py",
-        "重命名 trident_ → anteumbra_ 保持模板兼容",
+        "application/password_service.py",
+        '"trident",  # Deprecated pre-rename default; remove after the 2.0 credential migration.',
     ),
     (
         "interfaces/web/static/js/sse-manager.js",
-        "window.TridentSSEManager = window.AnteumbraSSEManager;",
+        "window.TridentSSEManager = window.AnteumbraSSEManager; // Deprecated: remove in 2.0 after legacy extensions migrate.",
     ),
     (
         "interfaces/web/static/js/utils.js",
-        "window.TridentUtils = AnteumbraUtils;",
+        "window.TridentUtils = AnteumbraUtils; // Deprecated: remove in 2.0 after legacy extensions migrate.",
     ),
 }
 
@@ -122,10 +121,11 @@ def test_domain_layer_has_no_outward_dependencies():
         edge
         for edge in _internal_import_edges()
         if edge.source_layer == "domain"
-        and edge.imported_layer
-        in {"application", "infrastructure", "interfaces", "plugins", "cli"}
+        and edge.imported_layer in {"application", "infrastructure", "interfaces", "plugins", "cli"}
     ]
-    assert not violations, "domain layer must not import outer layers:\n" + _format_edges(violations)
+    assert not violations, "domain layer must not import outer layers:\n" + _format_edges(
+        violations
+    )
 
 
 def test_deprecated_global_service_modules_are_removed():
@@ -152,9 +152,7 @@ def test_application_exports_are_importable():
         except Exception as exc:
             failures.append(f"{module_name}: {type(exc).__name__}: {exc}")
 
-    assert not failures, "public Application modules must import cleanly:\n" + "\n".join(
-        failures
-    )
+    assert not failures, "public Application modules must import cleanly:\n" + "\n".join(failures)
 
 
 def test_official_plugins_do_not_create_log_files_at_import_time():
@@ -183,9 +181,7 @@ def test_logging_is_owned_by_runtime_container():
     factory = PACKAGE_ROOT / "infrastructure" / "utils" / "logger_factory.py"
     source = factory.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(factory))
-    module_functions = {
-        node.name for node in tree.body if isinstance(node, ast.FunctionDef)
-    }
+    module_functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
     assert "ConfigRegistry" not in source
     assert {
@@ -205,8 +201,7 @@ def test_password_service_does_not_depend_on_infrastructure():
         and edge.imported_layer == "infrastructure"
     ]
     assert not violations, (
-        "password operations must use the injected config port:\n"
-        + _format_edges(violations)
+        "password operations must use the injected config port:\n" + _format_edges(violations)
     )
 
 
@@ -249,9 +244,7 @@ def test_runtime_workflow_state_has_no_module_global_factories():
         source = path.read_text(encoding="utf-8")
         for token in forbidden:
             if token in source:
-                violations.append(
-                    f"{path.relative_to(PROJECT_ROOT).as_posix()}: {token}"
-                )
+                violations.append(f"{path.relative_to(PROJECT_ROOT).as_posix()}: {token}")
 
     assert not violations, (
         "runtime workflow state must stay in RuntimeContainer-owned services:\n"
@@ -260,9 +253,7 @@ def test_runtime_workflow_state_has_no_module_global_factories():
 
 
 def test_runtime_container_has_no_untyped_or_unused_service_slots():
-    source = (
-        PACKAGE_ROOT / "application" / "runtime_container.py"
-    ).read_text(encoding="utf-8")
+    source = (PACKAGE_ROOT / "application" / "runtime_container.py").read_text(encoding="utf-8")
 
     assert "Any" not in source
     assert "hash_engine:" not in source
@@ -277,13 +268,10 @@ def test_interfaces_and_plugins_do_not_reach_service_private_state():
             source = path.read_text(encoding="utf-8")
             for token in forbidden:
                 if token in source:
-                    violations.append(
-                        f"{path.relative_to(PACKAGE_ROOT).as_posix()}: {token}"
-                    )
+                    violations.append(f"{path.relative_to(PACKAGE_ROOT).as_posix()}: {token}")
 
-    assert not violations, (
-        "cross-module integrations must use public service ports:\n"
-        + "\n".join(violations)
+    assert not violations, "cross-module integrations must use public service ports:\n" + "\n".join(
+        violations
     )
 
 
@@ -296,12 +284,8 @@ def test_symbol_logs_always_receive_an_explicit_logger():
                 continue
             function = node.func
             is_symbol_log = (
-                isinstance(function, ast.Name)
-                and function.id == "log_with_symbol"
-            ) or (
-                isinstance(function, ast.Attribute)
-                and function.attr == "log_with_symbol"
-            )
+                isinstance(function, ast.Name) and function.id == "log_with_symbol"
+            ) or (isinstance(function, ast.Attribute) and function.attr == "log_with_symbol")
             if not is_symbol_log:
                 continue
             has_logger = len(node.args) >= 4 or any(
@@ -311,8 +295,8 @@ def test_symbol_logs_always_receive_an_explicit_logger():
                 rel = path.relative_to(PACKAGE_ROOT).as_posix()
                 violations.append(f"{rel}:{node.lineno}")
 
-    assert not violations, (
-        "symbol logging must use a runtime-owned logger:\n" + "\n".join(violations)
+    assert not violations, "symbol logging must use a runtime-owned logger:\n" + "\n".join(
+        violations
     )
 
 
@@ -333,13 +317,11 @@ def test_interfaces_do_not_import_infrastructure():
     violations = [
         edge
         for edge in _internal_import_edges()
-        if edge.source_layer == "interfaces"
-        and edge.imported_layer == "infrastructure"
+        if edge.source_layer == "interfaces" and edge.imported_layer == "infrastructure"
     ]
     assert not violations, (
         "interfaces must depend on application/domain, not infrastructure. "
-        "Route access through an application service:\n"
-        + _format_edges(violations)
+        "Route access through an application service:\n" + _format_edges(violations)
     )
 
 
@@ -352,8 +334,7 @@ def test_infrastructure_does_not_import_plugin_manager():
     ]
     assert not violations, (
         "infrastructure should not import PluginManager directly. "
-        "Use an EventPublisher port supplied by the composition root:\n"
-        + _format_edges(violations)
+        "Use an EventPublisher port supplied by the composition root:\n" + _format_edges(violations)
     )
 
 
@@ -367,8 +348,7 @@ def test_application_does_not_import_interfaces_except_composition_root():
     ]
     assert not violations, (
         "application services must not depend on interfaces. Keep interface startup "
-        "inside the composition root:\n"
-        + _format_edges(violations)
+        "inside the composition root:\n" + _format_edges(violations)
     )
 
 
@@ -381,9 +361,7 @@ def test_known_application_to_interfaces_debt_still_matches_reality():
     stale_allowlist = KNOWN_APPLICATION_TO_INTERFACES - actual
     assert not stale_allowlist, (
         "remove cleaned-up application -> interfaces imports from the allowlist:\n"
-        + "\n".join(
-            f"{source}: {imported}" for source, imported in sorted(stale_allowlist)
-        )
+        + "\n".join(f"{source}: {imported}" for source, imported in sorted(stale_allowlist))
     )
 
 
@@ -392,9 +370,12 @@ def test_packaged_code_has_no_unscoped_legacy_branding():
     for path in _packaged_text_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "Trident" not in line and "trident_" not in line:
+            if "Trident" not in line and "trident_" not in line and '"trident"' not in line:
                 continue
-            if any(rel == allowed_path and allowed_text in line for allowed_path, allowed_text in KNOWN_LEGACY_BRANDING_LINES):
+            if any(
+                rel == allowed_path and allowed_text in line
+                for allowed_path, allowed_text in KNOWN_LEGACY_BRANDING_LINES
+            ):
                 continue
             violations.append(f"{rel}:{line_no}: {line.strip()}")
 
@@ -409,7 +390,7 @@ def test_runtime_composition_is_split_from_lifecycle():
     application_root = PACKAGE_ROOT / "application"
     launcher = (application_root / "launcher.py").read_text(encoding="utf-8")
 
-    assert "from anteumbra.application.runtime_builder import build_runtime_container" in launcher
+    assert "from anteumbra.application.runtime_builder import (" in launcher
     assert "from anteumbra.application.runtime_plugins import (" in launcher
     assert "from anteumbra.application.runtime_workers import (" in launcher
     for helper in (
@@ -473,6 +454,8 @@ def test_admin_data_actions_are_registered():
 
     missing = sorted((template_actions | generated) - registered)
     assert not missing, "unregistered admin data-action values:\n" + "\n".join(missing)
+
+
 def test_dashboard_initial_version_uses_package_version_context():
     dashboard = PACKAGE_ROOT / "interfaces" / "web" / "templates" / "admin" / "dashboard.html"
     source = dashboard.read_text(encoding="utf-8")

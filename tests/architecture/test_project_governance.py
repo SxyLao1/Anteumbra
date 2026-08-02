@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOCAL_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 
@@ -31,16 +30,13 @@ def test_public_english_documents_have_cn_counterparts():
     missing = [
         chinese
         for english, chinese in DOCUMENT_PAIRS
-        if not (PROJECT_ROOT / english).is_file()
-        or not (PROJECT_ROOT / chinese).is_file()
+        if not (PROJECT_ROOT / english).is_file() or not (PROJECT_ROOT / chinese).is_file()
     ]
     assert not missing, "missing English/Chinese document pairs: " + ", ".join(missing)
 
 
 def test_active_document_names_no_longer_use_zh_suffix():
-    stale = list(PROJECT_ROOT.glob("*_zh.md")) + list(
-        (PROJECT_ROOT / "docs").glob("*_zh.md")
-    )
+    stale = list(PROJECT_ROOT.glob("*_zh.md")) + list((PROJECT_ROOT / "docs").glob("*_zh.md"))
     assert not stale, "rename Chinese documents to *_cn.md: " + ", ".join(
         str(path.relative_to(PROJECT_ROOT)) for path in stale
     )
@@ -67,8 +63,7 @@ def test_architecture_docs_describe_runtime_owned_services():
             if claim in source:
                 violations.append(f"{relative_path}: {claim}")
     assert not violations, (
-        "architecture docs must match runtime-owned dependency injection:\n"
-        + "\n".join(violations)
+        "architecture docs must match runtime-owned dependency injection:\n" + "\n".join(violations)
     )
 
 
@@ -82,19 +77,15 @@ def test_local_markdown_links_resolve():
                 continue
             local_path = target.split("#", 1)[0]
             if not (document.parent / local_path).resolve().exists():
-                broken.append(
-                    f"{document.relative_to(PROJECT_ROOT).as_posix()}: {raw_target}"
-                )
+                broken.append(f"{document.relative_to(PROJECT_ROOT).as_posix()}: {raw_target}")
     assert not broken, "broken local Markdown links:\n" + "\n".join(broken)
 
 
 def test_ci_does_not_hide_release_smoke_failures():
-    ci_source = (
-        PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
-    ).read_text(encoding="utf-8")
-    publish_source = (
-        PROJECT_ROOT / ".github" / "workflows" / "publish.yml"
-    ).read_text(encoding="utf-8")
+    ci_source = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    publish_source = (PROJECT_ROOT / ".github" / "workflows" / "publish.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "python -m ruff check src tests" in ci_source
     assert "anteumbra --version 2>&1 || true" not in ci_source

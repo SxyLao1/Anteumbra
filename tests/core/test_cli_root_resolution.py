@@ -1,6 +1,6 @@
 def test_local_runtime_config_precedes_registered_install(monkeypatch, tmp_path):
-    from anteumbra.infrastructure.config import install_registry
     from anteumbra.cli import main as cli_main
+    from anteumbra.infrastructure.config import install_registry
 
     local_runtime = tmp_path / "local-runtime"
     local_runtime.mkdir()
@@ -34,8 +34,8 @@ def test_explicit_runtime_home_precedes_current_directory(monkeypatch, tmp_path)
 
 
 def test_registered_runtime_precedes_unmarked_source_checkout(monkeypatch, tmp_path):
-    from anteumbra.infrastructure.config import install_registry
     from anteumbra.cli import main as cli_main
+    from anteumbra.infrastructure.config import install_registry
 
     checkout = tmp_path / "checkout"
     (checkout / "src" / "anteumbra").mkdir(parents=True)

@@ -8,28 +8,32 @@ Design principles:
   - JSON-serializable (to_dict() / from_dict())
   - Zero infrastructure dependencies (no DB, no Flask, no filesystem)
 """
+
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 try:
     from pydantic import BaseModel, Field, field_validator
+
     _HAS_PYDANTIC = True
 except ImportError:
     # Graceful fallback: use dataclasses if pydantic not installed
-    from dataclasses import dataclass, field, asdict
+    from dataclasses import asdict, dataclass, field
+
     _HAS_PYDANTIC = False
 
 
 class DetectionSource(str, Enum):
     """How a detection was discovered."""
-    PASSIVE = "passive"    # Watchdog file monitoring
-    ACTIVE = "active"      # Manual directory scanner
-    WAF = "waf"            # WAF event correlation
+
+    PASSIVE = "passive"  # Watchdog file monitoring
+    ACTIVE = "active"  # Manual directory scanner
+    WAF = "waf"  # WAF event correlation
     LOG = "log_heuristic"  # Access log behavior analysis
-    MEMORY = "memory"      # Memory shell scanner
+    MEMORY = "memory"  # Memory shell scanner
 
 
 class FileStatus(str, Enum):
@@ -42,15 +46,14 @@ class FileStatus(str, Enum):
 # ── FileRecord (Domain Entity) ──────────────────────────
 
 if _HAS_PYDANTIC:
-
     from pydantic import model_validator
 
     class FileRecord(BaseModel):
         """Core domain entity: a detected suspicious file."""
+
         file_path: str = Field(..., description="Absolute path (normalized)")
         display_name: Optional[str] = Field(default=None, description="Filename only")
-        detected_at: str = Field(
-            default_factory=lambda: datetime.now(timezone.utc).isoformat())
+        detected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
         features: List[str] = Field(default_factory=list)
         file_exists: bool = True
         file_size: int = 0
@@ -125,8 +128,10 @@ else:
         metadata: Dict[str, Any] = None
 
         def __post_init__(self):
-            if self.features is None: self.features = []
-            if self.metadata is None: self.metadata = {}
+            if self.features is None:
+                self.features = []
+            if self.metadata is None:
+                self.metadata = {}
             if not self.detected_at:
                 self.detected_at = datetime.now(timezone.utc).isoformat()
             self.file_path = self.file_path.replace("\\", "/")
@@ -135,9 +140,12 @@ else:
 
         @property
         def status(self) -> FileStatus:
-            if self.quarantine_id: return FileStatus.QUARANTINED
-            if self.marked_false_positive: return FileStatus.FALSE_POSITIVE
-            if self.deleted_at: return FileStatus.DELETED
+            if self.quarantine_id:
+                return FileStatus.QUARANTINED
+            if self.marked_false_positive:
+                return FileStatus.FALSE_POSITIVE
+            if self.deleted_at:
+                return FileStatus.DELETED
             return FileStatus.ACTIVE
 
         @property
@@ -152,6 +160,7 @@ else:
         @classmethod
         def from_dict(cls, data: Dict[str, Any]) -> "FileRecord":
             from dataclasses import fields as dc_fields
+
             if "detection_source" in data and isinstance(data["detection_source"], str):
                 data["detection_source"] = DetectionSource(data["detection_source"])
             # Filter to known fields only (SQLite rows include 'id', etc.)
@@ -161,6 +170,7 @@ else:
 
 
 # ── Value Objects ────────────────────────────────────────
+
 
 @dataclass
 class ScanResult:
@@ -177,6 +187,7 @@ class ScanResult:
     Field order is intentional — matches historical callers' positional args:
       ScanResult(file_path, is_suspicious, features, engine=..., error=...)
     """
+
     file_path: Path
     is_suspicious: bool
     features: List[str] = field(default_factory=list)
@@ -185,7 +196,7 @@ class ScanResult:
     error: Optional[str] = None
     analysis_data: Optional[dict] = None
     detection_source: str = "unknown"  # passive | active | waf | log | unknown
-    confidence: float = 0.0           # 0.0~1.0 (detector.py version)
+    confidence: float = 0.0  # 0.0~1.0 (detector.py version)
     metadata: dict = field(default_factory=dict)  # extra context
 
     def to_record(self) -> "FileRecord":
@@ -206,10 +217,17 @@ class ScanResult:
 
 class QuarantineRecord:
     """Value object: a quarantined file."""
-    def __init__(self, quarantine_id: str, original_path: str,
-                 quarantine_path: str, rule_name: str = "",
-                 features: List[str] = None, file_size: int = 0,
-                 created_at: Optional[str] = None):
+
+    def __init__(
+        self,
+        quarantine_id: str,
+        original_path: str,
+        quarantine_path: str,
+        rule_name: str = "",
+        features: List[str] = None,
+        file_size: int = 0,
+        created_at: Optional[str] = None,
+    ):
         self.quarantine_id = quarantine_id
         self.original_path = original_path
         self.quarantine_path = quarantine_path

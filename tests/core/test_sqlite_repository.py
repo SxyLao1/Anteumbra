@@ -1,7 +1,12 @@
 """Tests for core/repositories/sqlite_repository.py"""
+
 import pytest
-from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository, DualWriteRepository
+
 from anteumbra.infrastructure.persistence.json_repository import JsonRepository
+from anteumbra.infrastructure.persistence.sqlite_repository import (
+    DualWriteRepository,
+    SqliteRepository,
+)
 
 
 @pytest.fixture
@@ -51,7 +56,9 @@ class TestSqliteRepository:
 
     def test_list_all_pagination(self, sql_repo):
         for i in range(10):
-            sql_repo.save(f"r{i}", {"file_path": f"/tmp/{i}.php", "detected_at": f"2026-06-28T12:0{i}:00"})
+            sql_repo.save(
+                f"r{i}", {"file_path": f"/tmp/{i}.php", "detected_at": f"2026-06-28T12:0{i}:00"}
+            )
         page = sql_repo.list_all(limit=3, offset=0)
         assert len(page) == 3
 
@@ -63,16 +70,19 @@ class TestSqliteRepository:
             sort_column="blocked_at",
         )
         try:
-            repo.save("alpha|10.0.0.1", {
-                "record_id": "alpha|10.0.0.1",
-                "site_id": "alpha",
-                "site_name": "Alpha",
-                "ip": "10.0.0.1",
-                "source": "manual",
-                "reason": "test block",
-                "broadcast_devices": ["stdout"],
-                "broadcast_status": "success",
-            })
+            repo.save(
+                "alpha|10.0.0.1",
+                {
+                    "record_id": "alpha|10.0.0.1",
+                    "site_id": "alpha",
+                    "site_name": "Alpha",
+                    "ip": "10.0.0.1",
+                    "source": "manual",
+                    "reason": "test block",
+                    "broadcast_devices": ["stdout"],
+                    "broadcast_status": "success",
+                },
+            )
 
             entry = repo.get("alpha|10.0.0.1")
 
@@ -112,10 +122,16 @@ class TestSqliteRepository:
             repo.close()
 
     def test_scan_history(self, sql_repo):
-        sql_repo.save_scan("scan-test", {
-            "scan_id": "scan-test", "target_dir": "/tmp", "status": "completed",
-            "total_files": 100, "findings": [{"file": "a.php"}]
-        })
+        sql_repo.save_scan(
+            "scan-test",
+            {
+                "scan_id": "scan-test",
+                "target_dir": "/tmp",
+                "status": "completed",
+                "total_files": 100,
+                "findings": [{"file": "a.php"}],
+            },
+        )
         s = sql_repo.get_scan("scan-test")
         assert s is not None
         assert s["status"] == "completed"
@@ -129,13 +145,20 @@ class TestSqliteRepository:
 class TestDualWriteRepository:
     def test_dual_write_save_and_read(self, temp_dir):
         import time
+
         jp = temp_dir / "dual.json"
         sp = temp_dir / "dual.db"
         json_repo = JsonRepository(jp, key_field="file_path")
         sql_repo = SqliteRepository(str(sp))
         dual = DualWriteRepository(json_repo, sql_repo)
-        dual.save("dual-test", {"file_path": "/tmp/dual_test.php", "features": ["test_feature"],
-                                 "detected_at": "2026-06-28T12:00:00"})
+        dual.save(
+            "dual-test",
+            {
+                "file_path": "/tmp/dual_test.php",
+                "features": ["test_feature"],
+                "detected_at": "2026-06-28T12:00:00",
+            },
+        )
         r = dual.get("dual-test")
         assert r is not None
         assert "test_feature" in str(r)

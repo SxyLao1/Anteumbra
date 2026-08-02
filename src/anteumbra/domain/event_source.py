@@ -5,9 +5,10 @@ v1.9.0: EventSource 抽象接口
 外部事件源插件契约。所有数据摄入渠道（WAF 轮询、Syslog 接收、
 日志文件追踪、文件系统监控）都实现此接口。
 """
+
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable
 from datetime import datetime
+from typing import Callable, List
 
 
 class EventSource(ABC):
@@ -47,8 +48,7 @@ class PollableEventSource(EventSource):
     """轮询式事件源（WAF API 等）"""
 
     @abstractmethod
-    def poll(self, start_time: datetime, end_time: datetime,
-             limit: int = 100) -> List[dict]:
+    def poll(self, start_time: datetime, end_time: datetime, limit: int = 100) -> List[dict]:
         """拉取指定时间窗口内的事件"""
         ...
 

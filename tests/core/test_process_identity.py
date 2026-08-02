@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import os
-import builtins
 from dataclasses import replace
 
 
@@ -53,10 +53,7 @@ def test_process_start_token_detects_pid_reuse(tmp_path):
         process_start_token=f"{identity.process_start_token}:reused",
     )
 
-    assert (
-        probe_process_identity(stale_identity, tmp_path)
-        is ProcessIdentityState.MISMATCH
-    )
+    assert probe_process_identity(stale_identity, tmp_path) is ProcessIdentityState.MISMATCH
 
 
 def test_schema_one_clock_drift_is_unknown_instead_of_pid_reuse(tmp_path):
@@ -73,10 +70,8 @@ def test_schema_one_clock_drift_is_unknown_instead_of_pid_reuse(tmp_path):
         process_start_token=None,
     )
 
-    assert (
-        probe_process_identity(schema_one_identity, tmp_path)
-        is ProcessIdentityState.UNKNOWN
-    )
+    assert probe_process_identity(schema_one_identity, tmp_path) is ProcessIdentityState.UNKNOWN
+
 
 def test_runtime_root_mismatch_rejects_foreign_identity(tmp_path):
     from anteumbra.infrastructure.process_identity import (
@@ -87,10 +82,7 @@ def test_runtime_root_mismatch_rejects_foreign_identity(tmp_path):
 
     identity = capture_process_identity(tmp_path / "first")
 
-    assert (
-        probe_process_identity(identity, tmp_path / "second")
-        is ProcessIdentityState.MISMATCH
-    )
+    assert probe_process_identity(identity, tmp_path / "second") is ProcessIdentityState.MISMATCH
 
 
 def test_legacy_pid_requires_matching_command_and_working_directory(tmp_path):
@@ -102,10 +94,7 @@ def test_legacy_pid_requires_matching_command_and_working_directory(tmp_path):
 
     identity = ProcessIdentity(pid=os.getpid())
 
-    assert (
-        probe_process_identity(identity, tmp_path)
-        is ProcessIdentityState.MISMATCH
-    )
+    assert probe_process_identity(identity, tmp_path) is ProcessIdentityState.MISMATCH
 
 
 def test_legacy_console_script_process_is_recognized(tmp_path, monkeypatch):
@@ -139,8 +128,7 @@ def test_legacy_console_script_process_is_recognized(tmp_path, monkeypatch):
     monkeypatch.setattr(psutil, "Process", lambda _pid: ConsoleScriptProcess())
 
     assert (
-        probe_process_identity(ProcessIdentity(pid=12345), tmp_path)
-        is ProcessIdentityState.RUNNING
+        probe_process_identity(ProcessIdentity(pid=12345), tmp_path) is ProcessIdentityState.RUNNING
     )
 
 
@@ -204,6 +192,5 @@ def test_missing_psutil_makes_process_ownership_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(builtins, "__import__", import_without_psutil)
 
     assert (
-        probe_process_identity(ProcessIdentity(pid=12345), tmp_path)
-        is ProcessIdentityState.UNKNOWN
+        probe_process_identity(ProcessIdentity(pid=12345), tmp_path) is ProcessIdentityState.UNKNOWN
     )

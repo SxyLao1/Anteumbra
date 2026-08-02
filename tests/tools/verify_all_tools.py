@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Trident Tools Syntax Test
+Anteumbra Tools Syntax Test
 验证所有 tools/*.py 都能正常 import（不执行功能）
 """
+
+import importlib
 import os
 import sys
-import importlib
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -17,7 +18,7 @@ SKIP_Syntax = {"generate_demo_data.py", "ci_quick_validator.py"}
 
 
 def main():
-    print("Trident Tools Verification")
+    print("Anteumbra Tools Verification")
     print("=" * 50)
 
     tools = [f for f in os.listdir(TOOLS_DIR) if f.endswith(".py") and not f.startswith("_")]
@@ -42,6 +43,7 @@ def main():
             failed_details.append((tool, err_msg))
             # 同时打印 traceback 到 stderr，确保 GitHub 日志能看到
             import traceback
+
             traceback.print_exc()
 
     print("=" * 50)

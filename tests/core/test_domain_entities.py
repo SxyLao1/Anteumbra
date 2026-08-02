@@ -1,11 +1,11 @@
 """Tests for domain entities."""
 
 from anteumbra.domain.entities import (
-    FileRecord,
     DetectionSource,
+    FileRecord,
     FileStatus,
-    ScanResult,
     QuarantineRecord,
+    ScanResult,
 )
 
 

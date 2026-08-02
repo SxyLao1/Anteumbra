@@ -15,7 +15,6 @@ from werkzeug.security import generate_password_hash
 
 from anteumbra.domain.runtime import ConfigProviderPort
 
-
 WEAK_PASSWORDS = frozenset(
     {
         "12345678",
@@ -33,7 +32,7 @@ WEAK_PASSWORDS = frozenset(
         "qwertyui",
         "root123",
         "scanner",
-        "trident",
+        "trident",  # Deprecated pre-rename default; remove after the 2.0 credential migration.
         "webshell",
         "welcome",
     }
@@ -57,37 +56,23 @@ class PasswordService:
         config = self._config.get()
         web_admin = config.get("web_admin", {})
         security = config.get("security", {})
-        password_hash = (
-            web_admin.get("password_hash", "")
-            if isinstance(web_admin, Mapping)
-            else ""
-        )
-        secret_key = (
-            security.get("secret_key", "")
-            if isinstance(security, Mapping)
-            else ""
-        )
+        password_hash = web_admin.get("password_hash", "") if isinstance(web_admin, Mapping) else ""
+        secret_key = security.get("secret_key", "") if isinstance(security, Mapping) else ""
 
         generated_password: str | None = None
         updates: dict[str, str] = {}
         if not password_hash or str(password_hash).startswith("${"):
             generated_password = "".join(
-                secrets.choice(string.ascii_letters + string.digits)
-                for _ in range(16)
+                secrets.choice(string.ascii_letters + string.digits) for _ in range(16)
             )
-            updates["ANTEUMBRA_PASSWORD_HASH"] = generate_password_hash(
-                generated_password
-            )
+            updates["ANTEUMBRA_PASSWORD_HASH"] = generate_password_hash(generated_password)
 
         invalid_secrets = {
             "",
             "change_this_to_a_random_32_char_string",
             "YOUR_SECRET_KEY_HERE",
         }
-        if (
-            str(secret_key).strip() in invalid_secrets
-            or str(secret_key).startswith("${")
-        ):
+        if str(secret_key).strip() in invalid_secrets or str(secret_key).startswith("${"):
             updates["ANTEUMBRA_SECRET_KEY"] = secrets.token_urlsafe(48)
 
         if updates:
@@ -131,9 +116,7 @@ class PasswordService:
         if not accepted:
             return False, message
         try:
-            self._write_env_values(
-                {"ANTEUMBRA_PASSWORD_HASH": generate_password_hash(password)}
-            )
+            self._write_env_values({"ANTEUMBRA_PASSWORD_HASH": generate_password_hash(password)})
         except (OSError, RuntimeError, ValueError) as exc:
             return False, f"Password update failed: {exc}"
         return True, "Password updated and active for new logins."

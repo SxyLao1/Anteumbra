@@ -5,6 +5,7 @@ E2E UI Tests — Dashboard & System Panels
 Uses go() with wait_until="commit" to avoid blocking
 on unpkg.com CDN <script> tags. Fresh Flask server per test.
 """
+
 import pytest
 from playwright.sync_api import expect
 
@@ -47,7 +48,7 @@ class TestDashboard:
         expect(capability_band).to_contain_text("Notifications")
 
     def test_overview_loads_existing_monitor_history(self, page, server_url, runtime):
-        marker = "CODEX-HISTORY-MARKER"
+        marker = "E2E-HISTORY-MARKER"
         runtime.sse.persist_log_line(f"[2026-07-17 12:00:00] INFO - {marker}")
 
         go(page, f"{server_url}/admin/")
@@ -133,9 +134,7 @@ class TestSettings:
         go(page, f"{server_url}/admin/account")
         page.wait_for_timeout(1000)
         body_text = page.locator("body").inner_text()
-        assert "password" in body_text.lower(), (
-            "Account page should have password change"
-        )
+        assert "password" in body_text.lower(), "Account page should have password change"
 
 
 class TestSecurityHeaders:

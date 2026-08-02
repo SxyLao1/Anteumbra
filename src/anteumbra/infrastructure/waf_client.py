@@ -15,7 +15,6 @@ import requests
 from anteumbra.domain import WAFEvent, WAFEventSource
 from anteumbra.domain.runtime import ConfigProviderPort
 
-
 logger = logging.getLogger("monitor.waf_client")
 
 
@@ -215,10 +214,7 @@ class WAFPoller:
                     if key in self._seen_event_keys:
                         continue
                     handle.write(
-                        json.dumps(
-                            self._event_payload(event, settings), ensure_ascii=False
-                        )
-                        + "\n"
+                        json.dumps(self._event_payload(event, settings), ensure_ascii=False) + "\n"
                     )
                     self._seen_event_keys.add(key)
                     written += 1

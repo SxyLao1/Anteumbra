@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 logger = logging.getLogger("monitor.metrics")
 
 _COUNTER_DEFAULTS: dict[str, Any] = {
@@ -146,9 +145,7 @@ class MetricsCollector:
         with self._lock:
             self._stats["uptime_seconds"] = time.time() - self._start_time
             if site_id:
-                return copy.deepcopy(
-                    self._site_stats.get(self._normalize_site_id(site_id), {})
-                )
+                return copy.deepcopy(self._site_stats.get(self._normalize_site_id(site_id), {}))
             snapshot = copy.deepcopy(self._stats)
             snapshot["sites"] = copy.deepcopy(self._site_stats)
             return snapshot

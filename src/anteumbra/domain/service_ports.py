@@ -190,6 +190,19 @@ class FileClusterEnginePort(Protocol):
         """Return cluster statistics."""
 
 
+class ThreatProfileRepositoryPort(Protocol):
+    """Best-effort profile shadow repository used for recovery."""
+
+    def save(self, record_id: str, data: Mapping[str, Any]) -> None:
+        """Save one serialized profile."""
+
+    def list_all(self, limit: int | None = None, **filters: Any) -> list[dict[str, Any]]:
+        """Return serialized profiles available for recovery."""
+
+    def close(self) -> None:
+        """Release repository resources."""
+
+
 class ThreatGraphPort(Protocol):
     """Site-qualified threat-intelligence graph contract."""
 

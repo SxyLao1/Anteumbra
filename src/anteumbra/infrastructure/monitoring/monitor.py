@@ -13,20 +13,26 @@ v1.8.1-Release: 平台自适应幽灵目录修复（改进版）
 - T-01-B验证: ≥0.01ms即可消除误判，50ms为工程保守设计
 - v1.8.1改进: 采用TTL控制的无限制容量缓存（替代LRU硬编码100）
 """
-import json
+
+import fnmatch
+import importlib
 import logging
 import os
+import queue
 import sys
 import threading
 import time
-import queue
-import fnmatch
 from pathlib import Path
 from typing import Callable, Dict, Set
+
 from watchdog.events import FileSystemEventHandler
+
+from anteumbra.application.detection_workflow import DetectionWorkflow
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.runtime import RuntimeServices
 from anteumbra.infrastructure.models import ScanOptions, Website
+from anteumbra.infrastructure.monitoring import log_analyzer
+from anteumbra.infrastructure.monitoring.detection_attribution import resolve_first_seen_ip
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 
@@ -59,7 +65,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         scan_options: ScanOptions,
         base_path: Path,
         logger: logging.Logger,
-        website: 'Website' = None,
+        website: "Website" = None,
         *,
         services: RuntimeServices,
     ):
@@ -75,6 +81,15 @@ class FileMonitorHandler(FileSystemEventHandler):
             else self.runtime.site_for_path(base_path)
         )
         self.website = website  # v1.0.10: 修复 LogAnalyzer 需要 website 属性
+        self._detection_workflow = DetectionWorkflow(
+            config=self.runtime.config,
+            registry=self.services.registry,
+            metrics=self.services.metrics,
+            events=self.services.events,
+            quarantine=self.services.quarantine,
+            site=self.site,
+            logger=self.logger,
+        )
         self.exclude_dirs = {d.lower() for d in scan_options.exclude_dirs}
         self._dedupe_window = 5.0
 
@@ -122,10 +137,14 @@ class FileMonitorHandler(FileSystemEventHandler):
         # v1.0.9: batch notification moved to quarantine_handler plugin.
         # notifier and quarantine paths now go through the event bus (emit).
 
-        log_with_symbol("success", "debug",
-                        f"处理器初始化完成 | 平台: {self._platform} | "
-                        f"验证延迟: {self._verify_delay_ms}ms | "
-                        f"缓存策略: TTL-{self._cache_timeout}s无限制", self.logger)
+        log_with_symbol(
+            "success",
+            "debug",
+            f"处理器初始化完成 | 平台: {self._platform} | "
+            f"验证延迟: {self._verify_delay_ms}ms | "
+            f"缓存策略: TTL-{self._cache_timeout}s无限制",
+            self.logger,
+        )
 
     def _init_platform_config(self):
         """
@@ -224,8 +243,7 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         except Exception as e:
             # 任何异常都返回False (避免误判文件为目录)
-            log_with_symbol("error_dir_cache", "debug",
-                            f"目录验证异常: {e}", self.logger)
+            log_with_symbol("error_dir_cache", "debug", f"目录验证异常: {e}", self.logger)
             return False
 
     def _is_known_directory(self, path: Path) -> bool:
@@ -261,18 +279,14 @@ class FileMonitorHandler(FileSystemEventHandler):
         相比v1.8.0的LRU机制，确保活跃期内所有目录均被记忆
         """
         now = time.time()
-        expired = [
-            k for k, ts in self._cache_ttl.items()
-            if now - ts > self._cache_timeout
-        ]
+        expired = [k for k, ts in self._cache_ttl.items() if now - ts > self._cache_timeout]
         for k in expired:
             self._dir_cache.discard(k)
             self._cache_ttl.pop(k, None)
 
         # 清理失效的别名映射
         self._path_aliases = {
-            new: old for new, old in self._path_aliases.items()
-            if old in self._dir_cache
+            new: old for new, old in self._path_aliases.items() if old in self._dir_cache
         }
 
     def _normalize_path(self, path: Path) -> str:
@@ -327,7 +341,9 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         for pattern in exclude_files:
             if fnmatch.fnmatch(event_path.name, pattern):
-                log_with_symbol("skip_exclude", "info", f"白名单排除: {event_path.name}", self.logger)
+                log_with_symbol(
+                    "skip_exclude", "info", f"白名单排除: {event_path.name}", self.logger
+                )
                 return False
 
         return True
@@ -339,15 +355,17 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         last_time = self._recent_files.get(path_key)
         if last_time and (now - last_time) < self._dedupe_window:
-            log_with_symbol("skip_duplicate", "info",
-                            f"跳过重复事件: {event_path.name} (距上次: {now - last_time:.2f}s)",
-                            self.logger)
+            log_with_symbol(
+                "skip_duplicate",
+                "info",
+                f"跳过重复事件: {event_path.name} (距上次: {now - last_time:.2f}s)",
+                self.logger,
+            )
             return True
 
         self._recent_files[path_key] = now
         self._recent_files = {
-            k: v for k, v in self._recent_files.items()
-            if now - v < self._dedupe_window * 2
+            k: v for k, v in self._recent_files.items() if now - v < self._dedupe_window * 2
         }
         return False
 
@@ -360,7 +378,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         }
         try:
             cfg = self.runtime.config
-            status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get("auto_quarantine_enabled", True)
+            status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get(
+                "auto_quarantine_enabled", True
+            )
             blocker_cfg = cfg.get("ip_blocker", {})
             status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
             status["block_device_count"] = len(blocker_cfg.get("devices", []))
@@ -370,52 +390,77 @@ class FileMonitorHandler(FileSystemEventHandler):
 
     # ── v1.0.9: EDA bridge helpers (Surgery 4 completion) ─────
 
-    def _emit_alert(self, alert_type: str, file_path: str, engine: str,
-                    features: list, first_seen_ip: str, level: str, **extra) -> None:
+    def _emit_alert(
+        self,
+        alert_type: str,
+        file_path: str,
+        engine: str,
+        features: list,
+        first_seen_ip: str,
+        level: str,
+        **extra,
+    ) -> None:
         """Emit alert_requested via event bus → notifier_handler plugin."""
         try:
-            self.services.events.publish("alert_requested", "monitor", {
-                "alert_type": alert_type,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "file_path": file_path,
-                "engine": engine,
-                "features": features,
-                "first_seen_ip": first_seen_ip,
-                "level": level,
-                **self.site.as_dict(),
-                **extra,
-            })
+            self.services.events.publish(
+                "alert_requested",
+                "monitor",
+                {
+                    "alert_type": alert_type,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "file_path": file_path,
+                    "engine": engine,
+                    "features": features,
+                    "first_seen_ip": first_seen_ip,
+                    "level": level,
+                    **self.site.as_dict(),
+                    **extra,
+                },
+            )
         except Exception:
             self.logger.debug("PluginManager emit alert_requested failed", exc_info=True)
 
-    def _emit_file_quarantined(self, file_path: str, rule_name: str,
-                               features: list, original_path: str,
-                               first_seen_ip: str = "127.0.0.1") -> None:
+    def _emit_file_quarantined(
+        self,
+        file_path: str,
+        rule_name: str,
+        features: list,
+        original_path: str,
+        first_seen_ip: str = "127.0.0.1",
+    ) -> None:
         """Emit file_quarantined via event bus → quarantine_handler plugin."""
         try:
-            self.services.events.publish("file_quarantined", "monitor", {
-                "file_path": file_path,
-                "rule_name": rule_name,
-                "features": features,
-                "original_path": original_path,
-                "first_seen_ip": first_seen_ip,
-                "quarantine_enabled": self.runtime.config.get(
-                    "quarantine", {}
-                ).get("auto_quarantine_enabled", True),
-                **self.site.as_dict(),
-            })
+            self.services.events.publish(
+                "file_quarantined",
+                "monitor",
+                {
+                    "file_path": file_path,
+                    "rule_name": rule_name,
+                    "features": features,
+                    "original_path": original_path,
+                    "first_seen_ip": first_seen_ip,
+                    "quarantine_enabled": self.runtime.config.get("quarantine", {}).get(
+                        "auto_quarantine_enabled", True
+                    ),
+                    **self.site.as_dict(),
+                },
+            )
         except Exception:
             self.logger.debug("PluginManager emit file_quarantined failed", exc_info=True)
 
     def _flush_batch_notify(self):
         """v1.0.9: emit batch notification via event bus → notifier_handler."""
         try:
-            self.services.events.publish("alert_requested", "monitor", {
-                "alert_type": "quarantine_batch",
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "level": "INFO",
-                **self.site.as_dict(),
-            })
+            self.services.events.publish(
+                "alert_requested",
+                "monitor",
+                {
+                    "alert_type": "quarantine_batch",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "level": "INFO",
+                    **self.site.as_dict(),
+                },
+            )
         except Exception as e:
             self.logger.warning(f"[BATCH_NOTIFY] emit 失败: {e}")
 
@@ -434,8 +479,7 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         if len(self._magic_cache) > 1000:
             self._magic_cache = {
-                k: v for k, v in self._magic_cache.items()
-                if now - v[1] < self._magic_cache_ttl
+                k: v for k, v in self._magic_cache.items() if now - v[1] < self._magic_cache_ttl
             }
 
         return result
@@ -453,26 +497,47 @@ class FileMonitorHandler(FileSystemEventHandler):
             content = file_path.read_bytes()
 
             php_patterns = [
-                b'<?php', b'<?=', b'<? ',
-                b'eval($_POST', b'eval($_GET',
-                b'system($_POST', b'exec($_POST',
+                b"<?php",
+                b"<?=",
+                b"<? ",
+                b"eval($_POST",
+                b"eval($_GET",
+                b"system($_POST",
+                b"exec($_POST",
             ]
 
             for pattern in php_patterns:
                 if pattern in content[:1024]:
-                    log_with_symbol("detect_php", "warning", f"PHP signature detected: {file_path.name}", self.logger)
+                    log_with_symbol(
+                        "detect_php",
+                        "warning",
+                        f"PHP signature detected: {file_path.name}",
+                        self.logger,
+                    )
                     return True
 
-            if b'<%@' in content[:256] or b'runtime' in content.lower()[:256]:
-                log_with_symbol("detect_jsp", "warning", f"JSP signature detected: {file_path.name}", self.logger)
+            if b"<%@" in content[:256] or b"runtime" in content.lower()[:256]:
+                log_with_symbol(
+                    "detect_jsp",
+                    "warning",
+                    f"JSP signature detected: {file_path.name}",
+                    self.logger,
+                )
                 return True
 
-            if b'<%' in content[:256] and b'%>' in content[:256]:
-                log_with_symbol("detect_asp", "warning", f"ASP signature detected: {file_path.name}", self.logger)
+            if b"<%" in content[:256] and b"%>" in content[:256]:
+                log_with_symbol(
+                    "detect_asp",
+                    "warning",
+                    f"ASP signature detected: {file_path.name}",
+                    self.logger,
+                )
                 return True
 
         except Exception as e:
-            log_with_symbol("detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger)
+            log_with_symbol(
+                "detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger
+            )
 
         return False
 
@@ -483,12 +548,37 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         config = self.runtime.config
         paths_cfg = config.get("paths", {})
-        default_extensions = paths_cfg.get("monitor_extensions",
-                                           ['.php', '.php3', '.php4', '.php5', '.php7', '.php8',
-                                            '.phtml', '.phar', '.phpt', '.phtm',
-                                            '.asp', '.aspx', '.asa', '.ashx', '.asmx', '.asax',
-                                            '.jsp', '.jspx', '.jspa', '.jspf', '.jsw', '.jsv',
-                                            '.txt', '.inc', '.bak', '.old'])
+        default_extensions = paths_cfg.get(
+            "monitor_extensions",
+            [
+                ".php",
+                ".php3",
+                ".php4",
+                ".php5",
+                ".php7",
+                ".php8",
+                ".phtml",
+                ".phar",
+                ".phpt",
+                ".phtm",
+                ".asp",
+                ".aspx",
+                ".asa",
+                ".ashx",
+                ".asmx",
+                ".asax",
+                ".jsp",
+                ".jspx",
+                ".jspa",
+                ".jspf",
+                ".jsw",
+                ".jsv",
+                ".txt",
+                ".inc",
+                ".bak",
+                ".old",
+            ],
+        )
 
         if file_path.suffix.lower() in default_extensions:
             return True
@@ -502,23 +592,30 @@ class FileMonitorHandler(FileSystemEventHandler):
 
             header = file_path.read_bytes()[:256]
 
-            if header.startswith(b'<?php') or b'<?=' in header or b'<? ' in header:
-                log_with_symbol("detect_php", "warning", f"PHP script detected: {file_path.name}", self.logger)
+            if header.startswith(b"<?php") or b"<?=" in header or b"<? " in header:
+                log_with_symbol(
+                    "detect_php", "warning", f"PHP script detected: {file_path.name}", self.logger
+                )
                 return True
 
-            if header.startswith(b'<%@') or b'%!' in header or b'%\n' in header:
-                log_with_symbol("detect_jsp", "warning", f"JSP script detected: {file_path.name}", self.logger)
+            if header.startswith(b"<%@") or b"%!" in header or b"%\n" in header:
+                log_with_symbol(
+                    "detect_jsp", "warning", f"JSP script detected: {file_path.name}", self.logger
+                )
                 return True
 
-            if header.startswith(b'<%') and b'%>' in header[:100]:
-                log_with_symbol("detect_asp", "warning", f"ASP script detected: {file_path.name}", self.logger)
+            if header.startswith(b"<%") and b"%>" in header[:100]:
+                log_with_symbol(
+                    "detect_asp", "warning", f"ASP script detected: {file_path.name}", self.logger
+                )
                 return True
 
         except Exception as e:
-            log_with_symbol("detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger)
+            log_with_symbol(
+                "detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger
+            )
 
         return False
-
 
     # ===== v1.7.9: 异步扫描工作线程 =====
     def _start_scan_worker(self):
@@ -549,162 +646,44 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self._scan_queue.task_done()
 
     def _do_scan(self, event_path, event_type):
-        """实际执行扫描（从 _handle_event 抽离）"""
-        # A restored file generates a fresh filesystem event. Skip before the
-        # scanner so an intentional restore produces neither a new finding nor
-        # scan-log noise during its short guard window.
-        try:
-            if self.services.quarantine.is_recently_restored(str(event_path)):
-                self.logger.info(
-                    "[RESTORE][SKIP] Recently restored file: %s",
-                    event_path.name,
-                )
-                return
-        except Exception:
-            self.logger.debug(
-                "Failed to check restored-file guard before scanning",
-                exc_info=True,
-            )
+        """Delegate detection semantics while retaining handler monkeypatch hooks."""
+        self._detection_workflow.execute(
+            event_path,
+            event_type,
+            scan=self._scan_event_path,
+            resolve_first_seen_ip=self._resolve_first_seen_ip,
+            emit_alert=self._emit_alert,
+            emit_file_quarantined=self._emit_file_quarantined,
+            report_detection=lambda result: log_with_symbol(
+                "scan_hit",
+                "critical",
+                f"{event_path.name} | 引擎: {result.engine}",
+                self.logger,
+            ),
+            report_scan_error=lambda path, error: log_with_symbol(
+                "error_scan",
+                "error",
+                f"{path}: {error}",
+                self.logger,
+            ),
+        )
 
-        try:
-            if isinstance(self.scan_callback, str):
-                module_path, func_name = self.scan_callback.rsplit('.', 1)
-                import importlib
-                module = importlib.import_module(module_path)
-                scan_func = getattr(module, func_name)
-            else:
-                scan_func = self.scan_callback
+    def _scan_event_path(self, event_path: Path):
+        if isinstance(self.scan_callback, str):
+            module_path, func_name = self.scan_callback.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            scan_func = getattr(module, func_name)
+        else:
+            scan_func = self.scan_callback
+        return scan_func(event_path, self.scan_options, self.logger)
 
-            scan_result = scan_func(event_path, self.scan_options, self.logger)
-            self.services.metrics.increment_site("scan_total", self.site.site_id)
-
-            # v2.0: Emit FileScannedEvent to PluginManager (dual-write: existing flow + event-driven)
-            try:
-                self.services.events.publish("file_scanned", "monitor", {
-                    "file_path": str(event_path),
-                    "event_type": event_type,
-                    "is_suspicious": scan_result.is_suspicious if scan_result else False,
-                    "engine": scan_result.engine if scan_result else "unknown",
-                    "features": scan_result.features if scan_result else [],
-                    "score": scan_result.score if scan_result and hasattr(scan_result, 'score') else 0,
-                    **self.site.as_dict(),
-                })
-            except Exception:
-                self.logger.debug("PluginManager emit file_scanned failed", exc_info=True)
-
-            if scan_result and scan_result.is_suspicious:
-                log_with_symbol("scan_hit", "critical",
-                                f"{event_path.name} | 引擎: {scan_result.engine}", self.logger)
-
-                # v1.0.9: 统一在此处完成 注册→事件化隔离，保证事务完整性
-                # Surgery 4 completion: quarantine + notification go through event bus.
-                try:
-                    # v1.8.4 / v2.0: 本地文件检测 — 多源IP溯源
-                    # 优先级: WAF事件日志 > LogAnalyzer(access log) > 默认127.0.0.1
-                    first_seen_ip = "127.0.0.1"
-                    event_name = event_path.name.lower()
-
-                    # Source 1: WAF events (waf_events.jsonl)
-                    # v2.0 fix: Match by TIME WINDOW, not by filename.
-                    try:
-                        waf_log = Path("data/waf_events.jsonl")
-                        if waf_log.exists():
-                            from datetime import datetime as _dt
-                            now_dt = _dt.now()
-                            with open(str(waf_log), 'r', encoding='utf-8') as f:
-                                lines = f.readlines()
-                            for line in reversed(lines[-200:]):
-                                if not line.strip():
-                                    continue
-                                evt = json.loads(line.strip())
-                                src_ip = evt.get("src_ip", "")
-                                if not src_ip or src_ip in ("127.0.0.1", "::1"):
-                                    continue
-                                evt_ts_str = evt.get("timestamp", "")
-                                if evt_ts_str:
-                                    try:
-                                        evt_dt = _dt.fromisoformat(evt_ts_str.replace("Z", "+00:00"))
-                                        if abs((now_dt - evt_dt).total_seconds()) <= 15:
-                                            method = evt.get("method", "") or evt.get("http_method", "")
-                                            if method.upper() in ("POST", "PUT", ""):
-                                                first_seen_ip = src_ip
-                                                self.logger.info(f"[MONITOR] Resolved attacker IP from WAF: {first_seen_ip} -> {event_name} (time-window match, Δ={abs((now_dt - evt_dt).total_seconds()):.1f}s)")
-                                                break
-                                    except (ValueError, TypeError, AttributeError):
-                                        pass
-                    except Exception:
-                        self.logger.debug("Failed to parse WAF event log for IP resolution", exc_info=True)
-
-                    # Source 2: LogAnalyzer — Apache/Nginx access log (正则解析)
-                    # Access-log attribution is opt-in.  Otherwise a default
-                    # placeholder path creates a warning for every detection.
-                    log_config = getattr(self.website, "log_config", {}) or {}
-                    if (
-                        first_seen_ip == "127.0.0.1"
-                        and log_config.get("log_monitor_enabled", False)
-                    ):
-                        try:
-                            from anteumbra.infrastructure.monitoring.log_analyzer import LogAnalyzer
-                            analyzer = LogAnalyzer(self.website, self.logger)
-                            result = analyzer.analyze_shell_access(event_path)
-                            if result and result.get("suspicious_ips"):
-                                best_ip = max(result["suspicious_ips"], key=result["suspicious_ips"].get)
-                                if best_ip and best_ip not in ("127.0.0.1", "::1"):
-                                    first_seen_ip = best_ip
-                                    self.logger.info(
-                                        f"[MONITOR] Resolved attacker IP from access log: {first_seen_ip} -> {event_name} "
-                                        f"(hits: {result['suspicious_ips'][best_ip]}, log: {result.get('log_path', '?')})"
-                                    )
-                        except Exception:
-                            self.logger.debug("LogAnalyzer failed to resolve attacker IP", exc_info=True)
-
-                    # v1.0.9: Critical detection alert via event bus → notifier_handler
-                    self._emit_alert("local_detection", str(event_path),
-                                     scan_result.engine, scan_result.features,
-                                     first_seen_ip, "CRITICAL")
-
-                    # Step 1: 注册到Registry — add() emits record_added internally
-                    self.services.registry.add(
-                        event_path,
-                        scan_result.features,
-                        first_seen_ip=first_seen_ip,
-                        detection_source="passive",
-                        site=self.site,
-                    )
-
-                    # Step 2: 检查隔离总开关（日志用；quarantine_handler 也会检查）
-                    quarantine_enabled = True
-                    try:
-                        quarantine_enabled = self.runtime.config.get(
-                            "quarantine", {}
-                        ).get("auto_quarantine_enabled", True)
-                    except Exception:
-                        self.logger.debug("Failed to read quarantine config", exc_info=True)
-
-                    if not quarantine_enabled:
-                        self.logger.info(f"[QUARANTINE] 总开关关闭，跳过隔离: {event_path.name}")
-                        self._emit_alert("quarantine_skipped", str(event_path),
-                                         scan_result.engine, scan_result.features,
-                                         first_seen_ip, "WARNING",
-                                         reason="auto_quarantine_disabled")
-                    elif self.services.quarantine.is_recently_restored(str(event_path)):
-                        self.logger.info(f"[QUARANTINE] 跳过刚恢复文件: {event_path.name}")
-                    else:
-                        # Step 3: 事件化隔离 — quarantine_handler 处理全链路
-                        # (quarantine_file → mark_quarantined → batch/skip/failure alert)
-                        rule_name = scan_result.features[0] if scan_result.features else "unknown"
-                        self._emit_file_quarantined(
-                            file_path=str(event_path),
-                            rule_name=rule_name,
-                            features=scan_result.features,
-                            original_path=str(event_path),
-                            first_seen_ip=first_seen_ip,
-                        )
-                except Exception as qe:
-                    self.logger.warning(f"[QUARANTINE] 隔离失败: {event_path.name} | {qe}")
-
-        except Exception as e:
-            log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
+    def _resolve_first_seen_ip(self, event_path: Path) -> str:
+        return resolve_first_seen_ip(
+            event_path,
+            website=self.website,
+            logger=self.logger,
+            analyzer_factory=log_analyzer.LogAnalyzer,
+        )
 
     def _stop_scan_worker(self):
         """停止扫描工作线程"""
@@ -732,9 +711,7 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
         except queue.Full:
             try:
-                self.services.metrics.increment(
-                    "scan_queue_overflow", site_id=self.site.site_id
-                )
+                self.services.metrics.increment("scan_queue_overflow", site_id=self.site.site_id)
             except Exception:
                 self.logger.debug("Failed to record scan queue overflow", exc_info=True)
             log_with_symbol(
@@ -757,8 +734,12 @@ class FileMonitorHandler(FileSystemEventHandler):
             return
 
         if self._is_duplicate(event_path):
-            log_with_symbol("skip_duplicate", "info",
-                            f"重复事件已过滤: {event_path.name} ({event_type})", self.logger)
+            log_with_symbol(
+                "skip_duplicate",
+                "info",
+                f"重复事件已过滤: {event_path.name} ({event_type})",
+                self.logger,
+            )
             return
 
         try:
@@ -774,7 +755,9 @@ class FileMonitorHandler(FileSystemEventHandler):
             path = normalize_path(event.src_path).resolve()
 
             if not path.exists():
-                log_with_symbol("create_skip", "debug", f"路径不存在: {event.src_path}", self.logger)
+                log_with_symbol(
+                    "create_skip", "debug", f"路径不存在: {event.src_path}", self.logger
+                )
                 return
 
             # ===== 目录处理: 使用 _verify_directory 验证 =====
@@ -793,8 +776,12 @@ class FileMonitorHandler(FileSystemEventHandler):
                     time.sleep(0.01)
                     wait_count += 1
                 if wait_count > 0:
-                    log_with_symbol("create_wait", "debug",
-                                    f"{path.name} 等待内容写入 {wait_count * 10}ms", self.logger)
+                    log_with_symbol(
+                        "create_wait",
+                        "debug",
+                        f"{path.name} 等待内容写入 {wait_count * 10}ms",
+                        self.logger,
+                    )
 
             # 记录父目录到缓存
             self._record_directory(path.parent)
@@ -803,8 +790,9 @@ class FileMonitorHandler(FileSystemEventHandler):
             self._handle_event(event, "CREATE")
 
         except PermissionError:
-            log_with_symbol("critical_permission", "critical",
-                            f"权限被拒绝: {event.src_path}", self.logger)
+            log_with_symbol(
+                "critical_permission", "critical", f"权限被拒绝: {event.src_path}", self.logger
+            )
         except Exception as e:
             log_with_symbol("create_error", "critical", f"致命错误: {e}", self.logger)
 
@@ -815,21 +803,24 @@ class FileMonitorHandler(FileSystemEventHandler):
 
             # 使用 _verify_directory 检查是否为目录
             if self._verify_directory(path):
-                log_with_symbol("skip_duplicate", "debug", f"跳过目录修改: {path.name}", self.logger)
+                log_with_symbol(
+                    "skip_duplicate", "debug", f"跳过目录修改: {path.name}", self.logger
+                )
                 return
 
             log_with_symbol("modify", "info", f"{path.name}", self.logger)
             self._handle_event(event, "MODIFY")
 
         except PermissionError:
-            log_with_symbol("warning_permission", "warning",
-                            f"修改权限被拒绝: {event.src_path}", self.logger)
+            log_with_symbol(
+                "warning_permission", "warning", f"修改权限被拒绝: {event.src_path}", self.logger
+            )
         except FileNotFoundError:
-            log_with_symbol("delete_file", "info",
-                            f"文件在修改期间被删除: {event.src_path}", self.logger)
+            log_with_symbol(
+                "delete_file", "info", f"文件在修改期间被删除: {event.src_path}", self.logger
+            )
         except Exception as e:
-            log_with_symbol("error_scan", "error",
-                            f"修改事件处理失败: {e}", self.logger)
+            log_with_symbol("error_scan", "error", f"修改事件处理失败: {e}", self.logger)
 
     def on_moved(self, event):
         """
@@ -845,8 +836,9 @@ class FileMonitorHandler(FileSystemEventHandler):
             is_directory = self._verify_directory(src_path)
 
             if is_directory:
-                log_with_symbol("move_dir", "info",
-                                f"{src_path.name} -> {dest_path.name}", self.logger)
+                log_with_symbol(
+                    "move_dir", "info", f"{src_path.name} -> {dest_path.name}", self.logger
+                )
 
                 # 更新缓存: 重命名所有子目录键
                 dest_key = self._normalize_path(dest_path)
@@ -855,7 +847,7 @@ class FileMonitorHandler(FileSystemEventHandler):
 
                 for cached_key in self._dir_cache:
                     if cached_key.startswith(src_key):
-                        new_key = dest_key + cached_key[len(src_key):]
+                        new_key = dest_key + cached_key[len(src_key) :]
                         new_cache.add(new_key)
                         # 保留原TTL时间戳
                         new_ttl[new_key] = self._cache_ttl.get(cached_key, time.time())
@@ -871,11 +863,11 @@ class FileMonitorHandler(FileSystemEventHandler):
                 for cached_dest, cached_src in self._path_aliases.items():
                     new_cached_dest = cached_dest
                     if cached_dest.startswith(src_key):
-                        new_cached_dest = dest_key + cached_dest[len(src_key):]
+                        new_cached_dest = dest_key + cached_dest[len(src_key) :]
 
                     new_cached_src = cached_src
                     if cached_src.startswith(src_key):
-                        new_cached_src = dest_key + cached_src[len(src_key):]
+                        new_cached_src = dest_key + cached_src[len(src_key) :]
 
                     new_aliases[new_cached_dest] = new_cached_src
 
@@ -886,8 +878,9 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self.logger.debug(f"[MOVE][DIR] 缓存已更新: {len(self._dir_cache)}个目录键")
 
             else:
-                log_with_symbol("move_file", "info",
-                                f"{src_path.name} -> {dest_path.name}", self.logger)
+                log_with_symbol(
+                    "move_file", "info", f"{src_path.name} -> {dest_path.name}", self.logger
+                )
                 self._update_cache_on_move(src_path, dest_path)
 
             # File moves now enter the same queue and scan transaction as
@@ -897,8 +890,9 @@ class FileMonitorHandler(FileSystemEventHandler):
                 self._handle_event(event, "MOVE", override_path=dest_path)
 
         except PermissionError:
-            log_with_symbol("warning_permission", "warning",
-                            f"移动权限被拒绝: {event.src_path}", self.logger)
+            log_with_symbol(
+                "warning_permission", "warning", f"移动权限被拒绝: {event.src_path}", self.logger
+            )
         except Exception as e:
             log_with_symbol("error_scan", "error", f"移动事件处理失败: {e}", self.logger)
 
@@ -927,25 +921,20 @@ class FileMonitorHandler(FileSystemEventHandler):
             log_with_symbol("delete_dir", "info", f"{event_path.name}", self.logger)
 
             # 激进清理: 删除该目录及其所有子孙路径
-            self._dir_cache = {
-                k for k in self._dir_cache
-                if not k.startswith(path_key)
-            }
+            self._dir_cache = {k for k in self._dir_cache if not k.startswith(path_key)}
             self._cache_ttl = {
-                k: v for k, v in self._cache_ttl.items()
-                if not k.startswith(path_key)
+                k: v for k, v in self._cache_ttl.items() if not k.startswith(path_key)
             }
             self._path_aliases = {
-                new: old for new, old in self._path_aliases.items()
+                new: old
+                for new, old in self._path_aliases.items()
                 if not (old.startswith(path_key) or new.startswith(path_key))
             }
         else:
             # v2.0 fix: Check if this file was quarantined before logging DELETE
             is_quarantined = False
             try:
-                record = self.services.registry.get(
-                    event_path, site_id=self.site.site_id
-                )
+                record = self.services.registry.get(event_path, site_id=self.site.site_id)
                 is_quarantined = bool(record and record.get("quarantine_id"))
             except Exception:
                 self.logger.warning(
@@ -954,15 +943,22 @@ class FileMonitorHandler(FileSystemEventHandler):
                 )
 
             if is_quarantined:
-                log_with_symbol("quarantine_add", "info",
-                                f"[QUARANTINE][FILE] 隔离完成(文件已移走): {event_path.name}", self.logger)
+                log_with_symbol(
+                    "quarantine_add",
+                    "info",
+                    f"[QUARANTINE][FILE] 隔离完成(文件已移走): {event_path.name}",
+                    self.logger,
+                )
             else:
-                log_with_symbol("delete_file", "info", f"[DELETE][FILE] {event_path.name}", self.logger)
+                log_with_symbol(
+                    "delete_file", "info", f"[DELETE][FILE] {event_path.name}", self.logger
+                )
 
         # Registry清理
         if self.services.registry.remove(event_path, site=self.site):
-            log_with_symbol("registry_remove", "info",
-                            f"Registry清理: {event_path.name}", self.logger)
+            log_with_symbol(
+                "registry_remove", "info", f"Registry清理: {event_path.name}", self.logger
+            )
 
     def on_closed(self, event):
         """文件关闭事件"""
@@ -1001,7 +997,7 @@ class WebsiteMonitor:
             base_path=website.path,
             logger=logger,
             services=self.services,
-            website=website  # v1.0.10: 修复 LogAnalyzer(self.website, ...)
+            website=website,  # v1.0.10: 修复 LogAnalyzer(self.website, ...)
         )
 
         # 初始化Observer
@@ -1010,15 +1006,17 @@ class WebsiteMonitor:
         # Linux权限检查
         if sys.platform != "win32":
             if not os.access(str(website.path), os.R_OK):
-                log_with_symbol("critical_permission", "critical",
-                                f"监控路径无读取权限: {website.path}", logger)
+                log_with_symbol(
+                    "critical_permission", "critical", f"监控路径无读取权限: {website.path}", logger
+                )
                 raise PermissionError(f"权限不足: {website.path}")
 
         # 调度监控
         self.observer.schedule(self.handler, str(website.path), recursive=True)
 
-        log_with_symbol("success", "info",
-                        f"{self.observer.__class__.__name__} | 路径: {website.path}", logger)
+        log_with_symbol(
+            "success", "info", f"{self.observer.__class__.__name__} | 路径: {website.path}", logger
+        )
 
     def start(self):
         """启动监控"""
@@ -1030,7 +1028,7 @@ class WebsiteMonitor:
         self._is_running = True
         time.sleep(0.5)
 
-        if hasattr(self.observer, 'is_alive') and not self.observer.is_alive():
+        if hasattr(self.observer, "is_alive") and not self.observer.is_alive():
             log_with_symbol("error", "error", "Observer start failed", self.logger)
             self._is_running = False
             self.handler.shutdown()
@@ -1060,10 +1058,7 @@ class WebsiteMonitor:
             for root, dirs, files in os.walk(self.website.path):
                 if self._baseline_stop.is_set():
                     break
-                dirs[:] = [
-                    name for name in dirs
-                    if name.lower() not in self.handler.exclude_dirs
-                ]
+                dirs[:] = [name for name in dirs if name.lower() not in self.handler.exclude_dirs]
                 for filename in files:
                     if self._baseline_stop.is_set():
                         break
@@ -1072,9 +1067,7 @@ class WebsiteMonitor:
                         self.handler.enqueue_scan(file_path, "BASELINE")
                         queued += 1
             try:
-                self.services.metrics.increment(
-                    "baseline_runs", site_id=self.website.site_id
-                )
+                self.services.metrics.increment("baseline_runs", site_id=self.website.site_id)
                 self.services.metrics.increment(
                     "baseline_files_queued", queued, site_id=self.website.site_id
                 )
@@ -1103,14 +1096,15 @@ class WebsiteMonitor:
         if self._baseline_thread and self._baseline_thread.is_alive():
             self._baseline_thread.join(timeout=3.0)
 
-        if hasattr(self.observer, 'is_alive') and self.observer.is_alive():
-            log_with_symbol("warning", "warning",
-                            "Observer未能在10秒内停止，可能资源泄漏", self.logger)
+        if hasattr(self.observer, "is_alive") and self.observer.is_alive():
+            log_with_symbol(
+                "warning", "warning", "Observer未能在10秒内停止，可能资源泄漏", self.logger
+            )
 
         self._is_running = False
         log_with_symbol("info", "info", "Monitor stopped", self.logger)
 
-        if hasattr(self, 'handler'):
+        if hasattr(self, "handler"):
             self.handler.shutdown()
             del self.handler
 

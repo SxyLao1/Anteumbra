@@ -5,17 +5,20 @@ from __future__ import annotations
 import copy
 import json
 import logging
-import os
-import sys
 import threading
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from anteumbra.domain import Repository
+from anteumbra.domain import Repository, registry_records
 from anteumbra.domain.runtime import ConfigProviderPort, EventPublisherPort
 from anteumbra.domain.site import SiteIdentity
+from anteumbra.infrastructure.registry_events import RegistryEventNotifier
+from anteumbra.infrastructure.registry_storage import (
+    RegistryJsonStore,
+    RegistryShadowStore,
+)
 from anteumbra.infrastructure.utils.path_utils import path_to_key
 from anteumbra.infrastructure.wal_manager import WalManager
 
@@ -35,9 +38,7 @@ class RegistryPersistenceError(RegistryError):
 class SuspiciousRegistry:
     """Own one Registry dataset and all of its persistence dependencies."""
 
-    _SHADOW_STORAGE_FIELDS = frozenset(
-        {"id", "record_id", "raw_json", "created_at", "updated_at"}
-    )
+    _SHADOW_STORAGE_FIELDS = frozenset({"id", "record_id", "raw_json", "created_at", "updated_at"})
 
     def __init__(
         self,
@@ -58,6 +59,14 @@ class SuspiciousRegistry:
         self._change_callback = change_callback
         self._shadow = shadow_repository
         self._logger = logger or logging.getLogger("monitor.suspicious_registry")
+        self._json_store = RegistryJsonStore(
+            self.path,
+            atomic_writer=lambda path, content: self._atomic_write(path, content),
+        )
+        self._shadow_store = RegistryShadowStore(
+            shadow_repository, self._logger, registry_records.record_id
+        )
+        self._event_notifier = RegistryEventNotifier(event_publisher, self._logger, change_callback)
         self._lock = threading.RLock()
         records, normalized = self._load_records()
         self._records = records
@@ -83,44 +92,25 @@ class SuspiciousRegistry:
             records = copy.deepcopy(self._records)
             index = self._find_index(records, key, identity.site_id)
             if index is None:
-                record = {
-                    "file_path": key,
-                    "detected_at": now,
-                    "features": list(features),
-                    "alerted": False,
-                    "file_exists": True,
-                    "first_seen_ip": first_seen_ip,
-                    "communication_count": 0,
-                    "deleted_at": None,
-                    "detection_source": detection_source,
-                    "marked_false_positive": False,
-                    "false_positive_reason": "",
-                    "false_positive_at": None,
-                    "quarantine_id": None,
-                    **identity.as_dict(),
-                }
+                record = registry_records.create_detection_record(
+                    key,
+                    features,
+                    first_seen_ip,
+                    detection_source,
+                    identity,
+                    now,
+                )
                 records.append(record)
             else:
                 record = records[index]
-                existing_source = str(record.get("detection_source") or "passive")
-                record.update(
-                    {
-                        "file_exists": True,
-                        "deleted_at": None,
-                        "alerted": False,
-                        "communication_count": 0,
-                        "first_seen_ip": first_seen_ip
-                        if first_seen_ip
-                        else record.get("first_seen_ip"),
-                        "detected_at": now,
-                        "features": list(features),
-                        "detection_source": detection_source
-                        if detection_source == "active"
-                        else existing_source,
-                        **identity.as_dict(),
-                    }
+                registry_records.refresh_detection_record(
+                    record,
+                    features,
+                    first_seen_ip,
+                    detection_source,
+                    identity,
+                    now,
                 )
-
             self._commit_upsert(
                 records,
                 record,
@@ -143,21 +133,12 @@ class SuspiciousRegistry:
         """Return a newest-first defensive snapshot matching the filters."""
         normalized_site_id = self._normalize_site_id(site_id) if site_id else None
         with self._lock:
-            records = [
-                copy.deepcopy(record)
-                for record in self._records
-                if (include_deleted or bool(record.get("file_exists", True)))
-                and (
-                    include_false_positive
-                    or not bool(record.get("marked_false_positive", False))
-                )
-                and (
-                    normalized_site_id is None
-                    or record.get("site_id") == normalized_site_id
-                )
-            ]
-        records.sort(key=lambda item: str(item.get("detected_at", "")), reverse=True)
-        return records
+            return registry_records.project_records(
+                self._records,
+                include_deleted=include_deleted,
+                include_false_positive=include_false_positive,
+                site_id=normalized_site_id,
+            )
 
     def get(
         self,
@@ -181,7 +162,7 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="mark_alerted",
-            mutate=lambda record: record.update(alerted=True),
+            mutate=registry_records.mark_alerted,
         )
 
     def mark_quarantined(
@@ -198,10 +179,8 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="mark_quarantined",
-            mutate=lambda record: record.update(
-                file_exists=False,
-                quarantine_id=str(quarantine_id),
-                quarantined_at=now,
+            mutate=lambda record: registry_records.mark_quarantined(
+                record, str(quarantine_id), now
             ),
             extra={"quarantine_id": str(quarantine_id)},
         )
@@ -217,12 +196,7 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="mark_restored",
-            mutate=lambda record: record.update(
-                file_exists=True,
-                quarantine_id=None,
-                restored_at=now,
-                deleted_at=None,
-            ),
+            mutate=lambda record: registry_records.mark_restored(record, now),
         )
 
     def mark_false_positive(
@@ -237,11 +211,7 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="mark_false_positive",
-            mutate=lambda record: record.update(
-                marked_false_positive=True,
-                false_positive_at=now,
-                false_positive_reason=str(reason),
-            ),
+            mutate=lambda record: registry_records.mark_false_positive(record, str(reason), now),
             extra={"reason": str(reason)},
         )
 
@@ -258,30 +228,11 @@ class SuspiciousRegistry:
             records = copy.deepcopy(self._records)
             index = self._find_index(records, key, identity.site_id)
             if index is None:
-                record = {
-                    "file_path": key,
-                    "detected_at": self._now(),
-                    "features": ["AUTO_CREATED_BY_ACCESS"],
-                    "alerted": False,
-                    "file_exists": True,
-                    "first_seen_ip": ip,
-                    "communication_count": 1,
-                    "deleted_at": None,
-                    "detection_source": "log_heuristic",
-                    "marked_false_positive": False,
-                    "false_positive_reason": "",
-                    "false_positive_at": None,
-                    "quarantine_id": None,
-                    **identity.as_dict(),
-                }
+                record = registry_records.create_access_record(key, ip, identity, self._now())
                 records.append(record)
             else:
                 record = records[index]
-                record["communication_count"] = int(
-                    record.get("communication_count", 0)
-                ) + 1
-                if not record.get("first_seen_ip"):
-                    record["first_seen_ip"] = ip
+                registry_records.increment_access(record, ip)
             self._commit_upsert(
                 records,
                 record,
@@ -305,16 +256,11 @@ class SuspiciousRegistry:
         resolved_site_id = site.site_id if site is not None else site_id
         now = self._now()
 
-        def mutate(record: dict[str, Any]) -> None:
-            record["file_exists"] = False
-            if not record.get("quarantine_id"):
-                record["deleted_at"] = now
-
         return self._update_record(
             file_path,
             resolved_site_id,
             operation="remove",
-            mutate=mutate,
+            mutate=lambda record: registry_records.mark_removed(record, now),
         )
 
     def soft_delete_record(
@@ -328,18 +274,13 @@ class SuspiciousRegistry:
             file_path,
             site_id,
             operation="soft_delete",
-            mutate=lambda record: record.update(
-                file_exists=False,
-                deleted_at=now,
-            ),
+            mutate=lambda record: registry_records.mark_soft_deleted(record, now),
         )
 
     def compact(self, compact_days: int | None = None) -> dict[str, int]:
         """Permanently remove old inactive records and return compaction stats."""
         if compact_days is None:
-            raw = self._config.get().get("filesizes", {}).get(
-                "registry_compact_days", 30
-            )
+            raw = self._config.get().get("filesizes", {}).get("registry_compact_days", 30)
             try:
                 compact_days = int(raw)
             except (TypeError, ValueError) as exc:
@@ -404,9 +345,7 @@ class SuspiciousRegistry:
 
     def close(self) -> None:
         """Close the injected shadow repository when it owns such a method."""
-        close = getattr(self._shadow, "close", None)
-        if callable(close):
-            close()
+        self._shadow_store.close()
 
     def _update_record(
         self,
@@ -498,57 +437,21 @@ class SuspiciousRegistry:
         *,
         previous: list[dict[str, Any]],
     ) -> None:
-        serialized = json.dumps(records, ensure_ascii=False, indent=2)
         try:
-            self._atomic_write(self.backup_path, serialized)
-            self._atomic_write(self.path, serialized)
+            self._json_store.persist(records)
         except OSError as exc:
             raise RegistryPersistenceError(
                 f"cannot atomically write Registry at {self.path}: {exc}"
             ) from exc
-        self._shadow_sync(records, previous)
-
-    def _shadow_sync(
-        self,
-        records: list[dict[str, Any]],
-        previous: list[dict[str, Any]],
-    ) -> None:
-        if self._shadow is None:
-            return
-        current_ids = {self._record_id(record) for record in records}
-        previous_ids = {self._record_id(record) for record in previous}
-        try:
-            shadow_ids: set[str] = set()
-            for shadow_record in self._shadow.list_all(limit=1_000_000):
-                if not isinstance(shadow_record, Mapping):
-                    continue
-                shadow_id = str(shadow_record.get("record_id") or "").strip()
-                if not shadow_id:
-                    try:
-                        shadow_id = self._record_id(shadow_record)
-                    except (KeyError, TypeError):
-                        continue
-                shadow_ids.add(shadow_id)
-            for stale_id in (previous_ids | shadow_ids) - current_ids:
-                self._shadow.delete(stale_id)
-            for record in records:
-                self._shadow.save(self._record_id(record), copy.deepcopy(record))
-        except Exception:
-            self._logger.warning(
-                "Registry SQLite shadow synchronization failed; JSON remains authoritative",
-                exc_info=True,
-            )
+        self._shadow_store.sync(records, previous)
 
     def _load_records(self) -> tuple[list[dict[str, Any]], bool]:
         failures: list[str] = []
-        for candidate, source in (
-            (self.path, "primary"),
-            (self.backup_path, "backup"),
-        ):
+        for candidate, source in self._json_store.candidates():
             if not candidate.exists():
                 continue
             try:
-                raw = json.loads(candidate.read_text(encoding="utf-8"))
+                raw = self._json_store.read(candidate)
                 records, normalized = self._normalize_records(raw)
             except (OSError, json.JSONDecodeError, RegistryDataError) as exc:
                 failures.append(f"{source}: {exc}")
@@ -558,22 +461,19 @@ class SuspiciousRegistry:
                 normalized = True
             return records, normalized
 
-        if self._shadow is not None:
-            try:
-                shadow_records = self._shadow.list_all(limit=999_999)
-                if shadow_records:
-                    records, _ = self._normalize_records(shadow_records)
-                    self._logger.warning(
-                        "Registry recovered %d records from SQLite shadow", len(records)
-                    )
-                    return records, True
-            except Exception as exc:
-                failures.append(f"shadow: {exc}")
+        try:
+            shadow_records = self._shadow_store.recover()
+            if shadow_records:
+                records, _ = self._normalize_records(shadow_records)
+                self._logger.warning(
+                    "Registry recovered %d records from SQLite shadow", len(records)
+                )
+                return records, True
+        except Exception as exc:
+            failures.append(f"shadow: {exc}")
 
         if failures:
-            raise RegistryDataError(
-                "Registry has no valid recovery source: " + "; ".join(failures)
-            )
+            raise RegistryDataError("Registry has no valid recovery source: " + "; ".join(failures))
         return [], False
 
     def _normalize_records(self, raw: Any) -> tuple[list[dict[str, Any]], bool]:
@@ -645,9 +545,7 @@ class SuspiciousRegistry:
                 normalized, _ = self._normalize_records([payload["record"]])
                 record = normalized[0]
                 records = copy.deepcopy(self._records)
-                index = self._find_index(
-                    records, record["file_path"], record["site_id"]
-                )
+                index = self._find_index(records, record["file_path"], record["site_id"])
                 if index is None:
                     records.append(record)
                 else:
@@ -692,16 +590,14 @@ class SuspiciousRegistry:
                     }
                 )
             else:
-                records[index]["features"] = self._normalize_features(
-                    entry.get("features")
-                )
+                records[index]["features"] = self._normalize_features(entry.get("features"))
                 records[index]["file_exists"] = True
         elif operation == "increment":
             if index is None:
                 raise RegistryDataError("legacy increment target does not exist")
-            records[index]["communication_count"] = int(
-                records[index].get("communication_count", 0)
-            ) + 1
+            records[index]["communication_count"] = (
+                int(records[index].get("communication_count", 0)) + 1
+            )
         elif operation == "remove":
             if index is None:
                 raise RegistryDataError("legacy remove target does not exist")
@@ -717,17 +613,7 @@ class SuspiciousRegistry:
         self._records = records
 
     def _notify(self, event_type: str, payload: Mapping[str, Any]) -> None:
-        try:
-            self._events.publish(event_type, "suspicious_registry", dict(payload))
-        except Exception:
-            self._logger.warning(
-                "Registry event publish failed: %s", event_type, exc_info=True
-            )
-        if self._change_callback is not None:
-            try:
-                self._change_callback()
-            except Exception:
-                self._logger.warning("Registry change callback failed", exc_info=True)
+        self._event_notifier.notify(event_type, payload)
 
     def _resolve_site(
         self,
@@ -742,17 +628,13 @@ class SuspiciousRegistry:
             str(file_path), site_id=site_id, site_name=site_name
         )
 
-    def _site_id_for_lookup(
-        self, file_path: str | Path, site_id: str | None
-    ) -> str:
+    def _site_id_for_lookup(self, file_path: str | Path, site_id: str | None) -> str:
         if site_id:
             return self._normalize_site_id(site_id)
         return self._config.resolve_site_identity(str(file_path)).site_id
 
     @staticmethod
-    def _find_index(
-        records: list[dict[str, Any]], file_path: str, site_id: str
-    ) -> int | None:
+    def _find_index(records: list[dict[str, Any]], file_path: str, site_id: str) -> int | None:
         for index, record in enumerate(records):
             if record.get("file_path") == file_path and record.get("site_id") == site_id:
                 return index
@@ -760,7 +642,7 @@ class SuspiciousRegistry:
 
     @staticmethod
     def _record_id(record: Mapping[str, Any]) -> str:
-        return f"{record['site_id']}:{record['file_path']}"
+        return registry_records.record_id(record)
 
     @staticmethod
     def _normalize_site_id(site_id: str) -> str:
@@ -800,17 +682,5 @@ class SuspiciousRegistry:
 
     @staticmethod
     def _atomic_write(path: Path, content: str) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(f".{path.name}.{threading.get_ident()}.tmp")
-        try:
-            with temporary.open("w", encoding="utf-8") as handle:
-                handle.write(content)
-                handle.flush()
-                if sys.platform != "win32":
-                    os.fsync(handle.fileno())
-            os.replace(temporary, path)
-        finally:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
+        """Compatibility injection point for atomic JSON write failures."""
+        RegistryJsonStore._atomic_write(path, content)

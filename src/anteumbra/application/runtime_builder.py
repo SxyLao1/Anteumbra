@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
+from anteumbra.application.config_service import get_version
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.runtime import ConfigProviderPort
 from anteumbra.domain.service_ports import PluginManagerPort
@@ -17,21 +20,26 @@ def build_runtime_container(
 ) -> RuntimeContainer:
     """Build one runtime container at the process composition root."""
     from anteumbra.application.config_history_service import ConfigHistoryLogger
+    from anteumbra.application.log_analysis_service import AccessLogAnalysisService
     from anteumbra.application.login_rate_service import LoginRateLimiter
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
     from anteumbra.application.scan_state_service import ScanRuntimeState
-    from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.block_ledger import BlockLedger
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
     from anteumbra.infrastructure.detection.hash_engine import HashEngine
+    from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
     from anteumbra.infrastructure.detection.scanner import ScannerService
     from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
+    from anteumbra.infrastructure.ip_blocker import IPBlocker
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        resolve_access_log_path,
+    )
     from anteumbra.infrastructure.monitoring.metrics import MetricsCollector
     from anteumbra.infrastructure.monitoring.notifier import Notifier
     from anteumbra.infrastructure.monitoring.siem_exporter import SIEMExporter
-    from anteumbra.infrastructure.ip_blocker import IPBlocker
     from anteumbra.infrastructure.persistence.sqlite_repository import SqliteRepository
     from anteumbra.infrastructure.quarantine import QuarantineStore
     from anteumbra.infrastructure.runtime_adapters import EventPublisherRouter
@@ -53,9 +61,7 @@ def build_runtime_container(
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     config_history = ConfigHistoryLogger(
         data_dir / "config_history.json",
-        rules_dir=normalize_path(
-            config.get("paths", {}).get("yara_rules_path", "rules/webshell")
-        ),
+        rules_dir=normalize_path(config.get("paths", {}).get("yara_rules_path", "rules/webshell")),
     )
     scan_state = ScanRuntimeState()
     scan_history = ScanHistoryService(
@@ -65,6 +71,7 @@ def build_runtime_container(
         )
     )
     login_rate_limiter = LoginRateLimiter()
+    log_analysis = AccessLogAnalysisService(resolve_access_log_path, LogHeuristicEngine)
     events = EventPublisherRouter(plugin_manager)
     wal = WalManager(
         data_dir / "registry_wal.log",
@@ -198,6 +205,7 @@ def build_runtime_container(
         scan_state=scan_state,
         scan_history=scan_history,
         login_rate_limiter=login_rate_limiter,
+        log_analysis=log_analysis,
         plugin_manager=plugin_manager,
         metrics=metrics,
         notifier=notifier,
@@ -213,4 +221,57 @@ def build_runtime_container(
         registry=registry,
         quarantine=quarantine,
         waf_poller=waf_poller,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeLifecycleDependencies:
+    """Concrete runtime capabilities assembled outside lifecycle orchestration."""
+
+    config_provider_factory: Callable[[], ConfigProviderPort]
+    path_normalizer: Callable[[str | Path], Path]
+    version_getter: Callable[[], str]
+    process_identity_writer: Callable[[Path, Path], object]
+    process_identity_remover: Callable[[Path, object], None]
+    container_builder: Callable[..., RuntimeContainer]
+    runtime_services_builder: Callable[..., object]
+    app_factory: Callable[..., object]
+    server_factory: Callable[..., object]
+    monitor_factory: Callable[..., object]
+    analyzer_factory: Callable[..., object]
+    log_monitor_factory: Callable[..., object]
+    alert_formatter: Callable[[dict[str, object]], str]
+
+
+def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
+    """Assemble concrete lifecycle capabilities at the composition root."""
+    from anteumbra.application.runtime_adapters import build_runtime_services
+    from anteumbra.infrastructure.config.provider import TomlConfigProvider
+    from anteumbra.infrastructure.monitoring.log_analyzer import (
+        get_analyzer,
+    )
+    from anteumbra.infrastructure.monitoring.log_monitor import LogMonitor
+    from anteumbra.infrastructure.monitoring.monitor import WebsiteMonitor
+    from anteumbra.infrastructure.monitoring.notifier import format_alert_message
+    from anteumbra.infrastructure.process_identity import (
+        remove_process_identity,
+        write_process_identity,
+    )
+    from anteumbra.infrastructure.utils.path_utils import normalize_path
+    from anteumbra.interfaces.web.factory import create_app, create_runtime_server
+
+    return RuntimeLifecycleDependencies(
+        config_provider_factory=TomlConfigProvider,
+        path_normalizer=normalize_path,
+        version_getter=get_version,
+        process_identity_writer=write_process_identity,
+        process_identity_remover=remove_process_identity,
+        container_builder=build_runtime_container,
+        runtime_services_builder=build_runtime_services,
+        app_factory=create_app,
+        server_factory=create_runtime_server,
+        monitor_factory=WebsiteMonitor,
+        analyzer_factory=get_analyzer,
+        log_monitor_factory=LogMonitor,
+        alert_formatter=format_alert_message,
     )

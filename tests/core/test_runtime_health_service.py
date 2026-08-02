@@ -19,17 +19,19 @@ def test_missing_yara_and_incomplete_notifications_are_degraded(monkeypatch):
         "find_spec",
         lambda _name: None,
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {
-            "enabled": True,
-            "email": {
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {
                 "enabled": True,
-                "smtp_host": "smtp.example.test",
-                "username": "",
+                "email": {
+                    "enabled": True,
+                    "smtp_host": "smtp.example.test",
+                    "username": "",
+                },
             },
-        },
-    })
+        }
+    )
 
     assert result["status"] == "degraded"
     assert result["detection"]["mode"] == "emergency_only"
@@ -53,10 +55,12 @@ def test_yara_probe_import_error_is_optional_degradation(monkeypatch):
         "find_spec",
         missing_module,
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {"enabled": False},
-    })
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {"enabled": False},
+        }
+    )
 
     assert result["status"] == "degraded"
     assert result["detection"]["mode"] == "emergency_only"
@@ -73,13 +77,15 @@ def test_ready_external_channel_is_reported(monkeypatch):
         "find_spec",
         lambda _name: object(),
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {
-            "enabled": True,
-            "webhook": {"enabled": True, "url": "https://soc.example.test/hook"},
-        },
-    })
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {
+                "enabled": True,
+                "webhook": {"enabled": True, "url": "https://soc.example.test/hook"},
+            },
+        }
+    )
 
     assert result["status"] == "healthy"
     assert result["detection"]["mode"] == "yara_and_emergency"
@@ -95,10 +101,12 @@ def test_disabled_notifications_are_an_explicit_local_mode(monkeypatch):
         "find_spec",
         lambda _name: object(),
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {"enabled": False},
-    })
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {"enabled": False},
+        }
+    )
 
     assert result["status"] == "healthy"
     assert result["notifications"] == {
@@ -117,12 +125,14 @@ def test_enabled_siem_without_event_bridge_is_degraded(monkeypatch):
         "find_spec",
         lambda _name: object(),
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {"enabled": False},
-        "siem": {"enabled": True},
-        "plugins": {"enabled": False, "builtin": []},
-    })
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {"enabled": False},
+            "siem": {"enabled": True},
+            "plugins": {"enabled": False, "builtin": []},
+        }
+    )
 
     assert result["status"] == "degraded"
     assert result["siem"] == {"enabled": True, "event_bridge_ready": False}
@@ -139,16 +149,18 @@ def test_enabled_siem_with_handler_is_healthy(monkeypatch):
         "find_spec",
         lambda _name: object(),
     )
-    result = runtime_health_service.assess_runtime_capabilities({
-        "scanner": {"yara": {"enabled": True}},
-        "notifier": {"enabled": False},
-        "siem": {"enabled": True},
-        "plugins": {
-            "enabled": True,
-            "builtin": ["siem_handler"],
-            "siem_handler": {"enabled": True},
-        },
-    })
+    result = runtime_health_service.assess_runtime_capabilities(
+        {
+            "scanner": {"yara": {"enabled": True}},
+            "notifier": {"enabled": False},
+            "siem": {"enabled": True},
+            "plugins": {
+                "enabled": True,
+                "builtin": ["siem_handler"],
+                "siem_handler": {"enabled": True},
+            },
+        }
+    )
 
     assert result["status"] == "healthy"
     assert result["siem"] == {"enabled": True, "event_bridge_ready": True}

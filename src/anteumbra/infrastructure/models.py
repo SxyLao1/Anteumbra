@@ -7,23 +7,26 @@
 @Motto: HACK THE REAL
 v1.7.4增强：ScanOptions支持access_log_path配置
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
+from anteumbra.domain.scan import ScanOptions
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.utils.path_utils import normalize_path
-
 
 # ═══════════════════════════════════════════════════════════════
 # v1.8.3: 画像引擎数据模型（从 threat_graph.py 迁移至此后统一管理）
 # ═══════════════════════════════════════════════════════════════
 
+
 @dataclass
 class AttackEvent:
     """单次攻击事件"""
-    timestamp: 'datetime'
+
+    timestamp: "datetime"
     site_id: str = "legacy"
     site_name: str = "Legacy / unassigned"
     event_type: str = ""
@@ -34,12 +37,14 @@ class AttackEvent:
     waf_rule_id: str = ""
     waf_score: float = 0.0
 
+
 @dataclass
 class AttackerProfile:
     """攻击者画像"""
+
     profile_id: str
-    created_at: 'datetime'
-    updated_at: 'datetime'
+    created_at: "datetime"
+    updated_at: "datetime"
     site_id: str = "legacy"
     site_name: str = "Legacy / unassigned"
     ip_pool: Set[str] = field(default_factory=set)
@@ -52,18 +57,20 @@ class AttackerProfile:
     risk_score: float = 0.0
     raw_score: float = 0.0
     decay_factor: float = 1.0
-    last_decayed: Optional['datetime'] = None
-    last_seen: Optional['datetime'] = None
+    last_decayed: Optional["datetime"] = None
+    last_seen: Optional["datetime"] = None
     status: str = "active"
-    last_alert_sent: Optional['datetime'] = None
+    last_alert_sent: Optional["datetime"] = None
     alert_cooldown_seconds: int = 60
+
 
 @dataclass
 class IPReputation:
     """IP 信誉"""
+
     ip: str
-    first_seen: 'datetime'
-    last_seen: 'datetime'
+    first_seen: "datetime"
+    last_seen: "datetime"
     site_id: str = "legacy"
     site_name: str = "Legacy / unassigned"
     event_count: int = 0
@@ -74,12 +81,14 @@ class IPReputation:
     cluster_level: int = 0
     profile_ids: Set[str] = field(default_factory=set)
 
+
 @dataclass
 class FileReputation:
     """文件信誉"""
+
     path: str
-    first_seen: 'datetime'
-    last_seen: 'datetime'
+    first_seen: "datetime"
+    last_seen: "datetime"
     site_id: str = "legacy"
     site_name: str = "Legacy / unassigned"
     detection_count: int = 0
@@ -92,29 +101,9 @@ class FileReputation:
 
 
 @dataclass
-class ScanOptions:
-    """扫描策略配置"""
-    monitor_extensions: List[str] = field(default_factory=lambda: [".php"])
-    exclude_dirs: List[str] = field(default_factory=list)
-    exclude_files: List[str] = field(default_factory=list)
-    max_file_size: str = "10MB"
-    debug_mode: bool = False
-    # v1.7.4新增：access_log_path支持（用于通配符配置）
-    access_log_path: Optional[str] = None  # 新增字段
-
-    @property
-    def max_size_bytes(self) -> int:
-        """将文件大小字符串转换为字节"""
-        size_str = self.max_file_size.upper()
-        multipliers = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3, 'TB': 1024**4}
-        for unit, multiplier in multipliers.items():
-            if size_str.endswith(unit):
-                return int(size_str.replace(unit, '')) * multiplier
-        return int(size_str)
-
-@dataclass
 class Website:
     """网站配置对象"""
+
     name: str
     path: Path
     port: int
@@ -141,6 +130,7 @@ class Website:
     def is_reachable(self) -> bool:
         """检查端口是否可达"""
         from anteumbra.infrastructure.detection.scanner import check_port
+
         return check_port("127.0.0.1", self.port)
 
     def __str__(self):

@@ -86,8 +86,7 @@ def test_poison_entry_moves_to_dead_letter_and_never_replays_again(wal):
     assert wal.replay({"upsert": fail}) == 0
     assert len(calls) == 1
     dead_letters = [
-        json.loads(line)
-        for line in wal.dead_letter_path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in wal.dead_letter_path.read_text(encoding="utf-8").splitlines()
     ]
     assert dead_letters[0]["reason"] == "replay_failed"
     assert "invalid record" in dead_letters[0]["error"]
@@ -141,9 +140,7 @@ def test_completed_large_wal_rotates_without_losing_pending_data(tmp_path):
         tmp_path / "registry_wal.log",
         settings_loader=lambda: {"wal_rotate_threshold_mb": 0.01},
     )
-    transaction_id = wal.write_entry(
-        "upsert", payload={"record": {"blob": "x" * 20_000}}
-    )
+    transaction_id = wal.write_entry("upsert", payload={"record": {"blob": "x" * 20_000}})
 
     wal.mark_completed(transaction_id)
 

@@ -43,10 +43,8 @@ def _registry(tmp_path, shadow=None):
 
     config = SimpleNamespace(
         get=lambda: {"filesizes": {}},
-        resolve_site_identity=lambda _path, site_id=None, site_name=None: (
-            SiteIdentity.from_values(
-                site_id or "legacy", site_name or "Legacy / unassigned"
-            )
+        resolve_site_identity=lambda _path, site_id=None, site_name=None: SiteIdentity.from_values(
+            site_id or "legacy", site_name or "Legacy / unassigned"
         ),
     )
     return SuspiciousRegistry(
@@ -82,9 +80,7 @@ def test_registry_record_identity_includes_site_id(tmp_path):
     registry.add(shared_path, ["alpha-rule"], site_id="alpha", site_name="Alpha")
     registry.add(shared_path, ["beta-rule"], site_id="beta", site_name="Beta")
 
-    records = registry.get_all(
-        include_deleted=True, include_false_positive=True
-    )
+    records = registry.get_all(include_deleted=True, include_false_positive=True)
     assert {record["site_id"] for record in records} == {"alpha", "beta"}
     assert registry.remove(shared_path, site_id="alpha") is True
     assert registry.get(shared_path, site_id="alpha")["file_exists"] is False
@@ -117,8 +113,8 @@ def test_quarantine_filters_records_by_site(tmp_path):
     quarantine_dir = tmp_path / "quarantine"
     store = QuarantineStore(
         quarantine_dir,
-        site_resolver=lambda _path, site_id=None, site_name=None: (
-            SiteIdentity.from_values(site_id or "legacy", site_name or "Legacy")
+        site_resolver=lambda _path, site_id=None, site_name=None: SiteIdentity.from_values(
+            site_id or "legacy", site_name or "Legacy"
         ),
     )
 
@@ -179,8 +175,8 @@ def test_quarantine_batch_alert_carries_one_site_identity(monkeypatch):
 
 
 def test_threat_graph_handler_preserves_site_identity():
-    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
     from anteumbra.domain import DomainEvent
+    from anteumbra.plugins.threat_graph_handler import ThreatGraphHandlerPlugin
 
     ingested = []
     filters = []
@@ -203,16 +199,18 @@ def test_threat_graph_handler_preserves_site_identity():
         Events(),
         log=logging.getLogger("test.threat_graph_handler"),
     )
-    plugin.on_event(DomainEvent(
-        "record_added",
-        0,
-        "registry",
-        {
-            "file_path": "/srv/alpha/shell.php",
-            "site_id": "alpha",
-            "site_name": "Alpha",
-        },
-    ))
+    plugin.on_event(
+        DomainEvent(
+            "record_added",
+            0,
+            "registry",
+            {
+                "file_path": "/srv/alpha/shell.php",
+                "site_id": "alpha",
+                "site_name": "Alpha",
+            },
+        )
+    )
 
     assert ingested[0]["site_id"] == "alpha"
     assert ingested[0]["site_name"] == "Alpha"
@@ -232,9 +230,7 @@ def test_metrics_keep_global_compatibility_and_add_site_buckets(tmp_path):
             return all_records
         return all_records
 
-    collector = MetricsCollector(
-        tmp_path / "metrics.json", registry_reader=records
-    )
+    collector = MetricsCollector(tmp_path / "metrics.json", registry_reader=records)
     collector.increment_site("scan_total", "alpha", 3)
     collector.increment_site("scan_total", "beta", 2)
 
@@ -340,19 +336,16 @@ def test_manual_scan_preserves_an_explicit_site_identity(tmp_path):
 
     registry = SimpleNamespace(
         get_all=lambda **_kwargs: [],
-        add=lambda path, features, **kwargs: added.append(
-            (path, features, kwargs)
-        ),
+        add=lambda path, features, **kwargs: added.append((path, features, kwargs)),
     )
     scanner_service = SimpleNamespace(
         scan=lambda path, options, _logger: (
-            scan_options.append(options)
-            or ScanResult(path, True, ["test-rule"], engine="test")
+            scan_options.append(options) or ScanResult(path, True, ["test-rule"], engine="test")
         )
     )
     provider = SimpleNamespace(
-        resolve_site_identity=lambda _path, site_id=None, site_name=None: (
-            SiteIdentity.from_values(site_id, site_name or str(site_id))
+        resolve_site_identity=lambda _path, site_id=None, site_name=None: SiteIdentity.from_values(
+            site_id, site_name or str(site_id)
         ),
         get_website=lambda _site_id: None,
         get=lambda: {},

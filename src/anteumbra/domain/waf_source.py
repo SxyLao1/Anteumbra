@@ -4,8 +4,9 @@
 Anteumbra does not parse raw traffic; it consumes structured event summaries
 already emitted by WAFs or log adapters.
 """
+
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
@@ -13,21 +14,22 @@ from typing import List, Optional
 @dataclass
 class WAFEvent:
     """WAF 返回的单条攻击事件"""
+
     event_id: str
     src_ip: str
-    timestamp: str          # ISO format
+    timestamp: str  # ISO format
     http_method: str
     url: str
     user_agent: str
     waf_rule_id: str
     waf_score: float
-    attack_type: str        # webshell, sqli, rce, c2, scanner, mixed
+    attack_type: str  # webshell, sqli, rce, c2, scanner, mixed
     site_id: str = ""
     site_name: str = ""
 
     # 画像引擎使用的额外字段
-    file_path: Optional[str] = None    # 关联的本地文件路径（文件事件关联后填充）
-    profile_id: Optional[str] = None   # 画像引擎分配后回写
+    file_path: Optional[str] = None  # 关联的本地文件路径（文件事件关联后填充）
+    profile_id: Optional[str] = None  # 画像引擎分配后回写
 
 
 class WAFEventSource(ABC):

@@ -7,14 +7,7 @@ import yara
 
 from anteumbra.infrastructure.detection.yara_engine import YaraEngine
 
-
-RULES_DIR = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "anteumbra"
-    / "rules"
-    / "webshell"
-)
+RULES_DIR = Path(__file__).resolve().parents[2] / "src" / "anteumbra" / "rules" / "webshell"
 
 
 @pytest.fixture(scope="module")
@@ -72,18 +65,18 @@ def test_engine_loads_all_bundled_files_without_errors(engine):
             "PHP_Decoded_Dynamic_Execution",
         ),
         (
-            b"<% x=Request(\"p\") : Eval x %>",
+            b'<% x=Request("p") : Eval x %>',
             "ASP_Request_Dynamic_Execution",
         ),
         (
             b'<%@ Page Language="C#" %><script runat="server">'
-            b'ProcessStartInfo p=new ProcessStartInfo();'
+            b"ProcessStartInfo p=new ProcessStartInfo();"
             b'p.FileName="cmd.exe"; Process.Start(p); x=box.Text;</script>',
             "ASPX_Command_Process_Behavior",
         ),
         (
             b'<%@ page import="java.util.*" %><% String x=request.getParameter("q");'
-            b'Class c=Class.forName(new String(new byte[]{1}));'
+            b"Class c=Class.forName(new String(new byte[]{1}));"
             b'c.getMethod("x").invoke(null); %>',
             "JSP_Reflective_Command_Execution",
         ),
@@ -97,7 +90,7 @@ def test_jsp_javascript_eval_is_not_a_webshell_signal(engine):
     payload = (
         b'<%@ page language="java" %><html><script>'
         b'const value = eval(document.getElementById("formula").value);'
-        b'</script></html>'
+        b"</script></html>"
     )
 
     assert _rule_names(engine, payload) == set()

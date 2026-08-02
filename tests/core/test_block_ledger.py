@@ -13,7 +13,9 @@ from anteumbra.infrastructure.block_ledger import (
 
 class MemoryShadow:
     def __init__(self, records=(), *, fail_save=False, fail_load=False):
-        self.records = {str(item.get("record_id", index)): dict(item) for index, item in enumerate(records)}
+        self.records = {
+            str(item.get("record_id", index)): dict(item) for index, item in enumerate(records)
+        }
         self.fail_save = fail_save
         self.fail_load = fail_load
         self.closed = False
@@ -233,7 +235,7 @@ def test_legacy_record_is_migrated_to_explicit_bucket(tmp_path):
 
 
 def test_csv_export_neutralizes_formula_values(ledger, alpha):
-    ledger.add_entry("10.0.0.15", site=alpha, reason="=HYPERLINK(\"bad\")")
+    ledger.add_entry("10.0.0.15", site=alpha, reason='=HYPERLINK("bad")')
 
     exported = ledger.export_ledger("csv", site_id="alpha")
 

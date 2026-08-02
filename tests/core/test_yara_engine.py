@@ -9,8 +9,7 @@ from anteumbra.infrastructure.detection.yara_engine import (
     resolve_yara_rules_path,
 )
 
-
-VALID_RULE = r'''
+VALID_RULE = r"""
 rule Test_PHP_Dynamic_Execution {
     meta:
         severity = "high"
@@ -19,7 +18,7 @@ rule Test_PHP_Dynamic_Execution {
     condition:
         $sink
 }
-'''
+"""
 
 
 def _config_provider(timeout=5):
@@ -50,9 +49,7 @@ def test_invalid_file_does_not_disable_valid_rules(tmp_path):
     assert len(engine.compiled_rules) == 1
     assert engine.loaded_rule_files == ("good.yar",)
     assert "broken.yar" in engine.load_errors
-    assert [match.rule_name for match in engine.scan(sample)] == [
-        "Test_PHP_Dynamic_Execution"
-    ]
+    assert [match.rule_name for match in engine.scan(sample)] == ["Test_PHP_Dynamic_Execution"]
 
 
 def test_runtime_failure_is_isolated_to_one_compiled_file():
@@ -73,10 +70,13 @@ def test_runtime_failure_is_isolated_to_one_compiled_file():
             calls.append(kwargs)
             return [SimpleNamespace(rule="Good", namespace="good", meta={})]
 
-    compiled = CompositeYaraRules([
-        _CompiledRuleFile("broken.yar", "broken", BrokenRules(), 1),
-        _CompiledRuleFile("good.yar", "good", GoodRules(), 1),
-    ], logging.getLogger("test.yara.runtime"))
+    compiled = CompositeYaraRules(
+        [
+            _CompiledRuleFile("broken.yar", "broken", BrokenRules(), 1),
+            _CompiledRuleFile("good.yar", "good", GoodRules(), 1),
+        ],
+        logging.getLogger("test.yara.runtime"),
+    )
 
     matches = compiled.match(data=b"payload", timeout=3)
 
@@ -101,9 +101,7 @@ def test_failed_reload_retains_previous_working_rules(tmp_path):
     assert engine.compiled_rules
     assert engine.loaded_rule_files == ("active.yar",)
     matches = engine.scan_data(b"eval($_POST", "reload-test")
-    assert [match.rule_name for match in matches] == [
-        "Test_PHP_Dynamic_Execution"
-    ]
+    assert [match.rule_name for match in matches] == ["Test_PHP_Dynamic_Execution"]
 
 
 def test_empty_configured_directory_uses_bundled_rules(tmp_path):
@@ -126,6 +124,4 @@ def test_direct_engine_uses_defaults_from_provider(tmp_path):
 
     matches = engine.scan_data(b"eval($_POST", "defaults-test")
 
-    assert [match.rule_name for match in matches] == [
-        "Test_PHP_Dynamic_Execution"
-    ]
+    assert [match.rule_name for match in matches] == ["Test_PHP_Dynamic_Execution"]

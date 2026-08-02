@@ -57,10 +57,7 @@ class ScanHistoryService:
         )
         text_fields = {"scan_id", "target_dir", "site_id", "site_name", "status"}
         return [
-            {
-                field: record.get(field, "" if field in text_fields else 0)
-                for field in fields
-            }
+            {field: record.get(field, "" if field in text_fields else 0) for field in fields}
             for record in self._store.list_records(limit)
         ]
 

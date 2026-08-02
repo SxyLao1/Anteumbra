@@ -8,6 +8,7 @@ Flow:
   3. Verify PHP variants are more similar to each other than to JSP
   4. Verify cross-language dissimilarity
 """
+
 import pytest
 
 
@@ -18,6 +19,7 @@ class TestFileClustering:
         """Verify ppdeep library is available (hash_engine module not yet in codebase)."""
         try:
             import ppdeep
+
             assert ppdeep is not None
         except ImportError:
             pytest.skip("ppdeep not installed")
@@ -35,15 +37,15 @@ class TestFileClustering:
         f1 = variant_webshells / "eval_v1.php"
         f2 = variant_webshells / "eval_v2.php"
 
-        content1 = f1.read_text(encoding='utf-8')
-        content2 = f2.read_text(encoding='utf-8')
+        content1 = f1.read_text(encoding="utf-8")
+        content2 = f2.read_text(encoding="utf-8")
 
         # Both should have core pattern: @eval, base64_decode
         assert "eval" in content1 and "eval" in content2
         assert "base64_decode" in content1 and "base64_decode" in content2
 
-        h1 = ppdeep.hash(content1.encode('utf-8'))
-        h2 = ppdeep.hash(content2.encode('utf-8'))
+        h1 = ppdeep.hash(content1.encode("utf-8"))
+        h2 = ppdeep.hash(content2.encode("utf-8"))
 
         assert h1 is not None and h2 is not None, "ppdeep should produce hashes"
         assert len(h1) > 10, f"ppdeep hash should be meaningful, got: {h1}"
@@ -52,8 +54,7 @@ class TestFileClustering:
         # Files are ~90% identical — similarity should be high
         similarity = ppdeep.compare(h1, h2)
         assert similarity >= 30, (
-            f"Nearly identical PHP files should have similarity >= 30%, "
-            f"got {similarity}%"
+            f"Nearly identical PHP files should have similarity >= 30%, got {similarity}%"
         )
 
     def test_php_vs_jsp_not_similar(self, variant_webshells):
@@ -66,8 +67,8 @@ class TestFileClustering:
         php_file = variant_webshells / "eval_v1.php"
         jsp_file = variant_webshells / "cmd_jsp1.jsp"
 
-        h_php = ppdeep.hash(php_file.read_text(encoding='utf-8').encode('utf-8'))
-        h_jsp = ppdeep.hash(jsp_file.read_text(encoding='utf-8').encode('utf-8'))
+        h_php = ppdeep.hash(php_file.read_text(encoding="utf-8").encode("utf-8"))
+        h_jsp = ppdeep.hash(jsp_file.read_text(encoding="utf-8").encode("utf-8"))
 
         similarity = ppdeep.compare(h_php, h_jsp)
         # PHP vs JSP should have very low similarity
@@ -120,7 +121,5 @@ class TestFileClustering:
         engine.cluster_file(str(second))
 
         clusters = engine.list_clusters()
-        assert [(cluster.size, cluster.hash_track) for cluster in clusters] == [
-            (2, "test")
-        ]
+        assert [(cluster.size, cluster.hash_track) for cluster in clusters] == [(2, "test")]
         assert engine.list_clusters(min_size=3) == []

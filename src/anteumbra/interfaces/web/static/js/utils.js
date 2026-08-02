@@ -41,4 +41,4 @@ const AnteumbraUtils = {
   }
 };
 window.AnteumbraUtils = AnteumbraUtils;
-window.TridentUtils = AnteumbraUtils;  // backward compat
+window.TridentUtils = AnteumbraUtils; // Deprecated: remove in 2.0 after legacy extensions migrate.

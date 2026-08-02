@@ -35,3 +35,15 @@ def test_short_help_alias_is_available():
 
     assert result.exit_code == 0, result.output
     assert "Commands:" in result.output
+
+
+def test_status_without_pid_file_is_a_non_destructive_core_command(monkeypatch, tmp_path):
+    from anteumbra.cli import main
+    from anteumbra.cli.main import cli
+
+    monkeypatch.setattr(main, "_find_project_root", lambda: tmp_path)
+
+    result = CliRunner().invoke(cli, ["status"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output == "Status: STOPPED (no PID file)\n"

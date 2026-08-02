@@ -11,16 +11,16 @@ Config:
   poll_interval = 5
   min_score = 5.0
 """
+
 import json
 import logging
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from anteumbra.domain import PollableEventSource
-from anteumbra.domain import Plugin, DomainEvent
+from anteumbra.domain import DomainEvent, Plugin, PollableEventSource
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,12 @@ class ModSecurityAdapter(Plugin, PollableEventSource):
         self._path = Path(config.get("audit_log_path", "/var/log/modsec_audit.log"))
         self._poll_interval = config.get("poll_interval", 5)
         self._min_score = config.get("min_score", 5.0)
-        logger.info("ModSecurity: activated, watching %s (poll=%ds, min_score=%.1f)",
-                    self._path, self._poll_interval, self._min_score)
+        logger.info(
+            "ModSecurity: activated, watching %s (poll=%ds, min_score=%.1f)",
+            self._path,
+            self._poll_interval,
+            self._min_score,
+        )
 
     def deactivate(self) -> None:
         self.stop()
@@ -98,21 +102,29 @@ class ModSecurityAdapter(Plugin, PollableEventSource):
                                     continue
                             except ValueError:
                                 pass
-                        score = float(entry.get("audit_data", {}).get("messages", [{}])[0].get("total_score", 0))
+                        score = float(
+                            entry.get("audit_data", {})
+                            .get("messages", [{}])[0]
+                            .get("total_score", 0)
+                        )
                         if score < self._min_score:
                             continue
                         req = entry.get("request", {})
-                        events.append({
-                            "src_ip": tx.get("client_ip", ""),
-                            "timestamp": ts_str,
-                            "http_method": req.get("method", ""),
-                            "url": req.get("uri", ""),
-                            "user_agent": req.get("headers", {}).get("User-Agent", ""),
-                            "waf_rule_id": entry.get("audit_data", {}).get("messages", [{}])[0].get("rule_id", "modsec"),
-                            "waf_score": score,
-                            "attack_type": self._classify(entry),
-                            "raw": entry,
-                        })
+                        events.append(
+                            {
+                                "src_ip": tx.get("client_ip", ""),
+                                "timestamp": ts_str,
+                                "http_method": req.get("method", ""),
+                                "url": req.get("uri", ""),
+                                "user_agent": req.get("headers", {}).get("User-Agent", ""),
+                                "waf_rule_id": entry.get("audit_data", {})
+                                .get("messages", [{}])[0]
+                                .get("rule_id", "modsec"),
+                                "waf_score": score,
+                                "attack_type": self._classify(entry),
+                                "raw": entry,
+                            }
+                        )
                         if len(events) >= limit:
                             break
                     except json.JSONDecodeError:
@@ -127,8 +139,8 @@ class ModSecurityAdapter(Plugin, PollableEventSource):
             try:
                 now = datetime.now()
                 events = self.poll(
-                    datetime.fromtimestamp(now.timestamp() - self._poll_interval),
-                    now, limit=200)
+                    datetime.fromtimestamp(now.timestamp() - self._poll_interval), now, limit=200
+                )
                 for evt in events:
                     if self._callback:
                         self._callback(evt)

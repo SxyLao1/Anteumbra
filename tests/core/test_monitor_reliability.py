@@ -35,14 +35,15 @@ def _services(
     return RuntimeServices(
         context=context,
         registry=registry
-        or SimpleNamespace(add=lambda *_args, **_kwargs: None, remove=lambda *_args, **_kwargs: True),
+        or SimpleNamespace(
+            add=lambda *_args, **_kwargs: None, remove=lambda *_args, **_kwargs: True
+        ),
         metrics=SimpleNamespace(
             increment=lambda *_args, **_kwargs: None,
             increment_site=lambda *_args, **_kwargs: None,
         ),
         events=SimpleNamespace(publish=lambda *_args, **_kwargs: None),
-        quarantine=quarantine
-        or SimpleNamespace(is_recently_restored=lambda _path: False),
+        quarantine=quarantine or SimpleNamespace(is_recently_restored=lambda _path: False),
     )
 
 
@@ -168,9 +169,7 @@ def _run_suspicious_scan_with_log_attribution(
     config = _scanner_config()
     config["quarantine"] = {"auto_quarantine_enabled": False}
     handler = monitor_module.FileMonitorHandler(
-        scan_callback=lambda path, *_args: ScanResult(
-            path, True, ["test-rule"], engine="test"
-        ),
+        scan_callback=lambda path, *_args: ScanResult(path, True, ["test-rule"], engine="test"),
         scan_options=ScanOptions(monitor_extensions=[".php"]),
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.log-attribution"),
@@ -192,9 +191,7 @@ def _run_suspicious_scan_with_log_attribution(
         handler.shutdown()
 
 
-def test_file_detection_skips_log_attribution_when_log_monitor_is_disabled(
-    monkeypatch, tmp_path
-):
+def test_file_detection_skips_log_attribution_when_log_monitor_is_disabled(monkeypatch, tmp_path):
     def unexpected_analyzer(*_args, **_kwargs):
         raise AssertionError("disabled log monitor must not inspect access logs")
 
@@ -208,9 +205,7 @@ def test_file_detection_skips_log_attribution_when_log_monitor_is_disabled(
     assert recorded[0][2]["first_seen_ip"] == "127.0.0.1"
 
 
-def test_file_detection_uses_log_attribution_when_log_monitor_is_enabled(
-    monkeypatch, tmp_path
-):
+def test_file_detection_uses_log_attribution_when_log_monitor_is_enabled(monkeypatch, tmp_path):
     class FakeAnalyzer:
         def __init__(self, *_args, **_kwargs):
             pass
@@ -228,9 +223,7 @@ def test_file_detection_uses_log_attribution_when_log_monitor_is_enabled(
     assert recorded[0][2]["first_seen_ip"] == "203.0.113.8"
 
 
-def test_recently_restored_file_does_not_emit_a_duplicate_detection(
-    monkeypatch, tmp_path
-):
+def test_recently_restored_file_does_not_emit_a_duplicate_detection(monkeypatch, tmp_path):
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
     restored = tmp_path / "restored.php"
@@ -242,9 +235,7 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(
         remove=lambda *_args, **_kwargs: True,
     )
     handler = monitor_module.FileMonitorHandler(
-        scan_callback=lambda path, *_args: ScanResult(
-            path, True, ["test-rule"], engine="test"
-        ),
+        scan_callback=lambda path, *_args: ScanResult(path, True, ["test-rule"], engine="test"),
         scan_options=ScanOptions(monitor_extensions=[".php"]),
         base_path=tmp_path,
         logger=logging.getLogger("test.monitor.restore-guard"),

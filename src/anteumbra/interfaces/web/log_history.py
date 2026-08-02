@@ -12,11 +12,8 @@ from typing import Any
 from anteumbra.application.runtime_container import RuntimeContainer
 from anteumbra.domain.site import SiteIdentity
 
-
 logger = logging.getLogger(__name__)
-_LOG_TIMESTAMP = re.compile(
-    r"^\[(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[,.]\d+)?)\]"
-)
+_LOG_TIMESTAMP = re.compile(r"^\[(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[,.]\d+)?)\]")
 
 
 def collect_log_history(
@@ -67,9 +64,7 @@ def render_log_history(
         line = str(raw_line).strip()
         if not line or "[SSE]" in line:
             continue
-        parts.append(
-            f'<div class="log-line {_level_class(line)}">{html.escape(line)}</div>'
-        )
+        parts.append(f'<div class="log-line {_level_class(line)}">{html.escape(line)}</div>')
     if parts:
         return "".join(parts)
     if empty_message is None:

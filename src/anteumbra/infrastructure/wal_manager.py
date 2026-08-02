@@ -120,9 +120,7 @@ class WalManager:
             operations, completed = self._split_records(records)
             if pending_only:
                 operations = [
-                    entry
-                    for entry in operations
-                    if entry["transaction_id"] not in completed
+                    entry for entry in operations if entry["transaction_id"] not in completed
                 ]
             return [dict(entry) for entry in operations]
 
@@ -151,9 +149,7 @@ class WalManager:
 
                 operations, completed = self._split_records(records)
                 pending = [
-                    entry
-                    for entry in operations
-                    if entry["transaction_id"] not in completed
+                    entry for entry in operations if entry["transaction_id"] not in completed
                 ]
                 recovered = 0
                 for entry in pending:
@@ -355,9 +351,7 @@ class WalManager:
     ) -> tuple[list[dict[str, Any]], set[str]]:
         operations = [record for record in records if record.get("kind") == "operation"]
         completed = {
-            str(record["transaction_id"])
-            for record in records
-            if record.get("kind") == "completed"
+            str(record["transaction_id"]) for record in records if record.get("kind") == "completed"
         }
         return operations, completed
 
@@ -392,9 +386,7 @@ class WalManager:
         candidate = self.path.with_name(f"{self.path.name}.{stamp}")
         counter = 1
         while candidate.exists():
-            candidate = self.path.with_name(
-                f"{self.path.name}.{stamp}.{counter:03d}"
-            )
+            candidate = self.path.with_name(f"{self.path.name}.{stamp}.{counter:03d}")
             counter += 1
         return candidate
 
