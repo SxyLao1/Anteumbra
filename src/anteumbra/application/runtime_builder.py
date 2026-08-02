@@ -243,8 +243,12 @@ class RuntimeLifecycleDependencies:
     alert_formatter: Callable[[dict[str, object]], str]
 
 
-def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
-    """Assemble concrete lifecycle capabilities at the composition root."""
+def build_runtime_lifecycle_dependencies(
+    *,
+    app_factory: Callable[..., object],
+    server_factory: Callable[..., object],
+) -> RuntimeLifecycleDependencies:
+    """Assemble concrete lifecycle capabilities with injected web adapters."""
     from anteumbra.application.runtime_adapters import build_runtime_services
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.monitoring.log_analyzer import (
@@ -258,7 +262,6 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
         write_process_identity,
     )
     from anteumbra.infrastructure.utils.path_utils import normalize_path
-    from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
     return RuntimeLifecycleDependencies(
         config_provider_factory=TomlConfigProvider,
@@ -268,8 +271,8 @@ def build_runtime_lifecycle_dependencies() -> RuntimeLifecycleDependencies:
         process_identity_remover=remove_process_identity,
         container_builder=build_runtime_container,
         runtime_services_builder=build_runtime_services,
-        app_factory=create_app,
-        server_factory=create_runtime_server,
+        app_factory=app_factory,
+        server_factory=server_factory,
         monitor_factory=WebsiteMonitor,
         analyzer_factory=get_analyzer,
         log_monitor_factory=LogMonitor,

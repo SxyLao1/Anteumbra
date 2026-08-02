@@ -81,10 +81,7 @@ def _format_edges(edges: Iterable[ImportEdge]) -> str:
     )
 
 
-# The launcher is the composition root and may start the web interface.
-KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = {
-    ("application/runtime_builder.py", "anteumbra.interfaces.web.factory"),
-}
+KNOWN_APPLICATION_TO_INTERFACES: set[tuple[str, str]] = set()
 
 
 KNOWN_LEGACY_BRANDING_LINES: set[tuple[str, str]] = {

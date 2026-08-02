@@ -68,9 +68,21 @@ def register_lifecycle_commands(
         click.echo(f"  PID:     {deps.os_module.getpid()}")
 
         from anteumbra.application.launcher import RuntimeLifecycle, RuntimeStartupError
+        from anteumbra.application.runtime_builder import (
+            build_runtime_lifecycle_dependencies,
+        )
+        from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
         try:
-            RuntimeLifecycle(host=host, port=port).run()
+            runtime_dependencies = build_runtime_lifecycle_dependencies(
+                app_factory=create_app,
+                server_factory=create_runtime_server,
+            )
+            RuntimeLifecycle(
+                host=host,
+                port=port,
+                dependencies=runtime_dependencies,
+            ).run()
         except RuntimeStartupError as exc:
             raise click.ClickException(str(exc)) from exc
 

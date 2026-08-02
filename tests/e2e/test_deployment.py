@@ -975,9 +975,13 @@ class TestCliInstall:
         from anteumbra.application.runtime_builder import (
             build_runtime_lifecycle_dependencies,
         )
+        from anteumbra.interfaces.web.factory import create_app, create_runtime_server
 
         dependencies = replace(
-            build_runtime_lifecycle_dependencies(),
+            build_runtime_lifecycle_dependencies(
+                app_factory=create_app,
+                server_factory=create_runtime_server,
+            ),
             container_builder=lambda **_kwargs: pytest.fail(
                 "runtime must not be built before validation"
             ),

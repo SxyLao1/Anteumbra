@@ -87,13 +87,13 @@ def test_module_size_baseline_records_cleanup_starting_point():
     assert not growth, f"cleanup target modules must not grow beyond baseline: {growth}"
 
 
-def test_stage_one_must_retire_the_only_application_to_interface_edge():
+def test_application_does_not_depend_on_interfaces():
     edges = {
         edge.key
         for edge in _internal_import_edges()
         if edge.source_layer == "application" and edge.imported_layer == "interfaces"
     }
-    assert edges == {("application/runtime_builder.py", "anteumbra.interfaces.web.factory")}
+    assert not edges
 
 
 def _route_contract(filename: str, blueprint: str) -> set[tuple[str, tuple[str, ...], bool]]:
