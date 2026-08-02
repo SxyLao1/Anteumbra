@@ -22,6 +22,16 @@
 - Moved runtime construction into focused `runtime_builder`, `runtime_workers`,
   and `runtime_plugins` modules. `launcher` now owns lifecycle orchestration
   and remains a compatibility entry point.
+- Reversed remaining application-layer dependencies through typed runtime,
+  scanning, YARA, platform, path, log-analysis, notification, Registry, and
+  threat-profile ports; application code no longer imports web interfaces.
+- Split CLI commands, admin diagnostics, monitoring administration,
+  notification transports, threat-profile persistence, Registry persistence,
+  and file-monitor detection workflow into focused modules.
+- Consolidated records and quarantine selection behavior behind a shared
+  controller while preserving explicit HTMX mount/unmount ownership.
+- Expanded Ruff to `E4/E7/E9/F/I`, established repository-wide formatting,
+  and added a 60% non-browser coverage floor to CI.
 
 ### Fixed
 - Preserved the final scanner progress count after a completed scan and restored the
@@ -30,11 +40,16 @@
   history records atomically, preventing traversal outside the configured data
   directory and partial JSON reads.
 - Kept YARA batch-rule selection intact when any delete request fails.
+- Aligned the Docker OCI version label with the installed package version and
+  added a regression check to prevent future image metadata drift.
 
 ### Tests
-- Passed 528 non-browser tests and 43 Playwright UI tests, including scan-history
-  path, scanner SSE teardown, YARA batch-failure, action-contract, and
-  runtime-composition regressions.
+- Passed 543 non-browser tests at 62.24% coverage and 43 Playwright UI tests,
+  including architecture boundaries, runtime lifecycle, scan history, scanner
+  SSE teardown, YARA batch failures, action contracts, and detection workflows.
+- Verified 116 package imports, 142/233-file Wheel parity, clean Wheel
+  installation and Windows PID identity, plus Docker health, host login,
+  non-root execution, SIEM export, detection, quarantine, and restore.
 
 ---
 
