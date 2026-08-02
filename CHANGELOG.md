@@ -42,9 +42,11 @@
 - Kept YARA batch-rule selection intact when any delete request fails.
 - Aligned the Docker OCI version label with the installed package version and
   added a regression check to prevent future image metadata drift.
+- Replaced fixed legacy versions in generated profile and scanner reports with
+  the runtime package version, and removed an expired browser-configuration note.
 
 ### Tests
-- Passed 543 non-browser tests at 62.24% coverage and 43 Playwright UI tests,
+- Passed 544 non-browser tests at 62.24% coverage and 43 Playwright UI tests,
   including architecture boundaries, runtime lifecycle, scan history, scanner
   SSE teardown, YARA batch failures, action contracts, and detection workflows.
 - Verified 116 package imports, 142/233-file Wheel parity, clean Wheel
