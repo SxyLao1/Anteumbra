@@ -146,6 +146,18 @@ anteumbra run
 python -m pytest
 ```
 
+## 开发分支
+
+`dev` 是当前开发的默认分支。从 `dev` 创建 `feature/*`、`fix/*` 或
+`chore/*` 分支，并向 `dev` 提交 Pull Request；禁止直接在 `main` 开发。
+
+稳定验证完成后，必须通过独立的 `dev -> main` promotion Pull Request 合并到
+`main`。该 PR 的全部必需检查通过后才能合并，并且只能从合并后的 `main` 提交打 Tag
+发布。PR 解决 Issue 时，正文使用 `Closes #N` 或 `Fixes #N`，合并后核验 Issue 已关闭；
+没有关联 Issue 时填写 `N/A`。仓库设置会自动删除已合并的源分支。
+
+完整流程见 [贡献指南](CONTRIBUTING.md)。
+
 ## Docker
 
 ```bash

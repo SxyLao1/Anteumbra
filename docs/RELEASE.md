@@ -48,7 +48,7 @@ Confirm that the generated `.env` has a non-placeholder session secret, YARA
 is available in the base install, no disabled notification channel attempts an
 outbound connection, and startup exits non-zero when readiness fails.
 
-Then publish a version:
+Then promote the validated development branch and publish a version:
 
 ```powershell
 cd F:\Home\Github\Anteumbra
@@ -57,7 +57,20 @@ python -m pytest -q -rs --ignore=tests\e2e_ui
 python -m pytest tests\e2e_ui -q
 git diff --check
 git status --short
-git push origin main
+git switch dev
+git push origin dev
+```
+
+Open a `dev -> main` promotion pull request. Wait for every required check to
+pass, merge the promotion PR, and verify that any `Closes #N` or `Fixes #N`
+references in its body closed their issues. Use `N/A` when no issue applies.
+The repository must keep automatic head-branch deletion enabled.
+
+After the promotion merge:
+
+```powershell
+git switch main
+git pull --ff-only origin main
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
