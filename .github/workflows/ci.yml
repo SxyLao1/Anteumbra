@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [dev, main]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [dev, main]
   workflow_dispatch:
 
 jobs:
@@ -70,7 +70,6 @@ jobs:
   ui-tests:
     name: "UI Tests — Playwright"
     runs-on: ubuntu-latest
-    needs: []  # run in parallel with test job
     steps:
       - uses: actions/checkout@v4
 
@@ -138,12 +137,13 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -d --name anteumbra-ci -p 8080:8080 anteumbra:ci
+          # shellcheck disable=SC2034,SC2329
           cleanup() {
             docker logs anteumbra-ci || true
             docker rm -f anteumbra-ci >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          for attempt in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl --fail --silent --show-error \
               http://localhost:8080/api/v1/health > /tmp/anteumbra-health.json; then
               cat /tmp/anteumbra-health.json

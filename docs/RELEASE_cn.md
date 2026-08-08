@@ -43,7 +43,7 @@ Remove-Item Env:ANTEUMBRA_HOME
 确认生成的 `.env` 包含非占位 Session Secret；基础安装可使用 YARA；禁用的通知通道不会
 访问外网；启动就绪失败时命令返回非零。
 
-完成发布前质量门：
+完成发布前质量门，并推进已验证的开发分支：
 
 ```powershell
 cd F:\Home\Github\Anteumbra
@@ -52,7 +52,19 @@ python -m pytest -q -rs --ignore=tests\e2e_ui
 python -m pytest tests\e2e_ui -q
 git diff --check
 git status --short
-git push origin main
+git switch dev
+git push origin dev
+```
+
+创建 `dev -> main` promotion Pull Request，等待全部必需检查通过后再合并。PR 正文中出现的
+`Closes #N` 或 `Fixes #N` 必须在合并后核验对应 Issue 已关闭；没有关联 Issue 时填写 `N/A`。
+仓库必须保持自动删除已合并源分支的设置。
+
+promotion 合并后：
+
+```powershell
+git switch main
+git pull --ff-only origin main
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```

@@ -151,6 +151,21 @@ Run tests from the repository root:
 python -m pytest
 ```
 
+## Development Branches
+
+`dev` is the default branch for current development. Create `feature/*`,
+`fix/*`, or `chore/*` branches from `dev`, then open a pull request back to
+`dev`. Do not develop directly on `main`.
+
+After stable validation, promote `dev` to `main` through a dedicated pull
+request. The promotion must pass all required checks before merge; releases are
+tagged from the resulting `main` commit. When a pull request resolves an issue,
+include `Closes #N` or `Fixes #N` in its body and verify the issue is closed
+after merge. Use `N/A` when no issue applies. Merged source branches are
+deleted automatically by the repository setting.
+
+See [Contributing](CONTRIBUTING.md) for the full workflow.
+
 ## Docker
 
 ```bash
