@@ -309,10 +309,17 @@
     mount: function (root) {
       if (!state.started && elementIn(root, '#main-content')) {
         state.started = true;
+        var bootstrap = document.getElementById('main-content');
+        var initialPath = bootstrap && bootstrap.dataset.initialPath;
+        if (initialPath) {
+          state.path = initialPath;
+          state.title = bootstrap.dataset.initialTitle || initialPath;
+          highlightNavigation(state.path);
+        }
         setTitle(state.title);
         window.setTimeout(function () {
           if (window.AnteumbraSSEManager) window.AnteumbraSSEManager.getConnection();
-          load('overview', 'Overview');
+          if (!initialPath) load('overview', 'Overview');
         }, 0);
         document.addEventListener('anteumbra:stats-refresh', refreshStatistics);
         document.addEventListener('keydown', function (event) {

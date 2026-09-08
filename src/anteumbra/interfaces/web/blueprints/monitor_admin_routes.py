@@ -6,12 +6,13 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from flask import current_app, jsonify, render_template, request
+from flask import current_app, jsonify, request
 
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints.monitor_bp import monitor_bp
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 
@@ -26,7 +27,7 @@ def _registry():
 @require_auth
 def wal_manager():
     """WAL management page"""
-    return render_template("admin/wal_manager.html")
+    return render_page("admin/wal_manager.html")
 
 
 @monitor_bp.route("/wal/current")
@@ -90,7 +91,7 @@ def wal_replay():
 @require_auth
 def registry_monitor():
     """Registry monitor page"""
-    return render_template("admin/registry_monitor.html")
+    return render_page("admin/registry_monitor.html")
 
 
 @monitor_bp.route("/registry/count")
@@ -139,7 +140,7 @@ def registry_compact():
 @require_auth
 def session_manager():
     """Session management page"""
-    return render_template("admin/session_manager.html")
+    return render_page("admin/session_manager.html")
 
 
 @monitor_bp.route("/session/list")
@@ -226,7 +227,7 @@ def session_cleanup():
 @require_auth
 def config_watcher_status():
     """Config monitor page"""
-    return render_template("admin/config_watcher.html")
+    return render_page("admin/config_watcher.html")
 
 
 @monitor_bp.route("/config/history")

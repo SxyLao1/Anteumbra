@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, request
 from markupsafe import escape as html_escape
 from werkzeug.utils import secure_filename
 
@@ -25,6 +25,7 @@ from anteumbra.application.yara_service import (
 )
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 try:
@@ -203,7 +204,7 @@ def list_rules():
 
         # 始终渲染片段
         compact = request.args.get("compact") == "1"
-        return render_template(
+        return render_page(
             "admin/yara_rules.html",
             rules=paginated_rules,
             page=page,
@@ -548,7 +549,7 @@ def search_rules():
 
         # 渲染为HTML片段
         compact = request.args.get("compact") == "1"
-        return render_template(
+        return render_page(
             "admin/yara_rules.html",
             rules=paginated_rules,
             page=page,
