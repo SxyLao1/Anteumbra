@@ -13,6 +13,7 @@
   function resultNode(id, text, failed) {
     var node = document.getElementById(id);
     if (!node) return;
+    node.hidden = false;
     node.style.display = '';
     node.style.color = failed ? 'var(--color-danger)' : 'var(--color-safe)';
     node.textContent = text;
@@ -72,7 +73,11 @@
   function searchConfig(input) {
     var query = String(input.value || '').toLowerCase();
     document.querySelectorAll('.cfg-section').forEach(function (section) {
-      var matched = !query || ((section.dataset.section || '') + ' ' + section.innerText).toLowerCase().indexOf(query) >= 0;
+      // Collapsed fields are not in innerText. Search stable keys even while hidden.
+      var keys = Array.from(section.querySelectorAll('.cfg-field')).map(function (field) {
+        return field.dataset.field || '';
+      }).join(' ');
+      var matched = !query || ((section.dataset.section || '') + ' ' + keys + ' ' + section.textContent).toLowerCase().indexOf(query) >= 0;
       section.classList.toggle('collapsed', !matched || !query);
       section.querySelectorAll('.cfg-field').forEach(function (field) {
         field.classList.toggle('cfg-highlight', Boolean(query && (field.dataset.field || '').toLowerCase().indexOf(query) >= 0));
