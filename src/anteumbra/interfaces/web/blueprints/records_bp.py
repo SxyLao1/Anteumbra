@@ -21,6 +21,7 @@ from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_quarantine,
     verify_file_in_registry,
 )
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -155,8 +156,8 @@ def get_records():
         all_paths = [r.get("file_path", "") for r in all_records if r.get("file_path")]
 
         compact = request.args.get("compact") == "1"
-        if request.headers.get("HX-Request"):
-            return render_template(
+        if request.headers.get("HX-Request") or request.headers.get("Sec-Fetch-Dest") == "document":
+            return render_page(
                 "admin/records_table.html",
                 records=enhanced,
                 page=page,

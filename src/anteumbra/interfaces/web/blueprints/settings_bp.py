@@ -15,6 +15,7 @@ from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.cli.config_support import load_toml_value, validate_config_file
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -194,7 +195,7 @@ def _siem_exporter():
 def settings_page():
     """v1.8.0: Settings -- system + account + notification config merged view"""
     try:
-        return render_template("admin/settings.html")
+        return render_page("admin/settings.html")
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] settings failed: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
@@ -210,7 +211,7 @@ def settings_notifications():
         email = notifier.get("email", {})
         wechat = notifier.get("wechat", {})
         webhook = notifier.get("webhook", {})
-        return render_template(
+        return render_page(
             "admin/panels/notify_config.html", email=email, wechat=wechat, webhook=webhook
         )
     except Exception as e:
@@ -242,7 +243,7 @@ def settings_config_editor():
                     k, v = line.split("=", 1)
                     env_vars[k.strip()] = v.strip()
 
-        return render_template(
+        return render_page(
             "admin/panels/config_editor.html",
             sections=sections,
             sections_levels=levels,
@@ -494,7 +495,7 @@ def settings_siem_status():
         s = e.get_stats()
         export_path = Path(s["export_file"])
         has_data = export_path.exists() and export_path.stat().st_size > 0
-        return render_template(
+        return render_page(
             "admin/panels/siem_status.html",
             enabled=s["enabled"],
             format=s["format"],
@@ -525,7 +526,7 @@ def settings_storage_status():
             if f.exists():
                 json_size += f.stat().st_size
         json_mb = round(json_size / 1024 / 1024, 2)
-        return render_template(
+        return render_page(
             "admin/panels/storage_status.html",
             backend=backend,
             db_exists=db_exists,
@@ -544,7 +545,7 @@ def settings_plugin_status():
     try:
         pm = current_app.extensions.get("anteumbra.plugin_manager")
         if pm is None:
-            return render_template(
+            return render_page(
                 "admin/panels/plugin_status.html",
                 enabled=False,
                 plugins=[],
@@ -556,7 +557,7 @@ def settings_plugin_status():
         detector_count = len(pm.detectors)
         notifier_count = len(pm.notifiers)
         source_count = len(pm.event_sources)
-        return render_template(
+        return render_page(
             "admin/panels/plugin_status.html",
             enabled=pm.is_enabled,
             plugins=plugins,

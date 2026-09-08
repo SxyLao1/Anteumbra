@@ -13,6 +13,7 @@ from pathlib import Path
 from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def profiles_list():
                     "sample_ips": list(p.ip_pool)[:5],
                 }
             )
-        return render_template(
+        return render_page(
             "admin/profiles.html",
             profiles=enriched,
             page=page,
@@ -327,7 +328,7 @@ def file_clusters_page():
             "multi_file_clusters": multi_count,
             "avg_similarity": avg_sim,
         }
-        return render_template(
+        return render_page(
             "admin/file_clusters.html", clusters=enriched, stats=stats, total=len(enriched)
         )
     except Exception as e:

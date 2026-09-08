@@ -26,6 +26,7 @@ from flask import (
 
 from anteumbra.application.path_service import normalize_path
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 # ── Blueprint ──────────────────────────────────────────────
@@ -56,7 +57,7 @@ def scanner_page():
             if default_site
             else ["cache", "logs", "temp", "data"]
         )
-        return render_template(
+        return render_page(
             "admin/scanner.html",
             default_dir=default_dir,
             default_extensions=default_extensions,
