@@ -36,6 +36,7 @@ from anteumbra.interfaces.web.log_history import (
     collect_log_history,
     render_log_history,
 )
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ def overview():
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
 
         runtime_capabilities = assess_runtime_capabilities(runtime.config.get())
-        return render_template(
+        return render_page(
             "admin/overview.html",
             auth_header=auth_header,
             username=username,
@@ -159,7 +160,7 @@ def overview():
 def threats():
     """v1.8.0: Threats — 检测记录+隔离管理合并视图"""
     try:
-        return render_template("admin/threats.html")
+        return render_page("admin/threats.html")
     except Exception as e:
         current_app.logger.error(f"[ADMIN] threats失败: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
@@ -343,7 +344,7 @@ def to_hash(value):
 @require_auth
 def account_page():
     """账户设置页面"""
-    return render_template("admin/account.html", username=session.get("username"))
+    return render_page("admin/account.html", username=session.get("username"))
 
 
 @admin_bp.route("/account/password", methods=["POST"])

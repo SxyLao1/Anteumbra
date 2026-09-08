@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from flask import Blueprint, Response, current_app, jsonify, render_template, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from anteumbra.domain.blocking import canonical_ip
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 blocklist_bp = Blueprint("blocklist", __name__, url_prefix="/admin")
@@ -253,7 +254,7 @@ def block_status():
 @blocklist_bp.route("/blocklist")
 @require_auth
 def blocklist_page():
-    return render_template("admin/blocklist.html")
+    return render_page("admin/blocklist.html")
 
 
 @blocklist_bp.route("/blocklist/data")
