@@ -7,16 +7,182 @@ Routes: /settings/* (11) + /siem/* (2)
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
+import tomli_w
 from flask import Blueprint, current_app, jsonify, render_template, request
 
+from anteumbra.cli.config_support import load_toml_value, validate_config_file
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/admin")
+
+# -- Config editor helpers (config.toml round-trip safety) --------------------
+#
+# Why: tomli_w persists arrays as multi-line blocks, but the pre-v1.0.36
+# editor parsed config.toml line by line. A multi-line array therefore
+# surfaced as the truncated string "[" plus stray key fragments, and saving
+# wrote those fragments back — silently corrupting every list value and
+# locking admins out via web_admin.allowed_ips. Editor values now come from
+# the parsed runtime config (rendered single-line), and the save endpoint
+# rejects anything it cannot round-trip instead of storing raw text.
+
+_CONFIG_KEY_RE = re.compile(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*")
+
+
+def _contains_tables(value) -> bool:
+    if isinstance(value, dict):
+        return True
+    if isinstance(value, list):
+        return any(_contains_tables(item) for item in value)
+    return False
+
+
+def _inline_value_text(value) -> str:
+    """Render a config value as single-line text for an ``<input>`` field.
+
+    HTML inputs cannot hold newlines, so arrays of scalars are rendered as
+    JSON (valid TOML arrays) and table-bearing values via tomli_w with
+    whitespace collapsed. The output must parse back through
+    ``load_toml_value`` on save.
+    """
+    if _contains_tables(value):
+        text = tomli_w.dumps({"v": value}).split("=", 1)[1].strip()
+        return " ".join(text.split())
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except TypeError:  # e.g. TOML datetimes inside arrays
+        text = tomli_w.dumps({"v": value}).split("=", 1)[1].strip()
+        return " ".join(text.split())
+
+
+def _harvest_descriptions(config_path: Path) -> dict[str, str]:
+    """Best-effort ``# @desc:`` extraction. Display-only and junk-tolerant."""
+    descriptions: dict[str, str] = {}
+    section = ""
+    pending = None
+    try:
+        lines = Path(config_path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return descriptions
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# @desc:"):
+            pending = stripped.split("@desc:", 1)[1].strip()
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            inner = stripped[2:-2] if stripped.startswith("[[") else stripped[1:-1]
+            section = inner.strip()
+            continue
+        if "=" in stripped and pending:
+            key = stripped.partition("=")[0].strip()
+            dotted = f"{section}.{key}" if section else key
+            descriptions[dotted] = pending
+            pending = None
+    return descriptions
+
+
+def _editor_field(key: str, value, description: str) -> dict:
+    field = {
+        "key": key,
+        "value": value,
+        "raw": str(value),
+        "type": "string",
+        "desc": description,
+        "is_env": False,
+        "display": value,
+    }
+    if isinstance(value, bool):
+        field["type"] = "bool"
+    elif isinstance(value, int):
+        field["type"] = "int"
+    elif isinstance(value, float):
+        field["type"] = "float"
+    elif isinstance(value, str):
+        raw = value.strip()
+        if raw.startswith("${") and raw.endswith("}"):
+            field["is_env"] = True
+            field["display"] = "(env: " + raw[2:-1].split(":-")[0] + ")"
+    else:  # lists (incl. tables), datetimes and other non-scalar TOML values
+        inline = _inline_value_text(value)
+        field["type"] = "array"
+        field["raw"] = inline
+        field["value"] = inline
+    return field
+
+
+def _collect_editor_sections(config: dict, descriptions: dict[str, str]) -> dict[str, list]:
+    """Build ``{section: [field, ...]}`` from the parsed config, in order.
+
+    Tables become sections (dotted names); lists of tables such as
+    ``ip_blocker.devices`` stay a single array field so they round-trip
+    intact through the editor input and the save endpoint.
+    """
+    sections: dict[str, list] = {}
+
+    def walk(prefix: str, table: dict) -> list[dict]:
+        fields: list[dict] = []
+        for key, value in table.items():
+            dotted = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, dict):
+                sections[dotted] = []  # reserve document order before recursing
+                sections[dotted] = walk(dotted, value)
+            else:
+                fields.append(_editor_field(key, value, descriptions.get(dotted, "")))
+        return fields
+
+    root_fields = walk("", config)
+    if root_fields:
+        sections[""] = root_fields
+    return sections
+
+
+def _coerce_config_value(key: str, new_val):
+    """Coerce a submitted editor value; reject unparseable array/table text.
+
+    The legacy path stored any string verbatim, which is how a multi-line
+    array truncated to "[" was written into config.toml. Array-looking text
+    must now parse as a TOML value or the whole save is rejected with 400.
+    """
+    if isinstance(new_val, (bool, int, float, list, dict)):
+        return new_val
+    if not isinstance(new_val, str):
+        raise ValueError(f"Unsupported value type for {key}: {type(new_val).__name__}")
+    stripped = new_val.strip()
+    if stripped.lower() in ("true", "false"):
+        return stripped.lower() == "true"
+    if stripped.startswith(("[", "{")):
+        try:
+            return load_toml_value(stripped)
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid array/table value for {key} (TOML parse failed): {stripped!r}"
+            ) from exc
+    try:
+        return int(stripped)
+    except ValueError:
+        pass
+    try:
+        return float(stripped)
+    except ValueError:
+        pass
+    return stripped
+
+
+def _set_dotted(config: dict, dotted_key: str, value) -> None:
+    parts = dotted_key.split(".")
+    target = config
+    for part in parts[:-1]:
+        if not isinstance(target.get(part), dict):
+            target[part] = {}
+        target = target[part]
+    target[parts[-1]] = value
 
 
 def _siem_exporter():
@@ -55,72 +221,26 @@ def settings_notifications():
 @settings_bp.route("/settings/config/editor")
 @require_auth
 def settings_config_editor():
-    """v1.8.0: Dynamic config.toml editor -- server-side struct parsing, template rendering"""
+    """v1.0.36: config.toml editor fed by the parsed runtime config.
+
+    Values come from ``config.get()`` (tomllib semantics) so multi-line
+    arrays and tables survive; raw file lines are only scanned for
+    ``# @desc:`` tooltips.
+    """
     try:
-        config_path = get_runtime().config.path
-        sections = {}
-        current_section = None
-        pending_desc = None
-
-        with open(config_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("# @desc:"):
-                pending_desc = stripped.split("@desc:", 1)[1].strip()
-                continue
-            if stripped.startswith("#") or not stripped:
-                continue
-            if stripped.startswith("[") and stripped.endswith("]"):
-                current_section = stripped[1:-1]
-                sections[current_section] = []
-                continue
-            if "=" in stripped and current_section:
-                key, _, value = stripped.partition("=")
-                key = key.strip()
-                raw = value.strip().rstrip("#").strip()
-                is_env = "${" in raw and "}" in raw
-                if raw.startswith('"') and raw.endswith('"'):
-                    ftype, fval = "string", raw[1:-1]
-                elif raw.lower() in ("true", "false"):
-                    ftype, fval = "bool", raw.lower() == "true"
-                elif raw.startswith("["):
-                    ftype, fval = "array", raw
-                elif raw.replace(".", "").replace("-", "").isdigit() or (
-                    raw.startswith("-") and raw[1:].replace(".", "").isdigit()
-                ):
-                    ftype = "float" if "." in raw else "int"
-                    fval = float(raw) if "." in raw else int(raw)
-                else:
-                    ftype, fval = "string", raw
-                sections[current_section].append(
-                    {
-                        "key": key,
-                        "value": fval,
-                        "type": ftype,
-                        "raw": raw,
-                        "desc": pending_desc or "",
-                        "is_env": is_env,
-                        "display": ("(env: " + raw[2:-1].split(":-")[0] + ")" if is_env else fval),
-                    }
-                )
-                pending_desc = None
-
-        levels = {}
-        for sec_name in sections:
-            depth = sec_name.count(".")
-            levels[sec_name] = depth
+        config_path = Path(get_runtime().config.path)
+        config = get_runtime().config.get()
+        sections = _collect_editor_sections(config, _harvest_descriptions(config_path))
+        levels = {name: name.count(".") for name in sections}
 
         env_vars = {}
-        env_path = os.path.join(os.path.dirname(config_path), ".env")
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if "=" in line and not line.startswith("#"):
-                        k, v = line.split("=", 1)
-                        env_vars[k.strip()] = v.strip()
+        env_path = config_path.parent / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    env_vars[k.strip()] = v.strip()
 
         return render_template(
             "admin/panels/config_editor.html",
@@ -138,59 +258,62 @@ def settings_config_editor():
 @settings_bp.route("/settings/config/save", methods=["POST"])
 @require_auth
 def settings_config_save():
-    """v1.9.5: Fix -- use tomli_w for proper TOML serialization"""
-    try:
-        import tomli_w
+    """v1.0.36: round-trip safe config save.
 
-        data = request.get_json()
+    Array/table text must parse as TOML; malformed keys and values are
+    rejected with 400 instead of being written. The candidate file is
+    validated before it atomically replaces config.toml, so a save can no
+    longer introduce config errors the runtime would refuse (e.g. an
+    invalid allowed_ips entry that locks the admin out).
+    """
+    tmp_path = None
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "error": "Invalid request body"}), 400
         changes = data.get("changes", {})
-        if not changes:
+        if not isinstance(changes, dict) or not changes:
             return jsonify({"success": False, "error": "No changes"}), 400
-        config_path = get_runtime().config.path
+        config_path = Path(get_runtime().config.path)
         raw = get_runtime().config.get()
         for full_key, new_val in changes.items():
-            parts = full_key.split(".")
-            target = raw
-            for part in parts[:-1]:
-                if part not in target:
-                    target[part] = {}
-                target = target[part]
-            key = parts[-1]
-            s = (
-                str(new_val).strip()
-                if not isinstance(new_val, (bool, int, float, list))
-                else new_val
-            )
-            if isinstance(s, bool):
-                target[key] = s
-            elif isinstance(s, (int, float)):
-                target[key] = s
-            elif isinstance(s, str):
-                if s.lower() in ("true", "false"):
-                    target[key] = s.lower() == "true"
-                elif s.startswith("[") and s.endswith("]"):
-                    try:
-                        target[key] = json.loads(s)
-                    except Exception:
-                        target[key] = s
-                else:
-                    try:
-                        if "." in s:
-                            target[key] = float(s)
-                        else:
-                            target[key] = int(s)
-                    except ValueError:
-                        target[key] = s
-            else:
-                target[key] = new_val
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write(tomli_w.dumps(raw))
+            if not _CONFIG_KEY_RE.fullmatch(str(full_key)):
+                return jsonify(
+                    {"success": False, "error": f"Invalid config key: {full_key!r}"}
+                ), 400
+            try:
+                coerced = _coerce_config_value(str(full_key), new_val)
+            except ValueError as exc:
+                return jsonify({"success": False, "error": str(exc)}), 400
+            _set_dotted(raw, str(full_key), coerced)
+
+        # Write a sibling temp file, validate it, then atomically replace.
+        # Delta validation: only errors newly introduced by this save block
+        # it, so saving into an already-warning config keeps working.
+        tmp_path = config_path.with_name(config_path.name + ".tmp")
+        tmp_path.write_text(tomli_w.dumps(raw), encoding="utf-8")
+        baseline_errors, _ = validate_config_file(config_path)
+        candidate_errors, _ = validate_config_file(tmp_path)
+        new_errors = [error for error in candidate_errors if error not in baseline_errors]
+        if new_errors:
+            tmp_path.unlink(missing_ok=True)
+            tmp_path = None
+            return jsonify(
+                {"success": False, "error": "Invalid config: " + "; ".join(new_errors[:3])}
+            ), 400
+        os.replace(tmp_path, config_path)
+        tmp_path = None
         try:
             get_runtime().config.reload()
         except Exception:
             logger.debug("Runtime config reload failed after config save", exc_info=True)
         return jsonify({"success": True, "message": "Config saved"})
     except Exception as e:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         current_app.logger.error(f"[SETTINGS] config save failed: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -198,52 +321,25 @@ def settings_config_save():
 @settings_bp.route("/settings/config/data")
 @require_auth
 def settings_config_data():
-    """v1.8.0: Return config.toml structured data + comment descriptions"""
+    """v1.8.0: config.toml structured data (values from the parsed config)."""
     try:
-        config_path = get_runtime().config.path
-        sections = {}
-        current_section = None
-        pending_desc = None
-
-        with open(config_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("# @desc:"):
-                pending_desc = stripped.split("@desc:", 1)[1].strip()
-                continue
-            if stripped.startswith("#") or not stripped:
-                continue
-            if stripped.startswith("[") and stripped.endswith("]"):
-                current_section = stripped[1:-1]
-                sections[current_section] = {"title": current_section, "fields": {}}
-                continue
-            if "=" in stripped and current_section:
-                key, _, value = stripped.partition("=")
-                key = key.strip()
-                value = value.strip().rstrip("#").strip()
-                if value.startswith('"') and value.endswith('"'):
-                    ftype, fval = "string", value[1:-1]
-                elif value.lower() in ("true", "false"):
-                    ftype, fval = "bool", value.lower() == "true"
-                elif value.startswith("["):
-                    ftype, fval = "array", value
-                elif value.replace(".", "").replace("-", "").isdigit() or (
-                    value.startswith("-") and value[1:].replace(".", "").isdigit()
-                ):
-                    ftype = "float" if "." in value else "int"
-                    fval = float(value) if "." in value else int(value)
-                else:
-                    ftype, fval = "string", value
-                sections[current_section]["fields"][key] = {
-                    "value": fval if ftype != "array" else value,
-                    "type": ftype,
-                    "desc": pending_desc or "",
-                }
-                pending_desc = None
-
-        return jsonify({"sections": sections, "path": str(config_path)})
+        config_path = Path(get_runtime().config.path)
+        config = get_runtime().config.get()
+        descriptions = _harvest_descriptions(config_path)
+        sections_out = {}
+        for sec_name, fields in _collect_editor_sections(config, descriptions).items():
+            sections_out[sec_name] = {
+                "title": sec_name,
+                "fields": {
+                    field["key"]: {
+                        "value": field["raw"] if field["type"] == "array" else field["value"],
+                        "type": field["type"],
+                        "desc": field["desc"],
+                    }
+                    for field in fields
+                },
+            }
+        return jsonify({"sections": sections_out, "path": str(config_path)})
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] config data failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
