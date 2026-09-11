@@ -311,6 +311,10 @@
         state.started = true;
         var bootstrap = document.getElementById('main-content');
         var initialPath = bootstrap && bootstrap.dataset.initialPath;
+        // Pages that extend the shell directly (quarantine) render their own
+        // content and do not advertise a data-path; never overwrite content
+        // the server already produced - only the idle placeholder is replaced.
+        var serverRendered = !!bootstrap && !/Initializing dashboard/.test(bootstrap.textContent || '');
         if (initialPath) {
           state.path = initialPath;
           state.title = bootstrap.dataset.initialTitle || initialPath;
@@ -319,7 +323,7 @@
         setTitle(state.title);
         window.setTimeout(function () {
           if (window.AnteumbraSSEManager) window.AnteumbraSSEManager.getConnection();
-          if (!initialPath) load('overview', 'Overview');
+          if (!initialPath && !serverRendered) load('overview', 'Overview');
         }, 0);
         document.addEventListener('anteumbra:stats-refresh', refreshStatistics);
         document.addEventListener('keydown', function (event) {
