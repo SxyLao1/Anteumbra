@@ -115,3 +115,37 @@ class TestNavigation:
         """Brand ANTUMBRA should always be visible."""
         expect(page.locator(".brand")).to_be_visible()
         expect(page.locator(".brand")).to_contain_text("ANTEUMBRA")
+
+
+class TestShellBootstrap:
+    """Direct navigation must keep the page the server rendered."""
+
+    @staticmethod
+    def _go(page, url):
+        """Navigate without blocking on CDN scripts (same trick as conftest.go)."""
+        page.goto("about:blank", wait_until="commit", timeout=10000)
+        page.wait_for_timeout(200)
+        return page.goto(url, wait_until="commit", timeout=20000)
+
+    def test_quarantine_keeps_its_own_content(self, page, server_url):
+        """The shell router must not replace a page that extends it.
+
+        quarantine.html extends the dashboard shell and renders its list
+        server-side; dashboard.js used to force-load Overview on every first
+        mount, so the quarantine list was overwritten right after it loaded.
+        """
+        self._go(page, f"{server_url}/admin/quarantine")
+        page.wait_for_selector("#quarantine-list-container", timeout=10000)
+        page.wait_for_timeout(1500)
+        main = page.locator("#main-content").inner_text()
+        assert "QUARANTINE" in main.upper() or "Restore" in main, (
+            f"quarantine content missing after load: {main[:200]}"
+        )
+        assert "TOTAL DETECTIONS" not in main, "shell replaced the page with Overview"
+
+    def test_quarantine_page_carries_sse_token(self, page, server_url):
+        """Without the token meta the live stream cannot connect."""
+        self._go(page, f"{server_url}/admin/quarantine")
+        page.wait_for_selector("#quarantine-list-container", timeout=10000)
+        token = page.get_attribute("meta[name='sse-token']", "content")
+        assert token, "sse-token meta tag is empty on the quarantine page"

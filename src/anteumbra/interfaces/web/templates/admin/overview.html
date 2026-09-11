@@ -5,7 +5,7 @@
   <span>{{ _('Notifications') }}: {{ 'External (' + runtime_capabilities.notifications.configured_channels|join(', ') + ')' if runtime_capabilities.notifications.mode == 'external' else 'Local logs only' }}</span>
   {% for warning in runtime_capabilities.warnings %}<span style="color:#ffaa00;">{{ warning.message }}</span>{% endfor %}
 </div>
-<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; height: calc(100% - 48px); min-height: 0;">
+<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(320px, auto) minmax(320px, auto); gap: 20px; min-height: calc(100% - 48px);">
   <!-- 安全报告面板 -->
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header">
@@ -53,10 +53,10 @@
   <div class="card" style="display: flex; flex-direction: column;">
     <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
       <span style="flex: 1;"><span class="card-header-icon">◆</span> {{ _('LIVE LOG STREAM') }}</span>
-      <input type="text" class="form-input" style="width: 140px; font-size: 10px; padding: 3px 6px;"
+      <input type="text" class="form-input log-filter-input"
              placeholder="{{ _('Quick filter...') }}" data-action="dashboard.log-stream-filter" id="log-filter-input">
       <span class="badge badge-info">{{ _('SSE') }}</span>
-      <button class="btn btn-ghost btn-sm" style="font-size: 10px; padding: 3px 8px;"
+      <button class="btn btn-ghost btn-xs"
               type="button" data-action="dashboard.log-open">{{ _('Analyze') }}</button>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"

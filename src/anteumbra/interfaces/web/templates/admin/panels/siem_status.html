@@ -1,31 +1,30 @@
-<!-- v1.9.5: SIEM Export Status Panel -->
-<div style="display:flex;flex-direction:column;gap:10px;">
-  <div style="display:flex;align-items:center;gap:8px;">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{% if enabled %}#00ff41{% else %}#ff4444{% endif %};"></span>
-    <span style="color:#888;font-size:11px;">{{ _('Status:') }} <strong style="color:{% if enabled %}#00ff41{% else %}#ff4444{% endif %};">{{ _('ACTIVE') if enabled else _('DISABLED') }}</strong></span>
+<!-- SIEM export status panel: shared components instead of per-element inline sizes -->
+<div class="siem-panel">
+  <div class="siem-status-row">
+    <span class="siem-dot {% if enabled %}siem-dot--on{% else %}siem-dot--off{% endif %}"></span>
+    <span class="siem-status-text">{{ _('Status:') }}
+      <strong class="{% if enabled %}text-safe{% else %}text-danger{% endif %}">{{ _('ACTIVE') if enabled else _('DISABLED') }}</strong>
+    </span>
   </div>
   {% if enabled %}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;">
-    <div><span style="color:#555;">{{ _('Format:') }}</span> <span style="color:#00ff41;">{{ format | upper }}</span></div>
-    <div><span style="color:#555;">{{ _('Exported:') }}</span> <span style="color:#ccc;">{{ _('%(count)s events', count=total_exported) }}</span></div>
-    <div><span style="color:#555;">{{ _('File:') }}</span> <span style="color:#888;font-size:9px;word-break:break-all;">{{ export_file }}</span></div>
-    <div><span style="color:#555;">{{ _('Size:') }}</span> <span style="color:#888;">{{ _('%(size)s MB', size=file_size_mb) }}</span></div>
+  <dl class="siem-facts">
+    <div><dt>{{ _('Format:') }}</dt><dd class="text-safe">{{ format | upper }}</dd></div>
+    <div><dt>{{ _('Exported:') }}</dt><dd>{{ _('%(count)s events', count=total_exported) }}</dd></div>
+    <div class="siem-facts-wide"><dt>{{ _('File:') }}</dt><dd class="siem-path">{{ export_file }}</dd></div>
+    <div><dt>{{ _('Size:') }}</dt><dd>{{ _('%(size)s MB', size=file_size_mb) }}</dd></div>
     {% if syslog_active %}
-    <div style="grid-column:1/-1;"><span style="color:#00ff41;">{{ _('Syslog streaming active') }}</span></div>
+    <div class="siem-facts-wide"><dt>{{ _('Syslog') }}</dt><dd class="text-safe">{{ _('Syslog streaming active') }}</dd></div>
     {% endif %}
-  </div>
-  <div style="display:flex;gap:6px;margin-top:4px;">
-    <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
-            type="button" data-action="settings.siem-export" data-siem-format="json">
+  </dl>
+  <div class="siem-actions">
+    <button class="btn btn-ghost btn-sm" type="button" data-action="settings.siem-export" data-siem-format="json">
       {{ _('Export JSON Lines') }}</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;"
-            type="button" data-action="settings.siem-export" data-siem-format="cef">
+    <button class="btn btn-ghost btn-sm" type="button" data-action="settings.siem-export" data-siem-format="cef">
       {{ _('Export CEF') }}</button>
-    {% if has_data %}
-    <a href="/admin/siem/export?format=csv" class="btn btn-ghost btn-sm" style="font-size:9px;padding:3px 10px;">{{ _('CSV') }}</a>
-    {% endif %}
+    <button class="btn btn-ghost btn-sm" type="button" data-action="settings.siem-export" data-siem-format="csv">
+      {{ _('Export CSV') }}</button>
   </div>
   {% else %}
-  <p style="color:#555;font-size:11px;">{{ _('Enable in config.toml:') }} <code>[siem] enabled = true</code></p>
+  <p class="muted-copy">{{ _('Enable in config.toml:') }} <code>[siem] enabled = true</code></p>
   {% endif %}
 </div>

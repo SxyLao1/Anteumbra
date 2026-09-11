@@ -112,6 +112,17 @@ class SIEMExporter:
         with open(self._export_path, "a", encoding="utf-8") as file_handle:
             file_handle.write(line + "\n")
 
+    def _write_csv_header_once(self) -> None:
+        """Write the CSV header when a CSV export starts on an empty file."""
+        try:
+            if self._export_path.exists() and self._export_path.stat().st_size > 0:
+                return
+            self._export_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._export_path, "a", encoding="utf-8") as file_handle:
+                file_handle.write(self._formatter.csv_header() + "\n")
+        except Exception as e:
+            logger.warning("SIEMExporter: CSV header write failed: %s", e)
+
     def _send_syslog(self, line: str) -> None:
         if not self._sock:
             return
@@ -167,14 +178,19 @@ class SIEMExporter:
     def set_format(self, output_format: str) -> None:
         """Switch to a supported format through a validated public API."""
         normalized = str(output_format).strip().lower()
-        if normalized not in {"json", "json_lines", "cef", "syslog"}:
-            raise ValueError(f"Unsupported SIEM format: {output_format}")
+        if normalized not in {"json", "json_lines", "cef", "syslog", "csv"}:
+            raise ValueError(
+                f"Unsupported SIEM format: {output_format} "
+                "(supported: json_lines, json, cef, syslog, csv)"
+            )
         self._format = normalized
         self._config = {**self._config, "format": normalized}
         self._formatter = SIEMFormatter(self._config)
 
     def export_existing(self, records: List[Dict], category: str = "webshell.detected") -> int:
         """Export existing detection records as SIEM events."""
+        if self._format == "csv":
+            self._write_csv_header_once()
         events = []
         for r in records:
             events.append(
