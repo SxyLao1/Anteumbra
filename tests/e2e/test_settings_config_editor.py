@@ -256,3 +256,64 @@ class TestConfigSaveRoundTrip:
             content_type="application/json",
         )
         assert resp.status_code == 400
+
+    def test_save_keeps_bracket_strings_as_strings(self, client, _app):
+        """A string value that merely looks like an array must stay a string.
+
+        ``logging.symbols.success = "[MONITOR][START][SUCCESS]"`` is a plain
+        string; treating every "[...]" as TOML made the whole editor save fail
+        with 400 whenever such a symbol existed.
+        """
+        _login(client)
+        config = _read_config(_app)
+        config.setdefault("logging", {}).setdefault("symbols", {})["success"] = (
+            "[MONITOR][START][SUCCESS]"
+        )
+        _persist_config(_app, config)
+
+        resp = client.post(
+            "/admin/settings/config/save",
+            json={
+                "changes": {
+                    "logging.symbols.success": "[MONITOR][START][SUCCESS]",
+                    "system.release_date": config.get("system", {}).get(
+                        "release_date", "2026-07-19"
+                    ),
+                }
+            },
+        )
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        stored = _read_config(_app)["logging"]["symbols"]["success"]
+        assert stored == "[MONITOR][START][SUCCESS]"
+        assert isinstance(stored, str)
+
+    def test_save_still_accepts_real_arrays(self, client, _app):
+        """Array fields keep round-tripping through the same endpoint."""
+        _rewrite_config_multiline(_app)
+        _login(client)
+        resp = client.post(
+            "/admin/settings/config/save",
+            json={"changes": {"web_admin.allowed_ips": '["127.0.0.1", "10.1.0.0/16"]'}},
+        )
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        assert _read_config(_app)["web_admin"]["allowed_ips"] == ["127.0.0.1", "10.1.0.0/16"]
+        # restore the single-address default for the remaining assertions
+        _persist_config(
+            _app,
+            {
+                **_read_config(_app),
+                "web_admin": {**_read_config(_app)["web_admin"], "allowed_ips": ["127.0.0.1"]},
+            },
+        )
+
+    def test_save_rejects_scalar_replacing_array(self, client, _app):
+        """Turning an array field into bare text stays an error, not a silent edit."""
+        _rewrite_config_multiline(_app)
+        before = _read_config(_app)["web_admin"]["allowed_ips"]
+        _login(client)
+        resp = client.post(
+            "/admin/settings/config/save",
+            json={"changes": {"web_admin.allowed_ips": "127.0.0.1"}},
+        )
+        assert resp.status_code == 400
+        assert _read_config(_app)["web_admin"]["allowed_ips"] == before

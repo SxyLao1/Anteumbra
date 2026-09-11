@@ -33,6 +33,7 @@ settings_bp = Blueprint("settings", __name__, url_prefix="/admin")
 # rejects anything it cannot round-trip instead of storing raw text.
 
 _CONFIG_KEY_RE = re.compile(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*")
+_MISSING = object()
 
 
 def _contains_tables(value) -> bool:
@@ -144,27 +145,44 @@ def _collect_editor_sections(config: dict, descriptions: dict[str, str]) -> dict
     return sections
 
 
-def _coerce_config_value(key: str, new_val):
-    """Coerce a submitted editor value; reject unparseable array/table text.
+def _coerce_config_value(key: str, new_val, current=_MISSING):
+    """Coerce a submitted editor value using the field's current TOML type.
 
-    The legacy path stored any string verbatim, which is how a multi-line
-    array truncated to "[" was written into config.toml. Array-looking text
-    must now parse as a TOML value or the whole save is rejected with 400.
+    The editor posts plain text, so the type cannot be recovered from the
+    string alone: ``logging.symbols.success = "[MONITOR][START][SUCCESS]"``
+    is a *string* that looks exactly like an array.  The value already in
+    config.toml is therefore the authority:
+
+    * the current value is an array/table -> the text must parse as TOML, so
+      a truncated ``"["`` is still rejected instead of being stored (that
+      guard is what stopped the allowed_ips lockout)
+    * the current value is a scalar -> text that parses into an array/table
+      is honoured as a type change, otherwise the text is kept verbatim
     """
     if isinstance(new_val, (bool, int, float, list, dict)):
         return new_val
     if not isinstance(new_val, str):
         raise ValueError(f"Unsupported value type for {key}: {type(new_val).__name__}")
     stripped = new_val.strip()
-    if stripped.lower() in ("true", "false"):
-        return stripped.lower() == "true"
+    current_is_container = isinstance(current, (list, dict))
     if stripped.startswith(("[", "{")):
         try:
-            return load_toml_value(stripped)
+            parsed = load_toml_value(stripped)
         except Exception as exc:
-            raise ValueError(
-                f"Invalid array/table value for {key} (TOML parse failed): {stripped!r}"
-            ) from exc
+            if current_is_container:
+                raise ValueError(
+                    f"Invalid array/table value for {key} (TOML parse failed): {stripped!r}"
+                ) from exc
+            return stripped
+        if isinstance(parsed, (list, dict)):
+            return parsed
+        if current_is_container:
+            return parsed
+        return stripped
+    if current_is_container:
+        raise ValueError(f"Value for {key} must stay an array/table (got {stripped!r})")
+    if stripped.lower() in ("true", "false"):
+        return stripped.lower() == "true"
     try:
         return int(stripped)
     except ValueError:
@@ -184,6 +202,19 @@ def _set_dotted(config: dict, dotted_key: str, value) -> None:
             target[part] = {}
         target = target[part]
     target[parts[-1]] = value
+
+
+_MISSING = object()
+
+
+def _get_dotted(config: dict, dotted_key: str):
+    """Return the current value for a dotted key, or ``_MISSING`` when unset."""
+    target = config
+    for part in dotted_key.split("."):
+        if not isinstance(target, dict) or part not in target:
+            return _MISSING
+        target = target[part]
+    return target
 
 
 def _siem_exporter():
@@ -283,7 +314,9 @@ def settings_config_save():
                     {"success": False, "error": f"Invalid config key: {full_key!r}"}
                 ), 400
             try:
-                coerced = _coerce_config_value(str(full_key), new_val)
+                coerced = _coerce_config_value(
+                    str(full_key), new_val, _get_dotted(raw, str(full_key))
+                )
             except ValueError as exc:
                 return jsonify({"success": False, "error": str(exc)}), 400
             _set_dotted(raw, str(full_key), coerced)
@@ -468,6 +501,9 @@ def siem_export():
                 "size_bytes": export_path.stat().st_size if export_path.exists() else 0,
             }
         )
+    except ValueError as e:
+        # An unsupported format is a caller error, not a server fault.
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] SIEM export failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500

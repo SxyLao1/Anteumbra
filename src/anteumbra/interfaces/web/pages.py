@@ -55,6 +55,22 @@ def _sse_token(username: str) -> str:
     return token
 
 
+def shell_context() -> dict:
+    """Context the dashboard shell needs: SSE token, username, client IP.
+
+    Templates that extend ``admin/dashboard.html`` directly — quarantine.html —
+    must pass this as well, otherwise the SSE token meta tag renders empty and
+    the live stream reports "Token missing" instead of connecting.
+    """
+    username = session.get("username") or get_admin_credentials()[0]
+    session.setdefault("username", username)
+    return {
+        "auth_header": _sse_token(username),
+        "username": username,
+        "client_ip": request.remote_addr,
+    }
+
+
 def render_page(template: str, **context):
     """Render ``template`` as a fragment, or embedded in the shell on navigation.
 
@@ -66,16 +82,14 @@ def render_page(template: str, **context):
     if request.headers.get("Sec-Fetch-Dest") != "document":
         return render_template(template, **context)
 
-    username = session.get("username") or get_admin_credentials()[0]
-    session.setdefault("username", username)
     initial_path = _initial_path()
-    shell_context = {
-        "auth_header": _sse_token(username),
-        "username": username,
-        "client_ip": request.remote_addr,
-        "initial_fragment": template,
-        "initial_path": initial_path,
-        "initial_title": _display_title(initial_path),
-    }
-    shell_context.update(context)
-    return render_template("admin/dashboard.html", **shell_context)
+    shell_values = shell_context()
+    shell_values.update(
+        {
+            "initial_fragment": template,
+            "initial_path": initial_path,
+            "initial_title": _display_title(initial_path),
+        }
+    )
+    shell_values.update(context)
+    return render_template("admin/dashboard.html", **shell_values)

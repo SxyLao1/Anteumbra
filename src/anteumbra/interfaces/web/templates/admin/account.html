@@ -9,7 +9,7 @@
       </p>
 
       {% if error %}
-      <div class="login-error" style="margin-bottom: 20px;">
+      <div class="badge badge-danger account-message" style="margin-bottom: 20px;">
         <span>⚠</span> <span>{{ error }}</span>
       </div>
       {% endif %}
@@ -45,7 +45,7 @@
           <input type="password" name="confirm_password" class="form-input" placeholder="{{ _('Re-enter new password') }}" required>
         </div>
 
-        <button type="submit" class="login-btn" style="width: 100%; margin-top: 8px;">{{ _('UPDATE PASSWORD') }}</button>
+        <button type="submit" class="btn btn-primary account-submit">{{ _('UPDATE PASSWORD') }}</button>
       </form>
     </div>
   </div>

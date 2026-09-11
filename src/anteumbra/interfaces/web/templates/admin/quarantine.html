@@ -1,5 +1,7 @@
 {% extends "admin/dashboard.html" %}
 
+{% block main_attrs %} data-initial-path="{{ initial_path | default('quarantine') }}" data-initial-title="Quarantine"{% endblock %}
+
 {% block main_content %}
 <div id="quarantine-list-container">
   {% include "admin/quarantine_list.html" %}

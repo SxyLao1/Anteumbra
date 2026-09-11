@@ -12,6 +12,7 @@ v1.7.9 新增：隔离管理后台蓝图
 from flask import Blueprint, current_app, jsonify, render_template, request
 
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import shell_context
 from anteumbra.interfaces.web.runtime import get_runtime
 
 quarantine_bp = Blueprint("quarantine", __name__, url_prefix="/admin")
@@ -94,6 +95,7 @@ def quarantine_list():
         else:
             return render_template(
                 "admin/quarantine.html",
+                **shell_context(),
                 records=paginated,
                 stats=stats,
                 page=page,

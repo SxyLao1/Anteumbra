@@ -1195,3 +1195,130 @@
   .scanner-view #scan-results-card .scanner-tabs { flex-basis: 100%; }
   .scanner-view #scan-results-card .card-header > button { margin-top: 2px; }
 }
+
+/* ---- v1.0.36: shared component baselines ----
+   Templates render the same building blocks (header actions, toolbars, stat
+   cards, record rows) on pages that were never covered by the scoped styling
+   above, so those controls fell back to unstyled block layout: the header
+   action cluster stacked vertically, ledger stat numbers ran into their
+   labels ("0Total"), record metadata ran together, and the scanner progress
+   bar had no box at all.  These rules define each block once, unscoped;
+   the page-scoped rules above still win wherever both apply. */
+
+/* Header action cluster must be a single row. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Toolbars */
+.batch-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.batch-toolbar .toolbar-divider { color: var(--color-border-hover); margin: 0 2px; }
+.batch-toolbar .rec-count,
+.batch-toolbar .q-count { color: var(--color-text-secondary); font: 11px/1.5 var(--font-mono); white-space: nowrap; }
+.batch-toolbar input[type="search"] { flex: 1 1 200px; width: auto; max-width: 320px; min-width: 0; }
+.batch-toolbar .btn:disabled,
+.rec-batch-btn:disabled,
+.q-batch-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* Record rows */
+.record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
+.record-meta > span { min-width: 0; overflow-wrap: anywhere; }
+.record-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 16px; }
+.record-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* Stat cards: the value owns a line, the label sits under it. */
+.stat-card { padding: 14px 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); }
+.stat-card strong { display: block; color: var(--color-text-primary); font: 600 22px/1.3 var(--font-mono); }
+.stat-card span { display: block; margin-top: 4px; color: var(--color-text-secondary); font-size: 11px; }
+.scanner-stats,
+.ledger-stats,
+.quarantine-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.scanner-stats div { padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); }
+.scanner-stats strong { display: block; color: var(--color-text-primary); font: 600 20px/1.3 var(--font-mono); }
+.scanner-stats div { color: var(--color-text-secondary); font-size: 11px; }
+.scanner-stats span { color: var(--color-text-secondary); }
+
+/* Blocklist page */
+.blocklist-view { display: flex; flex-direction: column; gap: 16px; }
+.blocklist-manual { display: flex; flex-direction: column; gap: 10px; }
+.blocklist-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.blocklist-actions .btn { min-height: 34px; }
+.device-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.device-row > span:first-child { color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; }
+.device-row .form-input { flex: 1 1 220px; width: auto; min-width: 160px; }
+.ledger-table-wrap { width: 100%; overflow-x: auto; }
+.ledger-filter.active { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-bg-secondary); }
+.blocklist-result { margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+
+/* Scanner progress */
+.progress-track { height: 6px; border: 1px solid var(--color-border); border-radius: 3px; background: var(--color-bg); overflow: hidden; }
+#scan-progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, var(--color-accent-dim), var(--color-accent)); box-shadow: 0 0 10px var(--color-accent-glow); transition: width 0.3s ease; }
+.progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--color-text-secondary); font: 11px/1.5 var(--font-mono); }
+
+/* Badge colour aliases used by the detail panels */
+.badge-blue { color: var(--color-info); border-color: rgba(0, 204, 255, 0.3); background: rgba(0, 204, 255, 0.08); }
+.badge-green { color: var(--color-safe); border-color: rgba(0, 255, 65, 0.3); background: rgba(0, 255, 65, 0.08); }
+.badge-red { color: var(--color-danger); border-color: rgba(255, 0, 64, 0.3); background: rgba(255, 0, 64, 0.08); }
+.badge-yellow { color: var(--color-warning); border-color: rgba(255, 170, 0, 0.3); background: rgba(255, 170, 0, 0.08); }
+.badge-gray { color: var(--color-text-muted); border-color: var(--color-border); background: var(--color-bg-secondary); }
+
+/* Informational button (record "Detail") reads as a button, not plain text */
+.btn-info { background: rgba(0, 204, 255, 0.12); color: var(--color-info); border-color: rgba(0, 204, 255, 0.45); }
+.btn-info:hover { background: rgba(0, 204, 255, 0.2); border-color: var(--color-info); box-shadow: 0 0 12px rgba(0, 204, 255, 0.25); transform: translateY(-1px); }
+
+/* Button sizes: one height per step so a row of controls always lines up.
+   line-height is pinned so an icon span can no longer add a stray pixel. */
+.btn { min-height: 36px; line-height: 1.2; }
+.btn-sm { min-height: 28px; line-height: 1.2; }
+.btn-xs { min-height: 22px; padding: 3px 8px; font-size: 10px; line-height: 1.2; }
+.card-header .btn,
+.page-actions .btn,
+.batch-toolbar .btn { min-height: 28px; }
+.card-header .form-input,
+.batch-toolbar .form-input { min-height: 28px; padding: 4px 10px; font-size: 12px; }
+.log-filter-input { flex: 0 1 160px; width: 160px; min-width: 0; min-height: 28px; padding: 4px 8px; font-size: 11px; }
+
+/* The account panel lives inside the admin shell, which never loads login.css:
+   it must use the shared button/notice components, not the login-page classes. */
+.account-submit { width: 100%; margin-top: 8px; }
+.account-message { display: flex; align-items: center; gap: 8px; width: 100%; border-radius: var(--radius-md); padding: 12px; font-size: 12px; }
+
+/* SIEM status panel */
+.siem-panel { display: flex; flex-direction: column; gap: 10px; }
+.siem-status-row { display: flex; align-items: center; gap: 8px; }
+.siem-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.siem-dot--on { background: var(--color-safe); box-shadow: 0 0 8px var(--color-accent-glow); }
+.siem-dot--off { background: var(--color-danger); }
+.siem-status-text { color: var(--color-text-secondary); font-size: 12px; }
+.siem-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin: 0; font-size: 12px; }
+.siem-facts > div { display: flex; gap: 6px; min-width: 0; }
+.siem-facts-wide { grid-column: 1 / -1; }
+.siem-facts dt { color: var(--color-text-muted); white-space: nowrap; }
+.siem-facts dd { margin: 0; min-width: 0; color: var(--color-text-primary); }
+.siem-path { color: var(--color-text-secondary); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.siem-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.text-safe { color: var(--color-safe); }
+.text-danger { color: var(--color-danger); }
+
+/* The scanner's start button sits in a grid cell; without this it stretches. */
+.scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
+
+@media (max-width: 900px) {
+  .scanner-stats,
+  .ledger-stats,
+  .quarantine-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .record-item { grid-template-columns: auto minmax(0, 1fr); }
+  .record-actions { grid-column: 2; justify-content: flex-start; }
+}
+
+@media (max-width: 600px) {
+  .scanner-stats,
+  .ledger-stats,
+  .quarantine-stats { grid-template-columns: minmax(0, 1fr); }
+  .header-actions { gap: 6px; }
+  .device-row .form-input,
+  .batch-toolbar input[type="search"] { flex-basis: 100%; width: 100%; max-width: none; }
+}

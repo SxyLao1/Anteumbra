@@ -68,6 +68,8 @@ class SIEMFormatter:
             return self._to_syslog(event)
         elif self.format_type == "json":
             return self._to_json(event)
+        elif self.format_type == "csv":
+            return self._to_csv(event)
         else:
             return self._to_json_lines(event)
 
@@ -165,6 +167,56 @@ class SIEMFormatter:
             f"{severity_num}|{extensions}"
         )
         return cef
+
+    # Column order shared by ``csv_header`` and ``_to_csv``; mirrors the field
+    # set already exported through CEF so analysts see the same attributes.
+    CSV_COLUMNS = (
+        "event_time",
+        "event_category",
+        "severity",
+        "confidence",
+        "source_ip",
+        "file_name",
+        "file_path",
+        "rule_name",
+        "features",
+        "communication_count",
+        "false_positive",
+        "mitre_technique_id",
+        "mitre_tactic",
+        "anteumbra_version",
+    )
+
+    def csv_header(self) -> str:
+        """Return the CSV header row matching ``_to_csv`` output."""
+        return ",".join(self.CSV_COLUMNS)
+
+    def _to_csv(self, event: Dict[str, Any]) -> str:
+        """One CSV row per event, RFC 4180 quoting via the csv module."""
+        import csv
+        import io
+
+        normalized = self._normalize_event(event)
+        row = {
+            "event_time": normalized["event_time"],
+            "event_category": normalized["event_category"],
+            "severity": normalized["severity"],
+            "confidence": normalized["confidence"],
+            "source_ip": normalized["source"]["ip"],
+            "file_name": normalized["source"]["file_name"],
+            "file_path": normalized["source"]["file_path"],
+            "rule_name": normalized["detection"]["rule_name"],
+            "features": "|".join(str(f) for f in normalized["detection"]["features"]),
+            "communication_count": normalized["detection"]["communication_count"],
+            "false_positive": normalized["detection"]["false_positive"],
+            "mitre_technique_id": normalized["mitre"]["technique_id"],
+            "mitre_tactic": normalized["mitre"]["tactic"],
+            "anteumbra_version": normalized["anteumbra"]["version"],
+        }
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=self.CSV_COLUMNS, lineterminator="")
+        writer.writerow({key: row.get(key, "") for key in self.CSV_COLUMNS})
+        return buffer.getvalue()
 
     def _to_syslog(self, event: Dict[str, Any]) -> str:
         """RFC 5424 Syslog format."""
