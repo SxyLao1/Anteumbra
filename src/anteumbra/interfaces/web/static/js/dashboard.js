@@ -324,6 +324,13 @@
         document.addEventListener('anteumbra:stats-refresh', refreshStatistics);
         document.addEventListener('keydown', function (event) {
           if (event.key !== 'Escape') return;
+          // Escape dismisses the topmost layer: an open modal first, then the
+          // log analyzer and the mobile sidebar.
+          var openModal = document.querySelector('.modal-overlay.active');
+          if (openModal) {
+            app.ui.hideModal(openModal);
+            return;
+          }
           closeLogAnalyzer();
           closeSidebar();
         });
