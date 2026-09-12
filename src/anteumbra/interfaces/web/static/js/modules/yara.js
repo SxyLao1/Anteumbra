@@ -6,6 +6,13 @@
   var selected = new Set();
   var uploadFile = null;
 
+  // [hidden] is now an author-level baseline rule, so visibility must be
+  // toggled through the attribute itself and not only through inline display.
+  function setVisible(node, visible) {
+    node.hidden = !visible;
+    node.style.display = visible ? '' : 'none';
+  }
+
   function refreshSelection(root) {
     var scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('.yara-checkbox').forEach(function (checkbox) {
@@ -14,10 +21,14 @@
     var count = selected.size;
     document.querySelectorAll('#yara-selected-count').forEach(function (node) {
       node.textContent = count + ' selected';
-      node.style.display = count ? '' : 'none';
+      setVisible(node, count > 0);
     });
-    document.querySelectorAll('#yara-batch-delete-btn, #yara-deselect-btn').forEach(function (node) { node.style.display = count ? '' : 'none'; });
-    document.querySelectorAll('#yara-select-all-btn').forEach(function (node) { node.style.display = count ? 'none' : ''; });
+    document.querySelectorAll('#yara-batch-delete-btn, #yara-deselect-btn').forEach(function (node) {
+      setVisible(node, count > 0);
+    });
+    document.querySelectorAll('#yara-select-all-btn').forEach(function (node) {
+      setVisible(node, count === 0);
+    });
   }
 
   function refreshRules(container) {
