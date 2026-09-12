@@ -1187,8 +1187,11 @@
 .scanner-view #scan-results-card .data-table th:nth-child(3) { width: 36%; }
 .scanner-view #scan-results-card .data-table th:nth-child(4) { width: 10%; }
 .scanner-view #scan-results-card .data-table th:nth-child(5) { width: 20%; }
-.scanner-view #scan-results-card .data-table th:nth-child(6) { width: 10%; }
-.scanner-view #scan-results-card .data-table th:nth-child(7) { width: 100px; }
+.scanner-view #scan-results-card .data-table th:nth-child(6) { width: 9%; }
+/* Row actions hold two buttons; without nowrap their labels break mid-word. */
+.scanner-view #scan-results-card .record-actions { flex-wrap: nowrap; justify-content: flex-end; }
+.scanner-view #scan-results-card .record-actions .btn { white-space: nowrap; }
+.scanner-view #scan-results-card .data-table th:nth-child(7) { width: 172px; }
 
 @media (max-width: 900px) {
   .scanner-view .scanner-config-grid {
@@ -1432,6 +1435,42 @@
   .logs-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Scanner cards are revealed with an inline display:flex by scanner.js; without
+   a column direction the header is squeezed into a vertical strip beside the
+   body (measured: header 41px wide, result table cells 0px wide). */
+.scanner-view #scan-config-card,
+.scanner-view #scan-progress-card,
+.scanner-view #scan-results-card { flex-direction: column; min-width: 0; }
+
+/* Records ledger: status filter row above the batch toolbar */
+.records-status-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.records-status-hint { color: var(--color-text-muted); font-size: 11px; }
+.record-false-positive { border-left: 3px solid var(--color-info); }
+/* ---- File clusters page ---- */
+.clusters-view { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.clusters-header h3 { margin: 0 0 8px; color: var(--color-accent); font: 600 15px/1.4 var(--font-mono); }
+.clusters-subtitle { margin: 0; color: var(--color-text-muted); font-size: 11px; }
+.clusters-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.clusters-stats .stat-card strong { font-size: 22px; }
+.clusters-list { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.cluster-card { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.cluster-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); }
+.cluster-id { color: var(--color-accent); font: 600 12px/1.4 var(--font-mono); }
+.cluster-meta, .cluster-time { color: var(--color-text-muted); font: 11px/1.4 var(--font-mono); }
+.cluster-files { display: flex; flex-direction: column; }
+.cluster-file { display: grid; grid-template-columns: minmax(140px, 240px) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 14px; border-bottom: 1px solid var(--color-border); }
+.cluster-file:last-child { border-bottom: none; }
+.cluster-file:hover { background: var(--color-bg-secondary); }
+.cluster-file-name { color: var(--color-text-primary); font: 12px/1.5 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cluster-file-path { color: var(--color-text-muted); font: 10px/1.5 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cluster-file-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.cluster-more { padding: 6px 14px; color: var(--color-text-muted); font-size: 10px; }
+
+@media (max-width: 1100px) {
+  .clusters-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cluster-file { grid-template-columns: minmax(0, 1fr) auto; }
+  .cluster-file-path { display: none; }
+}
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
 

@@ -215,6 +215,64 @@
 
   function closeRecordDetail() { app.ui.hideModal('record-detail-modal-overlay'); }
 
+  // One way to open a detection's detail, used by the ledger, the overview
+  // quadrant, the scanner results and the cluster list alike.
+  function openRecordDetail(trigger) {
+    var path = trigger && trigger.dataset ? trigger.dataset.filePath : '';
+    if (!path) return;
+    var box = document.getElementById('record-detail-modal');
+    var overlay = document.getElementById('record-detail-modal-overlay');
+    if (!box || !overlay) return;
+    box.innerHTML = '<div class="logs-placeholder">Loading detail...</div>';
+    app.ui.showModal(overlay);
+    app.http.text('/admin/records/detail?file_path=' + encodeURIComponent(path), {
+      headers: { 'HX-Request': 'true' }
+    }).then(function (html) {
+      box.innerHTML = html;
+      app.processHtmx(box);
+    }).catch(function (error) {
+      box.textContent = 'Detail failed: ' + error.message;
+    });
+  }
+
+  function reviewStatus() {
+    var panel = document.querySelector('.records-panel[data-status]');
+    return panel ? panel.dataset.status : 'all';
+  }
+
+  function reloadLedger() {
+    var panel = document.querySelector('.records-panel[data-status]');
+    if (!panel) return;
+    app.http.text('/admin/records?compact=1&status=' + encodeURIComponent(reviewStatus()), {
+      headers: { 'HX-Request': 'true' }
+    }).then(function (html) {
+      app.swapHtml(panel, html, 'outerHTML');
+    }).catch(function (error) { app.ui.toast('Reload failed: ' + error.message, 'error'); });
+  }
+
+  function reviewRecord(path, mark) {
+    if (!path) return;
+    var action = mark ? 'mark_false_positive' : 'unmark_false_positive';
+    app.http.text('/admin/' + action + '/' + encodeURIComponent(path) + '?status=' + encodeURIComponent(reviewStatus()), {
+      method: 'POST', headers: { 'HX-Request': 'true' }
+    }).then(function () {
+      app.ui.toast(mark ? 'Marked as false positive.' : 'False positive cleared.', 'success');
+      reloadLedger();
+    }).catch(function (error) {
+      app.ui.toast('Review failed: ' + error.message, 'error');
+    });
+  }
+
+  function switchStatus(status) {
+    var panel = document.querySelector('.records-panel[data-status]');
+    if (!panel || !status) return;
+    app.http.text('/admin/records?compact=1&status=' + encodeURIComponent(status), {
+      headers: { 'HX-Request': 'true' }
+    }).then(function (html) {
+      app.swapHtml(panel, html, 'outerHTML');
+    }).catch(function (error) { app.ui.toast('Filter failed: ' + error.message, 'error'); });
+  }
+
   function openProfileFromRecord(trigger) {
     var dashboard = app.module('dashboard');
     if (!dashboard || typeof dashboard.navigate !== 'function') return;
@@ -278,6 +336,10 @@
         var path = context.element.dataset.filePath || (context.element.closest('.record-item') || {}).dataset.path;
         if (path) showSource(path, 'path=' + encodeURIComponent(path));
       } },
+      'records.detail-open': { handler: function (context) { openRecordDetail(context.element); } },
+      'records.mark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, true); } },
+      'records.unmark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, false); } },
+      'records.status': { handler: function (context) { switchStatus(context.element.dataset.status); } },
       'records.view-quarantine': { handler: function (context) {
         var id = context.element.dataset.quarantineId;
         if (id) showSource('Quarantine: ' + id, 'qid=' + encodeURIComponent(id));

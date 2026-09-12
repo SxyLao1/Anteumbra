@@ -130,9 +130,16 @@
     cells[3].textContent = finding.engine || '';
     cells[4].textContent = (finding.features || []).join(', ');
     cells[5].textContent = finding.quarantine_id ? 'Quarantined' : 'Active';
-    var view = document.createElement('button');
-    view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View'; view.dataset.action = 'records.view-path'; view.dataset.filePath = finding.file_path;
-    cells[6].appendChild(view);
+    var actions = document.createElement('div');
+    actions.className = 'record-actions';
+    var source = document.createElement('button');
+    source.className = 'btn btn-ghost btn-sm'; source.textContent = 'Source';
+    source.dataset.action = 'records.view-path'; source.dataset.filePath = finding.file_path;
+    var detail = document.createElement('button');
+    detail.className = 'btn btn-info btn-sm'; detail.textContent = 'Detail';
+    detail.dataset.action = 'records.detail-open'; detail.dataset.filePath = finding.file_path;
+    actions.append(source, detail);
+    cells[6].appendChild(actions);
     cells.forEach(function (cell) { row.appendChild(cell); });
     tbody.appendChild(row);
     filterTab();
@@ -216,9 +223,14 @@
       if (tbody) tbody.replaceChildren();
       (result.findings || []).forEach(function (finding) { state.findings.push(finding); addRow(finding); });
       updateCounts(); updateSelection(); state.scanId = result.scan_id;
+      // Re-opening an older scan usually has no *new* hits; landing on the
+      // empty "New" tab looked like the result table failed to load.
+      var fresh = state.findings.filter(function (item) { return item.classification === 'new'; }).length;
+      if (!fresh) switchTab(state.findings.length ? 'known' : 'all');
       var results = node('scan-results-card');
       if (results) { results.hidden = false; results.style.display = 'flex'; }
       node('scan-report-btn').style.display = '';
+      setState('complete', 'Completed - ' + state.findings.length + ' findings');
     }).catch(function (error) { setResultsMessage(error.message, true); });
   }
 
