@@ -1,0 +1,40 @@
+<!-- v1.0.36: Recent Detections quadrant — moved out of the security report -->
+<div class="recent-detections" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
+  {% if recent_events %}
+  <table class="data-table event-table">
+    <thead>
+      <tr>
+        <th>{{ _('Time') }}</th>
+        <th>{{ _('File') }}</th>
+        <th>{{ _('Rule') }}</th>
+        <th>{{ _('Status') }}</th>
+        <th class="recent-actions-col">{{ _('Actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for event in recent_events %}
+      <tr>
+        <td class="recent-time">{{ event.time }}</td>
+        <td class="recent-file" title="{{ event.path or event.file }}">{{ event.file }}</td>
+        <td><span class="badge badge-warning">{{ event.rule }}</span></td>
+        <td>
+          {% if event.quarantined %}
+            <span class="badge badge-success">{{ _('Quarantined') }}</span>
+          {% elif event.false_positive %}
+            <span class="badge badge-info">{{ _('FP') }}</span>
+          {% else %}
+            <span class="badge badge-danger">{{ _('Active') }}</span>
+          {% endif %}
+        </td>
+        <td class="recent-actions-col">
+          <button class="btn btn-ghost btn-xs" type="button"
+                  data-action="records.view-path" data-file-path="{{ event.path|e }}">{{ _('Source') }}</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state"><p>{{ _('No detections recorded yet') }}</p></div>
+  {% endif %}
+</div>

@@ -1333,6 +1333,105 @@
 .text-safe { color: var(--color-safe); }
 .text-danger { color: var(--color-danger); }
 
+/* ---- Log Analyzer page ---- */
+.logs-view { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.logs-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.logs-kpis .stat-card { padding: 10px 14px; }
+.logs-kpis .stat-card strong { font-size: 22px; }
+.logs-kpis .stat-card span { margin-top: 2px; }
+.stat-card--accent { border-color: rgba(0, 255, 65, 0.45); }
+.stat-card--danger { border-color: rgba(255, 0, 64, 0.45); }
+.stat-card--warning { border-color: rgba(255, 170, 0, 0.45); }
+
+/* Security report quadrant: four compact cards must fit the quadrant without
+   clipping (the quadrant body is ~273px tall in a 900px viewport, so each of
+   the 2x2 cards gets ~100px).  Sizing lives here so the cards can never
+   outgrow the quadrant again; extra cards wrap and the body scrolls. */
+.dashboard-report { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; flex: 1; min-height: 0; overflow-y: auto; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.report-grid .stat-card { padding: 10px 12px; background: var(--color-bg); }
+.report-grid .stat-label { color: var(--color-accent); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+.report-grid .stat-value { margin-top: 2px; color: var(--color-text-primary); font: 700 26px/1.2 var(--font-mono); }
+.report-grid .stat-trend { margin-top: 2px; color: var(--color-text-muted); font-size: 11px; }
+.stat-card--quarantined { border-color: rgba(255, 107, 53, 0.45); }
+.stat-card--quarantined .stat-label { color: #ff6b35; }
+.stat-card--warning .stat-label { color: var(--color-warning); }
+.stat-card--danger .stat-label { color: var(--color-danger); }
+
+.logs-filters .card-body { display: flex; flex-direction: column; gap: 12px; }
+.logs-filter-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.logs-range { display: flex; flex-wrap: wrap; gap: 6px; }
+.logs-field { display: flex; flex-direction: column; gap: 4px; min-width: 118px; }
+.logs-field > span { color: var(--color-text-secondary); font: 11px/1.4 var(--font-mono); }
+.logs-field--grow { flex: 1 1 220px; min-width: 180px; }
+.logs-field select,
+.logs-field input { min-height: 28px; padding: 4px 8px; font-size: 12px; }
+.logs-check { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; }
+.logs-check input { width: 15px; height: 15px; accent-color: var(--color-accent); }
+.logs-custom { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 6px; border-top: 1px dashed var(--color-border); }
+.logs-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.logs-state { color: var(--color-text-secondary); font: 11px/1.5 var(--font-mono); }
+.logs-hint { color: var(--color-text-muted); font: 11px/1.5 var(--font-mono); }
+
+.logs-live-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--color-text-muted); }
+#log-live-btn.active { border-color: var(--color-accent); color: var(--color-accent); }
+#log-live-btn.active .logs-live-dot { background: var(--color-accent); box-shadow: 0 0 8px var(--color-accent-glow); animation: pulse-glow 2s infinite; }
+
+.logs-charts { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.logs-timeline { display: flex; align-items: flex-end; gap: 2px; height: 68px; }
+.logs-bar { flex: 1 1 4px; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--color-accent-dim); opacity: 0.75; }
+.logs-bar--errors { background: var(--color-danger); opacity: 1; }
+.logs-breakdown { display: flex; flex-direction: column; gap: 6px; }
+.logs-breakdown--modules { margin-top: 12px; }
+.logs-breakdown-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 46px; align-items: center; gap: 8px; font: 11px/1.5 var(--font-mono); }
+.logs-breakdown-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logs-breakdown-track { height: 8px; border-radius: 4px; background: var(--color-bg); border: 1px solid var(--color-border); overflow: hidden; }
+.logs-breakdown-fill { display: block; height: 100%; background: var(--color-accent-dim); }
+.logs-breakdown-value { text-align: right; color: var(--color-text-secondary); }
+.logs-module { color: var(--color-info); }
+
+.logs-table-card .card-body { padding: 0; }
+.logs-scroll { max-height: 46vh; overflow: auto; }
+.logs-table { width: 100%; }
+.logs-table thead th { position: sticky; top: 0; z-index: 1; background: var(--color-bg-card); }
+.logs-col-time { width: 92px; }
+.logs-col-level { width: 96px; }
+.logs-col-module { width: 104px; }
+.logs-col-actions { width: 76px; text-align: right; }
+.logs-row--critical { background: rgba(255, 0, 64, 0.07); }
+.logs-row--error { background: rgba(255, 0, 64, 0.04); }
+.logs-row--warning { background: rgba(255, 170, 0, 0.05); }
+.logs-row--hit .logs-message { color: var(--color-warning); }
+.logs-message { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.logs-message mark { background: rgba(0, 255, 65, 0.25); color: var(--color-text-primary); border-radius: 2px; }
+.logs-level { display: inline-block; padding: 1px 7px; border-radius: 10px; font: 600 10px/1.6 var(--font-mono); border: 1px solid transparent; }
+.logs-level--critical { color: var(--color-danger); border-color: rgba(255, 0, 64, 0.45); background: rgba(255, 0, 64, 0.12); }
+.logs-level--error { color: var(--color-danger); border-color: rgba(255, 0, 64, 0.3); background: rgba(255, 0, 64, 0.07); }
+.logs-level--warning { color: var(--color-warning); border-color: rgba(255, 170, 0, 0.35); background: rgba(255, 170, 0, 0.08); }
+.logs-level--info { color: var(--color-text-secondary); border-color: var(--color-border); }
+.logs-level--debug { color: var(--color-text-muted); border-color: var(--color-border); }
+.logs-placeholder { padding: 18px; color: var(--color-text-muted); font-size: 12px; }
+
+/* Recent detections quadrant */
+.recent-detections .event-table { width: 100%; table-layout: fixed; }
+.recent-detections .event-table th,
+.recent-detections .event-table td { padding: 6px 8px; vertical-align: top; }
+.recent-detections .event-table th { position: sticky; top: 0; z-index: 1; background: var(--color-bg-card); }
+/* Rule ids like YARA:PHP_Direct_Superglobal_Eval(critical) must wrap, not
+   overflow the quadrant's right edge. */
+.recent-detections .event-table .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.recent-detections .event-table th:nth-child(1) { width: 108px; }
+.recent-detections .event-table th:nth-child(3) { width: 34%; }
+.recent-detections .event-table th:nth-child(4) { width: 96px; }
+.recent-detections .recent-time { color: var(--color-text-secondary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.recent-detections .recent-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-actions-col { width: 84px; text-align: right; }
+
+@media (max-width: 1100px) {
+  .logs-charts { grid-template-columns: minmax(0, 1fr); }
+  .logs-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
 
