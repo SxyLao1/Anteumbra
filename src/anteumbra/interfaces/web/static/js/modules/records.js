@@ -175,14 +175,20 @@
     var size = document.getElementById('fv-file-size');
     var content = document.getElementById('fv-content');
     if (path) path.textContent = label;
-    if (size) size.textContent = 'Loading...';
+    if (size) size.textContent = app.t('Loading...');
     if (content) content.replaceChildren();
     app.http.json('/admin/file/content?' + query, { headers: { 'HX-Request': 'true' } })
       .then(function (result) {
         if (path) path.textContent = result.path || label;
         if (size) {
           var displaySize = result.size > 1024 ? (result.size / 1024).toFixed(1) + ' KB' : result.size + ' B';
-          size.textContent = displaySize + ' | ' + result.lines + ' lines';
+          var meta = app.t('%(size)s | %(lines)s lines', { size: displaySize, lines: result.lines });
+          // The encoding only matters when the file is not plain UTF-8; showing
+          // it explains why the glyphs look the way they do.
+          if (result.encoding && result.encoding !== 'utf-8') {
+            meta += ' | ' + result.encoding;
+          }
+          size.textContent = meta;
         }
         if (content) {
           renderSourceContent(content, result.content);

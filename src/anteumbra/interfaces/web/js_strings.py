@@ -66,6 +66,8 @@ JS_SOURCES: tuple[str, ...] = (
     # clusters
     "Expand all", "Collapse all", "Filter by cluster id, file name or path...",
     "No cluster matches the filter",
+    # source viewer
+    "%(size)s | %(lines)s lines",
     # shell
     "Chinese", "English", "Language",
 )
@@ -133,6 +135,8 @@ def _extraction_only() -> tuple[str, ...]:
         # clusters
         _("Expand all"), _("Collapse all"), _("Filter by cluster id, file name or path..."),
         _("No cluster matches the filter"),
+        # source viewer
+        _("%(size)s | %(lines)s lines"),
         # shell
         _("Chinese"), _("English"), _("Language"),
     )
