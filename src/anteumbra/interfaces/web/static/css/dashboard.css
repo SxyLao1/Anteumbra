@@ -373,34 +373,82 @@
 .kw-info  { color: #44aaff; }
 .kw-var   { color: #ff66ff; }
 
-/* 查看器容器 */
-#file-viewer-modal .modal-container {
+/* ---- 源码查看器 ----
+   壳里的标记是 .modal-box--file / .modal-path / .modal-size /
+   .modal-body--file，此前一条规则都没有：查看器被压成 .modal-box 的
+   560px 宽，路径与 "137.8 KB | 2488 lines" 挤在几十像素里各自折行，
+   「复制」按钮窄到两个汉字竖排。这里按壳里实际使用的类名重写。 */
+#file-viewer-modal .modal-box--file {
+  width: 95vw;
+  max-width: 1600px;
+  height: 90vh;
+  max-height: 90vh;
   background: #050505;
-  border: 1px solid #00ff41;
-  border-radius: 6px;
+  border-color: var(--color-border-hover);
 }
 
 #file-viewer-modal .modal-header {
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 10px 16px;
   background: #0a0a0a;
+  font-size: 13px;
 }
 
-/* 行号（CSS counter） */
-#fv-content {
-  counter-reset: fv-line;
+#file-viewer-modal .modal-header > span:first-child {
+  color: var(--color-accent);
+  font-weight: 700;
+  white-space: nowrap;
 }
-#fv-content::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0;
-  width: 44px;
-  height: 100%;
-  background: rgba(0,255,65,0.03);
-  border-right: 1px solid rgba(0,255,65,0.15);
-  pointer-events: none;
+
+#file-viewer-modal .modal-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#file-viewer-modal .modal-size {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+#file-viewer-modal .modal-header .btn {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#file-viewer-modal .modal-body--file {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: auto;
+  background: #050505;
+}
+
+#fv-content {
+  margin: 0;
+  min-height: 100%;
+  padding: 14px 18px 26px;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  tab-size: 4;
+  white-space: pre;
 }
 /*
-  行号通过 JS 注入 <span class="line-num"> 实现，
-  因为 CSS counter 在 innerHTML 替换后不可靠。
-  如果 JS 未注入，回退到纯 pre 显示。
+   行号尚未实现：这里原有一条 44px 宽的 ::before 条纹（带 border-right），
+   本意是给行号留槽，但 JS 从未注入行号，结果只剩一条竖线压在每行开头
+   几个字符上。已移除；要做行号就整块一起做。
 */
-

@@ -16,6 +16,7 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from markupsafe import escape as html_escape
 
 from anteumbra.application.path_service import normalize_path, path_to_key
+from anteumbra.application.text_encoding import decode_source_bytes
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_quarantine,
@@ -694,7 +695,7 @@ def view_file_content():
         if size > 512 * 1024:
             return jsonify({"error": f"文件过大 ({size} bytes)，上限 512KB"}), 413
 
-        content = resolved.read_text(encoding="utf-8", errors="replace")
+        content, encoding = decode_source_bytes(resolved.read_bytes())
         escaped = html_escape(content)
 
         return jsonify(
@@ -703,6 +704,7 @@ def view_file_content():
                 "size": size,
                 "content": escaped,
                 "lines": content.count("\n") + 1,
+                "encoding": encoding,
             }
         )
     except Exception as e:

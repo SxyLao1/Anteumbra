@@ -1616,6 +1616,113 @@
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
 
+/* ---- Detail modals: record + quarantine ----
+   The shell markup carries .detail-section / .detail-table, but no stylesheet
+   ever defined them, so the browser defaults applied: border-spacing 2px, zero
+   cell padding, auto table layout.  The label column collapsed to ~30px, every
+   CJK label wrapped onto two lines ("文件" / "名"), the label-to-value gap was
+   2px, and each section's table sized itself independently so the value column
+   started at a different x per section. */
+.modal-box--detail { max-width: 760px; }
+
+.record-detail-modal,
+.quarantine-detail-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.detail-section + .detail-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border-glow);
+}
+
+.detail-section h4 {
+  margin: 0 0 10px;
+  color: var(--color-accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Fixed layout so all three tables share one label column width and the
+   values line up on a single edge. */
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.detail-table td {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+  vertical-align: top;
+}
+
+.detail-table tr:last-child td { border-bottom: none; }
+
+.detail-table td:first-child {
+  width: 132px;
+  padding-right: 20px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.detail-table td:last-child {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detail-table code {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The linked-profile rows used to carry inline styles; they are classes now so
+   the modal's spacing rules apply consistently. */
+.detail-profile-list { display: flex; flex-direction: column; gap: 8px; }
+
+.detail-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border-glow);
+  border-radius: var(--radius-sm);
+}
+
+.detail-profile-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.detail-profile-main code { color: var(--color-accent); font-family: var(--font-mono); font-size: 12px; }
+.detail-profile-risk { font-size: 12px; white-space: nowrap; }
+.detail-profile-risk--high { color: var(--color-danger); }
+.detail-profile-risk--medium { color: var(--color-warning); }
+.detail-profile-risk--low { color: var(--color-text-secondary); }
+.detail-profile-meta { color: var(--color-text-muted); font-size: 11px; white-space: nowrap; }
+.detail-profile-row .btn { flex: 0 0 auto; min-height: 28px; padding: 4px 10px; font-size: 11px; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .detail-table td:first-child { width: 96px; padding-right: 12px; }
+}
+
 @media (max-width: 900px) {
   .scanner-stats,
   .ledger-stats,
