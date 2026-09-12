@@ -27,8 +27,12 @@
           {% endif %}
         </td>
         <td class="recent-actions-col">
-          <button class="btn btn-ghost btn-xs" type="button"
-                  data-action="records.view-path" data-file-path="{{ event.path|e }}">{{ _('Source') }}</button>
+          <div class="record-actions">
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-action="records.view-path" data-file-path="{{ event.path|e }}">{{ _('Source') }}</button>
+            <button class="btn btn-info btn-sm" type="button"
+                    data-action="records.detail-open" data-file-path="{{ event.path|e }}">{{ _('Detail') }}</button>
+          </div>
         </td>
       </tr>
       {% endfor %}

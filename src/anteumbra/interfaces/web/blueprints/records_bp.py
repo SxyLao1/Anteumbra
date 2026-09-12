@@ -120,7 +120,18 @@ def get_records():
     """检测记录列表（支持强制刷新、分页、审计模式）"""
     try:
         force_reload = request.args.get("force", "false").lower() == "true"
-        audit_mode = request.args.get("audit", "false").lower() in ("true", "1")
+        # One ledger, filtered by status: the audit view is no longer a separate
+        # tab, so "all" is the default and includes reviewed false positives and
+        # soft-deleted entries.  audit=true stays supported for old links.
+        status_filter = str(request.args.get("status", "") or "").lower()
+        if not status_filter:
+            status_filter = (
+                "all" if request.args.get("audit", "false").lower() in ("true", "1") else "all"
+            )
+        if status_filter not in ("all", "active", "false_positive", "deleted"):
+            status_filter = "all"
+        include_reviewed = status_filter in ("all", "false_positive", "deleted")
+        audit_mode = status_filter in ("all", "deleted")
         site_id = request.args.get("site_id") or None
 
         page_str = request.args.get("page", "1")
@@ -139,12 +150,25 @@ def get_records():
 
         all_records = _registry().get_all(
             include_deleted=audit_mode,
-            include_false_positive=audit_mode,
+            include_false_positive=include_reviewed,
             site_id=site_id,
         )
 
         # v2.0 fix: Always exclude quarantined items (they have their own Quarantine page)
         all_records = [r for r in all_records if not r.get("quarantine_id")]
+
+        if status_filter == "false_positive":
+            all_records = [r for r in all_records if r.get("marked_false_positive")]
+        elif status_filter == "deleted":
+            all_records = [
+                r for r in all_records if r.get("deleted_at") and not r.get("file_exists")
+            ]
+        elif status_filter == "active":
+            all_records = [
+                r
+                for r in all_records
+                if not r.get("marked_false_positive") and r.get("file_exists")
+            ]
 
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
@@ -165,6 +189,7 @@ def get_records():
                 total=total,
                 per_page=per_page,
                 audit_mode=audit_mode,
+                status_filter=status_filter,
                 compact=compact,
                 all_paths=all_paths,
             )
@@ -179,6 +204,7 @@ def get_records():
                         "per_page": per_page,
                     },
                     "audit_mode": audit_mode,
+                    "status": status_filter,
                     "site_id": site_id,
                 }
             )
@@ -294,6 +320,26 @@ def records_batch():
                     results["errors"].append({"file_path": fp, "error": str(exc)})
                     current_app.logger.error(
                         "[RECORDS] batch false-positive failed for %s: %s",
+                        fp,
+                        exc,
+                        exc_info=True,
+                    )
+        elif action == "unmark_false_positive":
+            # Undo a review: the record returns to the active threat set.
+            for fp in file_paths:
+                try:
+                    record = _find_record(fp, site_id=site_id)
+                    if _registry().unmark_false_positive(
+                        fp, record.get("site_id") if record else None
+                    ):
+                        results["success"] += 1
+                    else:
+                        results["skipped"] += 1
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append({"file_path": fp, "error": str(exc)})
+                    current_app.logger.error(
+                        "[RECORDS] batch unmark-false-positive failed for %s: %s",
                         fp,
                         exc,
                         exc_info=True,
@@ -495,6 +541,45 @@ def remove_file(file_path):
 # ── False Positive ─────────────────────────────────────────
 
 
+def _records_table_response(status_filter: str = "all"):
+    """Re-render the ledger for the current status filter after a review change."""
+    status_filter = (
+        status_filter if status_filter in ("all", "active", "false_positive", "deleted") else "all"
+    )
+    site_id = _requested_site_id()
+    include_reviewed = status_filter in ("all", "false_positive", "deleted")
+    records = _registry().get_all(
+        include_deleted=status_filter in ("all", "deleted"),
+        include_false_positive=include_reviewed,
+        site_id=site_id,
+    )
+    records = [r for r in records if not r.get("quarantine_id")]
+    if status_filter == "false_positive":
+        records = [r for r in records if r.get("marked_false_positive")]
+    elif status_filter == "deleted":
+        records = [r for r in records if r.get("deleted_at") and not r.get("file_exists")]
+    elif status_filter == "active":
+        records = [
+            r for r in records if not r.get("marked_false_positive") and r.get("file_exists")
+        ]
+
+    enhanced = _enhance_records(records)
+    config = get_runtime().config.get()
+    per_page = config.get("web_admin", {}).get("items_per_page", 20)
+    total = len(enhanced)
+    return render_template(
+        "admin/records_table.html",
+        records=enhanced,
+        page=1,
+        total_pages=max(1, (total + per_page - 1) // per_page),
+        total=total,
+        per_page=per_page,
+        status_filter=status_filter,
+        compact=request.args.get("compact") == "1",
+        all_paths=[r.get("file_path", "") for r in enhanced if r.get("file_path")],
+    )
+
+
 @records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
 @require_auth
 def mark_false_positive_route(file_path):
@@ -509,32 +594,29 @@ def mark_false_positive_route(file_path):
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
         get_runtime().sse.trigger_registry_update()
-
-        filtered_records = _registry().get_all(
-            include_deleted=False,
-            include_false_positive=False,
-            site_id=site_id,
-        )
-        enhanced = _enhance_records(filtered_records)
-
-        config = get_runtime().config.get()
-        per_page = config.get("web_admin", {}).get("items_per_page", 20)
-        total = len(enhanced)
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        page = 1
-
-        compact = request.args.get("compact") == "1"
-        return render_template(
-            "admin/records_table.html",
-            records=enhanced,
-            page=page,
-            total_pages=total_pages,
-            total=total,
-            per_page=per_page,
-            compact=compact,
-        )
+        return _records_table_response(str(request.args.get("status", "all")))
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 误报标记失败: {e}", exc_info=True)
+        return render_template("admin/error.html", error=str(e)), 500
+
+
+@records_bp.route("/unmark_false_positive/<path:file_path>", methods=["POST"])
+@require_auth
+def unmark_false_positive_route(file_path):
+    """取消误报 — return a reviewed false positive to the active set."""
+    try:
+        decoded_path = unquote(file_path)
+        normalized_path = normalize_path(decoded_path)
+
+        site_id = _requested_site_id()
+        ok = _registry().unmark_false_positive(normalized_path, site_id=site_id)
+        if not ok:
+            return jsonify({"status": "error", "message": "记录不存在"}), 404
+
+        get_runtime().sse.trigger_registry_update()
+        return _records_table_response(str(request.args.get("status", "all")))
+    except Exception as e:
+        current_app.logger.error(f"[RECORDS] 取消误报失败: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
 
 

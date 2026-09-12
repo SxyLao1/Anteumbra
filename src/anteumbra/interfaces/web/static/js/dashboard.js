@@ -5,9 +5,8 @@
   var app = window.Anteumbra;
   var state = { path: 'overview', title: 'Overview', requestId: 0, started: false, logObserver: null, logStream: null };
   var threatUrls = {
-    active: '/admin/records?compact=1',
+    active: '/admin/records?compact=1&status=all',
     quarantine: '/admin/quarantine?status=quarantined',
-    audit: '/admin/records?audit=true&compact=1',
     clusters: '/admin/file-clusters'
   };
 

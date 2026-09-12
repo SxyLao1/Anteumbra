@@ -8,7 +8,7 @@ v1.8.3: 文件相似度聚类引擎
 import hashlib
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -29,6 +29,7 @@ class FileClusterSnapshot:
     updated_at: datetime
     hash_track: str
     threshold: float = 0.80
+    sample_paths: list[str] = field(default_factory=list)
 
 
 class FileCluster:
@@ -93,6 +94,15 @@ class FileCluster:
     def sample_files(self) -> List[str]:
         """返回簇中文件名示例"""
         return [Path(p).name for p in list(self.files.keys())[:5]]
+
+    def sample_paths(self, limit: int = 25) -> List[str]:
+        """返回簇中成员文件的完整路径，供界面打开/查看。"""
+        return list(self.files.keys())[: max(1, int(limit))]
+
+    @property
+    def threshold(self) -> float:
+        """相似度阈值（由哈希引擎提供）。"""
+        return float(getattr(self.hash_engine, "threshold", 0.80))
 
 
 class FileClusterEngine:
@@ -189,7 +199,9 @@ class FileClusterEngine:
             cluster_id=cluster.cluster_id,
             size=cluster.size,
             sample_files=list(cluster.sample_files),
+            sample_paths=list(cluster.sample_paths(25)),
             created_at=cluster.created_at,
             updated_at=cluster.updated_at,
             hash_track=self.hash_engine.track_name,
+            threshold=cluster.threshold,
         )

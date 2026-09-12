@@ -112,6 +112,18 @@ def mark_false_positive(record: dict[str, Any], reason: str, now: str) -> None:
     )
 
 
+def unmark_false_positive(record: dict[str, Any], now: str) -> None:
+    """Return a reviewed false positive to the active set.
+
+    The timestamp is kept in ``false_positive_cleared_at`` so the audit trail
+    still shows that a review happened, while the record counts as active.
+    """
+    record.update(
+        marked_false_positive=False,
+        false_positive_cleared_at=now,
+    )
+
+
 def mark_removed(record: dict[str, Any], now: str) -> None:
     record["file_exists"] = False
     if not record.get("quarantine_id"):
