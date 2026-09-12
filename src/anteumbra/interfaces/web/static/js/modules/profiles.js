@@ -13,10 +13,12 @@
     var count = selected.size;
     var countNode = document.getElementById('ip-selected-count');
     var button = document.getElementById('block-ips-btn');
-    if (countNode) countNode.textContent = count + ' selected';
+    if (countNode) countNode.textContent = app.t('%(count)s selected', { count: count });
     if (button) {
       button.disabled = count === 0;
-      button.textContent = 'Block ' + (count || 'Selected') + ' IP' + (count === 1 ? '' : 's');
+      button.textContent = count
+        ? app.t('Block %(count)s IP(s)', { count: count })
+        : app.t('Block Selected IPs');
     }
   }
 
@@ -30,13 +32,13 @@
 
   function copy(text) {
     if (!navigator.clipboard) {
-      app.ui.toast('Clipboard access is unavailable.', 'warning');
+      app.ui.toast(app.t('Clipboard access is unavailable.'), 'warning');
       return;
     }
     navigator.clipboard.writeText(text).then(function () {
-      app.ui.toast('Copied.', 'success');
+      app.ui.toast(app.t('Copied.'), 'success');
     }).catch(function () {
-      app.ui.toast('Copy failed.', 'error');
+      app.ui.toast(app.t('Copy failed.'), 'error');
     });
   }
 
@@ -49,7 +51,9 @@
   function blockSelected(trigger) {
     var ips = Array.from(selected);
     if (!ips.length) return;
-    if (!app.confirm('Block ' + ips.length + ' IPs?\n\n' + ips.slice(0, 10).join('\n') + (ips.length > 10 ? '\n... and ' + (ips.length - 10) + ' more' : ''))) return;
+    var listing = ips.slice(0, 10).join('\n') +
+      (ips.length > 10 ? '\n' + app.t('... and %(count)s more', { count: ips.length - 10 }) : '');
+    if (!app.confirm(app.t('Block %(count)s IPs?', { count: ips.length }) + '\n\n' + listing)) return;
     var page = trigger.closest('[data-profile-id]');
     var profileId = page ? page.dataset.profileId : '';
     app.http.json('/admin/api/v1/blocklist/add', {
@@ -57,10 +61,10 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ips: ips, profile_id: profileId })
     }).then(function (result) {
-      app.ui.toast((result.success ? 'OK: ' : 'FAIL: ') + (result.message || 'Blocked'), result.success ? 'success' : 'error');
+      app.ui.toast((result.success ? app.t('OK: ') : app.t('FAIL: ')) + (result.message || app.t('Blocked')), result.success ? 'success' : 'error');
       if (result.success) window.setTimeout(loadBlockStatus, 350);
     }).catch(function (error) {
-      app.ui.toast('Block failed: ' + error.message, 'error');
+      app.ui.toast(app.t('Block failed: %(message)s', { message: error.message }), 'error');
     });
   }
 
@@ -77,10 +81,12 @@
     panel.dataset.frontendLoaded = 'true';
     app.http.json('/admin/block/status').then(function (result) {
       var values = {
-        'bs-auto': 'Auto: ' + (result.auto_block_enabled ? 'ON (>' + (result.auto_block_min_score * 100) + '%)' : 'OFF'),
-        'bs-devices': 'Devices: ' + result.device_count,
-        'bs-queue': 'Queue: ' + ((result.retry_queue && result.retry_queue.pending) || 0),
-        'bs-blocked': 'Blocked: ' + ((result.blocklist && result.blocklist.length) || 0)
+        'bs-auto': result.auto_block_enabled
+          ? app.t('Auto: ON (>%(score)s%%)', { score: result.auto_block_min_score * 100 })
+          : app.t('Auto: OFF'),
+        'bs-devices': app.t('Devices: %(count)s', { count: result.device_count }),
+        'bs-queue': app.t('Queue: %(count)s', { count: (result.retry_queue && result.retry_queue.pending) || 0 }),
+        'bs-blocked': app.t('Blocked: %(count)s', { count: (result.blocklist && result.blocklist.length) || 0 })
       };
       Object.keys(values).forEach(function (id) {
         var node = document.getElementById(id);
@@ -104,7 +110,7 @@
       }
     }).catch(function (error) {
       panel.removeAttribute('data-frontend-loaded');
-      app.ui.toast('Block status unavailable: ' + error.message, 'warning');
+      app.ui.toast(app.t('Block status unavailable: %(message)s', { message: error.message }), 'warning');
     });
   }
 
@@ -143,7 +149,7 @@
       } },
       'profiles.ip-select-all': { handler: function (context) {
         var section = context.element.closest('[data-all-ips]') || document.getElementById('ip-table-section');
-        try { JSON.parse(section.dataset.allIps || '[]').forEach(function (ip) { selected.add(String(ip)); }); } catch (_) { app.ui.toast('IP selection metadata is invalid.', 'error'); }
+        try { JSON.parse(section.dataset.allIps || '[]').forEach(function (ip) { selected.add(String(ip)); }); } catch (_) { app.ui.toast(app.t('IP selection metadata is invalid.'), 'error'); }
         selectedCheckboxes(section).forEach(function (checkbox) { checkbox.checked = true; selected.add(checkbox.value); });
         updateControls();
       } },

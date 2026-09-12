@@ -11,6 +11,9 @@
   <meta name="sse-max-per-ip" content="{{ config.get('web_admin', {}).get('sse_max_clients_per_ip', 5) }}">
   <meta name="sse-log-levels" content="{{ config.get('web_admin', {}).get('sse_log_levels', ['INFO', 'ERROR', 'CRITICAL']) | tojson | safe }}">
   <meta name="anteumbra-version" content="{{ anteumbra_version }}">
+  <!-- Strings the JS modules render; server-side translations for the same
+       source text so a language switch covers dynamic rows too. -->
+  <script id="i18n-strings" type="application/json">{{ js_strings | tojson | safe }}</script>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/vars.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css') }}">
@@ -48,7 +51,16 @@
           <span></span><span></span><span></span>
         </button>
         <div id="sse-status-indicator" class="sse-status disconnected" aria-live="polite">
-          <span class="dot"></span><span class="status-label">OFF</span>
+          <span class="dot"></span><span class="status-label">{{ _('Off') }}</span>
+        </div>
+        {% set active_locale = current_locale | default('en') %}
+        <div class="lang-switch" role="group" aria-label="{{ _('Language') }}">
+          <a class="lang-option{% if active_locale != 'en' %} active{% endif %}"
+             href="{{ request.path }}?lang=zh" data-action="core.navigate-location"
+             data-url="{{ request.path }}?lang=zh" title="{{ _('Chinese') }}">中文</a>
+          <a class="lang-option{% if active_locale == 'en' %} active{% endif %}"
+             href="{{ request.path }}?lang=en" data-action="core.navigate-location"
+             data-url="{{ request.path }}?lang=en" title="{{ _('English') }}">EN</a>
         </div>
         <button id="logout-btn" class="btn btn-danger btn-sm" type="button" data-action="dashboard.logout">
           <span aria-hidden="true">⏻</span> {{ _('Logout') }}
@@ -59,8 +71,8 @@
     <div class="sidebar-overlay" id="sidebar-overlay" data-action="dashboard.sidebar-close"></div>
     <div class="app-body">
       <aside class="app-sidebar">
-        <div class="sidebar-header">Navigation</div>
-        <nav aria-label="Primary navigation">
+        <div class="sidebar-header">{{ _('Navigation') }}</div>
+        <nav aria-label="{{ _('Primary navigation') }}">
           <ul class="nav-menu">
             <li class="nav-item"><a class="nav-link active" href="/admin/overview" data-action="dashboard.navigate" data-path="overview" data-title="{{ _('Overview') }}"><span class="nav-icon">◆</span><span>{{ _('Overview') }}</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/threats" data-action="dashboard.navigate" data-path="threats" data-title="{{ _('Threats') }}"><span class="nav-icon">⚡</span><span>{{ _('Threats') }}</span></a></li>

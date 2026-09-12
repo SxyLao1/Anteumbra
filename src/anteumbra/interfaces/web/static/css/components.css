@@ -1341,6 +1341,25 @@
 .text-safe { color: var(--color-safe); }
 .text-danger { color: var(--color-danger); }
 
+/* ---- Language switch (header) ---- */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+.lang-option {
+  padding: 5px 10px;
+  color: var(--color-text-secondary);
+  font: 600 11px/1.4 var(--font-mono);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+.lang-option:hover { color: var(--color-accent); background: var(--color-bg-card); }
+.lang-option.active { color: #000; background: var(--color-accent); }
 /* ---- Log Analyzer page ---- */
 .logs-view { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .logs-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }

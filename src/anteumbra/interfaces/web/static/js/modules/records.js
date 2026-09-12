@@ -8,12 +8,12 @@
     records: selectionFactory.create({
       checkboxSelector: '.rec-checkbox', countSelector: '.rec-count',
       buttonSelector: '.rec-batch-btn', datasetKey: 'allPaths',
-      onInvalidMetadata: function () { app.ui.toast('Selection metadata is invalid.', 'error'); }
+      onInvalidMetadata: function () { app.ui.toast(app.t('Selection metadata is invalid.'), 'error'); }
     }),
     quarantine: selectionFactory.create({
       checkboxSelector: '.q-checkbox', countSelector: '.q-count',
       buttonSelector: '.q-batch-btn', datasetKey: 'allQids',
-      onInvalidMetadata: function () { app.ui.toast('Selection metadata is invalid.', 'error'); }
+      onInvalidMetadata: function () { app.ui.toast(app.t('Selection metadata is invalid.'), 'error'); }
     }),
     lineWrap: false
   };
@@ -31,13 +31,13 @@
 
   function updateRecordControls() {
     var count = state.records.size;
-    document.querySelectorAll('.rec-count').forEach(function (item) { item.textContent = count + ' selected'; });
+    document.querySelectorAll('.rec-count').forEach(function (item) { item.textContent = app.t('%(count)s selected', { count: count }); });
     document.querySelectorAll('.rec-batch-btn').forEach(function (item) { item.disabled = count === 0; });
   }
 
   function updateQuarantineControls() {
     var count = state.quarantine.size;
-    document.querySelectorAll('.q-count').forEach(function (item) { item.textContent = count + ' selected'; });
+    document.querySelectorAll('.q-count').forEach(function (item) { item.textContent = app.t('%(count)s selected', { count: count }); });
     document.querySelectorAll('.q-batch-btn').forEach(function (item) { item.disabled = count === 0; });
   }
 
@@ -61,7 +61,7 @@
     try {
       JSON.parse(container.dataset[key]).forEach(function (value) { selection.add(String(value)); });
     } catch (_) {
-      app.ui.toast('Selection metadata is invalid.', 'error');
+      app.ui.toast(app.t('Selection metadata is invalid.'), 'error');
     }
   }
 
@@ -90,8 +90,8 @@
   function batchRecords(action, trigger) {
     var records = Array.from(state.records);
     if (!records.length) return;
-    var labels = { quarantine: 'Quarantine', false_positive: 'Mark as FP', delete: 'Delete' };
-    if (!app.confirm(labels[action] + ' ' + records.length + ' records?')) return;
+    var labels = { quarantine: app.t('Quarantine'), false_positive: app.t('Mark as FP'), delete: app.t('Delete') };
+    if (!app.confirm(app.t('%(action)s %(count)s records?', { action: labels[action], count: records.length }))) return;
     var body = new URLSearchParams({ action: action });
     records.forEach(function (path) { body.append('file_paths[]', path); });
     app.http.json('/admin/records/batch', {
@@ -100,21 +100,23 @@
       body: body.toString()
     }).then(function (result) {
       if (result.error) throw new Error(result.error);
-      window.alert('Done: ' + (result.success || 0) + ' success, ' + (result.skipped || 0) + ' skipped, ' + (result.failed || 0) + ' failed');
+      window.alert(app.t('Done: %(success)s success, %(skipped)s skipped, %(failed)s failed', {
+        success: result.success || 0, skipped: result.skipped || 0, failed: result.failed || 0
+      }));
       state.records.clear();
       updateRecordControls();
       document.dispatchEvent(new Event('anteumbra:stats-refresh'));
       refreshRecords(visibleContainer('[id^="records-table-container"]') || containerFor(trigger, '[id^="records-table-container"]'));
     }).catch(function (error) {
-      window.alert('Batch failed: ' + error.message);
+      window.alert(app.t('Batch failed: %(message)s', { message: error.message }));
     });
   }
 
   function batchQuarantine(action, trigger) {
     var ids = Array.from(state.quarantine);
     if (!ids.length) return;
-    var labels = { restore: 'Restore', delete: 'Delete' };
-    if (!app.confirm(labels[action] + ' ' + ids.length + ' quarantine records?')) return;
+    var labels = { restore: app.t('Restore'), delete: app.t('Delete') };
+    if (!app.confirm(app.t('%(action)s %(count)s quarantine records?', { action: labels[action], count: ids.length }))) return;
     var body = new URLSearchParams({ action: action });
     ids.forEach(function (id) { body.append('qids[]', id); });
     app.http.json('/admin/quarantine/batch', {
@@ -123,13 +125,15 @@
       body: body.toString()
     }).then(function (result) {
       if (result.error) throw new Error(result.error);
-      window.alert('Done: ' + (result.success || 0) + ' success, ' + (result.failed || 0) + ' failed');
+      window.alert(app.t('Done: %(success)s success, %(failed)s failed', {
+        success: result.success || 0, failed: result.failed || 0
+      }));
       state.quarantine.clear();
       updateQuarantineControls();
       document.dispatchEvent(new Event('anteumbra:stats-refresh'));
       refreshQuarantine(visibleContainer('#quarantine-list-container') || containerFor(trigger, '#quarantine-list-container'));
     }).catch(function (error) {
-      window.alert('Batch failed: ' + error.message);
+      window.alert(app.t('Batch failed: %(message)s', { message: error.message }));
     });
   }
 
@@ -197,7 +201,7 @@
     var content = document.getElementById('fv-content');
     if (!content || !navigator.clipboard) return;
     navigator.clipboard.writeText(content.textContent || '').then(function () {
-      app.ui.toast('Source copied.', 'success');
+      app.ui.toast(app.t('Source copied.'), 'success');
     });
   }
 
@@ -247,7 +251,7 @@
       headers: { 'HX-Request': 'true' }
     }).then(function (html) {
       app.swapHtml(panel, html, 'outerHTML');
-    }).catch(function (error) { app.ui.toast('Reload failed: ' + error.message, 'error'); });
+    }).catch(function (error) { app.ui.toast(app.t('Reload failed: %(message)s', { message: error.message }), 'error'); });
   }
 
   function reviewRecord(path, mark) {
@@ -256,10 +260,10 @@
     app.http.text('/admin/' + action + '/' + encodeURIComponent(path) + '?status=' + encodeURIComponent(reviewStatus()), {
       method: 'POST', headers: { 'HX-Request': 'true' }
     }).then(function () {
-      app.ui.toast(mark ? 'Marked as false positive.' : 'False positive cleared.', 'success');
+      app.ui.toast(app.t(mark ? 'Marked as false positive.' : 'False positive cleared.'), 'success');
       reloadLedger();
     }).catch(function (error) {
-      app.ui.toast('Review failed: ' + error.message, 'error');
+      app.ui.toast(app.t('Review failed: %(message)s', { message: error.message }), 'error');
     });
   }
 
@@ -270,7 +274,7 @@
       headers: { 'HX-Request': 'true' }
     }).then(function (html) {
       app.swapHtml(panel, html, 'outerHTML');
-    }).catch(function (error) { app.ui.toast('Filter failed: ' + error.message, 'error'); });
+    }).catch(function (error) { app.ui.toast(app.t('Filter failed: %(message)s', { message: error.message }), 'error'); });
   }
 
   function openProfileFromRecord(trigger) {
