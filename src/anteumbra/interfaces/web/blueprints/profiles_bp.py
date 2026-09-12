@@ -314,6 +314,8 @@ def file_clusters_page():
                     "cluster_id": c.cluster_id,
                     "size": c.size,
                     "samples": c.sample_files,
+                    # Full paths so the list can open a member file (Source/Detail)
+                    "sample_paths": list(c.sample_paths),
                     "created": c.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     "hash_track": c.hash_track,
                     "threshold": c.threshold,

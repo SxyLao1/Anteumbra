@@ -1,13 +1,30 @@
-{% set container_id = 'records-table-container-audit' if audit_mode else 'records-table-container' %}
-<div id="{{ container_id }}" class="records-panel" data-record-list data-all-paths='{{ all_paths|default([])|tojson }}' data-audit-mode="{{ 'true' if audit_mode else 'false' }}">
+{% set container_id = 'records-table-container' %}
+{% set active_status = status_filter | default('all') %}
+{% set status_url = '/admin/records?compact=1&status=' %}
+<div id="{{ container_id }}" class="records-panel" data-record-list data-status="{{ active_status }}"
+     data-all-paths='{{ all_paths|default([])|tojson }}' data-audit-mode="{{ 'true' if audit_mode else 'false' }}">
+  <div class="records-status-filter" role="group" aria-label="{{ _('Status filter') }}">
+    <button class="btn btn-sm ledger-filter{% if active_status == 'all' %} active{% endif %}" type="button"
+            data-action="records.status" data-status="all">{{ _('All') }}</button>
+    <button class="btn btn-sm ledger-filter{% if active_status == 'active' %} active{% endif %}" type="button"
+            data-action="records.status" data-status="active">{{ _('Active') }}</button>
+    <button class="btn btn-sm ledger-filter{% if active_status == 'false_positive' %} active{% endif %}" type="button"
+            data-action="records.status" data-status="false_positive">{{ _('False positives') }}</button>
+    <button class="btn btn-sm ledger-filter{% if active_status == 'deleted' %} active{% endif %}" type="button"
+            data-action="records.status" data-status="deleted">{{ _('Deleted') }}</button>
+    <span class="toolbar-spacer"></span>
+    <span class="records-status-hint">{{ _('False positives stay listed here — clear the mark to return a file to the active set.') }}</span>
+  </div>
+
   <div class="batch-toolbar">
     <button class="btn btn-ghost btn-sm" type="button" data-action="records.select-page">{{ _('Sel Page') }}</button>
     <button class="btn btn-ghost btn-sm" type="button" data-action="records.select-all">{{ _('All') }} {{ total }}</button>
     <button class="btn btn-ghost btn-sm" type="button" data-action="records.clear-selection">{{ _('Clear') }}</button>
     <span class="rec-count">{{ _('0 selected') }}</span><span class="toolbar-divider">|</span>
-    <button class="btn btn-danger btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="quarantine">{{ _('Quar Sel') }}</button>
-    <button class="btn btn-warning btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="false_positive">{{ _('FP Sel') }}</button>
-    <button class="btn btn-ghost btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="delete">{{ _('Del Sel') }}</button>
+    <button class="btn btn-danger btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="quarantine">{{ _('Quarantine') }}</button>
+    <button class="btn btn-warning btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="false_positive">{{ _('Mark FP') }}</button>
+    <button class="btn btn-success btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="unmark_false_positive">{{ _('Clear FP') }}</button>
+    <button class="btn btn-ghost btn-sm rec-batch-btn" type="button" disabled data-action="records.batch" data-batch-action="delete">{{ _('Delete') }}</button>
     <span class="toolbar-spacer"></span>
     <input type="search" class="form-input rec-search" placeholder="{{ _('Search...') }}" data-action="records.filter" data-container="{{ container_id }}">
   </div>
@@ -19,8 +36,8 @@
       <div class="record-info">
         <div class="record-title">{{ record.display_name }}</div>
         <div class="record-meta">
-          {% if record.marked_false_positive %}<span class="badge badge-info">{{ _('FP') }}</span>
-          {% elif record.deleted_at and not record.file_exists %}<span class="badge badge-muted">{{ _('DEL') }}</span>
+          {% if record.marked_false_positive %}<span class="badge badge-info">{{ _('FALSE POSITIVE') }}</span>
+          {% elif record.deleted_at and not record.file_exists %}<span class="badge badge-muted">{{ _('DELETED') }}</span>
           {% elif record.alerted %}<span class="badge badge-danger">{{ _('ALERT') }}</span>
           {% else %}<span class="badge badge-success">{{ _('ACTIVE') }}</span>{% endif %}
           <span>{{ record.detected_at }}</span><span>{{ _('Comm:') }} {{ record.communication_count }}</span><span>{{ record.features|join(', ') if record.features else _('None') }}</span>
@@ -29,18 +46,23 @@
       </div>
       <div class="record-actions">
         <button class="btn btn-sm btn-ghost" type="button" data-action="records.view-path" data-file-path="{{ record.file_path|e }}">{{ _('Source') }}</button>
-        <button class="btn btn-sm btn-info" type="button" hx-get="/admin/records/detail?file_path={{ record.file_path|urlencode }}" hx-target="#record-detail-modal" hx-swap="innerHTML">{{ _('Detail') }}</button>
+        <button class="btn btn-sm btn-info" type="button" data-action="records.detail-open" data-file-path="{{ record.file_path|e }}">{{ _('Detail') }}</button>
+        {% if record.marked_false_positive %}
+        <button class="btn btn-sm btn-success" type="button" data-action="records.unmark-fp" data-file-path="{{ record.file_path|e }}">{{ _('Clear FP') }}</button>
+        {% else %}
+        <button class="btn btn-sm btn-warning" type="button" data-action="records.mark-fp" data-file-path="{{ record.file_path|e }}">{{ _('Mark FP') }}</button>
+        {% endif %}
       </div>
     </article>
-    {% else %}<div class="empty-state"><p>{{ _('No detection records found') }}</p></div>{% endfor %}
+    {% else %}<div class="empty-state"><p>{{ _('No detection records match this filter') }}</p></div>{% endfor %}
   </div>
 
   {% if total_pages > 1 %}
   <div class="pagination-bar">
-    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %} hx-get="/admin/records?page={{ page - 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('← Prev') }}</button>
+    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %} hx-get="/admin/records?page={{ page - 1 }}&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('← Prev') }}</button>
     <span class="page-info">{{ _('Page') }} {{ page }} / {{ total_pages }} ({{ total }} {{ _('total') }})</span>
-    <input type="number" class="form-input page-jump" min="1" max="{{ total_pages }}" value="{{ page }}" data-action="core.page-jump" data-page-url="/admin/records?page=__PAGE__{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}" data-target="#{{ container_id }}">
-    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %} hx-get="/admin/records?page={{ page + 1 }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}{% if audit_mode %}&audit=true{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('Next →') }}</button>
+    <input type="number" class="form-input page-jump" min="1" max="{{ total_pages }}" value="{{ page }}" data-action="core.page-jump" data-page-url="/admin/records?page=__PAGE__&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" data-target="#{{ container_id }}">
+    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %} hx-get="/admin/records?page={{ page + 1 }}&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('Next →') }}</button>
   </div>
   {% endif %}
 </div>

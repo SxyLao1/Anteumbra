@@ -1,95 +1,66 @@
-<!-- v1.9.0: 独立文件簇视图 — 不依赖威胁画像 -->
+<!-- v1.0.36: file clusters — every member file is openable from the list -->
 {% set cluster_sizes = clusters|map(attribute='size')|list %}
 {% set largest_cluster_size = cluster_sizes|max if cluster_sizes else 0 %}
 {% set avg_files_per_cluster = ((cluster_sizes|sum) / (cluster_sizes|length))|round(1) if cluster_sizes else 0 %}
-<div style="display: flex; flex-direction: column; height: 100%; gap: 0;">
-  <div style="padding: 16px 16px 0 16px;">
-    <h3 style="color: #00ff41; font-family: var(--font-mono); margin: 0 0 12px 0; font-size: 15px;">
-      ⚡ {{ _('FILE CLUSTERS — Similarity-Based Grouping') }}
-    </h3>
-    <div style="color: #888; font-size: 11px; margin-bottom: 16px;">
+<section class="clusters-view">
+  <header class="clusters-header">
+    <h3>⚡ {{ _('FILE CLUSTERS — Similarity-Based Grouping') }}</h3>
+    <p class="clusters-subtitle">
       {{ _('Files grouped by ssdeep/TLSH/SimHash similarity (threshold ≥ 0.80). Management IP filtering does not affect cluster construction.') }}
-    </div>
+    </p>
+  </header>
 
-    <!-- Stats bar -->
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
-      <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 12px; text-align: center;">
-        <div style="color: #00ff41; font-size: 22px; font-weight: bold;">{{ stats.total_clusters }}</div>
-        <div style="color: #888; font-size: 11px;">{{ _('Total Clusters') }}</div>
-      </div>
-      <div class="stat-card" style="background: #0a0a0a; border: 1px solid #00ff41; border-radius: 4px; padding: 12px; text-align: center;">
-        <div style="color: #00ff41; font-size: 22px; font-weight: bold;">{{ stats.total_files }}</div>
-        <div style="color: #888; font-size: 11px;">{{ _('Total Files') }}</div>
-      </div>
-      <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ffaa00; border-radius: 4px; padding: 12px; text-align: center;">
-        <div style="color: #ffaa00; font-size: 22px; font-weight: bold;">{{ stats.multi_file_clusters }}</div>
-        <div style="color: #888; font-size: 11px;">{{ _('Multi-File Clusters') }}</div>
-      </div>
-      <div class="stat-card" style="background: #0a0a0a; border: 1px solid #ff6b35; border-radius: 4px; padding: 12px; text-align: center;">
-        <div style="color: #ff6b35; font-size: 22px; font-weight: bold;">{{ largest_cluster_size }}</div>
-        <div style="color: #888; font-size: 11px;">{{ _('Largest Cluster') }}</div>
-      </div>
-      <div class="stat-card" style="background: #0a0a0a; border: 1px solid #888; border-radius: 4px; padding: 12px; text-align: center;">
-        <div style="color: #888; font-size: 22px; font-weight: bold;">{{ avg_files_per_cluster }}</div>
-        <div style="color: #888; font-size: 11px;">{{ _('Avg Files/Cluster') }}</div>
-      </div>
+  <div class="clusters-stats">
+    <div class="stat-card stat-card--accent">
+      <strong>{{ stats.total_clusters }}</strong><span>{{ _('Total Clusters') }}</span>
+    </div>
+    <div class="stat-card">
+      <strong>{{ stats.total_files }}</strong><span>{{ _('Total Files') }}</span>
+    </div>
+    <div class="stat-card stat-card--warning">
+      <strong>{{ stats.multi_file_clusters }}</strong><span>{{ _('Multi-File Clusters') }}</span>
+    </div>
+    <div class="stat-card stat-card--quarantined">
+      <strong>{{ largest_cluster_size }}</strong><span>{{ _('Largest Cluster') }}</span>
+    </div>
+    <div class="stat-card">
+      <strong>{{ avg_files_per_cluster }}</strong><span>{{ _('Avg Files/Cluster') }}</span>
     </div>
   </div>
 
-  <!-- Cluster list -->
-  <div style="flex: 1; overflow-y: auto; padding: 0 16px 16px 16px;">
-    {% if clusters %}
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      {% for c in clusters %}
-      <div style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; overflow: hidden;">
-        <!-- Cluster header -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #050505; border-bottom: 1px solid #1a1a1a;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <code style="color: #00ff41; font-size: 12px; font-family: var(--font-mono);">{{ c.cluster_id }}</code>
-            <span class="badge" style="background: #00ff41; color: #000; font-size: 10px; padding: 2px 8px;">{{ c.size }} {{ _('files') }}</span>
-            {% if c.size > 1 %}
-            <span class="badge" style="background: #ffaa00; color: #000; font-size: 10px; padding: 2px 8px;">{{ _('MULTI-FILE') }}</span>
-            {% endif %}
-          </div>
-          <div style="color: #555; font-size: 10px; font-family: var(--font-mono);">
-            {{ c.created }}
-          </div>
-        </div>
-        <!-- File list -->
-        <div style="padding: 8px 0;">
-          {% for sample in c.samples %}
-          {% set path = sample if sample is string else sample.path %}
-          {% set sample_name = path.replace('\\', '/').split('/')[-1] %}
-          <div class="record-item" data-path="{{ path|e }}" style="display: flex; align-items: center; justify-content: space-between; padding: 5px 14px; font-size: 11px; font-family: var(--font-mono);">
-            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-              <span style="color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ path|e }}">{{ sample_name }}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-              <span style="color: #555; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ path|e }}">{{ path|e }}</span>
-              <button class="btn btn-ghost btn-sm"
-                      style="font-size: 9px; padding: 1px 6px;"
-                      type="button" data-action="records.view-path" data-file-path="{{ path|e }}">
-                {{ _('View') }}
-              </button>
-            </div>
-          </div>
-          {% endfor %}
-          {% if c.size > c.samples|length %}
-          <div style="padding: 5px 14px; color: #555; font-size: 10px;">{{ _('... and ') }}{{ c.size - (c.samples|length) }}{{ _(' more file(s)') }}</div>
-          {% endif %}
-        </div>
+  <div class="clusters-list">
+    {% for c in clusters %}
+    <article class="cluster-card">
+      <div class="cluster-card-head">
+        <code class="cluster-id">{{ c.cluster_id }}</code>
+        <span class="badge badge-success">{{ c.size }} {{ _('files') }}</span>
+        {% if c.size > 1 %}<span class="badge badge-warning">{{ _('MULTI-FILE') }}</span>{% endif %}
+        <span class="cluster-meta">{{ c.hash_track }} · {{ _('threshold') }} {{ c.threshold }}</span>
+        <span class="toolbar-spacer"></span>
+        <span class="cluster-time">{{ c.created }}</span>
       </div>
-      {% endfor %}
-    </div>
+      <div class="cluster-files">
+        {% for path in c.sample_paths %}
+        {% set name = path.replace('\\', '/').split('/')[-1] %}
+        <div class="cluster-file" data-path="{{ path|e }}">
+          <span class="cluster-file-name" title="{{ path|e }}">{{ name }}</span>
+          <span class="cluster-file-path" title="{{ path|e }}">{{ path|e }}</span>
+          <span class="cluster-file-actions">
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-action="records.view-path" data-file-path="{{ path|e }}">{{ _('Source') }}</button>
+            <button class="btn btn-info btn-sm" type="button"
+                    data-action="records.detail-open" data-file-path="{{ path|e }}">{{ _('Detail') }}</button>
+          </span>
+        </div>
+        {% endfor %}
+        {% set hidden = c.size - c.sample_paths|length %}
+        {% if hidden > 0 %}
+        <div class="cluster-more">{{ _('... and ') }}{{ hidden }}{{ _(' more file(s) in this cluster') }}</div>
+        {% endif %}
+      </div>
+    </article>
     {% else %}
-    <div class="empty-state">
-      <div class="empty-state-icon">📦</div>
-      <p style="color: #888;">{{ _('No file clusters found') }}</p>
-      <p style="color: #555; font-size: 11px; margin-top: 8px;">
-        {{ _('Clusters are formed when files are scanned and have similarity ≥ 0.80.') }}
-        <br>{{ _('Trigger a scan or ingest detection records to populate clusters.') }}
-      </p>
-    </div>
-    {% endif %}
+    <div class="empty-state"><p>{{ _('No file clusters recorded yet') }}</p></div>
+    {% endfor %}
   </div>
-</div>
+</section>

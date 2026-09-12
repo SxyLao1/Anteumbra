@@ -157,6 +157,10 @@ class FileClusterViewPort(Protocol):
         """Return representative filenames."""
 
     @property
+    def sample_paths(self) -> list[str]:
+        """Return representative file paths so a UI can open them."""
+
+    @property
     def created_at(self) -> datetime:
         """Return cluster creation time."""
 

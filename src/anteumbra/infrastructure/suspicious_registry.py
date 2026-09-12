@@ -215,6 +215,20 @@ class SuspiciousRegistry:
             extra={"reason": str(reason)},
         )
 
+    def unmark_false_positive(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> bool:
+        """Return a reviewed false positive to the active threat set."""
+        now = self._now()
+        return self._update_record(
+            file_path,
+            site_id,
+            operation="unmark_false_positive",
+            mutate=lambda record: registry_records.unmark_false_positive(record, now),
+        )
+
     def increment_access(
         self,
         file_path: str | Path,
