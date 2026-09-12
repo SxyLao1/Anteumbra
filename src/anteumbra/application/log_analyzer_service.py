@@ -304,7 +304,7 @@ def _timeline(
             {
                 "start": bucket_start,
                 "label": datetime.fromtimestamp(bucket_start).strftime(
-                    "%m-%d %H:%M" if size >= 3600 else "%H:%M"
+                    "%m-%d %H:%M" if size >= 1800 else "%H:%M"
                 ),
                 "total": len(window_rows),
                 "errors": sum(1 for row in window_rows if row["level"] in ("ERROR", "CRITICAL")),

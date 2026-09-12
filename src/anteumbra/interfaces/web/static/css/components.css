@@ -1,3 +1,8 @@
+/* ---- Baseline: the hidden attribute always wins ----
+   Several panels toggle [hidden] while other rules set display:flex/grid on
+   the same element (.empty-state, .threats-tab-content, cluster bodies), which
+   silently re-showed content that was meant to be hidden. */
+[hidden] { display: none !important; }
 /* ============================================================
    Anteumbra shared component styles
    ============================================================ */
@@ -1471,6 +1476,100 @@
   .cluster-file { grid-template-columns: minmax(0, 1fr) auto; }
   .cluster-file-path { display: none; }
 }
+/* ---- Scan history: one row per field instead of a concatenated string ---- */
+.scan-history-head,
+.scan-history-row {
+  display: grid;
+  grid-template-columns: 74px 148px minmax(0, 1fr) 96px 52px 56px 52px 52px 58px 148px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+}
+.scan-history-head {
+  color: var(--color-text-muted);
+  font: 10px/1.4 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.scan-history-row { border-bottom: 1px solid var(--color-border); font: 11px/1.5 var(--font-mono); }
+.scan-history-row:last-child { border-bottom: none; }
+.scan-history-row:hover { background: var(--color-bg-secondary); }
+.scan-history-id { color: var(--color-accent); }
+.scan-history-time { color: var(--color-text-secondary); white-space: nowrap; }
+.scan-history-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.scan-history-num { text-align: right; color: var(--color-text-secondary); }
+.scan-history-num--new { color: var(--color-warning); }
+.scan-history-num--errors { color: var(--color-danger); }
+.scan-history-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.scan-history-actions .btn { white-space: nowrap; }
+
+@media (max-width: 1200px) {
+  .scan-history-head,
+  .scan-history-row { grid-template-columns: 74px 148px minmax(0, 1fr) 96px 52px 56px 148px; }
+  .scan-history-head > span:nth-child(7),
+  .scan-history-head > span:nth-child(8),
+  .scan-history-head > span:nth-child(9),
+  .scan-history-row > span:nth-child(7),
+  .scan-history-row > span:nth-child(8),
+  .scan-history-row > span:nth-child(9) { display: none; }
+}
+
+/* ---- Clusters: collapsed cards + filter toolbar ---- */
+.clusters-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.clusters-search { flex: 1 1 260px; max-width: 420px; min-height: 28px; padding: 4px 10px; font-size: 12px; }
+.clusters-visible { color: var(--color-text-muted); font: 11px/1.5 var(--font-mono); }
+.cluster-toggle {
+  width: 100%;
+  border: none;
+  background: var(--color-bg-secondary);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.cluster-toggle:hover { background: var(--color-bg-card); }
+.cluster-arrow { color: var(--color-accent); font-size: 10px; }
+.cluster-card.is-expanded { border-color: var(--color-border-hover); }
+
+/* ---- Recent detections quadrant: two-line rows, actions always visible ---- */
+.recent-detections { padding: 12px 14px; flex: 1; min-height: 0; overflow-y: auto; }
+.recent-list { display: flex; flex-direction: column; gap: 8px; }
+.recent-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); }
+.recent-item:hover { border-color: var(--color-border-hover); }
+.recent-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.recent-file { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); font-family: var(--font-mono); font-size: 12px; }
+.recent-time { flex: 0 0 auto; color: var(--color-text-muted); font-family: var(--font-mono); font-size: 10px; }
+.recent-sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.recent-rule { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-family: var(--font-mono); font-size: 10px; }
+.recent-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.recent-actions .btn { white-space: nowrap; }
+
+/* Ledger rows: keep the row height stable no matter how many rules matched */
+.record-rule { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42ch; }
+.record-item .record-actions { flex-wrap: nowrap; }
+.record-item .record-actions .btn { white-space: nowrap; }
+
+/* ---- Log volume chart: axis, gridlines, stacked error segment ---- */
+.logs-chart { display: flex; gap: 8px; }
+.logs-chart-axis { display: flex; flex-direction: column; justify-content: space-between; padding: 2px 0 0; color: var(--color-text-secondary); font: 10px/1.2 var(--font-mono); text-align: right; min-width: 40px; }
+.logs-chart-plot { position: relative; flex: 1 1 auto; min-width: 0; height: 96px; }
+.logs-chart-grid { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.logs-chart-grid span { border-top: 1px dashed var(--color-border); }
+.logs-chart-grid span:last-child { border-top-style: solid; }
+.logs-timeline { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.logs-column { flex: 1 1 6px; min-width: 4px; height: 100%; display: flex; align-items: flex-end; }
+.logs-column--peak .logs-bar { opacity: 1; box-shadow: 0 0 8px var(--color-accent-glow); }
+.logs-column--peak .logs-bar::before { content: ""; position: absolute; top: -3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--color-accent); }
+.logs-column:hover .logs-bar { opacity: 1; box-shadow: 0 0 8px var(--color-accent-glow); }
+.logs-bar { position: relative; width: 100%; border-radius: 2px 2px 0 0; background: var(--color-accent-dim); opacity: 0.8; }
+.logs-bar-errors { position: absolute; bottom: 0; left: 0; right: 0; background: var(--color-danger); border-radius: 0 0 2px 2px; }
+.logs-chart-xaxis { display: flex; justify-content: space-between; margin: 4px 0 0 48px; color: var(--color-text-muted); font: 10px/1.4 var(--font-mono); }
+.logs-chart-legend { margin: 6px 0 0 48px; color: var(--color-text-secondary); font: 11px/1.5 var(--font-mono); }
+.logs-legend { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-secondary); font: 10px/1.4 var(--font-mono); }
+.logs-legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.logs-legend-dot--total { background: var(--color-accent-dim); }
+.logs-legend-dot--errors { background: var(--color-danger); }
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
 
