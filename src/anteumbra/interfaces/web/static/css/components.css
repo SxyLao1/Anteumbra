@@ -654,20 +654,34 @@
   .profile-risk { min-width: 42px; }
 }
 
-/* Settings fragments share this sheet so HTMX swaps retain their layout. */
+/* Settings fragments share this sheet so HTMX swaps retain their layout.
+   Two packed columns instead of a grid: a grid row takes the height of its
+   tallest card, which left ~450px of dead space under the short SYSTEM card
+   while ACCOUNT grew.  Multi-column packs the cards, keeps their own heights,
+   and lets the wide cards span the full width. */
 .settings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 20px;
+  display: block;
+  column-count: 2;
+  column-gap: 20px;
 }
 
-.settings-grid > .card { min-width: 0; }
+.settings-grid > .card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  break-inside: avoid;
+  margin: 0 0 20px;
+}
+.settings-grid > .card:last-child { margin-bottom: 0; }
 .settings-grid > .card:hover { transform: none; }
-.settings-grid--wide { grid-column: 1 / -1; }
+.settings-grid > .settings-grid--wide { column-span: all; }
 .settings-grid .card-body { min-width: 0; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .settings-actions .btn { flex: 1 1 160px; min-height: 36px; }
+
+@media (max-width: 980px) {
+  .settings-grid { column-count: 1; }
+}
 
 .config-editor {
   display: flex;
@@ -1222,6 +1236,22 @@
 .batch-toolbar .btn:disabled,
 .rec-batch-btn:disabled,
 .q-batch-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* Ghost buttons are transparent by design, which makes segmented filters
+   (All / Auto / Manual, ledger filters, tabs-as-buttons) read as bare text.
+   Give them visible chrome so a row of controls looks like controls. */
+.btn-ghost {
+  border-color: var(--color-border);
+  background: var(--color-bg-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-card);
+}
+.ledger-filter,
+.rec-batch-btn:not(:disabled):not(.btn-danger):not(.btn-warning) { border-color: var(--color-border); background: var(--color-bg-secondary); }
+.ledger-filter:not(.active):hover { border-color: var(--color-accent); color: var(--color-accent); }
+.ledger-filter.active { background: var(--color-bg-card); }
 
 /* Record rows */
 .record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
