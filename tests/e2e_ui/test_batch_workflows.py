@@ -53,10 +53,9 @@ def _open_threats(page):
 
 
 def _load_records_page(page, page_no: int, audit: bool = False):
-    cid = "records-table-container-audit" if audit else "records-table-container"
-    url = f"/admin/records?page={page_no}&compact=1"
-    if audit:
-        url += "&audit=true"
+    # one ledger now: the audit view is the "deleted" status filter
+    cid = "records-table-container"
+    url = f"/admin/records?page={page_no}&compact=1&status=all"  # the audit view is now the unified ledger
     page.evaluate(
         "([url,cid]) => htmx.ajax('GET', url, {target:'#'+cid, swap:'outerHTML'})",
         [url, cid],
@@ -66,7 +65,8 @@ def _load_records_page(page, page_no: int, audit: bool = False):
 
 
 def _select_matching_records(page, needle: str, count: int, audit: bool = False) -> int:
-    cid = "records-table-container-audit" if audit else "records-table-container"
+    # one ledger now: the audit view is the "deleted" status filter
+    cid = "records-table-container"
     selected = 0
     for page_no in range(1, 5):
         _load_records_page(page, page_no, audit=audit)
@@ -144,7 +144,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path, 
 
     assert _select_matching_records(page, "batch_e2e_fp", 4) == 4
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 4
-    fp_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="FP Sel")
+    fp_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="Mark FP")
     expect(fp_button).to_be_enabled()
     fp_button.click()
     try:
@@ -170,7 +170,7 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path, 
 
     assert _select_matching_records(page, "batch_e2e_q", 8) == 8
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 8
-    q_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="Quar Sel")
+    q_button = page.locator("#records-table-container .rec-batch-btn").filter(has_text="Quarantine")
     expect(q_button).to_be_enabled()
     q_button.click()
     _wait_for_message(page, "8 success")
@@ -216,13 +216,15 @@ def test_cross_page_batch_false_positive_quarantine_and_restore(page, tmp_path, 
     assert len(restored_records) == 8
     assert all(Path(item["original_path"]).exists() for item in restored_records)
 
-    _switch_tab(page, "audit")
-    page.wait_for_selector("#records-table-container-audit", timeout=10000)
+    # the audit view is now the unified ledger ("All" status); switch back to it
+    _switch_tab(page, "active")
+    page.click("#records-table-container .records-status-filter button[data-status='all']")
+    page.wait_for_selector("#records-table-container[data-status='all'] .record-item", timeout=10000)
     assert _select_matching_records(page, "batch_e2e_fp", 2, audit=True) == 2
     assert page.evaluate("window.Anteumbra.module('records').selectedRecords().size") == 2
-    page.locator("#records-table-container-audit .rec-batch-btn").filter(has_text="Del Sel").click()
+    page.locator("#records-table-container .rec-batch-btn").filter(has_text="Delete").click()
     _wait_for_message(page, "2 success")
-    expect(page.locator("#records-table-container-audit input.rec-checkbox:checked")).to_have_count(
+    expect(page.locator("#records-table-container input.rec-checkbox:checked")).to_have_count(
         0, timeout=10000
     )
 
