@@ -1,4 +1,4 @@
-<!-- v1.0.36: file clusters — every member file is openable from the list -->
+<!-- v1.0.36: file clusters — collapsed by default, filterable, every member openable -->
 {% set cluster_sizes = clusters|map(attribute='size')|list %}
 {% set largest_cluster_size = cluster_sizes|max if cluster_sizes else 0 %}
 {% set avg_files_per_cluster = ((cluster_sizes|sum) / (cluster_sizes|length))|round(1) if cluster_sizes else 0 %}
@@ -28,18 +28,31 @@
     </div>
   </div>
 
-  <div class="clusters-list">
+  <div class="clusters-toolbar">
+    <input type="search" class="form-input clusters-search" id="clusters-search"
+           placeholder="{{ _('Filter by cluster id, file name or path...') }}"
+           data-action="clusters.search">
+    <span class="clusters-visible" id="clusters-visible">{{ clusters|length }} / {{ clusters|length }}</span>
+    <span class="toolbar-spacer"></span>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="clusters.expand-all">{{ _('Expand all') }}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="clusters.collapse-all">{{ _('Collapse all') }}</button>
+  </div>
+
+  <div class="clusters-list" id="clusters-list">
     {% for c in clusters %}
-    <article class="cluster-card">
-      <div class="cluster-card-head">
+    {% set search_blob = c.cluster_id ~ ' ' ~ (c.sample_paths|join(' ')) %}
+    <article class="cluster-card" data-cluster-id="{{ c.cluster_id }}" data-search="{{ search_blob|e }}">
+      <button class="cluster-card-head cluster-toggle" type="button"
+              data-action="clusters.toggle" aria-expanded="false">
+        <span class="cluster-arrow" aria-hidden="true">▶</span>
         <code class="cluster-id">{{ c.cluster_id }}</code>
         <span class="badge badge-success">{{ c.size }} {{ _('files') }}</span>
         {% if c.size > 1 %}<span class="badge badge-warning">{{ _('MULTI-FILE') }}</span>{% endif %}
         <span class="cluster-meta">{{ c.hash_track }} · {{ _('threshold') }} {{ c.threshold }}</span>
         <span class="toolbar-spacer"></span>
         <span class="cluster-time">{{ c.created }}</span>
-      </div>
-      <div class="cluster-files">
+      </button>
+      <div class="cluster-files" hidden>
         {% for path in c.sample_paths %}
         {% set name = path.replace('\\', '/').split('/')[-1] %}
         <div class="cluster-file" data-path="{{ path|e }}">
@@ -53,14 +66,16 @@
           </span>
         </div>
         {% endfor %}
-        {% set hidden = c.size - c.sample_paths|length %}
-        {% if hidden > 0 %}
-        <div class="cluster-more">{{ _('... and ') }}{{ hidden }}{{ _(' more file(s) in this cluster') }}</div>
+        {% set hidden_members = c.size - c.sample_paths|length %}
+        {% if hidden_members > 0 %}
+        <div class="cluster-more">{{ _('... and ') }}{{ hidden_members }}{{ _(' more file(s) in this cluster') }}</div>
         {% endif %}
       </div>
     </article>
-    {% else %}
-    <div class="empty-state"><p>{{ _('No file clusters recorded yet') }}</p></div>
     {% endfor %}
+    <div class="empty-state" id="clusters-empty" hidden><p>{{ _('No cluster matches the filter') }}</p></div>
+    {% if not clusters %}
+    <div class="empty-state"><p>{{ _('No file clusters recorded yet') }}</p></div>
+    {% endif %}
   </div>
 </section>

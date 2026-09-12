@@ -1,43 +1,32 @@
-<!-- v1.0.36: Recent Detections quadrant — moved out of the security report -->
-<div class="recent-detections" style="padding: 16px; flex: 1; min-height: 0; overflow-y: auto;">
+<!-- v1.0.36: Recent Detections quadrant — two-line rows so Source/Detail always fit -->
+<div class="recent-detections">
   {% if recent_events %}
-  <table class="data-table event-table">
-    <thead>
-      <tr>
-        <th>{{ _('Time') }}</th>
-        <th>{{ _('File') }}</th>
-        <th>{{ _('Rule') }}</th>
-        <th>{{ _('Status') }}</th>
-        <th class="recent-actions-col">{{ _('Actions') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for event in recent_events %}
-      <tr>
-        <td class="recent-time">{{ event.time }}</td>
-        <td class="recent-file" title="{{ event.path or event.file }}">{{ event.file }}</td>
-        <td><span class="badge badge-warning">{{ event.rule }}</span></td>
-        <td>
-          {% if event.quarantined %}
-            <span class="badge badge-success">{{ _('Quarantined') }}</span>
-          {% elif event.false_positive %}
-            <span class="badge badge-info">{{ _('FP') }}</span>
-          {% else %}
-            <span class="badge badge-danger">{{ _('Active') }}</span>
-          {% endif %}
-        </td>
-        <td class="recent-actions-col">
-          <div class="record-actions">
-            <button class="btn btn-ghost btn-sm" type="button"
-                    data-action="records.view-path" data-file-path="{{ event.path|e }}">{{ _('Source') }}</button>
-            <button class="btn btn-info btn-sm" type="button"
-                    data-action="records.detail-open" data-file-path="{{ event.path|e }}">{{ _('Detail') }}</button>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="recent-list">
+    {% for event in recent_events %}
+    <article class="recent-item" data-path="{{ event.path|e }}">
+      <div class="recent-main">
+        <span class="recent-file" title="{{ event.path or event.file }}">{{ event.file }}</span>
+        {% if event.quarantined %}
+          <span class="badge badge-success">{{ _('Quarantined') }}</span>
+        {% elif event.false_positive %}
+          <span class="badge badge-info">{{ _('FP') }}</span>
+        {% else %}
+          <span class="badge badge-danger">{{ _('Active') }}</span>
+        {% endif %}
+        <span class="recent-time">{{ event.time }}</span>
+      </div>
+      <div class="recent-sub">
+        <span class="recent-rule" title="{{ event.rule }}">{{ event.rule }}</span>
+        <span class="recent-actions">
+          <button class="btn btn-ghost btn-sm" type="button"
+                  data-action="records.view-path" data-file-path="{{ event.path|e }}">{{ _('Source') }}</button>
+          <button class="btn btn-info btn-sm" type="button"
+                  data-action="records.detail-open" data-file-path="{{ event.path|e }}">{{ _('Detail') }}</button>
+        </span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
   {% else %}
   <div class="empty-state"><p>{{ _('No detections recorded yet') }}</p></div>
   {% endif %}

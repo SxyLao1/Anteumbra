@@ -104,10 +104,28 @@
       <div class="card-header">
         <span><span class="card-header-icon">▤</span> {{ _('VOLUME OVER TIME') }}</span>
         <span class="toolbar-spacer"></span>
-        <span class="logs-hint" id="log-timeline-hint"></span>
+        <span class="logs-legend"><i class="logs-legend-dot logs-legend-dot--total"></i>{{ _('lines') }}</span>
+        <span class="logs-legend"><i class="logs-legend-dot logs-legend-dot--errors"></i>{{ _('errors') }}</span>
       </div>
       <div class="card-body">
-        <div class="logs-timeline" id="log-timeline"></div>
+        <div class="logs-chart">
+          <div class="logs-chart-axis">
+            <span id="log-axis-max">-</span>
+            <span id="log-axis-mid">-</span>
+            <span id="log-axis-zero">0</span>
+          </div>
+          <div class="logs-chart-plot">
+            <div class="logs-chart-grid" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="logs-timeline" id="log-timeline"></div>
+          </div>
+        </div>
+        <div class="logs-chart-xaxis">
+          <span id="log-axis-start"></span>
+          <span id="log-axis-mid-label"></span>
+          <span id="log-axis-end"></span>
+        </div>
+        <div class="logs-chart-legend" id="log-chart-legend"></div>
+        <div class="logs-hint" id="log-timeline-hint"></div>
       </div>
     </section>
     <section class="card">

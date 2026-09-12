@@ -40,8 +40,13 @@
           {% elif record.deleted_at and not record.file_exists %}<span class="badge badge-muted">{{ _('DELETED') }}</span>
           {% elif record.alerted %}<span class="badge badge-danger">{{ _('ALERT') }}</span>
           {% else %}<span class="badge badge-success">{{ _('ACTIVE') }}</span>{% endif %}
-          <span>{{ record.detected_at }}</span><span>{{ _('Comm:') }} {{ record.communication_count }}</span><span>{{ record.features|join(', ') if record.features else _('None') }}</span>
+          <span>{{ record.detected_at }}</span>
+          <span>{{ _('Comm:') }} {{ record.communication_count }}</span>
           {% if record.quarantine_id %}<span>{{ _('Q:') }}{{ record.quarantine_id[:12] }}</span>{% endif %}
+          {% if record.features %}
+          <span class="record-rule" title="{{ record.features|join(', ') }}">{{ record.features[0] }}</span>
+          {% if record.features|length > 1 %}<span class="badge badge-muted" title="{{ record.features|join(', ') }}">+{{ record.features|length - 1 }}</span>{% endif %}
+          {% else %}<span>{{ _('None') }}</span>{% endif %}
         </div>
       </div>
       <div class="record-actions">

@@ -166,20 +166,58 @@
     if (!series || !series.length) {
       host.innerHTML = '<div class="logs-placeholder">No time-bucketed data.</div>';
       setText('log-timeline-hint', '');
+      setText('log-axis-max', '');
+      setText('log-axis-mid', '');
+      setText('log-axis-zero', '0');
+      setText('log-chart-legend', '');
       return;
     }
+    // A readable axis: round the peak up to a friendly maximum so the tallest
+    // bar does not touch the top and the gridlines carry round numbers.
     var peak = Math.max.apply(null, series.map(function (point) { return point.total; }).concat([1]));
+    var axisMax = niceCeil(peak);
     series.forEach(function (point) {
+      var column = document.createElement('div');
+      column.className = 'logs-column';
+      if (point.total === peak) column.classList.add('logs-column--peak');
+      column.dataset.total = point.total;
+      column.dataset.errors = point.errors;
+      column.title = point.label + ' — ' + point.total + ' lines' +
+        (point.errors ? ' (' + point.errors + ' errors)' : '');
       var bar = document.createElement('div');
       bar.className = 'logs-bar';
-      bar.style.height = Math.max(2, Math.round((point.total / peak) * 100)) + '%';
-      bar.dataset.total = point.total;
-      bar.dataset.errors = point.errors;
-      if (point.errors) bar.classList.add('logs-bar--errors');
-      bar.title = point.label + ' — ' + point.total + ' lines' + (point.errors ? ', ' + point.errors + ' errors' : '');
-      host.appendChild(bar);
+      bar.style.height = (point.total ? Math.max(3, Math.round((point.total / axisMax) * 100)) : 0) + '%';
+      if (point.errors) {
+        var errorPart = document.createElement('span');
+        errorPart.className = 'logs-bar-errors';
+        errorPart.style.height = Math.round((point.errors / Math.max(point.total, 1)) * 100) + '%';
+        bar.appendChild(errorPart);
+      }
+      column.appendChild(bar);
+      host.appendChild(column);
     });
-    setText('log-timeline-hint', series[0].label + ' → ' + series[series.length - 1].label + '  |  peak ' + peak);
+    setText('log-axis-max', String(axisMax));
+    setText('log-axis-mid', String(Math.round(axisMax / 2)));
+    setText('log-axis-zero', '0');
+    setText('log-axis-start', series[0].label);
+    setText('log-axis-mid-label', series[Math.floor(series.length / 2)].label);
+    setText('log-axis-end', series[series.length - 1].label);
+    var total = series.reduce(function (sum, point) { return sum + point.total; }, 0);
+    var errors = series.reduce(function (sum, point) { return sum + point.errors; }, 0);
+    setText('log-chart-legend',
+      total + ' lines · ' + errors + ' error' + (errors === 1 ? '' : 's') + ' · peak ' + peak + ' per bucket');
+    setText('log-timeline-hint', series.length + ' buckets · ' + series[0].label + ' → ' + series[series.length - 1].label);
+  }
+
+  function niceCeil(value) {
+    if (value <= 5) return 5;
+    var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+    var steps = [1, 2, 2.5, 5, 10];
+    for (var i = 0; i < steps.length; i++) {
+      var candidate = steps[i] * magnitude;
+      if (candidate >= value) return Math.round(candidate);
+    }
+    return Math.round(10 * magnitude);
   }
 
   function renderBreakdown(levels, modules) {
