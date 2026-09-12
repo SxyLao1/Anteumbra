@@ -1042,7 +1042,7 @@
 }
 .threats-view .records-panel .record-meta > span { min-width: 0; overflow-wrap: anywhere; }
 .threats-view .records-panel .record-actions { margin-left: 0; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.threats-view .records-panel .record-actions .btn { min-height: 34px; }
+.threats-view .records-panel .record-actions .btn { min-height: 32px; }
 .threats-view .records-panel .badge-muted { color: var(--color-text-muted); border-color: var(--color-border); background: var(--color-bg-secondary); }
 .threats-view .records-panel .pagination-bar { flex-wrap: wrap; }
 
@@ -1542,12 +1542,12 @@
 .recent-time { flex: 0 0 auto; color: var(--color-text-muted); font-family: var(--font-mono); font-size: 10px; }
 .recent-sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .recent-rule { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-family: var(--font-mono); font-size: 10px; }
-.recent-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.recent-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 .recent-actions .btn { white-space: nowrap; }
 
 /* Ledger rows: keep the row height stable no matter how many rules matched */
 .record-rule { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42ch; }
-.record-item .record-actions { flex-wrap: nowrap; }
+.record-item .record-actions { flex-wrap: nowrap; gap: 8px; }
 .record-item .record-actions .btn { white-space: nowrap; }
 
 /* ---- Log volume chart: axis, gridlines, stacked error segment ---- */
@@ -1570,6 +1570,30 @@
 .logs-legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .logs-legend-dot--total { background: var(--color-accent-dim); }
 .logs-legend-dot--errors { background: var(--color-danger); }
+/* ---- Row action buttons: one metric set everywhere ----
+   Measured from a 2x screenshot sheet: the ledger used 34px/8px, the overview
+   quadrant 28px/6px, so the same pair looked cramped in one place and roomy in
+   the other.  Every list now renders Source/Detail (and review) at the same
+   size and spacing. */
+.record-actions .btn,
+.recent-actions .btn,
+.cluster-file-actions .btn,
+.scan-history-actions .btn,
+.record-item .record-actions .btn {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.record-actions,
+.recent-actions,
+.cluster-file-actions,
+.scan-history-actions { gap: 8px; }
+.recent-actions .btn,
+.cluster-file-actions .btn { min-width: 0; }
+.recent-sub .recent-rule { line-height: 32px; }
+.cluster-file-actions .btn { min-height: 32px; }
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
 
