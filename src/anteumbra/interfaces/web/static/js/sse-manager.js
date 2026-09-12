@@ -226,7 +226,8 @@ window.AnteumbraSSEManager = {
     el.className = 'sse-status ' + state;
     const label = el.querySelector('.status-label');
     if (label) {
-      label.textContent = state === 'connected' ? 'LIVE' : state === 'connecting' ? '...' : 'OFF';
+      const t = (text) => (window.Anteumbra && window.Anteumbra.t ? window.Anteumbra.t(text) : text);
+      label.textContent = state === 'connected' ? t('Live') : state === 'connecting' ? '...' : t('Off');
     }
   }
 };

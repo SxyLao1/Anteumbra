@@ -2,7 +2,7 @@
 <div style="display:flex;flex-direction:column;gap:8px;">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="color:#00ff41;font-size:14px;">{{ '●' if db_exists else '○' }}</span>
-    <span style="color:#888;font-size:11px;">{{ _('Backend:') }} <strong style="color:#00ff41;">{{ backend | upper }}</strong></span>
+    <span style="color:#888;font-size:11px;">{{ _('Backend:') }} <strong style="color:#00ff41;">{{ {'both': _('Both'), 'sqlite': _('SQLite'), 'json': _('JSON')}.get(backend, backend | upper) }}</strong></span>
   </div>
   <div style="font-size:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px;">
     <div><span style="color:#555;">{{ _('SQLite DB:') }}</span> <span style="color:{{ '#00ff41' if db_exists else '#888' }};">{{ _('OK (%(size)s MB)', size=db_size|string) if db_exists else _('Not created') }}</span></div>

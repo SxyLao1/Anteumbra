@@ -7,6 +7,15 @@ dist/
 build/
 .eggs/
 
+# The i18n catalog sources are authored data, not build output.
+!build/
+build/*
+!build/babel.cfg
+!build/messages.pot
+!build/zh_map.py
+!build/zh_map_extra.py
+!build/build_zh_catalog.py
+
 # Virtual environments
 .venv/
 venv/

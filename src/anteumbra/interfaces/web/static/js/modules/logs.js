@@ -119,7 +119,7 @@
       var empty = document.createElement('tr');
       var cell = document.createElement('td');
       cell.colSpan = 5; cell.className = 'logs-placeholder';
-      cell.textContent = 'No log lines match the current filters.';
+      cell.textContent = app.t('No log lines match the current filters.');
       empty.appendChild(cell); tbody.appendChild(empty);
       return;
     }
@@ -152,7 +152,7 @@
     actions.className = 'logs-col-actions';
     var copy = document.createElement('button');
     copy.className = 'btn btn-ghost btn-xs'; copy.type = 'button';
-    copy.textContent = 'Copy';
+    copy.textContent = app.t('Copy');
     copy.dataset.action = 'logs.copy';
     actions.appendChild(copy);
     [time, level, module, message, actions].forEach(function (cell) { tr.appendChild(cell); });
@@ -164,7 +164,7 @@
     if (!host) return;
     host.replaceChildren();
     if (!series || !series.length) {
-      host.innerHTML = '<div class="logs-placeholder">No time-bucketed data.</div>';
+      host.innerHTML = '<div class="logs-placeholder">' + app.t('No time-bucketed data.') + '</div>';
       setText('log-timeline-hint', '');
       setText('log-axis-max', '');
       setText('log-axis-mid', '');
@@ -182,8 +182,8 @@
       if (point.total === peak) column.classList.add('logs-column--peak');
       column.dataset.total = point.total;
       column.dataset.errors = point.errors;
-      column.title = point.label + ' — ' + point.total + ' lines' +
-        (point.errors ? ' (' + point.errors + ' errors)' : '');
+      column.title = point.label + ' — ' + app.t('%(count)s lines', { count: point.total }) +
+        (point.errors ? ' (' + app.t('%(count)s errors', { count: point.errors }) + ')' : '');
       var bar = document.createElement('div');
       bar.className = 'logs-bar';
       bar.style.height = (point.total ? Math.max(3, Math.round((point.total / axisMax) * 100)) : 0) + '%';
@@ -204,9 +204,11 @@
     setText('log-axis-end', series[series.length - 1].label);
     var total = series.reduce(function (sum, point) { return sum + point.total; }, 0);
     var errors = series.reduce(function (sum, point) { return sum + point.errors; }, 0);
-    setText('log-chart-legend',
-      total + ' lines · ' + errors + ' error' + (errors === 1 ? '' : 's') + ' · peak ' + peak + ' per bucket');
-    setText('log-timeline-hint', series.length + ' buckets · ' + series[0].label + ' → ' + series[series.length - 1].label);
+    setText('log-chart-legend', app.t('%(lines)s lines · %(errors)s errors · peak %(peak)s per bucket', {
+      lines: total, errors: errors, peak: peak
+    }));
+    setText('log-timeline-hint', app.t('%(count)s buckets', { count: series.length }) +
+      ' · ' + series[0].label + ' → ' + series[series.length - 1].label);
   }
 
   function niceCeil(value) {
@@ -288,7 +290,7 @@
 
   function refresh() {
     var requestId = ++state.requestId;
-    setState('Loading...');
+    setState(app.t('Loading...'));
     return app.http.json(query()).then(function (data) {
       if (requestId !== state.requestId) return data;
       state.rows = data.rows || [];
@@ -298,15 +300,15 @@
       setText('log-kpi-hits', data.hits || 0);
       setText('log-count-badge', state.rows.length);
       setText('log-truncated-hint', data.truncated
-        ? 'showing the newest ' + state.rows.length + ' of ' + data.matched + ' matches'
-        : (data.undated ? data.undated + ' undated lines hidden by the time filter' : ''));
+        ? app.t('showing the newest %(shown)s of %(total)s matches', { shown: state.rows.length, total: data.matched })
+        : (data.undated ? app.t('%(count)s undated lines hidden by the time filter', { count: data.undated }) : ''));
       renderRows(state.rows.slice().reverse());
       renderTimeline(data.timeline);
       renderBreakdown(data.levels || {}, data.modules || {});
-      setState('Updated ' + new Date().toLocaleTimeString());
+      setState(app.t('Updated') + ' ' + new Date().toLocaleTimeString());
       return data;
     }).catch(function (error) {
-      setState('Failed: ' + error.message);
+      setState(app.t('Failed: %(message)s', { message: error.message }));
       return null;
     });
   }
@@ -316,11 +318,11 @@
     if (state.live) return;
     var meta = document.querySelector('meta[name="sse-token"]');
     var token = meta ? meta.content : '';
-    if (!token) { setState('SSE token missing'); return; }
+    if (!token) { setState(app.t('SSE token missing')); return; }
     state.live = true;
     var button = node('log-live-btn');
     if (button) button.classList.add('active');
-    setState('Live tail connected');
+    setState(app.t('Live tail connected'));
     state.stream = new EventSource('/admin/stream_logs?token=' + encodeURIComponent(token) + '&levels=all',
       { withCredentials: true });
     state.stream.onmessage = function (event) {
@@ -339,7 +341,7 @@
       while (tbody.children.length > MAX_LIVE_ROWS) tbody.removeChild(tbody.lastChild);
     };
     state.stream.onerror = function () {
-      setState('Live tail reconnecting...');
+      setState(app.t('Live tail reconnecting...'));
     };
   }
 
@@ -348,7 +350,7 @@
     if (state.stream) { state.stream.close(); state.stream = null; }
     var button = node('log-live-btn');
     if (button) button.classList.remove('active');
-    setState('Live tail stopped');
+    setState(app.t('Live tail stopped'));
   }
 
   function toggleLive() { if (state.live) { stopLive(); } else { startLive(); } }
@@ -366,7 +368,7 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setState('Exported ' + rows.length + ' lines as ' + format.toUpperCase());
+    setState(app.t('Exported %(count)s lines as %(format)s', { count: rows.length, format: format.toUpperCase() }));
   }
 
   function toCsv(rows) {
@@ -429,7 +431,7 @@
     var text = row ? row.querySelector('.logs-message').textContent : '';
     if (!text) return;
     if (navigator.clipboard) navigator.clipboard.writeText(text);
-    app.ui.toast('Line copied');
+    app.ui.toast(app.t('Line copied'));
   }
 
   function loadAccessAnalysis() {

@@ -8,13 +8,14 @@
     <span style="color:#555;font-size:10px;">{{ _('Sources:') }} <strong style="color:#00ff41;">{{ source_count }}</strong></span>
   </div>
   {% if plugins %}
+  {% set type_labels = {'plugin': _('Plugin'), 'detector': _('Detector'), 'notifier': _('Notifier'), 'source': _('Source')} %}
   <div style="display:flex;flex-direction:column;gap:3px;">
     {% for p in plugins %}
     <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 8px;background:#0a0a0a;border-radius:3px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="color:#00ff41;font-size:10px;">&#9679;</span>
         <span style="color:#ccc;font-size:10px;">{{ p.name }}</span>
-        <span class="badge badge-blue" style="font-size:8px;">{{ p.type }}</span>
+        <span class="badge badge-blue" style="font-size:8px;">{{ type_labels.get(p.type | lower, p.type) }}</span>
       </div>
       <span style="color:#555;font-size:9px;">v{{ p.version }}</span>
     </div>

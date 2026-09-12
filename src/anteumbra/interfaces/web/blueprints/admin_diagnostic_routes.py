@@ -122,7 +122,18 @@ def metrics_data():
         l_notification = _("Notification")
         l_mem = _("Memory")
         l_uptime = _("Uptime")
+        l_registry = _("Registry")
+        l_backlog = _("Registry queue backlog: %(count)s items pending save")
+        l_queue = _("Alert queue blocked: %(count)s waiting to send")
         notification_status = str(data.get("last_notification_status", "never"))
+        notification_label = {
+            "success": _("Success"),
+            "never": _("Never"),
+            "skipped": _("Skipped"),
+            "queued": _("Queued"),
+            "failed": _("Failed"),
+            "partial": _("Partial"),
+        }.get(notification_status, notification_status)
         notification_color = (
             "#00ff41"
             if notification_status == "success"
@@ -130,6 +141,11 @@ def metrics_data():
             if notification_status in {"never", "skipped", "queued"}
             else "#ff4444"
         )
+        l_notify_counts = _("ok %(ok)s / failed %(failed)s / skipped %(skipped)s") % {
+            "ok": data.get("notification_success", 0),
+            "failed": data.get("notification_failed", 0),
+            "skipped": data.get("notification_skipped", 0),
+        }
         return f"""
         <div class="metrics-grid">
             <div class="metric-card">
@@ -147,15 +163,15 @@ def metrics_data():
             <div class="metric-card">
                 <div class="metric-label">{l_alerts}</div>
                 <div class="metric-value">{data.get("alert_total", 0)}</div>
-                <div class="metric-subtitle">registry {data.get("registry_size", 0)}</div>
+                <div class="metric-subtitle">{l_registry} {data.get("registry_size", 0)}</div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-label">{l_notification}</div>
                 <div class="metric-value" style="color: {notification_color}; font-size: 18px;">
-                    {notification_status.upper()}
+                    {notification_label}
                 </div>
-                <div class="metric-subtitle">ok {data.get("notification_success", 0)} / failed {data.get("notification_failed", 0)} / skipped {data.get("notification_skipped", 0)}</div>
+                <div class="metric-subtitle">{l_notify_counts}</div>
             </div>
 
             <div class="metric-card">
@@ -169,9 +185,9 @@ def metrics_data():
             </div>
         </div>
 
-        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">Registry queue backlog: {data.get("registry_qsize", 0)} items pending save</small></div>' if data.get("registry_qsize", 0) > 0 else ""}
+        {f'<div style="margin-top: 15px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ffaa00;"><small style="color: #ffaa00;">{l_backlog % {"count": data.get("registry_qsize", 0)}}</small></div>' if data.get("registry_qsize", 0) > 0 else ""}
 
-        {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">🚨 告警队列阻塞: {data.get("alert_qsize", 0)} 条待发送</small></div>' if data.get("alert_qsize", 0) > 10 else ""}
+        {f'<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-left: 4px solid #ff4444;"><small style="color: #ff4444;">{l_queue % {"count": data.get("alert_qsize", 0)}}</small></div>' if data.get("alert_qsize", 0) > 10 else ""}
         """
     except Exception as e:
         current_app.logger.error(f"[ADMIN][METRICS] 致命错误: {e}", exc_info=True)

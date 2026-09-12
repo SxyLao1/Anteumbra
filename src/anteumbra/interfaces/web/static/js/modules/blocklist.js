@@ -64,7 +64,7 @@
     });
     if (!target.childElementCount) {
       var empty = document.createElement('tr');
-      var cell = tableCell('No block records found.');
+      var cell = tableCell(app.t('No block records found.'));
       cell.colSpan = 6;
       empty.appendChild(cell);
       target.appendChild(empty);
@@ -84,9 +84,11 @@
       button.dataset.ledgerPage = page;
       return button;
     }
-    if (data.page > 1) target.appendChild(pageButton('Prev', data.page - 1));
-    target.appendChild(document.createTextNode('Page ' + (data.page || 1) + ' / ' + (data.total_pages || 1) + ' (' + (data.total || 0) + ' total)'));
-    if (data.page < data.total_pages) target.appendChild(pageButton('Next', data.page + 1));
+    if (data.page > 1) target.appendChild(pageButton(app.t('Prev'), data.page - 1));
+    target.appendChild(document.createTextNode(app.t('Page %(page)s / %(total_pages)s (%(total)s total)', {
+      page: data.page || 1, total_pages: data.total_pages || 1, total: data.total || 0
+    })));
+    if (data.page < data.total_pages) target.appendChild(pageButton(app.t('Next'), data.page + 1));
   }
 
   function editNotes(cell) {
