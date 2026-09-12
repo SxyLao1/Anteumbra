@@ -199,20 +199,69 @@
     target.textContent = 'Loading history...';
     app.http.json('/admin/scanner/history').then(function (result) {
       if (requestId !== state.historyRequest || !target.isConnected) return;
-      target.replaceChildren();
-      (result.scans || []).forEach(function (scan) {
-        var line = document.createElement('div');
-        line.className = 'scan-history-row';
-        line.textContent = scan.scan_id.slice(0, 8) + ' ' + scan.target_dir + ' ' + scan.scanned_files + '/' + scan.total_files;
-        var view = document.createElement('button');
-        view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View'; view.dataset.action = 'scanner.view-results'; view.dataset.scanId = scan.scan_id;
-        var report = document.createElement('button');
-        report.className = 'btn btn-ghost btn-sm'; report.textContent = 'Report'; report.dataset.action = 'core.open-window'; report.dataset.url = '/admin/scanner/report?scan_id=' + encodeURIComponent(scan.scan_id);
-        line.append(' ', view, ' ', report);
-        target.appendChild(line);
-      });
-      if (!target.childElementCount) target.textContent = 'No scan history yet.';
+      renderHistory(result.scans || []);
     }).catch(function () { if (requestId === state.historyRequest) target.textContent = 'Failed to load history.'; });
+  }
+
+  function historyCell(text, className, title) {
+    var cell = document.createElement('span');
+    cell.className = className || '';
+    cell.textContent = text == null ? '' : String(text);
+    if (title) cell.title = title;
+    return cell;
+  }
+
+  function formatScanTime(value) {
+    if (value == null || value === '') return '-';
+    var numeric = Number(value);
+    var date = Number.isFinite(numeric) ? new Date(numeric * 1000) : new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+  }
+
+  function renderHistory(scans) {
+    var target = node('scan-history-list');
+    if (!target) return;
+    target.replaceChildren();
+    if (!scans.length) {
+      target.textContent = 'No scan history yet.';
+      return;
+    }
+    var head = document.createElement('div');
+    head.className = 'scan-history-head';
+    ['Scan', 'Started', 'Target', 'Coverage', 'New', 'Known', 'Clean', 'Errors', 'Took', ''].forEach(function (label) {
+      head.appendChild(historyCell(label));
+    });
+    target.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'scan-history-body';
+    scans.forEach(function (scan) {
+      var row = document.createElement('div');
+      row.className = 'scan-history-row';
+      row.appendChild(historyCell((scan.scan_id || '').slice(0, 8), 'scan-history-id', scan.scan_id));
+      row.appendChild(historyCell(formatScanTime(scan.start_time), 'scan-history-time'));
+      row.appendChild(historyCell(scan.target_dir || '-', 'scan-history-target', scan.target_dir));
+      row.appendChild(historyCell((scan.scanned_files || 0) + ' / ' + (scan.total_files || 0), 'scan-history-num'));
+      row.appendChild(historyCell(scan.new_findings || 0, 'scan-history-num scan-history-num--new'));
+      row.appendChild(historyCell(scan.known_findings || 0, 'scan-history-num'));
+      row.appendChild(historyCell(scan.clean || 0, 'scan-history-num'));
+      row.appendChild(historyCell(scan.errors || 0, 'scan-history-num scan-history-num--errors'));
+      row.appendChild(historyCell(scan.duration ? scan.duration + 's' : '-', 'scan-history-num'));
+      var actions = document.createElement('span');
+      actions.className = 'scan-history-actions';
+      var view = document.createElement('button');
+      view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View';
+      view.dataset.action = 'scanner.view-results'; view.dataset.scanId = scan.scan_id;
+      var report = document.createElement('button');
+      report.className = 'btn btn-info btn-sm'; report.textContent = 'Report';
+      report.dataset.action = 'core.open-window';
+      report.dataset.url = '/admin/scanner/report?scan_id=' + encodeURIComponent(scan.scan_id);
+      actions.append(view, report);
+      row.appendChild(actions);
+      body.appendChild(row);
+    });
+    target.appendChild(body);
   }
 
   function viewResults(scanId) {
