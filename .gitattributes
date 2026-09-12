@@ -1,5 +1,9 @@
 * text=auto
 
+# Compiled gettext catalogs are binary; line-ending conversion would corrupt them.
+*.mo binary -text
+*.po text eol=lf
+
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf

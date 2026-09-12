@@ -43,7 +43,7 @@
 
   function start() {
     var target = node('scan-target-dir');
-    if (!target || !target.value.trim()) { app.ui.toast('Please enter a target directory.', 'warning'); return; }
+    if (!target || !target.value.trim()) { app.ui.toast(app.t('Please enter a target directory.'), 'warning'); return; }
     state.findings = [];
     state.complete = false;
     state.jobId = '';
@@ -133,10 +133,10 @@
     var actions = document.createElement('div');
     actions.className = 'record-actions';
     var source = document.createElement('button');
-    source.className = 'btn btn-ghost btn-sm'; source.textContent = 'Source';
+    source.className = 'btn btn-ghost btn-sm'; source.textContent = app.t('Source');
     source.dataset.action = 'records.view-path'; source.dataset.filePath = finding.file_path;
     var detail = document.createElement('button');
-    detail.className = 'btn btn-info btn-sm'; detail.textContent = 'Detail';
+    detail.className = 'btn btn-info btn-sm'; detail.textContent = app.t('Detail');
     detail.dataset.action = 'records.detail-open'; detail.dataset.filePath = finding.file_path;
     actions.append(source, detail);
     cells[6].appendChild(actions);
@@ -181,11 +181,11 @@
 
   function quarantineSelection() {
     var paths = Array.from(state.selected);
-    if (!paths.length || !app.confirm('Quarantine ' + paths.length + ' selected files?')) return;
+    if (!paths.length || !app.confirm(app.t('Quarantine %(count)s selected files?', { count: paths.length }))) return;
     var completed = 0;
     function next() {
       var path = paths.shift();
-      if (!path) { window.alert('Done: ' + completed + ' quarantined'); state.selected.clear(); updateSelection(); return; }
+      if (!path) { window.alert(app.t('Done: %(count)s quarantined', { count: completed })); state.selected.clear(); updateSelection(); return; }
       app.http.json('/admin/scanner/quarantine', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'file_path=' + encodeURIComponent(path) })
         .then(function (result) { if (result.success) completed += 1; next(); }).catch(next);
     }
@@ -196,11 +196,11 @@
     var target = node('scan-history-list');
     if (!target) return;
     var requestId = ++state.historyRequest;
-    target.textContent = 'Loading history...';
+    target.textContent = app.t('Loading history...');
     app.http.json('/admin/scanner/history').then(function (result) {
       if (requestId !== state.historyRequest || !target.isConnected) return;
       renderHistory(result.scans || []);
-    }).catch(function () { if (requestId === state.historyRequest) target.textContent = 'Failed to load history.'; });
+    }).catch(function () { if (requestId === state.historyRequest) target.textContent = app.t('Failed to load history.'); });
   }
 
   function historyCell(text, className, title) {
@@ -224,12 +224,13 @@
     if (!target) return;
     target.replaceChildren();
     if (!scans.length) {
-      target.textContent = 'No scan history yet.';
+      target.textContent = app.t('No scan history yet.');
       return;
     }
     var head = document.createElement('div');
     head.className = 'scan-history-head';
-    ['Scan', 'Started', 'Target', 'Coverage', 'New', 'Known', 'Clean', 'Errors', 'Took', ''].forEach(function (label) {
+    [app.t('Scan'), app.t('Started'), app.t('Target'), app.t('Coverage'), app.t('New'),
+      app.t('Known'), app.t('Clean'), app.t('Errors'), app.t('Took'), ''].forEach(function (label) {
       head.appendChild(historyCell(label));
     });
     target.appendChild(head);
@@ -251,10 +252,10 @@
       var actions = document.createElement('span');
       actions.className = 'scan-history-actions';
       var view = document.createElement('button');
-      view.className = 'btn btn-ghost btn-sm'; view.textContent = 'View';
+      view.className = 'btn btn-ghost btn-sm'; view.textContent = app.t('View');
       view.dataset.action = 'scanner.view-results'; view.dataset.scanId = scan.scan_id;
       var report = document.createElement('button');
-      report.className = 'btn btn-info btn-sm'; report.textContent = 'Report';
+      report.className = 'btn btn-info btn-sm'; report.textContent = app.t('Report');
       report.dataset.action = 'core.open-window';
       report.dataset.url = '/admin/scanner/report?scan_id=' + encodeURIComponent(scan.scan_id);
       actions.append(view, report);
@@ -266,7 +267,7 @@
 
   function viewResults(scanId) {
     state.findings = []; state.selected.clear(); state.quarantined.clear();
-    setResultsMessage('Loading results...');
+    setResultsMessage(app.t('Loading results...'));
     app.http.json('/admin/scanner/results?scan_id=' + encodeURIComponent(scanId)).then(function (result) {
       var tbody = node('results-tbody');
       if (tbody) tbody.replaceChildren();

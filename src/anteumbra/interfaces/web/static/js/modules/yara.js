@@ -20,7 +20,7 @@
     });
     var count = selected.size;
     document.querySelectorAll('#yara-selected-count').forEach(function (node) {
-      node.textContent = count + ' selected';
+      node.textContent = app.t('%(count)s selected', { count: count });
       setVisible(node, count > 0);
     });
     document.querySelectorAll('#yara-batch-delete-btn, #yara-deselect-btn').forEach(function (node) {
@@ -40,7 +40,7 @@
   function setUploadFile(file) {
     if (!file) return;
     if (!/\.yar$/i.test(file.name)) {
-      app.ui.toast('Only .yar files are allowed.', 'error');
+      app.ui.toast(app.t('Only .yar files are allowed.'), 'error');
       return;
     }
     uploadFile = file;
@@ -87,7 +87,7 @@
       .then(function (response) {
         if (!response.success) throw new Error(response.error || 'Upload failed');
         if (result) result.textContent = response.message || 'Upload successful';
-        app.ui.toast(response.message || 'Upload successful', 'success');
+        app.ui.toast(response.message || app.t('Upload successful'), 'success');
         window.setTimeout(function () {
           app.ui.hideModal('yara-upload-modal');
           var container = document.getElementById('yara-rules-container');
@@ -102,7 +102,7 @@
 
   function batchDelete() {
     var rules = Array.from(selected);
-    if (!rules.length || !app.confirm('Delete ' + rules.length + ' selected rule(s)?')) return;
+    if (!rules.length || !app.confirm(app.t('Delete %(count)s selected rule(s)?', { count: rules.length }))) return;
     Promise.all(rules.map(function (filename) {
       return app.http.json('/admin/yara/rules/' + encodeURIComponent(filename), { method: 'DELETE' })
         .then(function (response) {
@@ -114,7 +114,7 @@
       refreshSelection(document);
       var container = document.getElementById('yara-rules-container');
       if (container) refreshRules(container);
-    }).catch(function (error) { app.ui.toast('Rule deletion failed: ' + error.message, 'error'); });
+    }).catch(function (error) { app.ui.toast(app.t('Rule deletion failed: %(message)s', { message: error.message }), 'error'); });
   }
 
   function filterRules(input) {

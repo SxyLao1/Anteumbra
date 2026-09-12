@@ -163,6 +163,27 @@ def create_app(
             "anteumbra_release_date": get_release_date(),
         }
 
+    @app.context_processor
+    def inject_js_strings():
+        """Localized JS strings plus the active locale for the header switch.
+
+        flask_babel does not inject ``get_locale`` into this Jinja environment,
+        so the current locale is resolved here with the same precedence the
+        Babel locale selector uses (query param -> cookie -> Accept-Language).
+        """
+        lang = request.args.get("lang")
+        if lang not in ("en", "zh"):
+            lang = request.cookies.get("lang")
+        if lang not in ("en", "zh"):
+            lang = request.accept_languages.best_match(["zh", "en"]) or "en"
+        try:
+            from anteumbra.interfaces.web.js_strings import js_strings
+
+            strings = js_strings()
+        except Exception:  # pragma: no cover - never break rendering for i18n
+            strings = {}
+        return {"js_strings": strings, "current_locale": lang}
+
     security_config = resolved_config.get("security", {})
     configured_secret = str(security_config.get("secret_key", "")).strip()
     if not configured_secret:

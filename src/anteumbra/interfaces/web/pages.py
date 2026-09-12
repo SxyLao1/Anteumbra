@@ -41,11 +41,17 @@ def _initial_path() -> str:
 
 
 def _display_title(initial_path: str) -> str:
+    """Titles come from the same catalog the nav uses, so zh stays Chinese."""
     title = _NAV_TITLES.get(initial_path)
-    if title:
+    if not title:
+        segment = initial_path.rsplit("/", 1)[-1] if initial_path else ""
+        title = segment.replace("-", " ").replace("_", " ").title() or "Overview"
+    try:
+        from flask_babel import gettext as _babel
+
+        return _babel(title)
+    except Exception:  # pragma: no cover - flask-babel is optional
         return title
-    segment = initial_path.rsplit("/", 1)[-1] if initial_path else ""
-    return segment.replace("-", " ").replace("_", " ").title() or "Overview"
 
 
 def _sse_token(username: str) -> str:

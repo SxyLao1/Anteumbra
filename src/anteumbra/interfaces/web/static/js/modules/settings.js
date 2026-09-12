@@ -42,7 +42,7 @@
 
   function generatePasswordHash() {
     var password = document.getElementById('env-pwd-input');
-    if (!password || !password.value) { app.ui.toast('Enter a password first.', 'warning'); return; }
+    if (!password || !password.value) { app.ui.toast(app.t('Enter a password first.'), 'warning'); return; }
     app.http.json('/admin/settings/env/hash', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: password.value })
     }).then(function (result) {
@@ -113,7 +113,7 @@
     var panel = systemPanels[type];
     var body = document.getElementById('system-modal-body');
     if (!panel || !body) return;
-    if (type === 'config' && !app.confirm('Reload config?')) return;
+    if (type === 'config' && !app.confirm(app.t('Reload config?'))) return;
     app.http.text(panel.action, { method: 'POST', headers: { 'HX-Request': 'true' } }).then(function (html) {
       body.innerHTML = html;
       app.processHtmx(body);
@@ -146,9 +146,11 @@
   function exportSiem(format) {
     var query = format === 'cef' ? '?format=cef' : '';
     app.http.json('/admin/siem/export' + query).then(function (result) {
-      var suffix = format === 'cef' ? ' events (CEF)' : ' events to ' + (result.file || 'export file');
-      app.ui.toast('Exported ' + (result.exported || 0) + suffix, 'success');
-    }).catch(function (error) { app.ui.toast('SIEM export failed: ' + error.message, 'error'); });
+      var message = format === 'cef'
+        ? app.t('Exported %(count)s events (CEF)', { count: result.exported || 0 })
+        : app.t('Exported %(count)s events to %(file)s', { count: result.exported || 0, file: result.file || app.t('export file') });
+      app.ui.toast(message, 'success');
+    }).catch(function (error) { app.ui.toast(app.t('SIEM export failed: %(message)s', { message: error.message }), 'error'); });
   }
 
   function updateSessionHeader(root) {
@@ -156,7 +158,9 @@
     if (!panel) return;
     var target = document.getElementById('session-header-stats');
     if (!target) return;
-    target.textContent = panel.dataset.sessionCount + ' total / ' + panel.dataset.activeCount + ' active';
+    target.textContent = app.t('%(total)s total / %(active)s active', {
+      total: panel.dataset.sessionCount, active: panel.dataset.activeCount
+    });
   }
 
   app.register('settings', {

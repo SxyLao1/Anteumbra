@@ -9,7 +9,7 @@
     function update() {
       var count = selected.size;
       document.querySelectorAll(options.countSelector).forEach(function (node) {
-        node.textContent = count + ' selected';
+        node.textContent = window.Anteumbra.t('%(count)s selected', { count: count });
       });
       document.querySelectorAll(options.buttonSelector).forEach(function (node) {
         node.disabled = count === 0;

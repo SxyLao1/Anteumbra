@@ -1,20 +1,589 @@
-
+# Anteumbra Simplified Chinese translation.
 msgid ""
 msgstr ""
-"Project-Id-Version: Anteumbra 2.0\n"
-"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-06-30 01:20+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
-"Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Project-Id-Version: Anteumbra\n"
+"Language: zh\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.18.0\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 
-# Navigation
+msgid "Scan"
+msgstr "扫描"
+
+msgid "Started"
+msgstr "开始时间"
+
+msgid "Target"
+msgstr "目标"
+
+msgid "Coverage"
+msgstr "覆盖"
+
+msgid "New"
+msgstr "新增"
+
+msgid "Known"
+msgstr "已知"
+
+msgid "Clean"
+msgstr "干净"
+
+msgid "Errors"
+msgstr "错误"
+
+msgid "Took"
+msgstr "耗时"
+
+msgid "View"
+msgstr "查看"
+
+msgid "Report"
+msgstr "报告"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "Detail"
+msgstr "详情"
+
+msgid "Select All"
+msgstr "全选"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Quarantine Selected"
+msgstr "隔离选中"
+
+msgid "Generate Report"
+msgstr "生成报告"
+
+msgid "Loading results..."
+msgstr "正在加载结果..."
+
+msgid "Loading history..."
+msgstr "正在加载历史..."
+
+msgid "No scan history yet."
+msgstr "暂无扫描历史。"
+
+msgid "Failed to load history."
+msgstr "加载历史失败。"
+
+msgid "Completed"
+msgstr "已完成"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "Please enter a target directory."
+msgstr "请输入目标目录。"
+
+msgid "Quarantine %(count)s selected files?"
+msgstr "隔离所选的 %(count) 个文件？"
+
+msgid "Done: %(count)s quarantined"
+msgstr "完成: 已隔离 %(count) 个"
+
+msgid "Lines scanned"
+msgstr "扫描行数"
+
+msgid "Matched filters"
+msgstr "命中过滤"
+
+msgid "Errors + Critical"
+msgstr "错误 + 严重"
+
+msgid "Detection hits"
+msgstr "检测命中"
+
+msgid "Level"
+msgstr "级别"
+
+msgid "Module"
+msgstr "模块"
+
+msgid "Keyword"
+msgstr "关键词"
+
+msgid "Rows"
+msgstr "行数"
+
+msgid "All levels"
+msgstr "全部级别"
+
+msgid "All modules"
+msgstr "全部模块"
+
+msgid "Hits only"
+msgstr "只看命中"
+
+msgid "Apply / Refresh"
+msgstr "应用 / 刷新"
+
+msgid "Live tail"
+msgstr "实时跟随"
+
+msgid "Reset filters"
+msgstr "重置过滤"
+
+msgid "Access log analysis"
+msgstr "访问日志分析"
+
+msgid "Export JSON"
+msgstr "导出 JSON"
+
+msgid "Export CSV"
+msgstr "导出 CSV"
+
+msgid "Time range"
+msgstr "时间范围"
+
+msgid "Custom"
+msgstr "自定义"
+
+msgid "From"
+msgstr "开始时间"
+
+msgid "To"
+msgstr "结束时间"
+
+msgid "Ready"
+msgstr "就绪"
+
+msgid "Loading..."
+msgstr "加载中..."
+
+msgid "Updated"
+msgstr "已更新"
+
+msgid "Live tail connected"
+msgstr "实时跟随已连接"
+
+msgid "Live tail stopped"
+msgstr "实时跟随已停止"
+
+msgid "Live tail reconnecting..."
+msgstr "实时跟随重连中..."
+
+msgid "SSE token missing"
+msgstr "缺少 SSE 令牌"
+
+msgid "No log lines match the current filters."
+msgstr "没有日志行匹配当前过滤条件。"
+
+msgid "No time-bucketed data."
+msgstr "没有时间分桶数据。"
+
+msgid "lines"
+msgstr "行"
+
+msgid "errors"
+msgstr "错误"
+
+msgid "buckets"
+msgstr "个分桶"
+
+msgid "per bucket"
+msgstr "每桶"
+
+msgid "%(count)s buckets"
+msgstr "%(count)s 个分桶"
+
+msgid "%(count)s lines"
+msgstr "%(count)s 行"
+
+msgid "%(count)s errors"
+msgstr "%(count)s 个错误"
+
+msgid "%(lines)s lines · %(errors)s errors · peak %(peak)s per bucket"
+msgstr "共 %(lines)s 行 · %(errors)s 个错误 · 峰值 %(peak)s 每桶"
+
+msgid "showing the newest %(shown)s of %(total)s matches"
+msgstr "仅显示最新 %(shown)s 条，共 %(total)s 条匹配"
+
+msgid "%(count)s undated lines hidden by the time filter"
+msgstr "%(count)s 行无时间戳的记录被时间筛选隐藏"
+
+msgid "Failed: %(message)s"
+msgstr "失败: %(message)s"
+
+msgid "Exported %(count)s lines as %(format)s"
+msgstr "已导出 %(count)s 行（%(format)s）"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Wrap"
+msgstr "换行"
+
+msgid "Unwrap"
+msgstr "不换行"
+
+msgid "Line copied"
+msgstr "已复制该行"
+
+msgid "Source copied."
+msgstr "已复制源码。"
+
+msgid "Mark FP"
+msgstr "标记误报"
+
+msgid "Clear FP"
+msgstr "取消误报"
+
+msgid "Marked as false positive."
+msgstr "已标记为误报。"
+
+msgid "False positive cleared."
+msgstr "已取消误报标记。"
+
+msgid "Active"
+msgstr "活跃"
+
+msgid "Quarantined"
+msgstr "已隔离"
+
+msgid "Deleted"
+msgstr "已删除"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Restore"
+msgstr "恢复"
+
+msgid "Quarantine"
+msgstr "隔离"
+
+msgid "Mark as FP"
+msgstr "标记为误报"
+
+msgid "%(count)s selected"
+msgstr "已选 %(count) 项"
+
+msgid "Selection metadata is invalid."
+msgstr "选择元数据无效。"
+
+msgid "IP selection metadata is invalid."
+msgstr "IP 选择元数据无效。"
+
+msgid "%(action)s %(count)s records?"
+msgstr "对 %(count)s 条记录执行「%(action)s」？"
+
+msgid "%(action)s %(count)s quarantine records?"
+msgstr "对 %(count)s 条隔离记录执行「%(action)s」？"
+
+msgid "Done: %(success)s success, %(skipped)s skipped, %(failed)s failed"
+msgstr "完成: 成功 %(success)s 条，跳过 %(skipped)s 条，失败 %(failed)s 条"
+
+msgid "Done: %(success)s success, %(failed)s failed"
+msgstr "完成: 成功 %(success)s 条，失败 %(failed)s 条"
+
+msgid "Batch failed: %(message)s"
+msgstr "批量操作失败: %(message)s"
+
+msgid "Reload failed: %(message)s"
+msgstr "重新加载失败: %(message)s"
+
+msgid "Review failed: %(message)s"
+msgstr "标记失败: %(message)s"
+
+msgid "Filter failed: %(message)s"
+msgstr "筛选失败: %(message)s"
+
+msgid "Clipboard access is unavailable."
+msgstr "无法访问剪贴板。"
+
+msgid "Copied."
+msgstr "已复制。"
+
+msgid "Copy failed."
+msgstr "复制失败。"
+
+msgid "Block Selected IPs"
+msgstr "封禁所选 IP"
+
+msgid "Block %(count)s IPs?"
+msgstr "封禁 %(count)s 个 IP？"
+
+msgid "... and %(count)s more"
+msgstr "... 另有 %(count)s 个"
+
+msgid "OK: "
+msgstr "成功: "
+
+msgid "FAIL: "
+msgstr "失败: "
+
+msgid "Blocked"
+msgstr "已封禁"
+
+msgid "Block failed: %(message)s"
+msgstr "封禁失败: %(message)s"
+
+msgid "Block status unavailable: %(message)s"
+msgstr "无法获取封禁状态: %(message)s"
+
+msgid "Only .yar files are allowed."
+msgstr "只允许上传 .yar 文件。"
+
+msgid "Upload successful"
+msgstr "上传成功"
+
+msgid "Delete %(count)s selected rule(s)?"
+msgstr "删除所选的 %(count) 条规则？"
+
+msgid "Rule deletion failed: %(message)s"
+msgstr "规则删除失败: %(message)s"
+
+msgid "Enter a password first."
+msgstr "请先输入密码。"
+
+msgid "Reload config?"
+msgstr "重新加载配置？"
+
+msgid "export file"
+msgstr "导出文件"
+
+msgid "Exported %(count)s events (CEF)"
+msgstr "已导出 %(count)s 条事件（CEF）"
+
+msgid "Exported %(count)s events to %(file)s"
+msgstr "已导出 %(count)s 条事件至 %(file)s"
+
+msgid "SIEM export failed: %(message)s"
+msgstr "SIEM 导出失败: %(message)s"
+
+msgid "%(total)s total / %(active)s active"
+msgstr "共 %(total)s 个 / %(active)s 个活跃"
+
+msgid "No block records found."
+msgstr "暂无封禁记录。"
+
+msgid "Prev"
+msgstr "上一页"
+
+msgid "Next"
+msgstr "下一页"
+
+msgid "Page %(page)s / %(total_pages)s (%(total)s total)"
+msgstr "第 %(page)s / %(total_pages)s 页（共 %(total)s 条）"
+
+msgid "Live"
+msgstr "实时"
+
+msgid "Off"
+msgstr "离线"
+
+msgid "Auto: OFF"
+msgstr "自动封禁: 关闭"
+
+msgid "Auto: ON (>%(score)s%%)"
+msgstr "自动封禁: 开启（>%(score)s%%）"
+
+msgid "Devices: %(count)s"
+msgstr "设备: %(count)s"
+
+msgid "Queue: %(count)s"
+msgstr "队列: %(count)s"
+
+msgid "Blocked: %(count)s"
+msgstr "已封禁: %(count)s"
+
+msgid "Expand all"
+msgstr "全部展开"
+
+msgid "Collapse all"
+msgstr "全部收起"
+
+msgid "Filter by cluster id, file name or path..."
+msgstr "按聚类 ID、文件名或路径过滤..."
+
+msgid "No cluster matches the filter"
+msgstr "没有聚类匹配该过滤条件"
+
+msgid "Chinese"
+msgstr "中文"
+
+msgid "English"
+msgstr "English"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Scan Total"
+msgstr "扫描总计"
+
+msgid "High Risk"
+msgstr "高危文件"
+
+msgid "Memory"
+msgstr "内存使用"
+
+msgid "Uptime"
+msgstr "运行时间"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "Alerts"
+msgstr "告警"
+
+msgid "Notification"
+msgstr "通知"
+
+msgid "Registry"
+msgstr "注册表"
+
+msgid "Registry queue backlog: %(count)s items pending save"
+msgstr "注册表队列积压: %(count)s 项待写入"
+
+msgid "Alert queue blocked: %(count)s waiting to send"
+msgstr "告警队列阻塞: %(count)s 条待发送"
+
+msgid "Never"
+msgstr "从未"
+
+msgid "Skipped"
+msgstr "已跳过"
+
+msgid "Queued"
+msgstr "排队中"
+
+msgid "Partial"
+msgstr "部分成功"
+
+msgid "ok %(ok)s / failed %(failed)s / skipped %(skipped)s"
+msgstr "成功 %(ok)s / 失败 %(failed)s / 跳过 %(skipped)s"
+
+msgid "🔐 Change Admin Password"
+msgstr "🔐 修改管理员密码"
+
+msgid "Session will be invalidated immediately after password change"
+msgstr "修改密码后当前会话将立即失效"
+
+msgid "Current Password"
+msgstr "当前密码"
+
+msgid "Enter current password"
+msgstr "请输入当前密码"
+
+msgid "New Password"
+msgstr "新密码"
+
+msgid "8-64 chars, mixed case + digits + symbols"
+msgstr "8-64 个字符，大小写字母 + 数字 + 符号"
+
+msgid "Requirements:"
+msgstr "密码要求："
+
+msgid "Length: 8-64 chars"
+msgstr "长度：8-64 个字符"
+
+msgid "Mixed case + digits + symbols (≥3 types)"
+msgstr "大小写字母 + 数字 + 符号（至少 3 类）"
+
+msgid "Not in top 1000 common passwords"
+msgstr "不在前 1000 个常见弱密码之列"
+
+msgid "Confirm New Password"
+msgstr "确认新密码"
+
+msgid "Re-enter new password"
+msgstr "请再次输入新密码"
+
+msgid "UPDATE PASSWORD"
+msgstr "更新密码"
+
+msgid "IP BLOCK LEDGER - Audit & Export"
+msgstr "IP 封禁台账 - 审计与导出"
+
+msgid "MANUAL BLOCK / UNBLOCK"
+msgstr "手动封禁 / 解封"
+
+msgid "IP addresses, one per line"
+msgstr "IP 地址，每行一个"
+
+msgid "Block"
+msgstr "封禁"
+
+msgid "Unblock"
+msgstr "解封"
+
+msgid "Devices:"
+msgstr "设备数："
+
+msgid "Reason / comment (optional)"
+msgstr "原因 / 备注（可选）"
+
+msgid "Total"
+msgstr "总计"
+
+msgid "Auto"
+msgstr "自动"
+
+msgid "Manual"
+msgstr "手动"
+
+msgid "Today"
+msgstr "今天"
+
+msgid "All"
+msgstr "全部"
+
+msgid "Search IP/reason..."
+msgstr "搜索 IP/原因..."
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "Reason"
+msgstr "原因"
+
+msgid "Notes"
+msgstr "备注"
+
+msgid "Blocked At"
+msgstr "封禁时间"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Loading ledger..."
+msgstr "正在加载台账..."
+
+msgid "Config Load History"
+msgstr "配置加载历史"
+
+msgid "Current Config Signature"
+msgstr "当前配置签名"
+
+msgid "Logout"
+msgstr "登出"
+
+msgid "Navigation"
+msgstr "导航"
+
+msgid "Primary navigation"
+msgstr "主导航"
+
 msgid "Overview"
 msgstr "总览"
 
@@ -33,68 +602,1025 @@ msgstr "画像"
 msgid "Blocklist"
 msgstr "封禁"
 
+msgid "Log Analyzer"
+msgstr "日志分析"
+
 msgid "Settings"
 msgstr "设置"
 
-# Dashboard
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "Total Detections"
+msgstr "检测总数"
+
+msgid "All time"
+msgstr "全部时间"
+
+msgid "Active in quarantine"
+msgstr "隔离中"
+
+msgid "False Positives"
+msgstr "误报"
+
+msgid "Marked by admin"
+msgstr "由管理员标记"
+
+msgid "Protection Rate"
+msgstr "防护率"
+
+msgid "Quarantined / Total"
+msgstr "已隔离 / 总数"
+
+msgid "错误 - Anteumbra Admin"
+msgstr "错误 - Anteumbra Admin"
+
+msgid "❌ 系统错误"
+msgstr "❌ 系统错误"
+
+msgid "无详细错误信息"
+msgstr "无详细错误信息"
+
+msgid "返回首页"
+msgstr "返回首页"
+
+msgid "FILE CLUSTERS — Similarity-Based Grouping"
+msgstr "文件聚类 — 基于相似度分组"
+
+msgid "Files grouped by ssdeep/TLSH/SimHash similarity (threshold ≥ 0.80). Management IP filtering does not affect cluster construction."
+msgstr "按 ssdeep/TLSH/SimHash 相似度分组的文件（阈值 ≥ 0.80）。管理 IP 过滤不影响聚类构建。"
+
+msgid "Total Clusters"
+msgstr "聚类总数"
+
+msgid "Total Files"
+msgstr "文件总数"
+
+msgid "Multi-File Clusters"
+msgstr "多文件聚类"
+
+msgid "Largest Cluster"
+msgstr "最大聚类"
+
+msgid "Avg Files/Cluster"
+msgstr "平均文件数/聚类"
+
+msgid "files"
+msgstr "个文件"
+
+msgid "MULTI-FILE"
+msgstr "多文件"
+
+msgid "threshold"
+msgstr "阈值"
+
+msgid "... and "
+msgstr "... 以及 "
+
+msgid " more file(s) in this cluster"
+msgstr " 个文件在此聚类中"
+
+msgid "No file clusters recorded yet"
+msgstr "暂无文件聚类记录"
+
+msgid "[FILE VIEWER]"
+msgstr "[文件查看器]"
+
+msgid "Anteumbra :: Secure Login"
+msgstr "Anteumbra :: 安全登录"
+
+msgid "ANTEUMBRA"
+msgstr "ANTEUMBRA"
+
+msgid "WebShell Detection System"
+msgstr "WebShell 检测系统"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "AUTHENTICATE"
+msgstr "验证"
+
+msgid "Anteumbra Security Platform // MIT License // Cross-Platform"
+msgstr "Anteumbra 安全平台 // MIT 许可证 // 跨平台"
+
+msgid "FILTERS"
+msgstr "过滤条件"
+
+msgid "space separated terms match the same line"
+msgstr "以空格分隔的多个词需匹配同一行"
+
+msgid "VOLUME OVER TIME"
+msgstr "日志量趋势"
+
+msgid "BREAKDOWN"
+msgstr "分布统计"
+
+msgid "LOG LINES"
+msgstr "日志行"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Message"
+msgstr "消息"
+
+msgid "Actions"
+msgstr "操作"
+
+msgid "Loading log history..."
+msgstr "正在加载日志历史..."
+
+msgid "ACCESS LOG ANALYSIS"
+msgstr "访问日志分析"
+
+msgid "METRICS"
+msgstr "指标"
+
+msgid "Loading metrics..."
+msgstr "正在加载指标..."
+
+msgid "LIVE LOG STREAM"
+msgstr "实时日志流"
+
+msgid "Filter logs..."
+msgstr "过滤日志..."
+
+msgid "[INFO] Initializing log stream..."
+msgstr "[INFO] 正在初始化日志流..."
+
+msgid "YARA RULES"
+msgstr "YARA 规则"
+
+msgid "Filter..."
+msgstr "过滤..."
+
+msgid "Loading YARA rules..."
+msgstr "正在加载 YARA 规则..."
+
+msgid "DETECTION RECORDS"
+msgstr "检测记录"
+
+msgid "Audit"
+msgstr "审计"
+
+msgid "Loading records..."
+msgstr "正在加载记录..."
+
+msgid "Degraded"
+msgstr "降级"
+
+msgid "Healthy"
+msgstr "正常"
+
+msgid "Detection"
+msgstr "检测"
+
+msgid "YARA + Emergency"
+msgstr "YARA + 应急特征"
+
+msgid "Emergency signatures"
+msgstr "应急特征"
+
+msgid "Notifications"
+msgstr "通知"
+
+msgid "External (%(channels)s)"
+msgstr "外部 (%(channels)s)"
+
+msgid "Local logs only"
+msgstr "仅本地日志"
+
 msgid "Security Report"
 msgstr "安全报告"
 
 msgid "System Metrics"
 msgstr "系统指标"
 
-msgid "Active Threats"
-msgstr "活跃威胁"
+msgid "Recent Detections"
+msgstr "最近检测"
 
-msgid "LIVE LOG STREAM"
-msgstr "实时日志流"
+msgid "View all"
+msgstr "查看全部"
 
-# Threats
-msgid "Active"
-msgstr "活跃"
+msgid "Quick filter..."
+msgstr "快速过滤..."
 
-msgid "Quarantine"
-msgstr "隔离区"
+msgid "SSE"
+msgstr "SSE"
 
-msgid "Audit Log"
-msgstr "审计日志"
+msgid "Analyze"
+msgstr "分析"
 
-msgid "File Clusters"
+msgid "Connecting to log stream..."
+msgstr "正在连接日志流..."
+
+msgid "Back to Profiles"
+msgstr "返回画像列表"
+
+msgid "CRITICAL"
+msgstr "严重"
+
+msgid "HIGH"
+msgstr "高危"
+
+msgid "MEDIUM"
+msgstr "中危"
+
+msgid "PROFILE ID"
+msgstr "画像 ID"
+
+msgid "RISK SCORE"
+msgstr "风险评分"
+
+msgid "TOOL FINGERPRINT"
+msgstr "工具指纹"
+
+msgid "STATUS"
+msgstr "状态"
+
+msgid "IP POOL"
+msgstr "IP 池"
+
+msgid "IPs"
+msgstr "IP 数"
+
+msgid "TARGET FILES"
+msgstr "目标文件"
+
+msgid "TARGET URLs"
+msgstr "目标 URL"
+
+msgid "LAST SEEN"
+msgstr "最后出现"
+
+msgid "N/A"
+msgstr "N/A"
+
+msgid "ATTACK CHAIN"
+msgstr "攻击链"
+
+msgid "detection"
+msgstr "检测事件"
+
+msgid "score: "
+msgstr "评分: "
+
+msgid "IP:"
+msgstr "IP："
+
+msgid "URL:"
+msgstr "URL："
+
+msgid "No attack events recorded yet"
+msgstr "暂无攻击事件记录"
+
+msgid "FILE CLUSTERS"
 msgstr "文件聚类"
 
-# Scanner
+msgid "LINKED DETECTION RECORDS"
+msgstr "关联检测记录"
+
+msgid "ASSOCIATED IPs"
+msgstr "关联 IP"
+
+msgid "0 selected"
+msgstr "已选 0 项"
+
+msgid "Select Page"
+msgstr "选择本页"
+
+msgid "Copy Selected"
+msgstr "复制选中"
+
+msgid "Copy All"
+msgstr "复制全部"
+
+msgid "Block Selected"
+msgstr "封禁选中"
+
+msgid "Select visible IPs"
+msgstr "选择可见 IP"
+
+msgid "IP Address"
+msgstr "IP 地址"
+
+msgid "Events"
+msgstr "事件数"
+
+msgid "WAF Score"
+msgstr "WAF 评分"
+
+msgid "First Seen"
+msgstr "首次出现"
+
+msgid "Last Seen"
+msgstr "最后出现"
+
+msgid "Page"
+msgstr "页"
+
+msgid "Anteumbra — Attacker Profile Report"
+msgstr "Anteumbra — 攻击者画像报告"
+
+msgid "Report Preview"
+msgstr "报告预览"
+
+msgid "Print / Save PDF"
+msgstr "打印 / 保存 PDF"
+
+msgid "Back"
+msgstr "返回"
+
+msgid "Attacker Profile Report"
+msgstr "攻击者画像报告"
+
+msgid "Generated:"
+msgstr "生成时间："
+
+msgid "Profile ID:"
+msgstr "画像 ID："
+
+msgid "Detection Event Timeline — based on WAF alerts and file system monitoring."
+msgstr "检测事件时间轴 — 基于 WAF 告警与文件系统监控。"
+
+msgid "Full attack chain reconstruction requires SIEM/NDR integration."
+msgstr "完整攻击链还原需要接入 SIEM/NDR。"
+
+msgid "Risk Score"
+msgstr "风险评分"
+
+msgid "IP Pool Size"
+msgstr "IP 池规模"
+
+msgid "Files Targeted"
+msgstr "目标文件数"
+
+msgid "Attack Type"
+msgstr "攻击类型"
+
+msgid "Tool Fingerprint"
+msgstr "工具指纹"
+
+msgid "Total Events"
+msgstr "事件总数"
+
+msgid "MITRE ATT&CK Mapping"
+msgstr "MITRE ATT&CK 映射"
+
+msgid "Detection Event Timeline"
+msgstr "检测事件时间轴"
+
+msgid "Score:"
+msgstr "评分："
+
+msgid "No detection events recorded."
+msgstr "暂无检测事件记录。"
+
+msgid "Associated IPs"
+msgstr "关联 IP"
+
+msgid "Cluster Level"
+msgstr "聚类级别"
+
+msgid "Disposal Recommendations"
+msgstr "处置建议"
+
+msgid "Generated by Anteumbra WebShell Detection System v%(version)s | MIT License"
+msgstr "由 Anteumbra WebShell 检测系统 v%(version)s 生成 | MIT 许可证"
+
+msgid "ATTACKER PROFILES"
+msgstr "攻击者画像"
+
+msgid "Search UA / IP / Tool..."
+msgstr "搜索 UA / IP / 工具..."
+
+msgid "total"
+msgstr "条"
+
+msgid "Risk"
+msgstr "风险"
+
+msgid "Traffic"
+msgstr "流量"
+
+msgid "BLOCK STATUS"
+msgstr "封禁状态"
+
+msgid "Devices: -"
+msgstr "设备: -"
+
+msgid "Queue: -"
+msgstr "队列: -"
+
+msgid "Blocked: -"
+msgstr "已封禁: -"
+
+msgid "UA:"
+msgstr "UA："
+
+msgid "unknown"
+msgstr "未知"
+
+msgid "IPs:"
+msgstr "IP 数："
+
+msgid "Files:"
+msgstr "文件数："
+
+msgid "Seen:"
+msgstr "出现时间："
+
+msgid "Sample IPs:"
+msgstr "示例 IP："
+
+msgid "RISK"
+msgstr "风险"
+
+msgid "No active profiles yet"
+msgstr "暂无活跃画像"
+
+msgid "隔离详情"
+msgstr "隔离详情"
+
+msgid "隔离信息"
+msgstr "隔离信息"
+
+msgid "隔离ID"
+msgstr "隔离ID"
+
+msgid "状态"
+msgstr "状态"
+
+msgid "隔离时间"
+msgstr "隔离时间"
+
+msgid "恢复时间"
+msgstr "恢复时间"
+
+msgid "删除时间"
+msgstr "删除时间"
+
+msgid "文件信息"
+msgstr "文件信息"
+
+msgid "原始路径"
+msgstr "原始路径"
+
+msgid "隔离路径"
+msgstr "隔离路径"
+
+msgid "文件大小"
+msgstr "文件大小"
+
+msgid "KB"
+msgstr "KB"
+
+msgid "检测信息"
+msgstr "检测信息"
+
+msgid "命中规则"
+msgstr "命中规则"
+
+msgid "特征列表"
+msgstr "特征列表"
+
+msgid "Sel Page"
+msgstr "选中本页"
+
+msgid "Restore Sel"
+msgstr "恢复选中"
+
+msgid "Delete Sel"
+msgstr "删除选中"
+
+msgid "Restored"
+msgstr "已恢复"
+
+msgid "Search..."
+msgstr "搜索..."
+
+msgid "Select quarantine record"
+msgstr "选择隔离记录"
+
+msgid "No quarantine records found"
+msgstr "未找到隔离记录"
+
+msgid "FP"
+msgstr "误报"
+
+msgid "No detections recorded yet"
+msgstr "暂无检测记录"
+
+msgid "检测详情"
+msgstr "检测详情"
+
+msgid "文件名"
+msgstr "文件名"
+
+msgid "完整路径"
+msgstr "完整路径"
+
+msgid "文件状态"
+msgstr "文件状态"
+
+msgid "存在"
+msgstr "存在"
+
+msgid "已删除"
+msgstr "已删除"
+
+msgid "检测时间"
+msgstr "检测时间"
+
+msgid "通信次数"
+msgstr "通信次数"
+
+msgid "首次发现IP"
+msgstr "首次发现IP"
+
+msgid "告警状态"
+msgstr "告警状态"
+
+msgid "已告警"
+msgstr "已告警"
+
+msgid "是"
+msgstr "是"
+
+msgid "否"
+msgstr "否"
+
+msgid "误报标记"
+msgstr "误报标记"
+
+msgid "已标记"
+msgstr "已标记"
+
+msgid "未标记"
+msgstr "未标记"
+
+msgid "关联威胁画像"
+msgstr "关联威胁画像"
+
+msgid "Risk:"
+msgstr "风险："
+
+msgid "✓ 文件已移除"
+msgstr "✓ 文件已移除"
+
+msgid "Status filter"
+msgstr "状态过滤"
+
+msgid "False positives"
+msgstr "误报"
+
+msgid "False positives stay listed here — clear the mark to return a file to the active set."
+msgstr "误报会保留在此列表中，取消标记即可让该文件回到活跃集合。"
+
+msgid "Select record"
+msgstr "选择记录"
+
+msgid "FALSE POSITIVE"
+msgstr "误报"
+
+msgid "DELETED"
+msgstr "已删除"
+
+msgid "ALERT"
+msgstr "已告警"
+
+msgid "ACTIVE"
+msgstr "活跃"
+
+msgid "Comm:"
+msgstr "通信："
+
+msgid "Q:"
+msgstr "队列:"
+
+msgid "None"
+msgstr "无"
+
+msgid "No detection records match this filter"
+msgstr "没有符合该过滤条件的检测记录"
+
+msgid "← Prev"
+msgstr "← 上一页"
+
+msgid "Next →"
+msgstr "下一页 →"
+
+msgid "Registry Records"
+msgstr "注册表记录"
+
+msgid "Async Save Queue"
+msgstr "异步保存队列"
+
+msgid "Last Save Time"
+msgstr "上次保存时间"
+
+msgid "WAL Replay Status"
+msgstr "WAL 回放状态"
+
+msgid "Proactive WebShell Detection"
+msgstr "主动式 WebShell 检测"
+
 msgid "SCAN CONFIG"
 msgstr "扫描配置"
+
+msgid "Target Directory"
+msgstr "目标目录"
+
+msgid "Extensions (comma-separated)"
+msgstr "扩展名（逗号分隔）"
+
+msgid "Include subdirectories"
+msgstr "包含子目录"
+
+msgid "Excluded:"
+msgstr "已排除："
+
+msgid "Start Scan"
+msgstr "开始扫描"
 
 msgid "SCAN PROGRESS"
 msgstr "扫描进度"
 
-msgid "Target Directory"
-msgstr "目标目录"
+msgid "Idle"
+msgstr "空闲"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "SCAN RESULTS"
+msgstr "扫描结果"
+
+msgid "File"
+msgstr "文件"
+
+msgid "Path"
+msgstr "路径"
+
+msgid "Engine"
+msgstr "引擎"
+
+msgid "Features"
+msgstr "特征"
+
+msgid "SCAN HISTORY"
+msgstr "扫描历史"
+
+msgid "Scan Report"
+msgstr "扫描报告"
+
+msgid "Anteumbra Manual Scan Report"
+msgstr "Anteumbra 手动扫描报告"
+
+msgid "Scan ID:"
+msgstr "扫描 ID："
+
+msgid "Duration:"
+msgstr "耗时："
+
+msgid "s"
+msgstr "秒"
+
+msgid "Scan Summary"
+msgstr "扫描摘要"
+
+msgid "New Findings"
+msgstr "新增发现"
+
+msgid "Known (in Registry)"
+msgstr "已知（注册表中）"
+
+msgid "Clean Files"
+msgstr "干净文件"
+
+msgid "Files Scanned"
+msgstr "已扫描文件"
+
+msgid "New Detections"
+msgstr "新增检测"
+
+msgid "Score"
+msgstr "评分"
+
+msgid "Known Detections"
+msgstr "已知检测"
+
+msgid "First Detected"
+msgstr "首次检测时间"
+
+msgid "Error:"
+msgstr "错误："
+
+msgid "Anteumbra v%(version)s — Manual Scanner Report —"
+msgstr "Anteumbra v%(version)s — 手动扫描器报告 —"
+
+msgid "Active 30d"
+msgstr "30 天内活跃"
+
+msgid "Cleanup expired sessions?"
+msgstr "清理已过期会话？"
+
+msgid "Cleanup"
+msgstr "清理"
+
+msgid "Loading sessions..."
+msgstr "正在加载会话..."
+
+msgid "ACCOUNT"
+msgstr "账户"
+
+msgid "SYSTEM"
+msgstr "系统"
+
+msgid "Registry Status"
+msgstr "注册表状态"
+
+msgid "WAL Management"
+msgstr "WAL 管理"
+
+msgid "Session Management"
+msgstr "会话管理"
+
+msgid "Config Reload"
+msgstr "配置重载"
+
+msgid "EXPORT & SIEM"
+msgstr "导出与 SIEM"
+
+msgid "STORAGE"
+msgstr "存储"
+
+msgid "PLUGINS"
+msgstr "插件"
+
+msgid "NOTIFICATIONS"
+msgstr "通知设置"
+
+msgid "CONFIG EDITOR"
+msgstr "配置编辑器"
+
+msgid "Loading config editor..."
+msgstr "正在加载配置编辑器..."
+
+msgid "System"
+msgstr "系统"
+
+msgid "Compact"
+msgstr "压缩"
+
+msgid "WAL"
+msgstr "WAL"
+
+msgid "Replay"
+msgstr "回放"
+
+msgid "Sessions"
+msgstr "会话"
+
+msgid "Config"
+msgstr "配置"
+
+msgid "Reload"
+msgstr "重载"
+
+msgid "Threat Records"
+msgstr "威胁记录"
+
+msgid "File Clusters"
+msgstr "文件聚类"
+
+msgid "Loading quarantine..."
+msgstr "正在加载隔离区..."
+
+msgid "Loading clusters..."
+msgstr "正在加载聚类..."
+
+msgid "Current WAL File"
+msgstr "当前 WAL 文件"
+
+msgid "WAL Archive List (Last 20)"
+msgstr "WAL 归档列表（最近 20 条）"
+
+msgid "Search rules..."
+msgstr "搜索规则..."
+
+msgid "Delete Selected"
+msgstr "删除选中"
+
+msgid "[+] Upload"
+msgstr "[+] 上传"
+
+msgid "rules"
+msgstr "条规则"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "No YARA rules installed"
+msgstr "未安装 YARA 规则"
+
+msgid "Search config..."
+msgstr "搜索配置..."
+
+msgid "Saved"
+msgstr "已保存"
+
+msgid "Save config.toml"
+msgstr "保存 config.toml"
+
+msgid "%(count)s fields"
+msgstr "%(count)s 个字段"
+
+msgid ".env File"
+msgstr ".env 文件"
+
+msgid "sensitive credentials"
+msgstr "敏感凭据"
+
+msgid "New password"
+msgstr "新密码"
+
+msgid "Generate Hash"
+msgstr "生成哈希"
+
+msgid "Save .env"
+msgstr "保存 .env"
+
+msgid "Credentials never committed to git."
+msgstr "凭据绝不会提交到 git。"
+
+msgid "Email"
+msgstr "邮件"
+
+msgid "Enable Email"
+msgstr "启用邮件"
+
+msgid "SMTP Host"
+msgstr "SMTP 主机"
+
+msgid "(set via ANTEUMBRA_EMAIL_PASSWORD env var)"
+msgstr "（通过 ANTEUMBRA_EMAIL_PASSWORD 环境变量设置）"
+
+msgid "WeChat (Server酱)"
+msgstr "微信（Server酱）"
+
+msgid "Enable WeChat"
+msgstr "启用微信"
+
+msgid "API Key"
+msgstr "API 密钥"
+
+msgid "(set via ANTEUMBRA_WECHAT_API_KEY env var)"
+msgstr "（通过 ANTEUMBRA_WECHAT_API_KEY 环境变量设置）"
+
+msgid "Webhook"
+msgstr "Webhook"
+
+msgid "Enable Webhook"
+msgstr "启用 Webhook"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Not configured"
+msgstr "未配置"
+
+msgid "Sensitive credentials (passwords, API keys) are managed via"
+msgstr "敏感凭据（密码、API 密钥）通过"
+
+msgid "file for security."
+msgstr "文件管理，以确保安全。"
+
+msgid "Toggle switches above enable/disable each notification channel in"
+msgstr "上方的开关用于启用/禁用各通知渠道，配置位于"
+
+msgid "System:"
+msgstr "系统："
+
+msgid "ENABLED"
+msgstr "已启用"
+
+msgid "DISABLED"
+msgstr "已禁用"
+
+msgid "Detectors:"
+msgstr "检测器："
+
+msgid "Notifiers:"
+msgstr "通知器："
+
+msgid "Sources:"
+msgstr "数据源："
+
+msgid "Plugin"
+msgstr "插件"
+
+msgid "Detector"
+msgstr "检测器"
+
+msgid "Notifier"
+msgstr "通知器"
+
+msgid "No plugins loaded. Add to"
+msgstr "未加载任何插件。请在"
+
+msgid "in config.toml."
+msgstr "中添加，位于 config.toml。"
+
+msgid "Enable in config.toml:"
+msgstr "在 config.toml 中启用："
+
+msgid "Page %(page)s / %(total_pages)s (%(session_count)s total)"
+msgstr "第 %(page)s / %(total_pages)s 页（共 %(session_count)s 个会话）"
+
+msgid "Status:"
+msgstr "状态："
+
+msgid "Format:"
+msgstr "格式："
+
+msgid "Exported:"
+msgstr "已导出："
+
+msgid "%(count)s events"
+msgstr "%(count)s 个事件"
+
+msgid "File:"
+msgstr "文件："
+
+msgid "Size:"
+msgstr "大小："
+
+msgid "%(size)s MB"
+msgstr "%(size)s MB"
+
+msgid "Syslog"
+msgstr "Syslog"
+
+msgid "Syslog streaming active"
+msgstr "Syslog 流式输出已启用"
+
+msgid "Export JSON Lines"
+msgstr "导出 JSON Lines"
+
+msgid "Export CEF"
+msgstr "导出 CEF"
+
+msgid "Backend:"
+msgstr "后端："
+
+msgid "Both"
+msgstr "双写"
+
+msgid "SQLite"
+msgstr "SQLite"
+
+msgid "JSON"
+msgstr "JSON"
+
+msgid "SQLite DB:"
+msgstr "SQLite 数据库："
+
+msgid "OK (%(size)s MB)"
+msgstr "正常（%(size)s MB）"
+
+msgid "Not created"
+msgstr "未创建"
+
+msgid "JSON files:"
+msgstr "JSON 文件："
+
+msgid "Dual-write active: JSON safety net + SQLite read priority"
+msgstr "双写已启用：JSON 作为安全兜底 + SQLite 读取优先"
+
+msgid "SQLite WAL mode — high performance concurrency"
+msgstr "SQLite WAL 模式 — 高性能并发"
+
+msgid "JSON file storage — default, zero-dependency"
+msgstr "JSON 文件存储 — 默认方案，零依赖"
+
+msgid "Active Threats"
+msgstr "活跃威胁"
+
+msgid "Audit Log"
+msgstr "审计日志"
 
 msgid "Recursive"
 msgstr "递归扫描"
 
 msgid "File Extensions"
 msgstr "文件扩展名"
-
-msgid "Start Scan"
-msgstr "开始扫描"
-
-msgid "SCAN RESULTS"
-msgstr "扫描结果"
-
-msgid "SCAN HISTORY"
-msgstr "扫描历史"
-
-msgid "Quarantine Selected"
-msgstr "隔离选中"
-
-msgid "Select All"
-msgstr "全选"
-
-msgid "Clear"
-msgstr "清除"
 
 # Records
 msgid "Search records..."
@@ -106,89 +1632,23 @@ msgstr "跨页全选"
 msgid "Clear Selection"
 msgstr "清除选择"
 
-msgid "Mark FP"
-msgstr "标记误报"
-
-msgid "Delete Selected"
-msgstr "删除选中"
-
 # Blocklist
 msgid "Block Audit Ledger"
 msgstr "封禁审计台账"
-
-msgid "All"
-msgstr "全部"
-
-msgid "Auto"
-msgstr "自动"
-
-msgid "Manual"
-msgstr "手动"
-
-msgid "Export JSON"
-msgstr "导出 JSON"
-
-msgid "Export CSV"
-msgstr "导出 CSV"
 
 # Profile
 msgid "Attack Chain"
 msgstr "攻击链"
 
-msgid "Associated IPs"
-msgstr "关联 IP"
-
-msgid "Generate Report"
-msgstr "生成报告"
-
-msgid "Block Selected IPs"
-msgstr "封禁选中 IP"
-
 # Common
 msgid "Login"
 msgstr "登录"
 
-msgid "Logout"
-msgstr "登出"
-
-msgid "Password"
-msgstr "密码"
-
-msgid "Username"
-msgstr "用户名"
-
 msgid "Save"
 msgstr "保存"
 
-msgid "Cancel"
-msgstr "取消"
-
-msgid "Close"
-msgstr "关闭"
-
-msgid "Refresh"
-msgstr "刷新"
-
-msgid "Copy"
-msgstr "复制"
-
-msgid "View"
-msgstr "查看"
-
-msgid "Delete"
-msgstr "删除"
-
-msgid "Restore"
-msgstr "恢复"
-
-msgid "Loading..."
-msgstr "加载中..."
-
 msgid "No data"
 msgstr "暂无数据"
-
-msgid "Error"
-msgstr "错误"
 
 msgid "Success"
 msgstr "成功"
@@ -196,46 +1656,5 @@ msgstr "成功"
 msgid "Warning"
 msgstr "警告"
 
-# Settings
-msgid "ACCOUNT"
-msgstr "账户"
-
-msgid "SYSTEM"
-msgstr "系统"
-
-msgid "CONFIG EDITOR"
-msgstr "配置编辑器"
-
-msgid "NOTIFICATIONS"
-msgstr "通知设置"
-
-msgid "EXPORT & SIEM"
-msgstr "导出与 SIEM"
-
-msgid "STORAGE"
-msgstr "存储"
-
-msgid "PLUGINS"
-msgstr "插件"
-
-msgid "Scan Total"
-msgstr "扫描总计"
-
-msgid "High Risk"
-msgstr "高危文件"
-
-msgid "Memory"
-msgstr "内存使用"
-
-msgid "Uptime"
-msgstr "运行时间"
-
-msgid "Unknown"
-msgstr "未知"
-
 msgid "Secure Login"
 msgstr "安全登录"
-
-msgid "AUTHENTICATE"
-msgstr "验证"
-

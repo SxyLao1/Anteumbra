@@ -17,6 +17,26 @@
     return meta ? meta.content : '';
   }
 
+  // Text rendered by JS modules is translated server-side and shipped as JSON,
+  // so a language switch also covers rows the frontend builds itself.
+  var strings = (function () {
+    var node = document.getElementById('i18n-strings');
+    if (!node) return {};
+    try {
+      return JSON.parse(node.textContent || '{}');
+    } catch (error) {
+      return {};
+    }
+  })();
+
+  function translate(text, params) {
+    var value = Object.prototype.hasOwnProperty.call(strings, text) ? strings[text] : text;
+    if (!params) return value;
+    return String(value).replace(/%\((\w+)\)s/g, function (match, name) {
+      return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
+    });
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -189,6 +209,7 @@
     },
     http: { request: request, json: requestJson, text: requestText, csrfToken: csrfToken },
     escape: { html: escapeHtml },
+    t: translate,
     ui: { showModal: showModal, hideModal: hideModal, toast: toast },
     confirm: function (message) { return window.confirm(message); },
     resolveTarget: resolveTarget,
