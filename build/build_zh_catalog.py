@@ -109,6 +109,21 @@ def _block_msgid(block: str) -> str:
     return "".join(parts)
 
 
+def pot_creation_date(pot: Path) -> str:
+    """Reuse the template's creation date so the compiled catalog is stable.
+
+    ``pybabel compile`` stamps ``POT-Creation-Date`` into the binary catalog; if
+    the header carries no date it falls back to "now", which makes every rebuild
+    produce different bytes for identical translations.  Copying the template's
+    own date keeps the .mo reproducible as long as the .pot is unchanged.
+    """
+    for line in pot.read_text(encoding="utf-8").splitlines():
+        if line.startswith('"POT-Creation-Date:'):
+            value = line[len('"POT-Creation-Date:') :].rstrip('"').strip()
+            return value.replace("\\n", "")
+    return ""
+
+
 def main() -> int:
     translations = load_map()
     print(f"map entries: {len(translations)}")
@@ -117,17 +132,25 @@ def main() -> int:
     ids: list[str] = read_pot_ids(POT)
     print(f"pot msgids: {len(ids)}")
 
-    header = (
-        "# Anteumbra Simplified Chinese translation.\n"
-        'msgid ""\n'
-        'msgstr ""\n'
-        '"Project-Id-Version: Anteumbra\\n"\n'
-        '"Language: zh\\n"\n'
-        '"MIME-Version: 1.0\\n"\n'
-        '"Content-Type: text/plain; charset=UTF-8\\n"\n'
-        '"Content-Transfer-Encoding: 8bit\\n"\n'
-        '"Plural-Forms: nplurals=1; plural=0;\\n"'
+    creation_date = pot_creation_date(POT)
+    header_lines = [
+        "# Anteumbra Simplified Chinese translation.",
+        'msgid ""',
+        'msgstr ""',
+        '"Project-Id-Version: Anteumbra\\n"',
+    ]
+    if creation_date:
+        header_lines.append(f'"POT-Creation-Date: {creation_date}\\n"')
+    header_lines.extend(
+        [
+            '"Language: zh\\n"',
+            '"MIME-Version: 1.0\\n"',
+            '"Content-Type: text/plain; charset=UTF-8\\n"',
+            '"Content-Transfer-Encoding: 8bit\\n"',
+            '"Plural-Forms: nplurals=1; plural=0;\\n"',
+        ]
     )
+    header = "\n".join(header_lines)
 
     body = []
     translated = 0
