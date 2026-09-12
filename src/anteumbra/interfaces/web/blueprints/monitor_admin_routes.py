@@ -8,16 +8,69 @@ from pathlib import Path
 
 from flask import current_app, jsonify, request
 
+from anteumbra.application.log_analyzer_service import LEVELS, RANGE_KEYS, analyze_lines
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints.monitor_bp import monitor_bp
+from anteumbra.interfaces.web.log_history import collect_log_history
 from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 
 def _registry():
     return get_runtime().registry
+
+
+# -- Log Analyzer --
+
+
+def _analyzer_filters() -> dict:
+    """Read the analyzer query string into service keyword arguments."""
+    args = request.args
+
+    def _float(name):
+        raw = str(args.get(name, "") or "").strip()
+        if not raw:
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    return {
+        "range_key": str(args.get("range", "all") or "all").lower(),
+        "from_epoch": _float("from"),
+        "to_epoch": _float("to"),
+        "level": str(args.get("level", "all") or "all"),
+        "module": str(args.get("module", "all") or "all"),
+        "keyword": str(args.get("q", "") or "")[:200],
+        "hits_only": str(args.get("hits", "")).lower() in ("1", "true", "on"),
+        "limit": args.get("limit", 500, type=int) or 500,
+    }
+
+
+@monitor_bp.route("/logs/analyzer")
+@require_auth
+def logs_analyzer():
+    """Dedicated log analysis page (replaces the overview-only modal)."""
+    return render_page(
+        "admin/logs_analyzer.html",
+        levels=LEVELS,
+        ranges=[key for key in RANGE_KEYS if key != "all"],
+    )
+
+
+@monitor_bp.route("/logs/analyzer/data")
+@require_auth
+def logs_analyzer_data():
+    """Filtered log rows plus the aggregates the analyzer page renders."""
+    try:
+        lines = collect_log_history(get_runtime(), limit=5000, log=current_app.logger)
+        return jsonify(analyze_lines(lines, **_analyzer_filters()))
+    except Exception as exc:  # noqa: BLE001 - report, never 500 the page
+        current_app.logger.error(f"[LOG_ANALYZER] analysis failed: {exc}", exc_info=True)
+        return jsonify({"error": str(exc), "rows": [], "matched": 0, "scanned": 0}), 500
 
 
 # -- WAL Management --

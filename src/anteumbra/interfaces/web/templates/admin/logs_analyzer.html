@@ -1,0 +1,155 @@
+<!-- v1.0.36: dedicated log analyzer — replaces the overview-only modal -->
+<section class="logs-view" data-logs-analyzer>
+  <div class="logs-kpis">
+    <div class="stat-card">
+      <strong id="log-kpi-scanned">-</strong>
+      <span>{{ _('Lines scanned') }}</span>
+    </div>
+    <div class="stat-card stat-card--accent">
+      <strong id="log-kpi-matched">-</strong>
+      <span>{{ _('Matched filters') }}</span>
+    </div>
+    <div class="stat-card stat-card--danger">
+      <strong id="log-kpi-errors">-</strong>
+      <span>{{ _('Errors + Critical') }}</span>
+    </div>
+    <div class="stat-card stat-card--warning">
+      <strong id="log-kpi-hits">-</strong>
+      <span>{{ _('Detection hits') }}</span>
+    </div>
+  </div>
+
+  <section class="card logs-filters">
+    <div class="card-header">
+      <span><span class="card-header-icon">⌕</span> {{ _('FILTERS') }}</span>
+      <span class="toolbar-spacer"></span>
+      <span class="logs-state" id="log-state">{{ _('Ready') }}</span>
+    </div>
+    <div class="card-body">
+      <div class="logs-filter-row">
+        <div class="logs-range" role="group" aria-label="{{ _('Time range') }}">
+          {% for key in ranges %}
+          <button class="btn btn-sm ledger-filter logs-range-btn{% if key == '24h' %} active{% endif %}" type="button"
+                  data-action="logs.range" data-range="{{ key }}">{{ key }}</button>
+          {% endfor %}
+          <button class="btn btn-sm ledger-filter logs-range-btn" type="button"
+                  data-action="logs.range" data-range="all">{{ _('All') }}</button>
+          <button class="btn btn-sm ledger-filter logs-range-btn" type="button"
+                  data-action="logs.range" data-range="custom">{{ _('Custom') }}</button>
+        </div>
+        <label class="logs-field">
+          <span>{{ _('Level') }}</span>
+          <select class="form-select" id="log-level" data-action="logs.filter">
+            <option value="all">{{ _('All levels') }}</option>
+            {% for name in levels %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="logs-field">
+          <span>{{ _('Module') }}</span>
+          <select class="form-select" id="log-module" data-action="logs.filter">
+            <option value="all">{{ _('All modules') }}</option>
+          </select>
+        </label>
+        <label class="logs-field logs-field--grow">
+          <span>{{ _('Keyword') }}</span>
+          <input type="search" class="form-input" id="log-keyword"
+                 placeholder="{{ _('space separated terms match the same line') }}"
+                 data-action="logs.search">
+        </label>
+        <label class="logs-check">
+          <input type="checkbox" id="log-hits-only" data-action="logs.filter">
+          <span>{{ _('Hits only') }}</span>
+        </label>
+        <label class="logs-field">
+          <span>{{ _('Rows') }}</span>
+          <select class="form-select" id="log-limit" data-action="logs.filter">
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+            <option value="2000">2000</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="logs-custom" id="log-custom-range" hidden>
+        <label class="logs-field">
+          <span>{{ _('From') }}</span>
+          <input type="datetime-local" class="form-input" id="log-from" data-action="logs.search">
+        </label>
+        <label class="logs-field">
+          <span>{{ _('To') }}</span>
+          <input type="datetime-local" class="form-input" id="log-to" data-action="logs.search">
+        </label>
+      </div>
+
+      <div class="logs-actions">
+        <button class="btn btn-primary btn-sm" type="button" data-action="logs.refresh">
+          {{ _('Apply / Refresh') }}</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="log-live-btn" data-action="logs.live-toggle">
+          <span class="logs-live-dot"></span>{{ _('Live tail') }}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="logs.clear">{{ _('Reset filters') }}</button>
+        <span class="toolbar-spacer"></span>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="logs.access-analysis">
+          {{ _('Access log analysis') }}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="logs.export" data-format="json">
+          {{ _('Export JSON') }}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="logs.export" data-format="csv">
+          {{ _('Export CSV') }}</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="logs-charts">
+    <section class="card">
+      <div class="card-header">
+        <span><span class="card-header-icon">▤</span> {{ _('VOLUME OVER TIME') }}</span>
+        <span class="toolbar-spacer"></span>
+        <span class="logs-hint" id="log-timeline-hint"></span>
+      </div>
+      <div class="card-body">
+        <div class="logs-timeline" id="log-timeline"></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><span><span class="card-header-icon">◍</span> {{ _('BREAKDOWN') }}</span></div>
+      <div class="card-body">
+        <div class="logs-breakdown" id="log-levels"></div>
+        <div class="logs-breakdown logs-breakdown--modules" id="log-modules"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card logs-table-card">
+    <div class="card-header">
+      <span><span class="card-header-icon">≡</span> {{ _('LOG LINES') }}</span>
+      <span class="badge badge-info" id="log-count-badge">0</span>
+      <span class="toolbar-spacer"></span>
+      <span class="logs-hint" id="log-truncated-hint"></span>
+    </div>
+    <div class="card-body logs-scroll">
+      <table class="data-table logs-table">
+        <thead>
+          <tr>
+            <th class="logs-col-time">{{ _('Time') }}</th>
+            <th class="logs-col-level">{{ _('Level') }}</th>
+            <th class="logs-col-module">{{ _('Module') }}</th>
+            <th>{{ _('Message') }}</th>
+            <th class="logs-col-actions">{{ _('Actions') }}</th>
+          </tr>
+        </thead>
+        <tbody id="log-rows">
+          <tr><td colspan="5" class="logs-placeholder">{{ _('Loading log history...') }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="log-access-panel" hidden>
+    <div class="card-header">
+      <span><span class="card-header-icon">⇄</span> {{ _('ACCESS LOG ANALYSIS') }}</span>
+      <span class="toolbar-spacer"></span>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="logs.access-close">{{ _('Close') }}</button>
+    </div>
+    <div class="card-body" id="log-access-content"></div>
+  </section>
+</section>

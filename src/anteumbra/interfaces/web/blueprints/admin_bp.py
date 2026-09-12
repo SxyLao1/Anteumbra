@@ -196,6 +196,30 @@ def dashboard_content():
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
 
+@admin_bp.route("/recent-detections")
+@require_auth
+def recent_detections():
+    """v1.0.36: overview quadrant — recent detections on their own."""
+    try:
+        from anteumbra.application.dashboard_service import build_dashboard_summary
+
+        runtime = get_runtime()
+        summary = build_dashboard_summary(
+            request.args.get("site_id") or None,
+            metrics=runtime.metrics,
+            websites=runtime.config.get_enabled_websites(),
+            registry=runtime.registry,
+            quarantine_stats_reader=runtime.quarantine.get_stats,
+        )
+        return render_template(
+            "admin/recent_detections.html",
+            recent_events=summary["recent_events"],
+        )
+    except Exception as e:
+        current_app.logger.error(f"[ADMIN] recent_detections失败: {e}", exc_info=True)
+        return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
+
+
 @admin_bp.route("/monitor_content")
 @require_auth
 def monitor_content():

@@ -5,9 +5,10 @@
   <span>{{ _('Notifications') }}: {{ 'External (' + runtime_capabilities.notifications.configured_channels|join(', ') + ')' if runtime_capabilities.notifications.mode == 'external' else 'Local logs only' }}</span>
   {% for warning in runtime_capabilities.warnings %}<span style="color:#ffaa00;">{{ warning.message }}</span>{% endfor %}
 </div>
-<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(320px, auto) minmax(320px, auto); gap: 20px; min-height: calc(100% - 48px);">
+<!-- v1.0.36: fixed four-quadrant overview — no page scrollbar, each quadrant scrolls -->
+<div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; height: calc(100% - 48px); min-height: 0;">
   <!-- 安全报告面板 -->
-  <div class="card" style="display: flex; flex-direction: column;">
+  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
     <div class="card-header">
       <span><span class="card-header-icon">◆</span> {{ _('Security Report') }}</span>
     </div>
@@ -20,7 +21,7 @@
   </div>
 
   <!-- 系统指标面板 -->
-  <div class="card" style="display: flex; flex-direction: column;">
+  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
     <div class="card-header">
       <span><span class="card-header-icon">◆</span> {{ _('System Metrics') }}</span>
       <span class="badge badge-info">{{ _('Live') }}</span>
@@ -33,19 +34,19 @@
     </div>
   </div>
 
-  <!-- 活跃威胁（未隔离） -->
-  <div class="card" style="display: flex; flex-direction: column;">
+  <!-- 最近检测（原安全报告内的列表，现独立象限） -->
+  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
     <div class="card-header">
-      <span><span class="card-header-icon">⚡</span> {{ _('Active Threats') }}</span>
-      <span class="badge badge-danger">{{ _('Needs Attention') }}</span>
+      <span><span class="card-header-icon">📋</span> {{ _('Recent Detections') }}</span>
+      <span class="toolbar-spacer"></span>
+      <a class="btn btn-ghost btn-sm" href="/admin/threats" data-action="core.navigate-location"
+         data-url="/admin/threats">{{ _('View all') }}</a>
     </div>
-    <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;">
-      <div id="overview-active-threats" style="padding: 16px;"
-           hx-get="/admin/records?compact=1"
-           hx-trigger="load, every 30s"
-           hx-swap="innerHTML">
-        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
-      </div>
+    <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;" id="overview-recent"
+         hx-get="/admin/recent-detections"
+         hx-trigger="load, every 30s"
+         hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
     </div>
   </div>
 
@@ -56,74 +57,12 @@
       <input type="text" class="form-input log-filter-input"
              placeholder="{{ _('Quick filter...') }}" data-action="dashboard.log-stream-filter" id="log-filter-input">
       <span class="badge badge-info">{{ _('SSE') }}</span>
-      <button class="btn btn-ghost btn-xs"
-              type="button" data-action="dashboard.log-open">{{ _('Analyze') }}</button>
+      <a class="btn btn-ghost btn-xs" href="/admin/logs/analyzer"
+         data-action="core.navigate-location" data-url="/admin/logs/analyzer">{{ _('Analyze') }}</a>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
          id="live-log-stream">
       {{ log_history|safe if log_history else '<div class="empty-state"><p>' + _('Connecting to log stream...') + '</p></div>' }}
     </div>
   </div>
-
-<!-- v1.8.0: Log Analyzer Modal -->
-<div id="log-analyzer-modal" class="modal-overlay" style="display:none; z-index:2000;" data-action="dashboard.log-backdrop">
-  <div class="modal-container" style="width:95vw; height:90vh; max-width:1400px; display:flex; flex-direction:column;">
-    <div class="modal-header" style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #1a1a1a;">
-      <h3 style="color:#00ff41; margin:0; flex:1;">{{ _('Log Analyzer') }}</h3>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" class="form-input" style="width:200px; font-size:11px; padding:4px 8px;"
-               placeholder="{{ _('Search keyword...') }}" data-action="dashboard.log-filter" id="analyzer-filter-input">
-        <select id="analyzer-level-filter" data-action="dashboard.log-filter"
-                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">{{ _('All') }}</option>
-          <option value="INFO">{{ _('INFO') }}</option>
-          <option value="WARNING">{{ _('WARNING') }}</option>
-          <option value="ERROR">{{ _('ERROR') }}</option>
-          <option value="CRITICAL">{{ _('CRITICAL') }}</option>
-        </select>
-        <select id="analyzer-module-filter" data-action="dashboard.log-filter"
-                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">{{ _('All') }}</option>
-          <option value="MONITOR">{{ _('MONITOR') }}</option>
-          <option value="SCAN">{{ _('SCAN') }}</option>
-          <option value="QUARANTINE">{{ _('QUARANTINE') }}</option>
-          <option value="REGISTRY">{{ _('REGISTRY') }}</option>
-          <option value="NOTIFIER">{{ _('NOTIFIER') }}</option>
-          <option value="SECURITY">{{ _('SECURITY') }}</option>
-          <option value="ALERT">{{ _('ALERT') }}</option>
-        </select>
-        <select id="analyzer-time-filter" data-action="dashboard.log-time"
-                style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:4px 8px; font-size:11px; border-radius:3px;">
-          <option value="all">{{ _('All Time') }}</option>
-          <option value="1h">{{ _('Last 1h') }}</option>
-          <option value="6h">{{ _('Last 6h') }}</option>
-          <option value="24h">{{ _('Last 24h') }}</option>
-          <option value="7d">{{ _('Last 7d') }}</option>
-          <option value="30d">{{ _('Last 30d') }}</option>
-          <option value="custom">{{ _('Custom...') }}</option>
-        </select>
-        <span id="analyzer-custom-time" style="display:none; gap:2px; align-items:center; flex-wrap:wrap;">
-          <span style="color:#666; font-size:10px;">{{ _('From') }}</span>
-          <input type="date" id="analyzer-time-from-date" data-action="dashboard.log-filter"
-                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
-          <input type="time" id="analyzer-time-from-time" step="1" data-action="dashboard.log-filter"
-                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
-          <span style="color:#666; font-size:10px;">{{ _('to') }}</span>
-          <input type="date" id="analyzer-time-to-date" data-action="dashboard.log-filter"
-                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:120px;">
-          <input type="time" id="analyzer-time-to-time" step="1" data-action="dashboard.log-filter"
-                 style="background:#0a0a0a; color:#ccc; border:1px solid #333; padding:2px 4px; font-size:10px; border-radius:3px; width:105px;">
-        </span>
-        <span style="font-size:10px; color:#666;" id="analyzer-count">{{ _('0 lines') }}</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px;" type="button" data-action="dashboard.log-access-analysis">{{ _('Access Analysis') }}</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px;" type="button" data-action="dashboard.log-close">{{ _('Close') }}</button>
-      </div>
-    </div>
-    <div class="modal-body" style="flex:1; padding:16px; overflow-y:auto; font-family:var(--font-mono); font-size:12px; line-height:1.7;"
-         id="analyzer-log-content">
-      <div class="empty-state"><p>{{ _('Loading logs...') }}</p></div>
-    </div>
-  </div>
-</div>
-
 </div>

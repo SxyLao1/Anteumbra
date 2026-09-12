@@ -118,6 +118,7 @@ def test_notifier_log_masking_hides_secrets():
 
 
 def test_access_log_analysis_is_available_from_log_analyzer():
+    """The analyzer moved from an overview modal to its own nav page."""
     monitor_bp = read_source(
         "src",
         "anteumbra",
@@ -126,11 +127,11 @@ def test_access_log_analysis_is_available_from_log_analyzer():
         "blueprints",
         "monitor_bp.py",
     )
-    dashboard_js = read_source(
-        "src", "anteumbra", "interfaces", "web", "static", "js", "dashboard.js"
+    logs_js = read_source(
+        "src", "anteumbra", "interfaces", "web", "static", "js", "modules", "logs.js"
     )
-    overview = read_source(
-        "src", "anteumbra", "interfaces", "web", "templates", "admin", "overview.html"
+    analyzer_page = read_source(
+        "src", "anteumbra", "interfaces", "web", "templates", "admin", "logs_analyzer.html"
     )
 
     assert any(
@@ -141,6 +142,7 @@ def test_access_log_analysis_is_available_from_log_analyzer():
         )
     )
     assert "runtime.log_analysis.analyze" in monitor_bp
-    assert "function loadAccessLogAnalysis()" in dashboard_js
-    assert "/admin/logs/access-analysis" in dashboard_js
-    assert "Access Analysis" in overview
+    assert "function loadAccessAnalysis()" in logs_js
+    assert "/admin/logs/access-analysis" in logs_js
+    assert "Access log analysis" in analyzer_page
+    assert "logs.access-analysis" in analyzer_page
