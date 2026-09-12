@@ -1,7 +1,7 @@
 <!-- v1.9.5: Storage Backend Status Panel -->
 <div style="display:flex;flex-direction:column;gap:8px;">
   <div style="display:flex;align-items:center;gap:8px;">
-    <span style="color:#00ff41;font-size:14px;">{{ '&#9679;' if db_exists else '&#9675;' | safe }}</span>
+    <span style="color:#00ff41;font-size:14px;">{{ '●' if db_exists else '○' }}</span>
     <span style="color:#888;font-size:11px;">{{ _('Backend:') }} <strong style="color:#00ff41;">{{ backend | upper }}</strong></span>
   </div>
   <div style="font-size:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px;">
