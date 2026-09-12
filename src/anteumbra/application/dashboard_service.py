@@ -8,13 +8,14 @@ from typing import Any, Callable, Optional
 from anteumbra.domain.site import SiteIdentity
 
 
-def _recent_events(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _recent_events(records: list[dict[str, Any]], limit: int = 25) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
-    for record in records[:5]:
+    for record in records[:limit]:
         events.append(
             {
                 "time": str(record.get("detected_at", "N/A"))[:16],
                 "file": Path(record.get("file_path", "")).name or "unknown",
+                "path": str(record.get("file_path", "")),
                 "rule": (record.get("features") or ["Unknown"])[0],
                 "quarantined": bool(record.get("quarantine_id")),
                 "false_positive": bool(record.get("marked_false_positive")),
