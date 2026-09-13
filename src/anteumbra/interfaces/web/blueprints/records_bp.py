@@ -80,6 +80,8 @@ def _enhance_records(raw_records):
                 "site_id": r.get("site_id", "legacy"),
                 "site_name": r.get("site_name", "Legacy / unassigned"),
                 "deleted_at": r.get("deleted_at", ""),
+                "missing_reason": r.get("missing_reason", ""),
+                "content_hash": r.get("content_hash", ""),
                 "quarantine_id": r.get("quarantine_id", ""),
             }
         )
@@ -444,6 +446,9 @@ def get_record_detail():
             "site_id": record.get("site_id", "legacy"),
             "site_name": record.get("site_name", "Legacy / unassigned"),
             "deleted_at": record.get("deleted_at", "N/A"),
+            "missing_reason": record.get("missing_reason", ""),
+            "missing_at": record.get("missing_at", ""),
+            "content_hash": record.get("content_hash", ""),
             "quarantine_info": quarantine_info,
             "linked_profiles": linked_profiles,
         }

@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from anteumbra.application.content_fingerprint import file_content_hash
 from anteumbra.domain.entities import ScanResult
 from anteumbra.domain.quarantine import QuarantineGuardPort
 from anteumbra.domain.runtime import DetectionRegistryPort, EventPublisherPort, MetricsPort
@@ -128,6 +129,7 @@ class DetectionWorkflow:
                 first_seen_ip=first_seen_ip,
                 detection_source="passive",
                 site=self._site,
+                content_hash=file_content_hash(event_path),
             )
             self._handle_quarantine(
                 event_path,

@@ -83,6 +83,7 @@ class SuspiciousRegistry:
         site_name: str | None = None,
         *,
         site: SiteIdentity | None = None,
+        content_hash: str = "",
     ) -> None:
         """Create or refresh one detection within its explicit site boundary."""
         identity = self._resolve_site(file_path, site, site_id, site_name)
@@ -99,6 +100,7 @@ class SuspiciousRegistry:
                     detection_source,
                     identity,
                     now,
+                    content_hash,
                 )
                 records.append(record)
             else:
@@ -110,6 +112,7 @@ class SuspiciousRegistry:
                     detection_source,
                     identity,
                     now,
+                    content_hash,
                 )
             self._commit_upsert(
                 records,
@@ -265,8 +268,15 @@ class SuspiciousRegistry:
         site_id: str | None = None,
         *,
         site: SiteIdentity | None = None,
+        reason: str = "",
     ) -> bool:
-        """Mark a physically removed file without crossing site boundaries."""
+        """Mark a physically removed file without crossing site boundaries.
+
+        Called when the watcher sees the file deleted outside the product (an
+        operator in Explorer, a shell command, or an attacker cleaning up).  The
+        record is retained and only changes state, so the threat history survives
+        the file it describes.
+        """
         resolved_site_id = site.site_id if site is not None else site_id
         now = self._now()
 
@@ -274,8 +284,85 @@ class SuspiciousRegistry:
             file_path,
             resolved_site_id,
             operation="remove",
-            mutate=lambda record: registry_records.mark_removed(record, now),
+            mutate=lambda record: registry_records.mark_removed(record, now, reason),
         )
+
+    def mark_present(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+        *,
+        site: SiteIdentity | None = None,
+    ) -> bool:
+        """Clear a previously recorded removal once the path exists again.
+
+        Cheap and idempotent on purpose: watcher events call this for every
+        touched path, and a registry rewrite plus WAL transaction per event
+        would be pure churn.  Only a record that is currently stored as missing
+        is worth a write.
+        """
+        resolved_site_id = site.site_id if site is not None else site_id
+        key = path_to_key(file_path)
+        target_site = self._site_id_for_lookup(file_path, resolved_site_id)
+        with self._lock:
+            index = self._find_index(self._records, key, target_site)
+            if index is None or bool(self._records[index].get("file_exists", True)):
+                return False
+        now = self._now()
+        return self._update_record(
+            file_path,
+            resolved_site_id,
+            operation="mark_present",
+            mutate=lambda record: registry_records.mark_present(record, now),
+        )
+
+    def reconcile_filesystem(self, site_id: str | None = None) -> dict[str, int]:
+        """Align stored ``file_exists`` with the real filesystem.
+
+        The watcher only sees deletions that happen while it is running, so a
+        file removed during a restart, a reboot, or any window where the service
+        was down would otherwise stay recorded as present forever.  This is the
+        catch-up pass; it is cheap because it only stats recorded paths.
+
+        Only filesystem-observed absences are reversed.  A record the operator
+        soft-deleted stays deleted even while the file is still on disk, because
+        ``missing_reason`` is empty for those.
+        """
+        normalized_site_id = self._normalize_site_id(site_id) if site_id else None
+        now = self._now()
+        counters = {"checked": 0, "marked_missing": 0, "marked_present": 0}
+        with self._lock:
+            records = copy.deepcopy(self._records)
+            changed = False
+            for record in records:
+                if normalized_site_id is not None and record.get("site_id") != normalized_site_id:
+                    continue
+                key = record.get("file_path")
+                if not key:
+                    continue
+                counters["checked"] += 1
+                try:
+                    exists = Path(key).is_file()
+                except OSError:
+                    continue
+                stored = bool(record.get("file_exists", True))
+                if stored and not exists:
+                    registry_records.mark_removed(record, now, "gone-while-stopped")
+                    counters["marked_missing"] += 1
+                    changed = True
+                elif (
+                    not stored
+                    and exists
+                    and record.get("missing_reason")
+                    and not record.get("quarantine_id")
+                ):
+                    registry_records.mark_present(record, now)
+                    counters["marked_present"] += 1
+                    changed = True
+            if changed:
+                self._persist(records, previous=self._records)
+                self._records = records
+        return counters
 
     def soft_delete_record(
         self,
@@ -540,6 +627,9 @@ class SuspiciousRegistry:
             record.setdefault("first_seen_ip", None)
             record.setdefault("communication_count", 0)
             record.setdefault("deleted_at", None)
+            record.setdefault("content_hash", "")
+            record.setdefault("missing_at", None)
+            record.setdefault("missing_reason", "")
             record.setdefault("detection_source", "passive")
             record.setdefault("false_positive_reason", "")
             record.setdefault("false_positive_at", None)
@@ -623,6 +713,7 @@ class SuspiciousRegistry:
             records[index]["alerted"] = True
         else:
             raise RegistryDataError(f"unknown legacy WAL operation: {operation}")
+        records, _ = self._normalize_records(records)
         self._persist(records, previous=self._records)
         self._records = records
 
