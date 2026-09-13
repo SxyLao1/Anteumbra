@@ -626,6 +626,31 @@ def unmark_false_positive_route(file_path):
         return render_template("admin/error.html", error=str(e)), 500
 
 
+@records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
+@require_auth
+def rearm_alert_route(file_path):
+    """重新告警 — re-arm alerting so the next detection of this file reports again.
+
+    Repeat alerts are suppressed while the standing alert still covers the exact
+    bytes on disk, so an operator who wants to be told again needs a way to say
+    so without deleting the file or faking a false-positive review.
+    """
+    try:
+        decoded_path = unquote(file_path)
+        normalized_path = normalize_path(decoded_path)
+
+        site_id = _requested_site_id()
+        if not _registry().clear_alert_state(normalized_path, site_id=site_id):
+            return jsonify({"status": "error", "message": "记录不存在"}), 404
+
+        current_app.logger.info("[RECORDS] 重新告警: %s", normalized_path)
+        get_runtime().sse.trigger_registry_update()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        current_app.logger.error(f"[RECORDS] 重新告警失败: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # ── Audit Log ──────────────────────────────────────────────
 
 

@@ -46,6 +46,7 @@ JS_SOURCES: tuple[str, ...] = (
     "Done: %(success)s success, %(skipped)s skipped, %(failed)s failed",
     "Done: %(success)s success, %(failed)s failed", "Batch failed: %(message)s",
     "Reload failed: %(message)s", "Review failed: %(message)s", "Filter failed: %(message)s",
+    "Alert re-armed.", "Re-arm failed: %(message)s",
     # profiles / IP reputation
     "Clipboard access is unavailable.", "Copied.", "Copy failed.", "Block Selected IPs",
     "Block %(count)s IPs?", "... and %(count)s more", "OK: ", "FAIL: ", "Blocked",
@@ -115,7 +116,8 @@ def _extraction_only() -> tuple[str, ...]:
         _("Done: %(success)s success, %(skipped)s skipped, %(failed)s failed"),
         _("Done: %(success)s success, %(failed)s failed"), _("Batch failed: %(message)s"),
         _("Reload failed: %(message)s"), _("Review failed: %(message)s"),
-        _("Filter failed: %(message)s"),
+        _("Filter failed: %(message)s"), _("Alert re-armed."),
+        _("Re-arm failed: %(message)s"),
         # profiles / IP reputation
         _("Clipboard access is unavailable."), _("Copied."), _("Copy failed."),
         _("Block Selected IPs"), _("Block %(count)s IPs?"), _("... and %(count)s more"),

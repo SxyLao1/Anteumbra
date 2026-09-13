@@ -877,8 +877,26 @@ class WebsiteMonitor:
             return
 
         log_with_symbol("success", "info", "Monitor started successfully", self.logger)
+        self._announce_quarantine_state()
         self._reconcile_registry_state()
         self._start_baseline_scan()
+
+    def _announce_quarantine_state(self) -> None:
+        """Say once per run whether detections will actually be quarantined.
+
+        Hits used to carry a "quarantine skipped" line each — one line per
+        detection for something that cannot change during a run.
+        """
+        try:
+            enabled = self.services.context.config.get("quarantine", {}).get(
+                "auto_quarantine_enabled", True
+            )
+        except Exception:
+            self.logger.debug("Failed to read quarantine config", exc_info=True)
+            return
+        if enabled:
+            return
+        self.logger.info("[QUARANTINE] 自动隔离总开关关闭：命中只记录并告警，不会隔离文件")
 
     def _reconcile_registry_state(self) -> None:
         """Catch up on deletions the watcher could not have seen.

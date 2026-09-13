@@ -114,18 +114,10 @@ class QuarantineHandlerPlugin(Plugin):
             return None
 
         if not quarantine_enabled:
-            # Emit skipped alert
-            self._emit_alert(
-                "quarantine_skipped",
-                ts,
-                file_path,
-                first_seen_ip,
-                features,
-                "WARNING",
-                reason="auto_quarantine_disabled",
-                site_id=site_id,
-                site_name=site_name,
-            )
+            # A disabled switch is a standing configuration, not an alert: the
+            # run announces it once at startup, and one WARNING per hit only
+            # doubles the notification volume for no new information.
+            self._logger.debug("[QUARANTINE] 总开关关闭，跳过隔离: %s", file_path)
             return None
 
         # -- Perform quarantine --

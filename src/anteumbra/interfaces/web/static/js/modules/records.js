@@ -273,6 +273,20 @@
     });
   }
 
+  function rearmRecordAlert(trigger) {
+    var path = trigger && trigger.dataset ? trigger.dataset.filePath : '';
+    if (!path) return;
+    app.http.text('/admin/records/rearm_alert/' + encodeURIComponent(path), {
+      method: 'POST', headers: { 'HX-Request': 'true' }
+    }).then(function () {
+      app.ui.toast(app.t('Alert re-armed.'), 'success');
+      openRecordDetail(trigger);
+      reloadLedger();
+    }).catch(function (error) {
+      app.ui.toast(app.t('Re-arm failed: %(message)s', { message: error.message }), 'error');
+    });
+  }
+
   function switchStatus(status) {
     var panel = document.querySelector('.records-panel[data-status]');
     if (!panel || !status) return;
@@ -360,6 +374,7 @@
       'quarantine.detail-open': { handler: function (context) { openQuarantineDetail(context.element); } },
       'quarantine.detail-close': { handler: closeQuarantineDetail },
       'records.detail-close': { handler: closeRecordDetail },
+      'records.detail-rearm': { handler: function (context) { rearmRecordAlert(context.element); } },
       'records.detail-profile': { handler: function (context) { openProfileFromRecord(context.element); } }
     },
     mount: function (root) {
