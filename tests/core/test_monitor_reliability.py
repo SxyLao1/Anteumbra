@@ -2,6 +2,7 @@ import logging
 import queue
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 from anteumbra.domain.entities import ScanResult
@@ -77,6 +78,119 @@ def test_full_scan_queue_falls_back_to_synchronous_processing(monkeypatch, tmp_p
 
         assert calls == [(tmp_path / "overflow.php", "CREATE")]
     finally:
+        handler.shutdown()
+
+
+def test_baseline_sweep_waits_for_capacity_instead_of_scanning_inline(monkeypatch, tmp_path):
+    """A site sweep must never turn into a YARA scan on the sweep's own thread.
+
+    The sweep offers thousands of files at once, so the queue fills; the event
+    path falls back to scanning inline, which is what produced the "queue full"
+    warnings seen dozens of times per run.  Baseline work waits instead.
+    """
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    blocker = threading.Event()
+    calls: list[tuple[str, str]] = []
+
+    def record(path, event_type):
+        calls.append((threading.current_thread().name, str(path)))
+        blocker.wait(3)
+
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.baseline-capacity"),
+        services=_services(tmp_path),
+    )
+    try:
+        monkeypatch.setattr(handler, "_do_scan", record)
+        handler._scan_queue = queue.Queue(maxsize=4)
+        handler._baseline_queue_reserve = 2
+        handler._scan_queue.put((tmp_path / "occupies-worker.php", "BASELINE"))
+        time.sleep(0.3)  # let the worker take it and park on the blocker
+        for index in range(2):  # fill up to the sweep's limit (4 - 2)
+            handler._scan_queue.put((tmp_path / f"f{index}.php", "BASELINE"))
+
+        def release():
+            time.sleep(0.4)
+            handler._scan_queue.get()
+
+        releaser = threading.Thread(target=release, daemon=True, name="Releaser")
+        releaser.start()
+        started = time.time()
+        accepted = handler.enqueue_baseline_scan(tmp_path / "sweep.php")
+        elapsed = time.time() - started
+        blocker.set()
+        releaser.join(timeout=3)
+
+        assert accepted is True
+        assert elapsed >= 0.3, f"the sweep did not wait for capacity ({elapsed:.2f}s)"
+        inline = [entry for entry in calls if entry[0] != "ScanWorker"]
+        assert inline == [], f"the sweep scanned a file inline: {inline}"
+    finally:
+        blocker.set()
+        handler.shutdown()
+
+
+def test_baseline_sweep_stops_waiting_when_the_monitor_stops(tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.baseline-stop"),
+        services=_services(tmp_path),
+    )
+    try:
+        handler._stop_scan_worker()
+        handler._scan_queue = queue.Queue(maxsize=2)
+        handler._baseline_queue_reserve = 2
+        handler._scan_queue.put((tmp_path / "queued.php", "BASELINE"))
+        stop = threading.Event()
+        stop.set()
+
+        assert handler.enqueue_baseline_scan(tmp_path / "sweep.php", stop) is False
+    finally:
+        handler.shutdown()
+
+
+def test_baseline_sweep_leaves_room_for_real_events(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    blocker = threading.Event()
+    calls: list[tuple[str, str]] = []
+
+    def record(path, event_type):
+        calls.append((threading.current_thread().name, str(path)))
+        blocker.wait(3)
+
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.baseline-reserve"),
+        services=_services(tmp_path),
+    )
+    try:
+        monkeypatch.setattr(handler, "_do_scan", record)
+        handler._scan_queue = queue.Queue(maxsize=10)
+        handler._baseline_queue_reserve = 3
+        handler._scan_queue.put((tmp_path / "occupies-worker.php", "BASELINE"))
+        time.sleep(0.3)  # the worker parks on the blocker
+
+        for index in range(7):  # 10 - 3 is the sweep's own limit
+            assert handler.enqueue_baseline_scan(tmp_path / f"sweep{index}.php") is True
+
+        assert handler._scan_queue.qsize() == 7
+        # the reserve is still free, so an event is queued rather than scanned inline
+        handler.enqueue_scan(tmp_path / "event.php", "CREATE")
+        assert handler._scan_queue.qsize() == 8
+        assert "event.php" not in [Path(path).name for _thread, path in calls]
+    finally:
+        blocker.set()
         handler.shutdown()
 
 
