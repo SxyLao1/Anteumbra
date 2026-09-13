@@ -118,6 +118,18 @@ class FileMonitorHandler(FileSystemEventHandler):
         # Slots the startup sweep leaves free so a real filesystem event is
         # queued rather than scanned inline on the caller's thread.
         self._baseline_queue_reserve = max(2, queue_size // 10)
+        # One thread scans one file at a time and YARA releases the GIL, so a
+        # few workers shorten both the startup sweep and the latency of a mass
+        # upload.  A quarter of the cores, capped at four, keeps a small machine
+        # at one worker; scanner.worker_threads overrides it.
+        try:
+            workers = int(scanner_cfg.get("worker_threads", 0))
+        except (TypeError, ValueError):
+            workers = 0
+        if workers <= 0:
+            workers = max(1, min(4, (os.cpu_count() or 1) // 4))
+        self._scan_worker_count = max(1, workers)
+        self._scan_worker_threads: list[threading.Thread] = []
         self._scan_worker_thread = None
         self._scan_worker_shutdown = threading.Event()
         self._start_scan_worker()
@@ -438,15 +450,24 @@ class FileMonitorHandler(FileSystemEventHandler):
 
     # ===== v1.7.9: 异步扫描工作线程 =====
     def _start_scan_worker(self):
-        """启动后台扫描工作线程（仅一次）"""
-        if self._scan_worker_thread is not None and self._scan_worker_thread.is_alive():
+        """启动后台扫描工作线程（按并发配置启动多个）"""
+        if any(thread.is_alive() for thread in self._scan_worker_threads):
             return
         self._scan_worker_shutdown.clear()
-        self._scan_worker_thread = threading.Thread(
-            target=self._scan_worker_loop, daemon=True, name="ScanWorker"
+        self._scan_worker_threads = [
+            threading.Thread(
+                target=self._scan_worker_loop,
+                daemon=True,
+                name=f"ScanWorker-{index + 1}",
+            )
+            for index in range(self._scan_worker_count)
+        ]
+        for thread in self._scan_worker_threads:
+            thread.start()
+        self._scan_worker_thread = self._scan_worker_threads[0]
+        self.logger.info(
+            "[SCAN][WORKER] 异步扫描工作线程已启动 x%d", len(self._scan_worker_threads)
         )
-        self._scan_worker_thread.start()
-        self.logger.info("[SCAN][WORKER] 异步扫描工作线程已启动")
 
     def _scan_worker_loop(self):
         """扫描队列消费循环"""
@@ -507,13 +528,17 @@ class FileMonitorHandler(FileSystemEventHandler):
     def _stop_scan_worker(self):
         """停止扫描工作线程"""
         self._scan_worker_shutdown.set()
-        if self._scan_worker_thread and self._scan_worker_thread.is_alive():
-            try:
+        alive = [thread for thread in self._scan_worker_threads if thread.is_alive()]
+        if not alive:
+            return
+        try:
+            for _thread in alive:
                 self._scan_queue.put_nowait((None, None))
-            except queue.Full:
-                # The worker observes the shutdown flag after the current item.
-                pass
-            self._scan_worker_thread.join(timeout=3)
+        except queue.Full:
+            # The workers observe the shutdown flag after the current item.
+            pass
+        for thread in alive:
+            thread.join(timeout=3)
 
     def shutdown(self):
         """Release worker resources when the owning WebsiteMonitor stops."""
