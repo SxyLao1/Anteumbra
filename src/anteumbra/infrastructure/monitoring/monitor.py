@@ -115,6 +115,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         except (TypeError, ValueError):
             self._scan_queue_put_timeout = 0.25
         self._scan_queue = queue.Queue(maxsize=queue_size)
+        # Slots the startup sweep leaves free so a real filesystem event is
+        # queued rather than scanned inline on the caller's thread.
+        self._baseline_queue_reserve = max(2, queue_size // 10)
         self._scan_worker_thread = None
         self._scan_worker_shutdown = threading.Event()
         self._start_scan_worker()
@@ -544,6 +547,30 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
             self._do_scan(event_path, event_type)
 
+    def enqueue_baseline_scan(self, file_path: Path, stop_event=None) -> bool:
+        """Queue one pre-existing file, waiting for room instead of scanning inline.
+
+        A site sweep offers thousands of files at once.  The event path keeps its
+        synchronous fallback, because an event is worth scanning even on a busy
+        queue, but baseline work is elastic: waiting is always cheaper than
+        making the caller run a YARA scan.  The sweep also stops short of the
+        queue limit so a real event still finds room — that is what removed the
+        56 "queue full" inline scans measured in a single run.
+        """
+        limit = max(1, self._scan_queue.maxsize - self._baseline_queue_reserve)
+        while True:
+            if self._scan_worker_shutdown.is_set():
+                return False
+            if stop_event is not None and stop_event.is_set():
+                return False
+            if self._scan_queue.qsize() < limit:
+                try:
+                    self._scan_queue.put((file_path, "BASELINE"), block=False)
+                    return True
+                except queue.Full:
+                    continue
+            time.sleep(0.1)
+
     def _handle_event(self, event, event_type: str, override_path: Path = None):
         """v1.7.9: 统一事件处理 → 异步入队，不阻塞watchdog主线程"""
         if getattr(event, "is_directory", False):
@@ -954,8 +981,8 @@ class WebsiteMonitor:
                         break
                     file_path = Path(root) / filename
                     if self.handler._should_monitor(file_path):
-                        self.handler.enqueue_scan(file_path, "BASELINE")
-                        queued += 1
+                        if self.handler.enqueue_baseline_scan(file_path, self._baseline_stop):
+                            queued += 1
             try:
                 self.services.metrics.increment("baseline_runs", site_id=self.website.site_id)
                 self.services.metrics.increment(
