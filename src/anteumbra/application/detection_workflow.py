@@ -125,6 +125,10 @@ class DetectionWorkflow:
                 and self._registry.was_alerted(event_path, content_hash, site_id=self._site.site_id)
             )
             if already_alerted:
+                # Nothing about this record would change: same path, same bytes,
+                # same rules, and the alert already went out.  Writing it again
+                # only moved its "detected at" timestamp, at the cost of one
+                # registry write per re-scanned file on every sweep.
                 self._logger.debug("[ALERT][SKIP] 同一内容已告警，不再重复: %s", event_path.name)
             else:
                 emit_alert(
@@ -135,15 +139,15 @@ class DetectionWorkflow:
                     first_seen_ip,
                     "CRITICAL",
                 )
-            self._registry.add(
-                event_path,
-                scan_result.features,
-                first_seen_ip=first_seen_ip,
-                detection_source="passive",
-                site=self._site,
-                content_hash=content_hash,
-                alert_emitted=not already_alerted,
-            )
+                self._registry.add(
+                    event_path,
+                    scan_result.features,
+                    first_seen_ip=first_seen_ip,
+                    detection_source="passive",
+                    site=self._site,
+                    content_hash=content_hash,
+                    alert_emitted=True,
+                )
             self._handle_quarantine(
                 event_path,
                 scan_result,
