@@ -199,4 +199,8 @@ TRANSLATIONS = {
     "%(count)s IPs": "%(count)s 个 IP",
     # source viewer
     "%(size)s | %(lines)s lines": "%(size)s | %(lines)s 行",
+    # session expiry prompt
+    "Session expired": "登录状态已过期",
+    "Your session has expired. Please sign in again.": "身份凭据已过期，请重新登录。",
+    "Sign in again": "重新登录",
 }
