@@ -271,7 +271,7 @@ msgid "Mark as FP"
 msgstr "标记为误报"
 
 msgid "%(count)s selected"
-msgstr "已选 %(count) 项"
+msgstr "%(count)s 项"
 
 msgid "Selection metadata is invalid."
 msgstr "选择元数据无效。"
@@ -919,7 +919,7 @@ msgid "ASSOCIATED IPs"
 msgstr "关联 IP"
 
 msgid "0 selected"
-msgstr "已选 0 项"
+msgstr "0 项"
 
 msgid "Select Page"
 msgstr "选择本页"
@@ -1737,3 +1737,12 @@ msgstr "已重新告警。"
 
 msgid "Re-arm failed: %(message)s"
 msgstr "重新告警失败：%(message)s"
+
+msgid "Clear selection"
+msgstr "清除选中"
+
+msgid "Select this page"
+msgstr "全选本页"
+
+msgid "Select every page"
+msgstr "全选每页"
