@@ -316,8 +316,17 @@ class ScannerService:
         except OSError:
             logger.debug("Decoder pass could not read %s", file_path, exc_info=True)
             return None
-        except Exception:
-            logger.exception("Decoder pass failed for %s", file_path)
+        except Exception as exc:
+            # A decoder that cannot handle one file's content is a per-file
+            # condition, not an operator-facing failure: one line names the file
+            # and the reason, and the traceback stays available at DEBUG.
+            logger.warning(
+                "[SCAN][DECODE] decoder pass skipped %s: %s: %s",
+                file_path.name,
+                type(exc).__name__,
+                exc,
+            )
+            logger.debug("Decoder pass traceback for %s", file_path, exc_info=True)
             return None
         if not matches:
             return None
