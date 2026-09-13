@@ -61,7 +61,7 @@ JS_SOURCES: tuple[str, ...] = (
     "No block records found.", "Prev", "Next",
     "Page %(page)s / %(total_pages)s (%(total)s total)",
     # SSE indicator + block status bar
-    "Live", "Off", "Auto: OFF", "Auto: ON (>%(score)s%%)", "Devices: %(count)s",
+    "Connected", "Disconnected", "Auto: OFF", "Auto: ON (>%(score)s%%)", "Devices: %(count)s",
     "Queue: %(count)s", "Blocked: %(count)s",
     # clusters
     "Expand all", "Collapse all", "Filter by cluster id, file name or path...",
@@ -132,7 +132,7 @@ def _extraction_only() -> tuple[str, ...]:
         _("No block records found."), _("Prev"), _("Next"),
         _("Page %(page)s / %(total_pages)s (%(total)s total)"),
         # SSE indicator + block status bar
-        _("Live"), _("Off"), _("Auto: OFF"), _("Auto: ON (>%(score)s%%)"),
+        _("Connected"), _("Disconnected"), _("Auto: OFF"), _("Auto: ON (>%(score)s%%)"),
         _("Devices: %(count)s"), _("Queue: %(count)s"), _("Blocked: %(count)s"),
         # clusters
         _("Expand all"), _("Collapse all"), _("Filter by cluster id, file name or path..."),

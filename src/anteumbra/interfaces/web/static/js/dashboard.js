@@ -19,11 +19,12 @@
   function mainContent() { return document.getElementById('main-content'); }
 
   function setTitle(title) {
+    // The highlighted sidebar item is now the only in-page page indicator. The
+    // header used to repeat the current page next to the brand (which also
+    // overwrote the version chip) and the content pane repeated it a third time
+    // above the fragment, so only the browser tab needs updating.
     var value = title || 'Overview';
-    var brand = document.querySelector('.brand-sub');
-    var page = document.getElementById('page-title');
-    if (brand) brand.textContent = value;
-    if (page) page.textContent = value;
+    document.title = value + ' · Anteumbra';
   }
 
   function setLoading(target, text) {

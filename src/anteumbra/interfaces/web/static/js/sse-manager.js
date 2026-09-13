@@ -227,7 +227,11 @@ window.AnteumbraSSEManager = {
     const label = el.querySelector('.status-label');
     if (label) {
       const t = (text) => (window.Anteumbra && window.Anteumbra.t ? window.Anteumbra.t(text) : text);
-      label.textContent = state === 'connected' ? t('Live') : state === 'connecting' ? '...' : t('Off');
+      // "Live" alone did not say *what* was live; the chip's tooltip names the
+      // live log stream, and the label now states the connection itself.
+      label.textContent = state === 'connected'
+        ? t('Connected')
+        : state === 'connecting' ? '...' : t('Disconnected');
     }
   }
 };

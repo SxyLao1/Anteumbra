@@ -207,36 +207,8 @@ body::before {
   padding: 24px;
 }
 
-/* 内容标题区 */
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.page-title {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.page-title::before {
-  content: '>';
-  color: var(--color-accent);
-  animation: blink-cursor 1s infinite;
-}
-
-.page-actions {
-  display: flex;
-  gap: 8px;
-}
+/* 内容标题区（.page-header / .page-title）已移除：页名只由侧边栏高亮表示，
+   头部和内容区不再各重复一次。详见 dashboard.html。 */
 
 
 /* ============================================================
@@ -324,12 +296,6 @@ body::before {
 
   .content-scroll {
     padding: 16px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
   }
 
   .metrics-grid {

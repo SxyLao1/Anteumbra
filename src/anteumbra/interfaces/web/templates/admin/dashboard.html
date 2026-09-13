@@ -45,13 +45,15 @@
         <span>ANTEUMBRA</span>
         <span class="brand-sub">v{{ anteumbra_version }}</span>
       </div>
-      <div class="header-center" id="header-center"></div>
       <div class="header-actions">
+        <button class="btn btn-ghost btn-sm header-refresh" type="button" data-action="dashboard.refresh"
+                title="{{ _('Reload the current view') }}"><span aria-hidden="true">↻</span> {{ _('Refresh') }}</button>
         <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle menu" data-action="dashboard.sidebar-toggle">
           <span></span><span></span><span></span>
         </button>
-        <div id="sse-status-indicator" class="sse-status disconnected" aria-live="polite">
-          <span class="dot"></span><span class="status-label">{{ _('Off') }}</span>
+        <div id="sse-status-indicator" class="sse-status disconnected" aria-live="polite"
+             title="{{ _('Live log stream connection') }}">
+          <span class="dot"></span><span class="status-label">{{ _('Disconnected') }}</span>
         </div>
         {% set active_locale = current_locale | default('en') %}
         <div class="lang-switch" role="group" aria-label="{{ _('Language') }}">
@@ -87,10 +89,6 @@
       </aside>
 
       <main class="app-main">
-        <div class="page-header">
-          <h1 class="page-title" id="page-title">{% if initial_title %}{{ initial_title }}{% else %}{{ _('Overview') }}{% endif %}</h1>
-          <div class="page-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.refresh"><span aria-hidden="true">↻</span> {{ _('Refresh') }}</button></div>
-        </div>
         <div class="content-scroll" id="main-content" aria-live="polite"{% block main_attrs %}{% if initial_path %} data-initial-path="{{ initial_path }}" data-initial-title="{{ initial_title }}"{% endif %}{% endblock %}>
           {% block main_content %}
           {% if initial_fragment %}{% include initial_fragment ignore missing %}
