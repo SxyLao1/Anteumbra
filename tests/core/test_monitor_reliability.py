@@ -1,6 +1,7 @@
 import logging
 import queue
 import threading
+import time
 from types import SimpleNamespace
 
 from anteumbra.domain.entities import ScanResult
@@ -258,6 +259,72 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(monkeypatch,
         handler._do_scan(restored, "CREATE")
     finally:
         handler.shutdown()
+
+
+def test_reupload_inside_the_duplicate_window_is_still_scanned(monkeypatch, tmp_path):
+    """A file deleted and put back seconds later must not be filtered away.
+
+    The duplicate window exists to collapse the MODIFY/CLOSE burst that follows
+    one write.  Applying it to a CREATE hid the exact case that matters: an
+    identical webshell re-uploaded 1.4s after deletion was dropped, so it was
+    never scanned and its record stayed "missing" while the file sat on disk.
+    """
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    order = []
+    registry = SimpleNamespace(
+        add=lambda *_args, **_kwargs: None,
+        remove=lambda *_args, **_kwargs: True,
+        mark_present=lambda path, **kwargs: order.append(("mark_present", str(path))),
+    )
+    returning = tmp_path / "back.php"
+    returning.write_text("<?php", encoding="utf-8")
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.reupload-window"),
+        website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(tmp_path, registry=registry),
+    )
+    try:
+        monkeypatch.setattr(
+            handler, "enqueue_scan", lambda path, event_type: order.append(("scan", str(path)))
+        )
+        handler._recent_files[monitor_module.path_to_key(returning.resolve())] = time.time() - 1.0
+
+        handler._handle_event(SimpleNamespace(src_path=str(returning)), "CREATE")
+    finally:
+        handler.shutdown()
+
+    assert [entry[0] for entry in order] == ["mark_present", "scan"]
+
+
+def test_touch_noise_inside_the_duplicate_window_is_still_dropped(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    queued = []
+    touched = tmp_path / "noisy.php"
+    touched.write_text("<?php", encoding="utf-8")
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.touch-window"),
+        website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(tmp_path),
+    )
+    try:
+        monkeypatch.setattr(
+            handler, "enqueue_scan", lambda path, event_type: queued.append((path, event_type))
+        )
+        handler._handle_event(SimpleNamespace(src_path=str(touched)), "MODIFY")
+        handler._handle_event(SimpleNamespace(src_path=str(touched)), "MODIFY")
+        handler._handle_event(SimpleNamespace(src_path=str(touched)), "CLOSE")
+    finally:
+        handler.shutdown()
+
+    assert queued == [(touched.resolve(), "MODIFY")]
 
 
 def test_out_of_band_delete_marks_the_registry_record_missing(tmp_path):
