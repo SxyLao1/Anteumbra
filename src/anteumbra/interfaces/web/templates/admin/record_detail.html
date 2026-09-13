@@ -15,6 +15,17 @@
             <span class="badge badge-green">{{ _('Present') }}</span>
           {% else %}
             <span class="badge badge-red">{{ _('Deleted') }}</span>
+            {% set missing_labels = {
+              'deleted-on-disk': _('Deleted outside the product'),
+              'quarantined': _('Moved to quarantine'),
+              'gone-while-stopped': _('Missing after restart'),
+            } %}
+            {% if record.missing_reason %}
+              <span class="badge badge-muted">{{ missing_labels.get(record.missing_reason, record.missing_reason) }}</span>
+            {% endif %}
+            {% if record.missing_at %}
+              <span class="detail-profile-meta">{{ record.missing_at }}</span>
+            {% endif %}
           {% endif %}
         </td></tr>
       </table>
@@ -32,6 +43,13 @@
         </td></tr>
         <tr><td>{{ _('Communications') }}</td><td>{{ record.communication_count }}</td></tr>
         <tr><td>{{ _('First seen IP') }}</td><td>{{ record.first_seen_ip }}</td></tr>
+        <tr><td>{{ _('Content SHA-256') }}</td><td>
+          {% if record.content_hash %}
+            <code>{{ record.content_hash }}</code>
+          {% else %}
+            <span class="detail-profile-meta">{{ _('Not recorded') }}</span>
+          {% endif %}
+        </td></tr>
       </table>
     </div>
 

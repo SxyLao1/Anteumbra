@@ -16,6 +16,7 @@ def create_detection_record(
     detection_source: str,
     identity: SiteIdentity,
     now: str,
+    content_hash: str = "",
 ) -> dict[str, Any]:
     return {
         "file_path": file_path,
@@ -23,6 +24,11 @@ def create_detection_record(
         "features": list(features),
         "alerted": False,
         "file_exists": True,
+        # Digest of the last flagged content at this path, so a later "is this
+        # the same file again?" question can be answered after the file is gone.
+        "content_hash": str(content_hash or ""),
+        "missing_at": None,
+        "missing_reason": "",
         "first_seen_ip": first_seen_ip,
         "communication_count": 0,
         "deleted_at": None,
@@ -42,11 +48,18 @@ def refresh_detection_record(
     detection_source: str,
     identity: SiteIdentity,
     now: str,
+    content_hash: str = "",
 ) -> None:
     existing_source = str(record.get("detection_source") or "passive")
     record.update(
         {
             "file_exists": True,
+            # Detecting the file again means it is present again, so any earlier
+            # "missing" state is cleared and the alert is re-armed. That is what
+            # makes a deleted-then-re-uploaded webshell alert a second time.
+            "missing_at": None,
+            "missing_reason": "",
+            "content_hash": str(content_hash or record.get("content_hash") or ""),
             "deleted_at": None,
             "alerted": False,
             "communication_count": 0,
@@ -124,10 +137,44 @@ def unmark_false_positive(record: dict[str, Any], now: str) -> None:
     )
 
 
-def mark_removed(record: dict[str, Any], now: str) -> None:
-    record["file_exists"] = False
+def mark_removed(record: dict[str, Any], now: str, reason: str = "") -> None:
+    """Record that the file is no longer on disk.
+
+    A threat record is about what was found, not about the file still being
+    there, so the record is kept and only its state changes — otherwise a
+    webshell that someone deletes would keep showing as active, and a later
+    re-upload of the identical file could pass for "already handled".
+    ``alerted`` is cleared so the file is reported again if it comes back;
+    ``content_hash`` is kept because it still describes what was caught here.
+    """
+    record.update(
+        file_exists=False,
+        missing_at=now,
+        missing_reason=str(reason or ""),
+        alerted=False,
+    )
     if not record.get("quarantine_id"):
         record["deleted_at"] = now
+
+
+def mark_present(record: dict[str, Any], now: str) -> None:
+    """Record that the path exists on disk again (re-uploaded or restored).
+
+    Coming back from a recorded disappearance re-arms the alert, because the
+    path held a flagged file, then held nothing, and now holds something again.
+    A mere presence notification for a path that never went missing is not a
+    re-detection and leaves the alert state alone.
+    """
+    rearmed = bool(record.get("missing_at"))
+    record.update(
+        file_exists=True,
+        missing_at=None,
+        missing_reason="",
+        deleted_at=None,
+    )
+    if rearmed:
+        record["alerted"] = False
+        record["reappeared_at"] = now
 
 
 def mark_soft_deleted(record: dict[str, Any], now: str) -> None:

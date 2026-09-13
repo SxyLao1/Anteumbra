@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from types import SimpleNamespace
 
@@ -134,6 +135,46 @@ def test_disabled_auto_quarantine_still_registers_and_emits_skip_alert(tmp_path)
     ]
     assert alerts[1][2] == {"reason": "auto_quarantine_disabled"}
     assert not any(call[0] == "quarantine" for call in calls)
+
+
+def test_detection_records_a_digest_of_the_flagged_file(tmp_path):
+    calls = []
+    target = tmp_path / "shell.php"
+    payload = b"<?php eval($_POST['cmd']); ?>"
+    target.write_bytes(payload)
+    result = ScanResult(target, True, ["webshell-rule"], engine="yara")
+    workflow = _build_workflow(calls)
+
+    workflow.execute(
+        target,
+        "CREATE",
+        scan=lambda _path: result,
+        resolve_first_seen_ip=lambda _path: "127.0.0.1",
+        emit_alert=lambda *_args, **_kwargs: calls.append(("alert",)),
+        emit_file_quarantined=lambda *_args, **_kwargs: calls.append(("quarantine",)),
+    )
+
+    registry_call = next(call for call in calls if call[0] == "registry")
+    assert registry_call[3]["content_hash"] == hashlib.sha256(payload).hexdigest()
+
+
+def test_missing_file_still_produces_a_detection_record(tmp_path):
+    calls = []
+    target = tmp_path / "vanished.php"
+    result = ScanResult(target, True, ["webshell-rule"], engine="yara")
+    workflow = _build_workflow(calls)
+
+    workflow.execute(
+        target,
+        "CREATE",
+        scan=lambda _path: result,
+        resolve_first_seen_ip=lambda _path: "127.0.0.1",
+        emit_alert=lambda *_args, **_kwargs: calls.append(("alert",)),
+        emit_file_quarantined=lambda *_args, **_kwargs: calls.append(("quarantine",)),
+    )
+
+    registry_call = next(call for call in calls if call[0] == "registry")
+    assert registry_call[3]["content_hash"] == ""
 
 
 def test_second_restore_guard_failure_does_not_emit_quarantine(tmp_path):

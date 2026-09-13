@@ -1713,3 +1713,18 @@ msgstr "警告"
 
 msgid "Secure Login"
 msgstr "安全登录"
+
+msgid "Deleted outside the product"
+msgstr "被外部删除（人工或脚本）"
+
+msgid "Moved to quarantine"
+msgstr "已移入隔离区"
+
+msgid "Missing after restart"
+msgstr "重启后已不存在"
+
+msgid "Content SHA-256"
+msgstr "内容 SHA-256"
+
+msgid "Not recorded"
+msgstr "未记录"

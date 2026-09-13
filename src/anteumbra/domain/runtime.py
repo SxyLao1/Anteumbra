@@ -84,6 +84,7 @@ class DetectionRegistryPort(Protocol):
         site_name: str | None = None,
         *,
         site: SiteIdentity | None = None,
+        content_hash: str = "",
     ) -> None:
         """Store or update a suspicious-file record."""
 
@@ -101,8 +102,21 @@ class DetectionRegistryPort(Protocol):
         site_id: str | None = None,
         *,
         site: SiteIdentity | None = None,
+        reason: str = "",
     ) -> bool:
         """Mark a suspicious-file record as removed within its site boundary."""
+
+    def mark_present(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+        *,
+        site: SiteIdentity | None = None,
+    ) -> bool:
+        """Clear a recorded removal once the path exists again."""
+
+    def reconcile_filesystem(self, site_id: str | None = None) -> dict[str, int]:
+        """Align stored presence flags with the real filesystem."""
 
     def get(
         self,
