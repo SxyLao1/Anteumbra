@@ -190,7 +190,11 @@ class LogAnalyzer:
                 )
                 return None
 
-            log_with_symbol("success", "info", f"固定路径加载: {fixed_path}", self.logger)
+            # Resolving the log path is an internal step: it runs for every
+            # scanned file, so it belongs at DEBUG.  It also used the "success"
+            # symbol, i.e. the [MONITOR][START][SUCCESS] prefix, which made these
+            # per-file lines read like monitor restarts.
+            log_with_symbol("debug_scan", "debug", f"固定路径加载: {fixed_path}", self.logger)
             return fixed_path
 
     def extract_ip(self, log_entry: str) -> Optional[str]:
@@ -232,7 +236,7 @@ class LogAnalyzer:
             log_with_symbol("debug_scan", "debug", "未配置日志路径", self.logger)
             return None
 
-        log_with_symbol("scan_hit", "info", f"开始全量扫描: {self.log_path.name}", self.logger)
+        log_with_symbol("debug_scan", "debug", f"开始全量扫描: {self.log_path.name}", self.logger)
 
         # 如果log_path是通过通配符获取的，在分析前重新验证文件存在性
         if not self.log_path.exists():
@@ -289,7 +293,15 @@ class LogAnalyzer:
                             self.logger,
                         )
 
-            log_with_symbol("scan_hit", "info", f"发现 {len(suspicious_ips)} 个可疑IP", self.logger)
+            # A hit is a result worth surfacing; "found 0" is an internal step and
+            # ran once per scanned file, which is what made the panel scroll.
+            suspicious_count = len(suspicious_ips)
+            log_with_symbol(
+                "scan_hit",
+                "info" if suspicious_count else "debug",
+                f"发现 {suspicious_count} 个可疑IP",
+                self.logger,
+            )
 
         except Exception as e:
             log_with_symbol("error_scan_fail", "error", f"分析失败: {e}", self.logger)
