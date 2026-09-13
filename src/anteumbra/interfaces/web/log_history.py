@@ -26,6 +26,13 @@ DEFAULT_LIVE_LEVELS: tuple[str, ...] = ("INFO", "CRITICAL")
 # shrink or grow as it switches from the initial load to the stream.
 LIVE_LOG_LINES = 1000
 
+# How much of a site log to read, from the end.  A fixed small window looked
+# right until the newest part of the log was DEBUG-heavy (the analyzer's
+# per-file steps are DEBUG by design): 500 KB then held ~570 INFO/CRITICAL
+# lines, so a panel that promises 1000 showed half that.  The window grows
+# until the tail can be filled, and the last entry is the hard cap.
+LOG_READ_WINDOWS: tuple[int, ...] = (512 * 1024, 2 * 1024 * 1024, 8 * 1024 * 1024)
+
 
 def parse_level(line: str) -> str:
     """Return the severity of one log line, defaulting to INFO."""
@@ -73,34 +80,72 @@ def collect_log_history(
     levels: Iterable[str] | None = None,
     log: logging.Logger | None = None,
 ) -> list[str]:
-    """Collect bounded site logs and SSE history through runtime-owned ports."""
+    """Collect bounded site logs and SSE history through runtime-owned ports.
+
+    Reading grows through ``LOG_READ_WINDOWS`` until the filtered, de-duplicated
+    tail actually reaches ``limit``: the panel promises a full tail of the newest
+    lines at the requested severities, and the newest bytes of a log are not
+    guaranteed to hold that many.
+    """
     if limit < 1:
         raise ValueError("limit must be positive")
     reporter = log or logger
-    selected = runtime.config.get_enabled_websites() if websites is None else websites
-    lines: list[str] = []
+    selected = list(runtime.config.get_enabled_websites() if websites is None else websites)
+    files = _history_files(runtime, selected)
+    buffered = _sse_history(runtime, reporter)
 
+    tail: list[str] = []
+    for window in LOG_READ_WINDOWS:
+        candidates = _site_history(files, window, reporter)
+        candidates.extend(buffered)
+        # Filter and de-duplicate before taking the tail so the panel is filled
+        # with the newest lines at the requested severities rather than with
+        # whatever happened to be last.
+        tail = _chronological_tail(
+            filter_levels((line for line in candidates if "[SSE]" not in line), levels),
+            limit,
+        )
+        if len(tail) >= limit:
+            break
+    return tail
+
+
+def _history_files(
+    runtime: RuntimeContainer,
+    selected: Iterable[Any],
+) -> list[tuple[SiteIdentity, Path]]:
+    """Resolve each site's history paths once, however often they are read."""
+    files: list[tuple[SiteIdentity, Path]] = []
     for website in selected:
         site = SiteIdentity.from_values(website.site_id, website.name)
-        for path in runtime.logging.get_site_history_paths(site):
-            try:
-                lines.extend(_qualify_site_lines(_tail_lines(path), site.site_id))
-            except OSError:
-                reporter.warning(
-                    "Failed to read site monitor history %s",
-                    path,
-                    exc_info=True,
-                )
+        files.extend((site, Path(path)) for path in runtime.logging.get_site_history_paths(site))
+    return files
 
+
+def _site_history(
+    files: Iterable[tuple[SiteIdentity, Path]],
+    window: int,
+    reporter: logging.Logger,
+) -> list[str]:
+    lines: list[str] = []
+    for site, path in files:
+        try:
+            lines.extend(_qualify_site_lines(_tail_lines(path, window), site.site_id))
+        except OSError:
+            reporter.warning(
+                "Failed to read site monitor history %s",
+                path,
+                exc_info=True,
+            )
+    return lines
+
+
+def _sse_history(runtime: RuntimeContainer, reporter: logging.Logger) -> list[str]:
     try:
-        lines.extend(runtime.sse.get_log_buffer())
+        return list(runtime.sse.get_log_buffer())
     except (OSError, RuntimeError, TypeError, ValueError):
         reporter.warning("Failed to read SSE log history", exc_info=True)
-
-    candidates = (line for line in lines if "[SSE]" not in line)
-    # Filter before taking the tail so the panel is filled with the newest lines
-    # at the requested severities rather than with whatever happened to be last.
-    return _chronological_tail(filter_levels(candidates, levels), limit)
+        return []
 
 
 def render_log_history(
@@ -179,6 +224,7 @@ def _level_class(line: str) -> str:
 __all__ = [
     "DEFAULT_LIVE_LEVELS",
     "LIVE_LOG_LINES",
+    "LOG_READ_WINDOWS",
     "allowed_levels",
     "collect_log_history",
     "filter_levels",
