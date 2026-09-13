@@ -131,6 +131,19 @@
     <div id="record-detail-modal" class="modal-box modal-box--detail" role="dialog" aria-modal="true" aria-label="Record detail"></div>
   </div>
 
+  <div id="session-expired-overlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box modal-box--session" role="alertdialog" aria-modal="true" aria-labelledby="session-expired-title">
+      <div class="modal-header"><span id="session-expired-title">{{ _('Session expired') }}</span></div>
+      <div class="modal-body">
+        <p id="session-expired-message" class="session-expired-copy">{{ _('Your session has expired. Please sign in again.') }}</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" type="button" id="session-expired-action"
+                data-action="core.navigate-location" data-url="{{ url_for('admin.login') }}">{{ _('Sign in again') }}</button>
+      </div>
+    </div>
+  </div>
+
   <div id="file-viewer-modal" class="modal-overlay modal-overlay--front" aria-hidden="true" data-action="core.backdrop-close">
     <div class="modal-box modal-box--file" role="dialog" aria-modal="true" aria-label="File source viewer">
       <div class="modal-header"><span>FILE VIEWER</span><span id="fv-file-path" class="modal-path"></span><span id="fv-file-size" class="modal-size"></span><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-copy">{{ _('Copy') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-wrap">{{ _('Wrap') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="records.file-close">{{ _('Close') }}</button></div>

@@ -68,6 +68,8 @@ JS_SOURCES: tuple[str, ...] = (
     "No cluster matches the filter",
     # source viewer
     "%(size)s | %(lines)s lines",
+    # session expiry prompt
+    "Session expired", "Your session has expired. Please sign in again.", "Sign in again",
     # shell
     "Chinese", "English", "Language",
 )
@@ -137,6 +139,9 @@ def _extraction_only() -> tuple[str, ...]:
         _("No cluster matches the filter"),
         # source viewer
         _("%(size)s | %(lines)s lines"),
+        # session expiry prompt
+        _("Session expired"), _("Your session has expired. Please sign in again."),
+        _("Sign in again"),
         # shell
         _("Chinese"), _("English"), _("Language"),
     )

@@ -87,7 +87,43 @@
     return target;
   }
 
+  // An expired session must never be answered by swapping a login page into the
+  // dashboard: the shell stays on screen and the user sees a sign-in form inside
+  // a content pane with no explanation.  The server marks those responses with
+  // X-Auth-Status and the shell reacts here instead.
+  var reloginPrompted = false;
+  var RELOGIN_URL = '/admin/login';
+
+  function isSessionExpired(response) {
+    if (!response || !response.headers) return false;
+    return response.headers.get('X-Auth-Status') === 'session_expired';
+  }
+
+  function promptRelogin() {
+    if (reloginPrompted) return;
+    reloginPrompted = true;
+    var overlay = document.getElementById('session-expired-overlay');
+    if (!overlay) {
+      // No shell to render into (should not happen) - fall back to the login page.
+      window.location.assign(RELOGIN_URL);
+      return;
+    }
+    var message = document.getElementById('session-expired-message');
+    if (message) message.textContent = translate('Your session has expired. Please sign in again.');
+    var action = document.getElementById('session-expired-action');
+    if (action) action.textContent = translate('Sign in again');
+    showModal(overlay);
+  }
+
   function responseError(response) {
+    if (isSessionExpired(response)) {
+      promptRelogin();
+      var expired = new Error(translate('Your session has expired. Please sign in again.'));
+      // Callers use this to skip painting their own error state: the re-login
+      // prompt is already on screen and a second red banner behind it is noise.
+      expired.sessionExpired = true;
+      return Promise.reject(expired);
+    }
     return response.text().then(function (body) {
       var message = 'HTTP ' + response.status;
       try {
@@ -211,6 +247,7 @@
     escape: { html: escapeHtml },
     t: translate,
     ui: { showModal: showModal, hideModal: hideModal, toast: toast },
+    session: { promptRelogin: promptRelogin, isExpiredResponse: isSessionExpired },
     confirm: function (message) { return window.confirm(message); },
     resolveTarget: resolveTarget,
     start: function () {
@@ -225,6 +262,12 @@
       });
       document.addEventListener('htmx:beforeSwap', function (event) {
         unmount(event.detail.target);
+      });
+      document.addEventListener('htmx:responseError', function (event) {
+        var xhr = event.detail && event.detail.xhr;
+        if (xhr && xhr.getResponseHeader && xhr.getResponseHeader('X-Auth-Status') === 'session_expired') {
+          promptRelogin();
+        }
       });
       document.addEventListener('htmx:afterSwap', function (event) {
         mount(event.detail.target);
