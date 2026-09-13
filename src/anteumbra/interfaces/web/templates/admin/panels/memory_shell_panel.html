@@ -1,0 +1,209 @@
+{# Memory-shell probe panel.
+
+   Loaded into #memory-shell-panel by the page shell, and by itself while a
+   probe is running: an htmx poll chain stops as soon as the element is replaced
+   by a panel whose `running` set is empty, so an idle page does not poll.  The
+   swap target is the page container, so this root element never targets itself.
+#}
+<div class="memory-shell-panel"
+     data-memory-shell-panel
+     data-memory-shell-state="{{ state }}"
+     {% if polling %}hx-get="/admin/memory-shell/panel" hx-trigger="every 2s" hx-target="#memory-shell-panel" hx-swap="innerHTML"{% endif %}>
+
+  {% if error %}
+  <div role="alert" style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:10px;margin-bottom:12px;color:#ff4444;font-size:11px;">{{ error }}</div>
+  {% endif %}
+
+  {% if not available %}
+  <div style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:12px;">
+    <div style="color:#ff4444;font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Memory-shell probe unavailable') }}</div>
+    <div style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;">{{ unavailable_reason }}</div>
+  </div>
+  {% else %}
+
+  {# ── status row ─────────────────────────────────────── #}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+    <span style="display:inline-flex;align-items:center;gap:6px;color:var(--color-text-secondary);font-size:11px;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ '#00ff41' if enabled else '#ff4444' }};"></span>
+      {{ _('Probe:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong>
+    </span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Auto probe:') }} <strong style="color:{{ '#00ff41' if auto_probe else '#888888' }};">{{ _('Enabled') if auto_probe else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Cooldown:') }} <strong style="color:#00ff41;">{{ cooldown_seconds }}</strong>s</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('HTTP timeout:') }} <strong style="color:#00ff41;">{{ http_timeout_seconds }}</strong>s</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Runs:') }} <strong style="color:#00ff41;">{{ runs }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Failures:') }} <strong style="color:{{ '#ff4444' if failures else '#00ff41' }};">{{ failures }}</strong></span>
+    {% if running %}
+    <span style="color:#ffaa00;font-size:11px;">{{ _('Probing...') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
+    {% endif %}
+  </div>
+  <div style="color:var(--color-text-muted);font-size:10px;margin-bottom:14px;">
+    {{ _('Trigger extensions:') }}
+    {% for extension in trigger_extensions %}<code style="color:#00ff41;">{{ extension }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+  </div>
+
+  {% if not enabled %}
+  <div style="border:1px solid #665500;background:#1a1400;border-radius:4px;padding:8px;margin-bottom:12px;color:#ffaa00;font-size:11px;">
+    {{ _('The memory-shell probe is disabled in config.toml; manual probes would only be recorded as failures.') }}
+  </div>
+  {% endif %}
+
+  {# ── per-site table ─────────────────────────────────── #}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:6px;">{{ _('Monitored sites') }}</div>
+  <table class="data-table" style="width:100%;margin-bottom:16px;">
+    <thead>
+      <tr>
+        <th>{{ _('Site') }}</th>
+        <th>{{ _('Root') }}</th>
+        <th>{{ _('Base URL') }}</th>
+        <th>{{ _('Last run') }}</th>
+        <th>{{ _('Entries') }}</th>
+        <th>{{ _('Suspicious') }}</th>
+        <th>{{ _('Cooldown') }}</th>
+        <th>{{ _('Actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for site in sites %}
+      <tr>
+        <td>
+          <div style="color:#e0e0e0;">{{ site.name }}</div>
+          <div style="color:var(--color-text-muted);font-size:9px;font-family:var(--font-mono);">{{ site.site_id }}</div>
+        </td>
+        <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;color:var(--color-text-secondary);">{{ site.root or _('None') }}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-secondary);">{{ site.base_url or _('None') }}</td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">
+          {{ site.last_run or _('Never') }}
+          {% if site.failure %}<div class="badge badge-danger">{{ _('Failed') }}</div>{% endif %}
+          {% if site.cleanup_error %}<div class="badge badge-danger">{{ _('Cleanup failed') }}</div>{% endif %}
+        </td>
+        <td style="font-size:10px;font-family:var(--font-mono);color:var(--color-text-secondary);">{{ site.entry_summary or _('None') }}</td>
+        <td>
+          {% if site.suspect_count %}
+          <span class="badge badge-danger">{{ site.suspect_count }}</span>
+          {% else %}<span style="color:#00ff41;">0</span>{% endif %}
+        </td>
+        <td style="font-size:10px;color:var(--color-text-muted);">{{ site.cooldown_remaining }}s</td>
+        <td>
+          {% if site.running %}
+          <span style="color:#ffaa00;font-size:10px;">{{ _('Probing...') }}</span>
+          {% else %}
+          <button class="btn btn-primary btn-sm" type="button"
+                  {% if not enabled %}disabled{% endif %}
+                  hx-post="/admin/memory-shell/probe?site_id={{ site.site_id|urlencode }}"
+                  hx-target="#memory-shell-panel" hx-swap="innerHTML"
+                  hx-disabled-elt="this"
+                  hx-confirm="{{ _('Run a memory-shell probe on this site now?') }}">{{ _('Probe Memory Shell') }}</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8"><div class="empty-state"><p>{{ _('No watched site is configured for probing.') }}</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── findings ───────────────────────────────────────── #}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:6px;">{{ _('Findings') }}</div>
+  {% for finding in findings %}
+  <div style="border:1px solid #552222;background:#140808;border-radius:4px;padding:10px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+      <span class="badge badge-danger">{{ _('Suspicious') }} {{ finding.suspect_count }}</span>
+      <strong style="color:#ff4444;font-size:12px;">{{ finding.site_name }}</strong>
+      <span style="color:var(--color-text-muted);font-size:10px;">{{ finding.finished_at }}</span>
+      {% if finding.url %}<span style="color:var(--color-text-muted);font-size:10px;font-family:var(--font-mono);">{{ finding.url }}</span>{% endif %}
+      {% if finding.container %}<span style="color:var(--color-text-muted);font-size:10px;">{{ _('Container:') }} {{ finding.container }}</span>{% endif %}
+    </div>
+    <table class="data-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>{{ _('Kind') }}</th>
+          <th>{{ _('Name') }}</th>
+          <th>{{ _('URLs') }}</th>
+          <th>{{ _('Class name') }}</th>
+          <th>{{ _('Class loader') }}</th>
+          <th>{{ _('On disk') }}</th>
+          <th>{{ _('Reasons') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in finding.suspects %}
+        <tr>
+          <td><span class="badge badge-danger">{{ entry.kind or _('Unknown') }}</span></td>
+          <td>{{ entry.name or _('None') }}</td>
+          <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ entry.urls|join(', ') if entry.urls else _('None') }}</td>
+          <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ entry.class_name or _('None') }}</td>
+          <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ entry.class_loader or _('None') }}</td>
+          <td>
+            {% if entry.on_disk %}<span style="color:#00ff41;">{{ _('Yes') }}</span>
+            {% else %}<span style="color:#ff4444;font-weight:bold;">{{ _('No') }}</span>{% endif %}
+          </td>
+          <td>
+            {% for reason in entry.reasons %}<span class="badge badge-warning">{{ reason }}</span>{% if not loop.last %} {% endif %}{% endfor %}
+            {% if not entry.reasons %}{{ _('None') }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if finding.clean_count %}
+    <div style="color:var(--color-text-muted);font-size:10px;margin-top:6px;">{{ _('%(count)s non-suspicious entries collapsed', count=finding.clean_count) }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:12px;"><p>{{ _('No suspicious entry has been reported yet.') }}</p></div>
+  {% endfor %}
+
+  {# ── recent runs: failures and cleanup state stay visible ── #}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin:16px 0 6px 0;">{{ _('Recent runs') }}</div>
+  <table class="data-table" style="width:100%;">
+    <thead>
+      <tr>
+        <th>{{ _('Site') }}</th>
+        <th>{{ _('Time') }}</th>
+        <th>{{ _('Trigger:') }}</th>
+        <th>{{ _('Duration:') }}</th>
+        <th>{{ _('Status') }}</th>
+        <th>{{ _('Entries') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in recent_runs %}
+      <tr>
+        <td>
+          <div style="color:#e0e0e0;">{{ run.site_name }}</div>
+          {% if run.triggered_by %}<div style="color:var(--color-text-muted);font-size:9px;">{{ _('Triggered by:') }} {{ run.triggered_by }}</div>{% endif %}
+        </td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.finished_at or _('Never') }}</td>
+        <td style="font-size:10px;">{{ _('Manual') if run.trigger == 'manual' else _('Auto') }}</td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.duration_ms }} ms</td>
+        <td>
+          {% if run.failure %}<span class="badge badge-danger">{{ _('Failed') }}</span>
+          {% elif not run.cleanup_ok %}<span class="badge badge-danger">{{ _('Cleanup failed') }}</span>
+          {% elif run.ok %}<span class="badge badge-success">{{ _('Clean') }}</span>
+          {% else %}<span class="badge badge-warning">{{ _('Unknown') }}</span>{% endif %}
+        </td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">
+          <div style="font-family:var(--font-mono);">{{ run.entry_summary or _('None') }}</div>
+          {% if run.clean_count %}
+          <div style="color:var(--color-text-muted);">{{ _('%(count)s non-suspicious entries collapsed', count=run.clean_count) }}</div>
+          {% endif %}
+          {% if run.failure %}
+          <div style="color:#ff4444;">{{ _('Probe failed:') }} {{ run.failure }}</div>
+          {% endif %}
+          {% if not run.cleanup_ok %}
+          <div style="color:#ff4444;font-weight:bold;">{{ _('Probe cleanup failed:') }} {{ run.cleanup_error or _('Unknown') }}</div>
+          <div style="color:#ff4444;">{{ _('A probe file may still exist in the web root. Remove it manually.') }}</div>
+          {% endif %}
+          {% if run.report_error %}
+          <div style="color:#ffaa00;">{{ _('Report error:') }} {{ run.report_error }}</div>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6"><div class="empty-state" style="padding:12px;"><p>{{ _('No probe has run yet.') }}</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% endif %}
+</div>

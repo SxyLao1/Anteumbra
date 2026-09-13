@@ -29,6 +29,7 @@ _NAV_TITLES = {
     "scanner": "Scanner",
     "profiles": "Profiles",
     "blocklist": "Blocklist",
+    "memory-shell": "Memory Shell",
     "logs/analyzer": "Log Analyzer",
     "settings": "Settings",
 }

@@ -18,6 +18,7 @@ from threading import Thread
 from typing import Dict, List, Optional
 
 from anteumbra.domain.logging import log_with_symbol
+from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
     DetectionRegistryPort,
@@ -38,12 +39,14 @@ class LogMonitor:
         config_provider: ConfigProviderPort,
         notifier: NotifierPort,
         registry: DetectionRegistryPort,
+        internal_artifacts: InternalArtifactRegistryPort | None = None,
     ):
         self.logger = logger
         self.analyzer = analyzer
         self.config_provider = config_provider
         self.notifier = notifier
         self.registry = registry
+        self.internal_artifacts = internal_artifacts
         self.website = analyzer.website
         self.site_id = analyzer.website.site_id
         self._is_running = False
@@ -217,6 +220,13 @@ class LogMonitor:
                 return
 
             access_url = url_match.group(1)
+
+            # Anteumbra's own probe request must never be attributed to anyone.
+            if self.internal_artifacts is not None and self.internal_artifacts.contains_url(
+                access_url
+            ):
+                self.logger.debug(f"[LOG_MONITOR][INTERNAL] 跳过自建探针请求: {access_url}")
+                return
 
             # v1.7.7-CRITICAL：使用 INFO 级别确保日志一定显示
             self.logger.info(f"[LOG_MONITOR][URL] 访问: {access_url} | IP: {ip}")

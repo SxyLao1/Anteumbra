@@ -6,7 +6,38 @@
 
 ---
 
-## [1.0.35] - 2026-08-02
+## [1.0.36] - 2026-09-14
+
+### Added
+- Memory-shell detection. The new `memory_shell_probe` plugin reacts to a
+  webshell detection by deploying a token-guarded JSP probe into the watched web
+  root under a random directory and file name, reading back what the servlet
+  container has registered in memory (filters, servlets, listeners and classes
+  parked in an `HttpSession`), and deleting the probe and its directory again.
+  Components with no file on disk, JSP-generated class loaders, tool-name
+  signatures and tool method/field fingerprints are reported as suspicious;
+  findings reach the alert channels and a dedicated admin page.
+- Internal-artifact registry. Files Anteumbra creates inside a watched directory,
+  and their URLs, are recognised as self-inflicted for the duration of a probe, so
+  the file monitor, the baseline sweep, manual scans and the access-log monitor all
+  ignore them. Matching uses the recorded path and URL of the current run, never a
+  name pattern, so it cannot be abused as a detection bypass.
+- Admin page `/admin/memory-shell`: per-site manual probing, probe history, entry
+  counts, suspicious-component detail (kind, name, URL patterns, class, class
+  loader, on-disk presence, reasons) and explicit failure/cleanup states.
+
+### Changed
+- The probe reports the JVM input arguments, `-javaagent` presence and
+  `jdk.attach.allowAttachSelf`, because bytecode-enhancement memory shells register
+  nothing and cannot be enumerated from inside a JSP.
+
+### Fixed
+- Probe cleanup never deletes a file that was replaced after deployment: the file
+  must still carry the probe marker, otherwise it is left in place, the failure is
+  surfaced, and the internal registration is released so the foreign file is judged
+  on its own.
+
+
 
 ### Changed
 - Decoupled the admin frontend from template-bound global JavaScript calls. `app.js`

@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.35
+# Anteumbra 用户手册 v1.0.36
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -711,7 +711,9 @@ builtin = [
     "stdout_logger",
     "quarantine_handler",
     "notifier_handler",
-    "threat_graph_handler"
+    "threat_graph_handler",
+    "siem_handler",
+    "memory_shell_probe"
 ]
 ```
 
@@ -721,14 +723,25 @@ builtin = [
 | `quarantine_handler` | 执行隔离及隔离后账务处理 |
 | `notifier_handler` | 通过邮件/微信/Webhook 发送告警 |
 | `threat_graph_handler` | 从检测事件更新攻击者画像 |
+| `siem_handler` | 将事件导出为 SIEM 可消费的格式 |
+| `memory_shell_probe` | 检测只在内存中存在、磁盘上没有文件的 webshell（内存马），见 10.4 |
 
 ### 10.2 WAF 适配器
 
+WAF 适配器是**事件源插件**：它们从外部 WAF 拉取或接收事件，再交给 Anteumbra。
+启用需要**两处同时打开**——列进 `builtin`，并在自己的配置段里 `enabled = true`：
+
 ```toml
+[plugins]
+builtin = [
+    "waf_adapters.modsecurity",   # 注意是模块化的插件名
+]
+
 [plugins.modsecurity]
-enabled = false
+enabled = true
 audit_log_path = "data/modsec_audit.log"
 poll_interval = 5
+min_score = 5.0
 
 [plugins.cloudflare]
 enabled = false
@@ -737,7 +750,24 @@ api_token = "${CLOUDFLARE_API_TOKEN:-}"
 poll_interval = 60
 ```
 
-可用适配器：`modsecurity`、`cloudflare`、`aws_waf`、`syslog_waf`。全部默认禁用。
+| 插件名 | 适配器 | 说明 |
+|--------|--------|------|
+| `waf_adapters.modsecurity` | `ModSecurityAdapter` | 轮询 ModSecurity v2/v3 JSON 审计日志 |
+| `waf_adapters.cloudflare` | `CloudflareAdapter` | 轮询 Cloudflare 防火墙事件 API |
+| `waf_adapters.aws_waf` | `AWSWAFAdapter` | 轮询 AWS WAF；缺少 `boto3` 时自动降级为不活跃 |
+| `waf_adapters.syslog_waf` | `SyslogWAFReceiver` | 监听 syslog 接收 WAF 事件 |
+
+行为说明：
+
+- 插件注册时即调用 `start()` 开始拉取/监听，卸载时调用 `stop()` 停止；启动失败只会让该适配器
+  变成"已加载但不活跃"，不会影响其他插件与运行时。
+- 适配器产生的事件以 `waf.event` 发布到事件总线，**同时**追加写入 `data/waf_events.jsonl`——
+  运行时自己的 WAF 轮询器也写这个文件，威胁画像的 `JsonlEventTailer` 从它读取，因此适配器
+  采集到的事件会被正常计入画像与外发 SIEM。
+- 全部适配器默认 `enabled = false`，且都不在默认 `builtin` 列表中；未显式启用时不会有任何
+  网络请求或端口监听。
+- 设置页的插件面板会区分显示"已加载""已安装但被配置关闭""未在 builtin 中列出"三种状态，
+  并给出对应的配置片段，便于照着直接打开。
 
 ### 10.3 事件流
 
@@ -754,6 +784,90 @@ PluginManager.dispatch()
         ▼
 Plugin.on_event(event) → Optional[List[DomainEvent]]
 ```
+
+### 10.4 内存马探测插件（memory_shell_probe）
+
+文件型 webshell 删掉就没了，内存马不会：它从来没有以文件形式存在过，文件监控看不到它。
+本插件在检测到 webshell 之后，主动向 Servlet 容器询问"内存里到底注册了什么"：
+
+```
+随机目录 + 随机文件名：把探针 JSP 落到站点根目录
+        │  （写入前先把探针文件与探针 URL 登记为"内部制品"）
+        ├─ HTTP GET http://<站点>:<端口>/<随机路径>/<随机文件名>.jsp?t=<本次 token>
+        │     探针枚举 StandardContext：Filter / Servlet / Listener，
+        │     以及 HttpSession 中驻留的 Class
+        ▼
+解析 JSON → 可疑项写入探测结果并触发告警
+        │
+        └─ finally：删除探针文件与它所在的随机目录（只删自己创建的那一个）
+```
+
+启用方式：
+
+```toml
+[plugins]
+enabled = true
+builtin = ["memory_shell_probe"]
+
+[plugins.memory_shell_probe]
+enabled = true
+auto_probe_on_detection = true
+trigger_extensions = [".jsp", ".jspx", ".jspf", ".jsw", ".jsv"]
+site_ids = []
+probe_base_dirs = {}
+url_prefixes = {}
+cooldown_seconds = 300
+http_timeout_seconds = 8
+artifact_ttl_seconds = 120
+directory_prefix = "mb-"
+history_size = 50
+alert_on_suspects = true
+host = "127.0.0.1"
+scheme = "http"
+```
+
+| 配置项 | 说明 |
+|--------|------|
+| `enabled` | 插件总开关。关闭后自动探测与页面上的手动探测都不执行 |
+| `auto_probe_on_detection` | 命中 webshell 告警后自动探测该站点 |
+| `trigger_extensions` | 触发自动探测的文件后缀；默认仅 JSP 族（探针本身是 JSP） |
+| `site_ids` | 只对这些站点探测；留空表示所有已启用且路径存在的站点 |
+| `probe_base_dirs` | `{ 站点 id = "站点根下的子目录" }`，指定探针写入哪个已部署 context（Tomcat：`webapps` 下必须配） |
+| `url_prefixes` | `{ 站点 id = "/前缀" }`，站点 path 只是文档根子目录时补 URL 前缀 |
+| `cooldown_seconds` | 同一站点两次自动探测的最小间隔，避免告警风暴 |
+| `http_timeout_seconds` | 单次读取探针的超时 |
+| `artifact_ttl_seconds` | 内部制品登记的有效期（探针删除后会立即注销） |
+| `directory_prefix` | 随机目录前缀，便于在文件系统里辨认 |
+| `history_size` | 页面保留的最近探测次数 |
+| `alert_on_suspects` | 检出可疑组件时是否立即告警 |
+| `host` / `scheme` | 访问探针使用的地址与协议 |
+
+判定依据（任一命中即标记为可疑）：
+
+- 类在磁盘上找不到对应文件（运行时 `defineClass` 动态定义，内存马的典型特征）；
+- 类名或注册名包含工具特征（`behinder`、`godzilla`、`memshell`、`shell`、`inject`、`payload` 等）；
+- 类名是随机短串（工具每次部署随机命名）；
+- ClassLoader 是匿名类或 JSP 生成的加载器（`..._jsp$U` 这类）；
+- 类没有 `CodeSource`；
+- 方法/字段指纹：`getMagic`、`fillContext`、`getBasicsInfo`、`equals(Object)` 返回 `boolean`、`whatever`/`shellCode`/`classBody` 字段；
+- HttpSession 中驻留了非 JDK 类，且该类在磁盘上没有文件（哥斯拉一类客户端会把 payload 类缓存在会话里）。
+  JDK 自带的类（例如会话里存了 `String.class`）会被跳过，不产生噪声。
+
+自身噪声处理：探针文件与探针 URL 会被登记为"内部制品"，文件监控、基线扫描、手动扫描、访问日志监控都会跳过它们，Anteumbra 不会对自己的探针告警。登记按**本次运行的具体路径与 URL**匹配、并带有效期，不使用 `probe-*` 这类名字通配符——否则攻击者只要把后门命名为 `probe-x.jsp` 就能获得豁免。
+
+限制与边界：
+
+- 只适用于"本地可写、且 Web 服务器按文件系统路径直接对外提供服务"的 Java 容器（Tomcat / Jetty / Resin 等）。探针是 JSP，PHP、IIS 站点不会被触发。
+- 探针必须落在**已部署的 context 目录**里，否则 JSP 不属于任何上下文，请求直接 404。三种情况：
+  1. 站点 `path` 本身就是文档根（目录下有 `WEB-INF/web.xml`）→ 直接落，URL 前缀为空；
+  2. 站点根目录下**只有一个** context → 自动选中它，并把 context 名作为 URL 前缀；
+  3. 站点根目录下有**多个** context（例如 Tomcat 的 `webapps`）→ 必须显式指定
+     `probe_base_dirs = { tomcat = "dshlab" }`，否则探测会以"探针 HTTP 404"如实失败，
+     日志和页面都会写明原因，不会静默重试。
+     站点 `path` 只是文档根的子目录时，用 `url_prefixes = { tomcat = "/blog" }` 补 URL 前缀。
+- 探针只能看到容器**自己注册**的东西。纯字节码增强型（`retransform` / `instrument`）内存马不注册 Filter/Servlet，本探针看不到：例如冰蝎（Behinder 4.1）真正的内存马用 javassist 往 `org.apache.catalina.core.ApplicationFilterChain.internalDoFilter` 前插入代码，既不新增 FilterDef/FilterMap，也不改 `web.xml`，`findFilterDefs()`、`findFilterMaps()`、`filterConfigs` 全部查不到它（这一点已在实验环境用真实工具验证过）。这类内存马需要比对 `catalina.jar` 里的原始字节码，或监测 agent 附着（`-javaagent`、`jdk.attach.allowAttachSelf`、`ClassFileTransformer` 是否出现）；探针会把 `javaagent`、`attach_self` 与 JVM 启动参数一并回报，作为人工研判线索。
+- 探测结果是"某时刻的快照"，保存在内存中（最近 `history_size` 次），进程重启后清空；命中会照常走告警通道。
+- 探测失败（容器未启动、站点不可达、探针被替换、清理失败）都会在页面与日志中如实呈现；**清理失败会标红**，因为它意味着站点里留下了一个本不该存在的文件。
 
 ---
 
@@ -899,5 +1013,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.35 — MIT License</sub>
+  <sub>Anteumbra v1.0.36 — MIT License</sub>
 </div>
