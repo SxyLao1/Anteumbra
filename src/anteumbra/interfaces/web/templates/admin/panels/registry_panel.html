@@ -40,7 +40,7 @@
                 {% if '异步' in queue_status %}
                     <span style="color: #00ff00;">异步</span>
                 {% else %}
-                    <span style="color: #888;">同步</span>
+                    <span style="color: var(--color-text-secondary);">同步</span>
                 {% endif %}
             </div>
             <small class="metric-subtitle">{{ queue_status }}</small>

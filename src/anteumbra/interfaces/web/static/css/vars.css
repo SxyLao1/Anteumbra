@@ -14,8 +14,11 @@
 
   /* 文字 */
   --color-text-primary: #e0e0e0;
-  --color-text-secondary: #8899a6;
-  --color-text-muted: #556677;
+  --color-text-secondary: #8899a6;   /* 6.7:1 on --color-bg, passes WCAG AA */
+  /* Was #556677, which measured 3.3:1 on --color-bg and 3.1:1 on a card -- below
+     the 4.5:1 AA floor for normal text, and this token carries most of the
+     secondary labels (counts, timestamps, hints). Now 5.3:1 / 5.1:1. */
+  --color-text-muted: #73879a;
   --color-accent: #00ff41;
   --color-accent-dim: #008f11;
   --color-accent-glow: rgba(0, 255, 65, 0.4);
