@@ -1740,3 +1740,9 @@ msgstr "重新告警失败：%(message)s"
 
 msgid "Clear selection"
 msgstr "清除选中"
+
+msgid "Select this page"
+msgstr "全选本页"
+
+msgid "Select every page"
+msgstr "全选每页"

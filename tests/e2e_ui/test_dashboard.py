@@ -69,7 +69,13 @@ class TestDashboard:
 
     def test_overview_loads_existing_monitor_history(self, page, server_url, runtime):
         marker = "E2E-HISTORY-MARKER"
-        runtime.sse.persist_log_line(f"[2026-07-17 12:00:00] INFO - {marker}")
+        # The panel shows the newest lines at the configured severities, so the
+        # marker has to be the newest line: a fixed old date sorts to the front
+        # of the tail and drops out as soon as the log holds a full window.
+        import datetime as _datetime
+
+        stamp = _datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        runtime.sse.persist_log_line(f"[{stamp}] INFO - {marker}")
 
         go(page, f"{server_url}/admin/")
         page.click("a.nav-link[data-path='overview']")

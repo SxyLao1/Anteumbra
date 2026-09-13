@@ -15,10 +15,11 @@ import re
 import pytest
 
 TOOLBAR_ORDER = (
-    "yara-select-all-btn",
     "yara-batch-delete-btn",
     "yara-deselect-btn",
     "yara-selected-count",
+    "yara-select-page-btn",
+    "yara-select-all-btn",
     "yara-show-upload",
 )
 
@@ -82,3 +83,22 @@ def test_the_clear_button_says_what_it_clears(_app):
 
         assert gettext("Clear selection") == "清除选中"
         assert gettext("%(count)s selected", count=3) == "3 项"
+        assert gettext("Select this page") == "全选本页"
+        assert gettext("Select every page") == "全选每页"
+
+
+def test_the_fragment_carries_every_rule_name_for_select_all(toolbar):
+    """Selecting every page needs the names the server paginated away."""
+    payload = re.search(
+        r'<script type="application/json" id="yara-all-filenames">(.*?)</script>',
+        toolbar,
+        re.DOTALL,
+    )
+
+    assert payload, "the fragment must carry the full rule list"
+    import json
+
+    names = json.loads(payload.group(1))
+    assert isinstance(names, list)
+    for name in names:
+        assert name.endswith(".yar"), name

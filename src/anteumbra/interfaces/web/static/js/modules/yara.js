@@ -139,10 +139,25 @@
         if (context.element.checked) selected.add(filename); else selected.delete(filename);
         refreshSelection(document);
       }, events: ['change'], preventDefault: false },
-      'yara.select-all': { handler: function (context) {
+      'yara.select-page': { handler: function (context) {
         var root = context.element.closest('#yara-rules-container') || document;
         root.querySelectorAll('.yara-checkbox').forEach(function (checkbox) { checkbox.checked = true; selected.add(checkbox.dataset.filename); });
         refreshSelection(root);
+      } },
+      // Selecting every page needs the names the server paginated away, which
+      // the fragment carries as JSON; the selection itself already survives a
+      // page swap, so returning to a page re-checks what was picked.
+      'yara.select-all': { handler: function (context) {
+        var payload = document.getElementById('yara-all-filenames');
+        var filenames = [];
+        try { filenames = payload ? JSON.parse(payload.textContent || '[]') : []; } catch (error) { filenames = []; }
+        if (!filenames.length) {
+          var root = context.element.closest('#yara-rules-container') || document;
+          root.querySelectorAll('.yara-checkbox').forEach(function (checkbox) { selected.add(checkbox.dataset.filename); });
+        } else {
+          filenames.forEach(function (filename) { selected.add(filename); });
+        }
+        refreshSelection(context.element.closest('#yara-rules-container') || document);
       } },
       'yara.clear-selection': { handler: function (context) {
         selected.clear();
