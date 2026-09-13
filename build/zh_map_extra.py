@@ -144,6 +144,10 @@ TRANSLATIONS = {
     # SSE indicator + storage / plugin panels
     "Live": "实时",
     "Off": "离线",
+    "Connected": "已连接",
+    "Disconnected": "未连接",
+    "Live log stream connection": "实时日志流连接状态",
+    "Reload the current view": "重新加载当前视图",
     "Both": "双写",
     "SQLite": "SQLite",
     "JSON": "JSON",

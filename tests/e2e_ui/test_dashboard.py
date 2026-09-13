@@ -39,13 +39,33 @@ class TestDashboard:
         body_text = page.locator("body").inner_text()
         assert len(body_text) > 100, "Dashboard body should have meaningful content"
 
-    def test_overview_shows_detection_and_notification_modes(self, page, server_url):
-        page.click("a.nav-link[data-path='overview']")
-        capability_band = page.locator("[data-testid='runtime-capabilities']")
+    def test_overview_hides_the_capability_band_when_healthy(self, page, server_url):
+        """The band is a warning surface, not a permanent status line.
 
-        expect(capability_band).to_be_visible(timeout=10000)
-        expect(capability_band).to_contain_text("Detection")
-        expect(capability_band).to_contain_text("Notifications")
+        It used to render "Healthy / Detection: ... / Notifications: ..." on every
+        visit, which cost the quadrant grid ~48px to report nothing wrong.  It is
+        now rendered only when the runtime is degraded or carries warnings, so a
+        healthy instance must not show it.
+        """
+        page.click("a.nav-link[data-path='overview']")
+        expect(page.locator("[data-testid='overview-grid']")).to_be_visible(timeout=10000)
+
+        band = page.locator("[data-testid='runtime-capabilities']")
+        if band.count():
+            # Present only because this runtime really is degraded; then it must
+            # still explain itself.
+            expect(band).to_contain_text("Detection")
+            expect(band).to_contain_text("Notifications")
+        else:
+            assert band.count() == 0
+
+    def test_page_title_appears_once(self, page, server_url):
+        """Only the sidebar states which page you are on."""
+        page.click("a.nav-link[data-path='overview']")
+        page.wait_for_timeout(1200)
+        assert page.locator("a.nav-link.active", has_text="Overview").count() == 1
+        assert page.locator("#page-title").count() == 0
+        assert page.locator(".brand-sub", has_text="Overview").count() == 0
 
     def test_overview_loads_existing_monitor_history(self, page, server_url, runtime):
         marker = "E2E-HISTORY-MARKER"

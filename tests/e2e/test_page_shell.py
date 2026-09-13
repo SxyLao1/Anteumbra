@@ -40,7 +40,9 @@ def client(_app):
 # ── Route matrix ────────────────────────────────────────────────────────────
 
 _PAGE_ROUTES = [
-    ("/admin/overview", "runtime-capabilities"),
+    # overview-grid, not runtime-capabilities: the capability band is rendered
+    # only when the runtime is degraded, so it is not a stable fragment marker.
+    ("/admin/overview", "overview-grid"),
     ("/admin/threats", "threats-view"),
     ("/admin/yara/rules", "yara-rules-container"),
     ("/admin/scanner", "scanner-view"),
@@ -116,6 +118,27 @@ def test_login_still_redirects_for_anonymous(_app):
         )
         assert resp.status_code == 302
         assert "/admin/login" in resp.headers["Location"]
+
+
+def test_overview_fragment_carries_its_own_grid_geometry(client):
+    """A fragment must not depend on the stylesheet for its own layout.
+
+    The router swaps fragments into an already-loaded document, and a swap does
+    not re-parse stylesheets.  When the overview's quadrant geometry lived only
+    in components.css, a tab that was open across a CSS change received the new
+    fragment with the old CSS and the four quadrants collapsed into one vertical
+    list.  Keeping the grid declaration on the fragment makes it self-sufficient.
+    """
+    import re
+
+    body = client.get("/admin/overview", headers={"HX-Request": "true"}).get_data(as_text=True)
+    grid_tag = re.search(r"<div[^>]*class=\"[^\"]*dashboard-grid[^\"]*\"[^>]*>", body)
+    assert grid_tag, "overview fragment has no .dashboard-grid element"
+    style = re.search(r'style="([^"]*)"', grid_tag.group(0))
+    assert style, "the quadrant grid carries no inline style; its geometry would be lost"
+    inline = style.group(1).replace(" ", "")
+    for declaration in ("display:grid", "grid-template-columns:1fr1fr", "grid-template-rows:1fr1fr"):
+        assert declaration in inline, f"grid geometry missing from the fragment: {declaration}"
 
 
 def test_dashboard_index_still_renders_shell(client):
