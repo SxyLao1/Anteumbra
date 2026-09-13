@@ -13,7 +13,7 @@ from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints.monitor_bp import monitor_bp
-from anteumbra.interfaces.web.log_history import collect_log_history
+from anteumbra.interfaces.web.log_history import allowed_levels, collect_log_history
 from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
@@ -358,11 +358,12 @@ def sse_history():
     """Return persisted log history"""
     try:
         config = get_runtime().config.get()
-        web_admin_cfg = config.get("web_admin", {})
-        allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
+        # One source of truth with the history endpoint, so a client filtering
+        # by this list cannot show severities the panel itself excludes.
+        levels = sorted(allowed_levels(config))
         buffer_logs = get_runtime().sse.get_log_buffer()
         # ... (rest of sse_history logic)
-        return jsonify({"logs": buffer_logs, "levels": allowed_levels})
+        return jsonify({"logs": buffer_logs, "levels": levels})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

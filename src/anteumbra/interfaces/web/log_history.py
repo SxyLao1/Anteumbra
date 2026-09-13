@@ -14,6 +14,55 @@ from anteumbra.domain.site import SiteIdentity
 
 logger = logging.getLogger(__name__)
 _LOG_TIMESTAMP = re.compile(r"^\[(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[,.]\d+)?)\]")
+_LEVEL = re.compile(r"\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG|TRACE)\b")
+
+# The live panel is a tail, not an analysis surface: it shows this set and the
+# full record is read on the Log Analyzer page.  Overridable per deployment via
+# web_admin.sse_log_levels.
+DEFAULT_LIVE_LEVELS: tuple[str, ...] = ("INFO", "CRITICAL")
+
+# How many lines the live panel holds.  The shell, the history endpoint and the
+# client-side append all use this one number so the panel does not silently
+# shrink or grow as it switches from the initial load to the stream.
+LIVE_LOG_LINES = 1000
+
+
+def parse_level(line: str) -> str:
+    """Return the severity of one log line, defaulting to INFO."""
+    match = _LEVEL.search(line.upper())
+    if not match:
+        return "INFO"
+    level = match.group(1)
+    return "WARNING" if level == "WARN" else level
+
+
+def allowed_levels(
+    config: Any | None = None,
+    *,
+    default: Iterable[str] = DEFAULT_LIVE_LEVELS,
+) -> set[str]:
+    """Resolve the levels the live panel shows for this deployment."""
+    levels = default
+    if config is not None:
+        try:
+            raw = config.get("web_admin", {}).get("sse_log_levels")
+        except AttributeError:
+            raw = None
+        if raw:
+            levels = raw
+    resolved = {str(level).upper() for level in levels}
+    # DEBUG is never surfaced here even if listed; it is the flood source.
+    resolved.discard("DEBUG")
+    resolved.discard("TRACE")
+    return resolved
+
+
+def filter_levels(lines: Iterable[str], levels: Iterable[str] | None) -> list[str]:
+    """Keep only the requested severities; ``None`` keeps everything."""
+    if levels is None:
+        return list(lines)
+    wanted = {str(level).upper() for level in levels}
+    return [line for line in lines if parse_level(line) in wanted]
 
 
 def collect_log_history(
@@ -21,6 +70,7 @@ def collect_log_history(
     *,
     websites: Iterable[Any] | None = None,
     limit: int = 1000,
+    levels: Iterable[str] | None = None,
     log: logging.Logger | None = None,
 ) -> list[str]:
     """Collect bounded site logs and SSE history through runtime-owned ports."""
@@ -47,10 +97,10 @@ def collect_log_history(
     except (OSError, RuntimeError, TypeError, ValueError):
         reporter.warning("Failed to read SSE log history", exc_info=True)
 
-    return _chronological_tail(
-        (line for line in lines if "[SSE]" not in line),
-        limit,
-    )
+    candidates = (line for line in lines if "[SSE]" not in line)
+    # Filter before taking the tail so the panel is filled with the newest lines
+    # at the requested severities rather than with whatever happened to be last.
+    return _chronological_tail(filter_levels(candidates, levels), limit)
 
 
 def render_log_history(
@@ -117,16 +167,21 @@ def _chronological_tail(lines: Iterable[str], limit: int) -> list[str]:
 
 
 def _level_class(line: str) -> str:
-    upper = line.upper()
-    if "CRITICAL" in upper:
-        return "critical"
-    if "ERROR" in upper:
-        return "error"
-    if "WARNING" in upper or "WARN" in upper:
-        return "warn"
-    if "DEBUG" in upper:
-        return "debug"
-    return "info"
+    return {
+        "CRITICAL": "critical",
+        "ERROR": "error",
+        "WARNING": "warn",
+        "DEBUG": "debug",
+        "TRACE": "debug",
+    }.get(parse_level(line), "info")
 
 
-__all__ = ["collect_log_history", "render_log_history"]
+__all__ = [
+    "DEFAULT_LIVE_LEVELS",
+    "LIVE_LOG_LINES",
+    "allowed_levels",
+    "collect_log_history",
+    "filter_levels",
+    "parse_level",
+    "render_log_history",
+]

@@ -29,6 +29,8 @@ from anteumbra.interfaces.web.auth import (
     require_auth,
 )
 from anteumbra.interfaces.web.log_history import (
+    LIVE_LOG_LINES,
+    allowed_levels,
     collect_log_history,
     render_log_history,
 )
@@ -61,8 +63,6 @@ def stream_logs():
     if sse is None:
         abort(503)
 
-    config = runtime.config.get()
-    web_admin_cfg = config.get("web_admin", {})
     limits = sse.get_limits()
 
     ip_client_count = sse.ip_client_count(client_ip)
@@ -114,15 +114,13 @@ def stream_logs():
     show_all_levels = request.args.get("levels", "") == "all"
 
     if not show_all_levels:
+        # Same helper the history endpoint uses, so the stream and the initial
+        # load can never disagree about which severities this panel shows.
         try:
-            config = runtime.config.get()
-            web_admin_cfg = config.get("web_admin", {})
-            allowed_levels = web_admin_cfg.get("sse_log_levels", ["INFO", "ERROR", "CRITICAL"])
-            allowed_levels_set = set(level.upper() for level in allowed_levels)
-            allowed_levels_set.discard("DEBUG")
+            allowed_levels_set = allowed_levels(runtime.config.get())
         except Exception as e:
             logger.warning(f"[SSE] Failed to read log level config: {e}, using defaults")
-            allowed_levels_set = {"INFO", "WARNING", "ERROR", "CRITICAL"}
+            allowed_levels_set = allowed_levels(None)
     else:
         allowed_levels_set = None
         logger.info("[SSE][ANALYZER] Full log mode")
@@ -221,11 +219,18 @@ def stream_logs():
 @monitor_bp.route("/logs/history")
 @require_auth
 def logs_history():
-    """Return escaped runtime-owned history for LIVE LOG STREAM initialization."""
+    """Return escaped runtime-owned history for LIVE LOG STREAM initialization.
+
+    The panel is a tail of the newest 1000 lines at the configured severities
+    (INFO + CRITICAL by default); the full record with every level is read on the
+    Log Analyzer page.
+    """
     try:
+        runtime = get_runtime()
         lines = collect_log_history(
-            get_runtime(),
-            limit=1000,
+            runtime,
+            limit=LIVE_LOG_LINES,
+            levels=allowed_levels(runtime.config.get()),
             log=current_app.logger,
         )
         return render_log_history(
