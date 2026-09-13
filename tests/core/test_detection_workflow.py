@@ -120,8 +120,8 @@ def test_suspicious_detection_preserves_side_effect_order(tmp_path):
     }
 
 
-def test_already_alerted_content_is_not_reported_again(tmp_path):
-    """A re-scan of bytes we already alerted for stays quiet."""
+def test_already_alerted_content_is_not_reported_or_rewritten(tmp_path):
+    """A re-scan of bytes we already alerted for changes nothing, so it writes nothing."""
     calls = []
     target = tmp_path / "known.php"
     payload = b"<?php eval($_POST['cmd']); ?>"
@@ -139,9 +139,9 @@ def test_already_alerted_content_is_not_reported_again(tmp_path):
     )
 
     assert not [call for call in calls if call[0] == "alert"]
-    registry_call = next(call for call in calls if call[0] == "registry")
-    assert registry_call[3]["alert_emitted"] is False
-    assert registry_call[3]["content_hash"] == hashlib.sha256(payload).hexdigest()
+    assert not [call for call in calls if call[0] == "registry"]
+    lookup = next(call for call in calls if call[0] == "was_alerted")
+    assert lookup[2] == hashlib.sha256(payload).hexdigest()
 
 
 def test_suppression_lookup_receives_the_digest_of_the_current_bytes(tmp_path):
