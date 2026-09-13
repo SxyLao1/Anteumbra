@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra VERSION\n"
 "Report-Msgid-Bugs-To: noreply@example.com\n"
-"POT-Creation-Date: 2026-09-13 13:17+0800\n"
+"POT-Creation-Date: 2026-09-13 14:29+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -283,7 +283,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:99
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:3
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:19
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:28
 #: src/anteumbra/interfaces/web/templates/admin/settings.html:2
 #: src/anteumbra/interfaces/web/templates/admin/settings.html:10
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:23
@@ -382,14 +382,14 @@ msgid "Exported %(count)s lines as %(format)s"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:109
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:149
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:147
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:10
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:69
 msgid "Copy"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:109
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:149
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:147
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:14
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:169
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:43
@@ -398,7 +398,7 @@ msgid "Close"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:109
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:149
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:147
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:12
 msgid "Wrap"
 msgstr ""
@@ -660,14 +660,12 @@ msgid "Page %(page)s / %(total_pages)s (%(total)s total)"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:135
-#: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:6
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:27
-msgid "Live"
+msgid "Connected"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:135
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:54
-msgid "Off"
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:56
+msgid "Disconnected"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:135
@@ -721,32 +719,32 @@ msgid "%(size)s | %(lines)s lines"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:143
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:136
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:134
 msgid "Session expired"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:143
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:138
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:136
 msgid "Your session has expired. Please sign in again."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:144
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:142
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:140
 msgid "Sign in again"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:146
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:60
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:62
 msgid "Chinese"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:146
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:63
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:65
 msgid "English"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:146
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:57
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:59
 msgid "Language"
 msgstr ""
 
@@ -986,54 +984,11 @@ msgstr ""
 msgid "Current Config Signature"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:66
-msgid "Logout"
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:50
+msgid "Reload the current view"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:74
-msgid "Navigation"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:75
-msgid "Primary navigation"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:77
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:91
-msgid "Overview"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:78
-msgid "Threats"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:79
-msgid "Rules"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:80
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:2
-msgid "Scanner"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:81
-#: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:3
-msgid "Profiles"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:82
-msgid "Blocklist"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:83
-msgid "Log Analyzer"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:84
-msgid "Settings"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:92
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:50
 #: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
@@ -1042,11 +997,61 @@ msgstr ""
 msgid "Refresh"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:125
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:55
+msgid "Live log stream connection"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:68
+msgid "Logout"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:76
+msgid "Navigation"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:77
+msgid "Primary navigation"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:79
+msgid "Overview"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:80
+msgid "Threats"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:81
+msgid "Rules"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:82
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:2
+msgid "Scanner"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:83
+#: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:3
+msgid "Profiles"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:84
+msgid "Blocklist"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:85
+msgid "Log Analyzer"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:86
+msgid "Settings"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:123
 msgid "Cancel"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:125
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:123
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:46
 msgid "Upload"
 msgstr ""
@@ -1239,13 +1244,18 @@ msgstr ""
 msgid "METRICS"
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:6
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:36
+msgid "Live"
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:14
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:33
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:42
 msgid "Loading metrics..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:22
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:56
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:65
 msgid "LIVE LOG STREAM"
 msgstr ""
 
@@ -1279,74 +1289,74 @@ msgid "Audit"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:79
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:49
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:58
 #: src/anteumbra/interfaces/web/templates/admin/threats.html:8
 msgid "Loading records..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:3
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:11
 msgid "Degraded"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:3
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:11
 msgid "Healthy"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:4
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:12
 #: src/anteumbra/interfaces/web/templates/admin/profile_report.html:76
 msgid "Detection"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:4
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:12
 msgid "YARA + Emergency"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:4
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:12
 msgid "Emergency signatures"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:5
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:13
 msgid "Notifications"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:5
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:13
 #, python-format
 msgid "External (%(channels)s)"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:5
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:13
 msgid "Local logs only"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:13
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:22
 msgid "Security Report"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:26
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:35
 msgid "System Metrics"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:40
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:49
 msgid "Recent Detections"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:43
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:52
 msgid "View all"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:58
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:67
 msgid "Quick filter..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:59
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:68
 msgid "SSE"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:61
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:70
 msgid "Analyze"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:65
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:74
 msgid "Connecting to log stream..."
 msgstr ""
 

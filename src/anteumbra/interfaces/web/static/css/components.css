@@ -492,45 +492,10 @@
 
 
 /* ============================================================
-   Header Toolbar & Page Toolbar - v1.8.0
+   Page Toolbar - v1.8.0
    ============================================================ */
-.header-center {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  justify-content: center;
-  min-width: 0;
-}
-
-.header-center .page-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-center .page-toolbar input.form-input {
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  width: 220px;
-}
-
-.header-center .page-toolbar input.form-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px rgba(0, 255, 65, 0.15);
-}
-
-.header-center .page-toolbar .btn {
-  font-size: 12px;
-  padding: 5px 12px;
-  white-space: nowrap;
-}
+/* .header-center 已移除：它是给页头工具条留的空槽，从未有模板写入，而页头
+   工具条（.page-toolbar）实际都渲染在内容区里。 */
 
 /* 卡片内的小型搜索框 */
 .card-header .form-input {
@@ -1320,7 +1285,6 @@
 .btn-sm { min-height: 28px; line-height: 1.2; }
 .btn-xs { min-height: 22px; padding: 3px 8px; font-size: 10px; line-height: 1.2; }
 .card-header .btn,
-.page-actions .btn,
 .batch-toolbar .btn { min-height: 28px; }
 .card-header .form-input,
 .batch-toolbar .form-input { min-height: 28px; padding: 4px 10px; font-size: 12px; }
@@ -1622,6 +1586,35 @@
 .cluster-file-actions .btn { min-height: 32px; }
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
+
+/* ---- Runtime capability band ----
+   The overview renders this only when the runtime is degraded or carries
+   warnings, so it no longer costs the quadrant grid height just to say
+   "healthy / YARA + emergency / local logs only" on every visit.
+
+   Only appearance lives here.  The quadrant geometry deliberately stays as an
+   inline style on the fragment: the overview is swapped in by the router, and a
+   swap does not re-parse stylesheets, so a document opened before a CSS change
+   would apply old CSS to the new fragment and collapse the grid into a list. */
+.capability-band {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-height: 38px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-left: 3px solid var(--color-warning);
+  background: rgba(255, 170, 0, 0.06);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.capability-band__status { color: var(--color-warning); }
+.capability-band__warning { color: var(--color-warning); }
+
+/* The header refresh is a global control now, not a per-page one. */
+.header-refresh { flex: 0 0 auto; white-space: nowrap; }
 
 /* Explains what the New / Known / All tabs mean, so "Known" no longer looks like
    a tab that hides results for no reason. */
