@@ -35,9 +35,19 @@ class _Runtime:
     sse = _Sse()
 
 
+def _probe_path(tmp_path: Path) -> Path:
+    """A record path whose URL form works on both Windows and POSIX.
+
+    A leading slash would have to be percent-encoded, and Werkzeug answers that
+    with a 308 merge redirect, so the test keeps the path relative in exactly the
+    same way the handler will normalise it back.
+    """
+    return Path(tmp_path.as_posix().lstrip("/"))
+
+
 def _url(path: Path) -> str:
     """Encode a path the way the admin UI does (encoded separators, one segment)."""
-    return "/admin/records/rearm_alert/" + quote(str(path).replace("\\", "/"), safe="/:")
+    return "/admin/records/rearm_alert/" + quote(path.as_posix(), safe="/:")
 
 
 @pytest.fixture
@@ -75,8 +85,7 @@ def _authenticated(client):
 
 def test_rearm_clears_the_standing_alert_state(client, tmp_path):
     test_client, registry = client
-    path = tmp_path / "shell.php"
-    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    path = _probe_path(tmp_path) / "shell.php"
     registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
     _authenticated(test_client)
 
@@ -96,7 +105,7 @@ def test_rearm_reports_a_missing_record(client, tmp_path):
     test_client, _registry = client
     _authenticated(test_client)
 
-    response = test_client.post(_url(tmp_path / "absent.php"))
+    response = test_client.post(_url(_probe_path(tmp_path) / "absent.php"))
 
     assert response.status_code == 404
     assert json.loads(response.get_data(as_text=True))["status"] == "error"
@@ -104,8 +113,7 @@ def test_rearm_reports_a_missing_record(client, tmp_path):
 
 def test_rearm_requires_authentication(client, tmp_path):
     test_client, registry = client
-    path = tmp_path / "shell.php"
-    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    path = _probe_path(tmp_path) / "shell.php"
     registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
 
     response = test_client.post(_url(path))
