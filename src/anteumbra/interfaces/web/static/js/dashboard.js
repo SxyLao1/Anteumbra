@@ -48,6 +48,16 @@
     target.appendChild(stateNode);
   }
 
+  function setNotice(target, text) {
+    target.replaceChildren();
+    var stateNode = document.createElement('div');
+    stateNode.className = 'empty-state';
+    var label = document.createElement('p');
+    label.textContent = text;
+    stateNode.appendChild(label);
+    target.appendChild(stateNode);
+  }
+
   function highlightNavigation(path) {
     document.querySelectorAll('.nav-link[data-path]').forEach(function (link) {
       link.classList.toggle('active', link.dataset.path === path);
@@ -72,9 +82,21 @@
     if (toggle) toggle.classList.toggle('active');
   }
 
+  // Second line of defence: if a login page ever arrives as a fragment, show the
+  // re-login prompt instead of rendering a sign-in form inside the content pane.
+  function looksLikeLoginPage(html) {
+    return html.indexOf('login-form') >= 0
+      || html.indexOf('login-container') >= 0
+      || /name=["']password["']/.test(html);
+  }
+
   function applyFragment(target, html) {
     if (html.indexOf('app-header') >= 0 || html.indexOf('app-shell') >= 0) {
       throw new Error('Server returned a full document instead of an admin fragment');
+    }
+    if (looksLikeLoginPage(html)) {
+      if (app.session && app.session.promptRelogin) app.session.promptRelogin();
+      throw new Error(app.t('Your session has expired. Please sign in again.'));
     }
     app.unmount(target);
     target.innerHTML = html;
@@ -99,7 +121,14 @@
         applyFragment(target, html);
       })
       .catch(function (error) {
-        if (requestId === state.requestId) setError(target, error);
+        if (requestId !== state.requestId) return;
+        // An expired session already shows the re-login prompt; label the pane
+        // with the same reason instead of a red failure line behind the modal.
+        if (error && error.sessionExpired) {
+          setNotice(target, app.t('Your session has expired. Please sign in again.'));
+          return;
+        }
+        setError(target, error);
       });
   }
 

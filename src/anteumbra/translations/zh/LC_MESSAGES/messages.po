@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra\n"
-"POT-Creation-Date: 2026-09-13 00:32+0800\n"
+"POT-Creation-Date: 2026-09-13 10:25+0800\n"
 "Language: zh\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -416,6 +416,15 @@ msgstr "没有聚类匹配该过滤条件"
 
 msgid "%(size)s | %(lines)s lines"
 msgstr "%(size)s | %(lines)s 行"
+
+msgid "Session expired"
+msgstr "登录状态已过期"
+
+msgid "Your session has expired. Please sign in again."
+msgstr "身份凭据已过期，请重新登录。"
+
+msgid "Sign in again"
+msgstr "重新登录"
 
 msgid "Chinese"
 msgstr "中文"
