@@ -77,6 +77,9 @@ anteumbra = [
     "interfaces/web/static/js/*.js",
     "interfaces/web/static/js/modules/*.js",
     "plugins/**/*.py",
+    # Memory-shell probe template: deployed into a watched web root at runtime,
+    # so a source-only wheel would break the feature after `pip install`.
+    "infrastructure/memory_shell/assets/*.jsp",
 ]
 
 [tool.setuptools.exclude-package-data]

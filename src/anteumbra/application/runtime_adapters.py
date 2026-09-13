@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping
 
+from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 from anteumbra.domain.quarantine import QuarantineGuardPort
 from anteumbra.domain.runtime import (
     DetectionRegistryPort,
@@ -22,6 +23,7 @@ def build_runtime_services(
     registry: DetectionRegistryPort,
     metrics: MetricsPort,
     quarantine: QuarantineGuardPort,
+    internal_artifacts: InternalArtifactRegistryPort | None = None,
 ) -> RuntimeServices:
     """Build explicitly wired services for the normal application runtime."""
     context = RuntimeContext.from_websites(config, list(websites))
@@ -31,4 +33,5 @@ def build_runtime_services(
         metrics=metrics,
         events=event_publisher,
         quarantine=quarantine,
+        internal_artifacts=internal_artifacts,
     )

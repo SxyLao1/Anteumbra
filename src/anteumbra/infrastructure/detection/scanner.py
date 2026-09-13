@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from anteumbra.domain.entities import ScanResult
+from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 from anteumbra.domain.runtime import ConfigProviderPort, MetricsPort
 from anteumbra.domain.service_ports import YaraEnginePort
 from anteumbra.infrastructure.models import ScanOptions
@@ -261,10 +262,12 @@ class ScannerService:
         config_provider: ConfigProviderPort,
         yara_engine: YaraEnginePort,
         metrics: MetricsPort,
+        internal_artifacts: InternalArtifactRegistryPort | None = None,
     ) -> None:
         self.config_provider = config_provider
         self.yara_engine = yara_engine
         self.metrics = metrics
+        self.internal_artifacts = internal_artifacts
         self.chain = ScannerChain(
             (
                 (5, YaraScanner(config_provider, yara_engine)),
@@ -280,6 +283,11 @@ class ScannerService:
     ) -> ScanResult:
         """Scan one file and record exactly one global attempt/outcome."""
         file_path = Path(file_path)
+        if self.internal_artifacts is not None and self.internal_artifacts.is_internal_path(
+            file_path
+        ):
+            # Anteumbra's own probe artifact: never a detection subject.
+            return ScanResult(file_path, False, [], engine="internal-artifact")
         configured_extensions = scan_options.monitor_extensions or self.config_provider.get().get(
             "paths", {}
         ).get("monitor_extensions", sorted(_WEB_EXTENSIONS))

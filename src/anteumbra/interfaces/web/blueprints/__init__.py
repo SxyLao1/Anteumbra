@@ -62,3 +62,8 @@ def register_blueprints(app: "Flask"):
     from anteumbra.interfaces.web.blueprints.system_bp import system_bp
 
     app.register_blueprint(system_bp)
+
+    # v2.1: 内存马（memory shell）探测后台
+    from anteumbra.interfaces.web.blueprints.memory_shell_bp import memory_shell_bp
+
+    app.register_blueprint(memory_shell_bp)

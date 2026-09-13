@@ -215,6 +215,7 @@ Anteumbra 使用 **隐式事件总线** 模式 — `PluginManager` 同时是插�
 
 pm.emit("alert_requested", ...)  ──→  stdout_logger.on_event()
                                    ├─→  notifier_handler.on_event()
+                                   └─→  memory_shell_probe.on_event()
 
 pm.emit("file_quarantined", ...) ──→  stdout_logger.on_event()
                                    ├─→  quarantine_handler.on_event()
@@ -225,6 +226,8 @@ pm.emit("record_added", ...)     ──→  threat_graph_handler.on_event()
 pm.emit("registry_changed", ...) ──→  threat_graph_handler.on_event()
 
 pm.emit("block_executed", ...)   ──→  stdout_logger.on_event()
+
+pm.emit("memory_shell_found", ...) ─→  （无内置消费者，供外部插件与告警面订阅）
 
 pm.emit("wal_archived", ...)     ──→  stdout_logger.on_event()
 pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
@@ -275,13 +278,14 @@ pm.emit("wal_replayed", ...)     ──→  stdout_logger.on_event()
 
 | Event Type | Emitter | Handlers |
 |-----------|---------|----------|
-| `alert_requested` | monitor.py, quarantine_handler | stdout_logger, notifier_handler |
+| `alert_requested` | monitor.py, quarantine_handler | stdout_logger, notifier_handler, memory_shell_probe |
 | `file_quarantined` | monitor.py | stdout_logger, quarantine_handler |
 | `file_scanned` | monitor.py | stdout_logger |
 | `block_executed` | block_ledger.py | stdout_logger |
 | `record_added` | suspicious_registry.py | threat_graph_handler, siem_handler |
 | `registry_changed` | suspicious_registry.py (6 sites) | threat_graph_handler |
 | `threat_graph_updated` | threat_graph_handler | stdout_logger |
+| `memory_shell_found` | memory_shell_probe | —（供外部插件订阅） |
 | `wal_archived` | wal_manager.py | stdout_logger |
 | `wal_replayed` | wal_manager.py | stdout_logger |
 

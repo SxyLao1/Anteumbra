@@ -164,9 +164,13 @@ class RuntimeLifecycle:
                 container.quarantine,
                 container.logging.get_logger,
                 alert_formatter=dependencies.alert_formatter,
+                memory_shell=getattr(container, "memory_shell", None),
             )
             container.plugin_manager = plugin_manager
             container.events.bind(plugin_manager)
+            memory_shell = getattr(container, "memory_shell", None)
+            if memory_shell is not None:
+                memory_shell.bind_publisher(container.events)
             if container.ip_blocker is not None:
                 container.ip_blocker.start()
 
@@ -177,6 +181,7 @@ class RuntimeLifecycle:
                 registry=container.registry,
                 metrics=container.metrics,
                 quarantine=container.quarantine,
+                internal_artifacts=getattr(container, "internal_artifacts", None),
             )
 
             app = dependencies.app_factory(runtime=container)
@@ -194,6 +199,7 @@ class RuntimeLifecycle:
                 monitor_factory=dependencies.monitor_factory,
                 analyzer_factory=dependencies.analyzer_factory,
                 log_monitor_factory=dependencies.log_monitor_factory,
+                internal_artifacts=getattr(container, "internal_artifacts", None),
             )
             state.monitors = monitors
             state.log_monitors = log_monitors

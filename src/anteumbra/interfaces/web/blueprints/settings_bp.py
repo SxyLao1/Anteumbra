@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import tomli_w
@@ -574,32 +575,151 @@ def settings_storage_status():
         return f'<div style="color:#ff4444;">Error: {e}</div>'
 
 
+def _plugin_section_name(name: str) -> str:
+    """Return the ``[plugins.<name>]`` section a plugin reads its settings from.
+
+    Adapters are registered under their package path (``waf_adapters.syslog_waf``)
+    while the instance and its config section use the plugin's own name
+    (``syslog_waf``), so the section is the last dotted segment.
+    """
+    return name.rsplit(".", 1)[-1] if name else ""
+
+
+def _plugin_rows(manager, plugin_config) -> list[dict]:
+    """Build the plugin inventory: what is loaded plus what could be loaded.
+
+    ``list_all()`` answers "what is running"; the inventory answers "what is
+    there and why is it not running", which is the question an operator has when
+    an adapter they configured never shows up in the UI.
+    """
+    loaded_by_name = {}
+    try:
+        for entry in manager.list_all():
+            loaded_by_name[str(entry.get("name") or "")] = entry
+    except Exception:
+        logger.error("plugin list_all() failed", exc_info=True)
+
+    available = getattr(manager, "available_plugins", None)
+    inventory = []
+    if callable(available):
+        try:
+            inventory = [item for item in available() or [] if isinstance(item, Mapping)]
+        except Exception:
+            logger.error("plugin inventory failed", exc_info=True)
+    if not inventory:
+        # Older managers only report what is already loaded; render that rather
+        # than an empty panel.
+        inventory = [
+            {
+                "name": name,
+                "loaded": True,
+                "installed": True,
+                "in_builtin": True,
+                "enabled": True,
+                "version": entry.get("version"),
+                "type": entry.get("type"),
+                "events": entry.get("events") or [],
+            }
+            for name, entry in loaded_by_name.items()
+        ]
+
+    builtin = plugin_config.get("builtin") if isinstance(plugin_config, Mapping) else None
+    builtin_names = [str(item) for item in builtin] if isinstance(builtin, (list, tuple)) else []
+    system_enabled = bool(getattr(manager, "is_enabled", False))
+
+    rows = []
+    for item in inventory:
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        section = _plugin_section_name(name)
+        loaded_entry = loaded_by_name.get(name) or loaded_by_name.get(section)
+        loaded = bool(item.get("loaded")) or loaded_entry is not None
+        installed = bool(item.get("installed", True))
+        in_builtin = bool(item.get("in_builtin", name in builtin_names))
+        enabled = bool(item.get("enabled", True))
+        section_config = plugin_config.get(section) if isinstance(plugin_config, Mapping) else None
+        if isinstance(section_config, Mapping) and "enabled" in section_config:
+            enabled = bool(section_config.get("enabled"))
+
+        reasons = []
+        if not loaded:
+            # Each reason is a separate, actionable fact: do not collapse
+            # "switched off" and "not listed" into one vague "not loaded".
+            if not system_enabled:
+                reasons.append("system_off")
+            if not installed:
+                reasons.append("not_installed")
+            if not in_builtin:
+                reasons.append("not_listed")
+            if not enabled:
+                reasons.append("disabled")
+            if system_enabled and installed and in_builtin and enabled:
+                reasons.append("not_registered")
+
+        snippet_lines = []
+        plugin_table = []
+        if not system_enabled:
+            plugin_table.append("enabled = true")
+        if not in_builtin:
+            plugin_table.append("builtin = " + json.dumps(builtin_names + [name]))
+        if plugin_table:
+            snippet_lines = ["[plugins]", *plugin_table]
+        if not enabled:
+            if snippet_lines:
+                snippet_lines.append("")
+            snippet_lines += [f"[plugins.{section}]", "enabled = true"]
+
+        rows.append(
+            {
+                "name": name,
+                "section": section,
+                "loaded": loaded,
+                "installed": installed,
+                "in_builtin": in_builtin,
+                "enabled": enabled,
+                "version": (loaded_entry or {}).get("version") or item.get("version"),
+                "type": (loaded_entry or {}).get("type") or item.get("type"),
+                "events": (loaded_entry or {}).get("events") or item.get("events") or [],
+                "reasons": reasons,
+                "snippet": "\n".join(snippet_lines),
+            }
+        )
+    # Loaded plugins first: the interesting rows are the ones that are not.
+    rows.sort(key=lambda row: (not row["loaded"], row["name"]))
+    return rows
+
+
 @settings_bp.route("/settings/plugin-status")
 @require_auth
 def settings_plugin_status():
-    """Plugin system status panel for Settings page."""
+    """Plugin inventory panel for Settings page."""
     try:
         pm = current_app.extensions.get("anteumbra.plugin_manager")
+        plugin_config = get_runtime().config.get().get("plugins", {})
+        if not isinstance(plugin_config, Mapping):
+            plugin_config = {}
         if pm is None:
             return render_page(
                 "admin/panels/plugin_status.html",
                 enabled=False,
                 plugins=[],
+                plugin_count=0,
+                loaded_count=0,
                 detector_count=0,
                 notifier_count=0,
                 source_count=0,
             )
-        plugins = pm.list_all()
-        detector_count = len(pm.detectors)
-        notifier_count = len(pm.notifiers)
-        source_count = len(pm.event_sources)
+        plugins = _plugin_rows(pm, plugin_config)
         return render_page(
             "admin/panels/plugin_status.html",
             enabled=pm.is_enabled,
             plugins=plugins,
-            detector_count=detector_count,
-            notifier_count=notifier_count,
-            source_count=source_count,
+            plugin_count=len(plugins),
+            loaded_count=sum(1 for row in plugins if row["loaded"]),
+            detector_count=len(pm.detectors),
+            notifier_count=len(pm.notifiers),
+            source_count=len(pm.event_sources),
         )
     except Exception as e:
         return f'<div style="color:#ff4444;">Error: {e}</div>'

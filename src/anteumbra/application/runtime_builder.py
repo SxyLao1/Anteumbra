@@ -22,6 +22,7 @@ def build_runtime_container(
     from anteumbra.application.config_history_service import ConfigHistoryLogger
     from anteumbra.application.log_analysis_service import AccessLogAnalysisService
     from anteumbra.application.login_rate_service import LoginRateLimiter
+    from anteumbra.application.memory_shell_service import MemoryShellService
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
@@ -33,7 +34,9 @@ def build_runtime_container(
     from anteumbra.infrastructure.detection.log_heuristic import LogHeuristicEngine
     from anteumbra.infrastructure.detection.scanner import ScannerService
     from anteumbra.infrastructure.detection.yara_engine import build_yara_engine
+    from anteumbra.infrastructure.internal_artifacts import InMemoryInternalArtifactRegistry
     from anteumbra.infrastructure.ip_blocker import IPBlocker
+    from anteumbra.infrastructure.memory_shell import MemoryShellProbeDeployer
     from anteumbra.infrastructure.monitoring.log_analyzer import (
         resolve_access_log_path,
     )
@@ -195,7 +198,23 @@ def build_runtime_container(
     threat_graph.set_persist_path(data_dir / "threat_intel" / "threat_graph.json")
     threat_graph.load()
     yara_engine = build_yara_engine(provider, runtime_logging.get_logger("yara"))
-    scanner = ScannerService(provider, yara_engine, metrics)
+    # One registry, shared by everything that must recognise Anteumbra's own
+    # artifacts: the probe that creates them, the scanner that would flag them,
+    # the file monitor that would report them and the log monitor that would
+    # attribute the probe's HTTP request to an attacker.
+    internal_artifacts = InMemoryInternalArtifactRegistry()
+    memory_shell = MemoryShellService(
+        config_provider=provider,
+        deployer=MemoryShellProbeDeployer(
+            artifacts=internal_artifacts,
+            log=runtime_logging.get_logger("memory_shell.deployer"),
+        ),
+        artifacts=internal_artifacts,
+        notifier=notifier,
+        publisher=events,
+        log=runtime_logging.get_logger("memory_shell"),
+    )
+    scanner = ScannerService(provider, yara_engine, metrics, internal_artifacts)
     return RuntimeContainer(
         config=provider,
         events=events,
@@ -221,6 +240,8 @@ def build_runtime_container(
         registry=registry,
         quarantine=quarantine,
         waf_poller=waf_poller,
+        internal_artifacts=internal_artifacts,
+        memory_shell=memory_shell,
     )
 
 

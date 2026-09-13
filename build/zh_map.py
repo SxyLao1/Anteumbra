@@ -215,7 +215,7 @@ TRANSLATIONS = {
     "Active": "活跃",
     "LINKED DETECTION RECORDS": "关联检测记录",
     "ASSOCIATED IPs": "关联 IP",
-    "0 selected": "已选 0 项",
+    "0 selected": "0 项",
     "Select Page": "选择本页",
     "Select All": "全选",
     "Clear": "清除",

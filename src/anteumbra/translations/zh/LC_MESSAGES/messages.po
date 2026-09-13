@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra\n"
-"POT-Creation-Date: 2026-09-13 14:29+0800\n"
+"POT-Creation-Date: 2026-09-14 00:05+0800\n"
 "Language: zh\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -303,6 +303,12 @@ msgstr "标记失败: %(message)s"
 msgid "Filter failed: %(message)s"
 msgstr "筛选失败: %(message)s"
 
+msgid "Alert re-armed."
+msgstr "已重新告警。"
+
+msgid "Re-arm failed: %(message)s"
+msgstr "重新告警失败：%(message)s"
+
 msgid "Clipboard access is unavailable."
 msgstr "无法访问剪贴板。"
 
@@ -483,6 +489,30 @@ msgstr "部分成功"
 msgid "ok %(ok)s / failed %(failed)s / skipped %(skipped)s"
 msgstr "成功 %(ok)s / 失败 %(failed)s / 跳过 %(skipped)s"
 
+msgid "The memory-shell probe service did not answer: %(error)s"
+msgstr "内存马探测服务无响应: %(error)s"
+
+msgid "The memory-shell probe service returned no usable state."
+msgstr "内存马探测服务未返回可用状态。"
+
+msgid "The memory-shell probe service is not attached to this runtime. Enable the memory_shell_probe plugin in config.toml and restart Anteumbra."
+msgstr "内存马探测服务未挂载到当前运行时。请在 config.toml 中启用 memory_shell_probe 插件并重启 Anteumbra。"
+
+msgid "The memory-shell panel failed to render: %(error)s"
+msgstr "内存马面板渲染失败: %(error)s"
+
+msgid "The memory-shell probe service is not available."
+msgstr "内存马探测服务不可用。"
+
+msgid "No site was selected for the probe."
+msgstr "未选择要探测的站点。"
+
+msgid "Unknown site: %(site_id)s"
+msgstr "未知站点: %(site_id)s"
+
+msgid "The probe could not be started: %(error)s"
+msgstr "探测无法启动: %(error)s"
+
 msgid "🔐 Change Admin Password"
 msgstr "🔐 修改管理员密码"
 
@@ -624,6 +654,9 @@ msgstr "画像"
 msgid "Blocklist"
 msgstr "封禁"
 
+msgid "Memory Shell"
+msgstr "内存马检测"
+
 msgid "Log Analyzer"
 msgstr "日志分析"
 
@@ -764,6 +797,15 @@ msgstr "正在加载日志历史..."
 
 msgid "ACCESS LOG ANALYSIS"
 msgstr "访问日志分析"
+
+msgid "Memory Shell Detection"
+msgstr "内存马检测"
+
+msgid "Anteumbra drops a short-lived JSP probe into a watched web root, asks the servlet container what it has registered in memory, then removes the probe again."
+msgstr "Anteumbra 会向受监控的网站根目录投放一个短生命周期的 JSP 探测器，向 Servlet 容器查询内存中已注册的组件（过滤器 / Servlet / 监听器），随后删除该探测器。"
+
+msgid "Loading panel..."
+msgstr "正在加载面板..."
 
 msgid "METRICS"
 msgstr "指标"
@@ -1161,6 +1203,15 @@ msgstr "文件状态"
 msgid "Present"
 msgstr "存在"
 
+msgid "Deleted outside the product"
+msgstr "被外部删除（人工或脚本）"
+
+msgid "Moved to quarantine"
+msgstr "已移入隔离区"
+
+msgid "Missing after restart"
+msgstr "重启后已不存在"
+
 msgid "Detected at"
 msgstr "检测时间"
 
@@ -1170,6 +1221,12 @@ msgstr "通信次数"
 msgid "First seen IP"
 msgstr "首次发现IP"
 
+msgid "Content SHA-256"
+msgstr "内容 SHA-256"
+
+msgid "Not recorded"
+msgstr "未记录"
+
 msgid "Alert status"
 msgstr "告警状态"
 
@@ -1178,6 +1235,9 @@ msgstr "已告警"
 
 msgid "Yes"
 msgstr "是"
+
+msgid "Alert me again"
+msgstr "重新告警"
 
 msgid "No"
 msgstr "否"
@@ -1398,9 +1458,6 @@ msgstr "配置重载"
 msgid "EXPORT & SIEM"
 msgstr "导出与 SIEM"
 
-msgid "Loading panel..."
-msgstr "正在加载面板..."
-
 msgid "STORAGE"
 msgstr "存储"
 
@@ -1461,6 +1518,15 @@ msgstr "搜索规则..."
 msgid "Delete Selected"
 msgstr "删除选中"
 
+msgid "Clear selection"
+msgstr "清除选中"
+
+msgid "Select this page"
+msgstr "全选本页"
+
+msgid "Select every page"
+msgstr "全选每页"
+
 msgid "[+] Upload"
 msgstr "[+] 上传"
 
@@ -1508,6 +1574,135 @@ msgstr "暂无热加载记录"
 
 msgid "Every config.toml reload is logged here with the keys that changed."
 msgstr "每次 config.toml 热加载都会连同变更的键记录在此。"
+
+msgid "Memory-shell probe unavailable"
+msgstr "内存马探测不可用"
+
+msgid "Probe:"
+msgstr "探测："
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Auto probe:"
+msgstr "自动探测："
+
+msgid "Cooldown:"
+msgstr "冷却时间："
+
+msgid "HTTP timeout:"
+msgstr "HTTP 超时："
+
+msgid "Runs:"
+msgstr "运行次数："
+
+msgid "Failures:"
+msgstr "失败次数："
+
+msgid "Probing..."
+msgstr "探测中..."
+
+msgid "Trigger extensions:"
+msgstr "触发扩展名："
+
+msgid "The memory-shell probe is disabled in config.toml; manual probes would only be recorded as failures."
+msgstr "配置中已关闭内存马探测；手动探测只会被记录为失败。"
+
+msgid "Monitored sites"
+msgstr "受监控站点"
+
+msgid "Site"
+msgstr "站点"
+
+msgid "Root"
+msgstr "根目录"
+
+msgid "Base URL"
+msgstr "基础 URL"
+
+msgid "Last run"
+msgstr "上次运行"
+
+msgid "Entries"
+msgstr "条目"
+
+msgid "Suspicious"
+msgstr "可疑"
+
+msgid "Cooldown"
+msgstr "冷却"
+
+msgid "Cleanup failed"
+msgstr "清理失败"
+
+msgid "Run a memory-shell probe on this site now?"
+msgstr "立即对该站点执行内存马探测？"
+
+msgid "Probe Memory Shell"
+msgstr "探测内存马"
+
+msgid "No watched site is configured for probing."
+msgstr "没有可用于探测的受监控站点。"
+
+msgid "Findings"
+msgstr "发现"
+
+msgid "Container:"
+msgstr "容器："
+
+msgid "Kind"
+msgstr "类型"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "URLs"
+msgstr "URL"
+
+msgid "Class name"
+msgstr "类名"
+
+msgid "Class loader"
+msgstr "类加载器"
+
+msgid "On disk"
+msgstr "磁盘存在"
+
+msgid "Reasons"
+msgstr "判定依据"
+
+msgid "%(count)s non-suspicious entries collapsed"
+msgstr "已折叠 %(count)s 个非可疑条目"
+
+msgid "No suspicious entry has been reported yet."
+msgstr "尚未发现可疑条目。"
+
+msgid "Recent runs"
+msgstr "最近运行"
+
+msgid "Trigger:"
+msgstr "触发方式："
+
+msgid "Triggered by:"
+msgstr "触发来源："
+
+msgid "Probe failed:"
+msgstr "探测失败："
+
+msgid "Probe cleanup failed:"
+msgstr "探测清理失败："
+
+msgid "A probe file may still exist in the web root. Remove it manually."
+msgstr "探测文件可能仍残留在网站根目录中，请手动删除。"
+
+msgid "Report error:"
+msgstr "报告错误："
+
+msgid "No probe has run yet."
+msgstr "尚未执行任何探测。"
 
 msgid "Email"
 msgstr "邮件"
@@ -1563,6 +1758,9 @@ msgstr "已启用"
 msgid "DISABLED"
 msgstr "已禁用"
 
+msgid "Loaded:"
+msgstr "已加载："
+
 msgid "Detectors:"
 msgstr "检测器："
 
@@ -1571,6 +1769,12 @@ msgstr "通知器："
 
 msgid "Sources:"
 msgstr "数据源："
+
+msgid "The plugin system is switched off; no plugin is loaded."
+msgstr "插件系统已关闭，未加载任何插件。"
+
+msgid "Enable in config.toml:"
+msgstr "在 config.toml 中启用："
 
 msgid "Plugin"
 msgstr "插件"
@@ -1581,14 +1785,44 @@ msgstr "检测器"
 msgid "Notifier"
 msgstr "通知器"
 
-msgid "No plugins loaded. Add to"
-msgstr "未加载任何插件。请在"
+msgid "Plugin system off"
+msgstr "插件系统已关闭"
 
-msgid "in config.toml."
-msgstr "中添加，位于 config.toml。"
+msgid "Not installed"
+msgstr "未安装"
 
-msgid "Enable in config.toml:"
-msgstr "在 config.toml 中启用："
+msgid "Not in builtin"
+msgstr "未列入 builtin"
+
+msgid "Disabled in config"
+msgstr "配置已关闭"
+
+msgid "Not registered"
+msgstr "未注册"
+
+msgid "Not loaded"
+msgstr "未加载"
+
+msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
+msgstr "[plugins] 段已关闭，因此不会加载 builtin 中的任何插件。"
+
+msgid "Listed in config.toml, but this build has no implementation for it."
+msgstr "已在 config.toml 中列出，但本构建没有对应实现。"
+
+msgid "This build can load it, but [plugins] builtin does not list it."
+msgstr "本构建可以加载该插件，但 [plugins] builtin 未列出它。"
+
+msgid "Installed but switched off in config.toml."
+msgstr "已安装，但在 config.toml 中被关闭。"
+
+msgid "Enabled and listed, but the plugin is not registered — check the startup log."
+msgstr "已启用且已列出，但插件未注册——请检查启动日志。"
+
+msgid "Add to config.toml:"
+msgstr "在 config.toml 中添加："
+
+msgid "No plugin is available in this build."
+msgstr "本构建没有可用的插件。"
 
 msgid "No active sessions"
 msgstr "暂无活跃会话"
@@ -1713,36 +1947,3 @@ msgstr "警告"
 
 msgid "Secure Login"
 msgstr "安全登录"
-
-msgid "Deleted outside the product"
-msgstr "被外部删除（人工或脚本）"
-
-msgid "Moved to quarantine"
-msgstr "已移入隔离区"
-
-msgid "Missing after restart"
-msgstr "重启后已不存在"
-
-msgid "Content SHA-256"
-msgstr "内容 SHA-256"
-
-msgid "Not recorded"
-msgstr "未记录"
-
-msgid "Alert me again"
-msgstr "重新告警"
-
-msgid "Alert re-armed."
-msgstr "已重新告警。"
-
-msgid "Re-arm failed: %(message)s"
-msgstr "重新告警失败：%(message)s"
-
-msgid "Clear selection"
-msgstr "清除选中"
-
-msgid "Select this page"
-msgstr "全选本页"
-
-msgid "Select every page"
-msgstr "全选每页"

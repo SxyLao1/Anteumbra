@@ -50,6 +50,7 @@ class PluginManager:
         self._abandoned_threads: List[tuple[str, threading.Thread]] = []
         self._metric_recorder = metric_recorder
         self._plugin_factories = dict(plugin_factories or {})
+        self._event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
         self._logger = log or logging.getLogger(__name__)
 
     def set_plugin_factories(
@@ -60,6 +61,59 @@ class PluginManager:
         if self._plugins:
             raise RuntimeError("plugin factories cannot change after registration")
         self._plugin_factories = dict(factories)
+
+    def set_event_sink(
+        self,
+        sink: Callable[[str, Mapping[str, Any]], None] | None,
+    ) -> None:
+        """Route events produced by EventSource plugins to a durable consumer.
+
+        The WAF adapters publish `waf.event`; without a sink those events reach
+        only bus subscribers, and the runtime's own threat-graph pipeline reads
+        its input from a JSONL file. Registering a sink closes that loop.
+        """
+        self._event_sink = sink
+
+    def _start_event_source(self, plugin: Plugin) -> None:
+        """Wire and start one EventSource plugin.
+
+        Registration used to record the source and never call `start()`, so a
+        listed adapter was loadable but never actually polled. Failures here
+        must not abort registration: a broken adapter should degrade to
+        "installed but inert", not take the plugin system down.
+        """
+        try:
+            plugin.set_callback(self._handle_source_event)
+        except Exception as e:  # noqa: BLE001 - adapter-specific callback contract
+            self._logger.error("PluginManager: 事件源 '%s' 回调注册失败: %s", plugin.name, e)
+        try:
+            plugin.start()
+            self._logger.info("PluginManager: 事件源 '%s' 已启动", plugin.name)
+        except Exception as e:  # noqa: BLE001 - an inert adapter is acceptable
+            self._logger.error("PluginManager: 事件源 '%s' 启动失败: %s", plugin.name, e)
+
+    def _handle_source_event(self, event: Any) -> None:
+        """Normalise an EventSource callback into a bus event (and the sink)."""
+        try:
+            if isinstance(event, DomainEvent):
+                event_type, source, payload = event.event_type, event.source, event.payload
+            elif isinstance(event, Mapping):
+                event_type = str(event.get("event_type") or "waf.event")
+                source = str(event.get("source") or "waf_adapter")
+                nested = event.get("payload")
+                payload = dict(nested) if isinstance(nested, Mapping) else dict(event)
+            else:
+                self._logger.debug("PluginManager: 忽略无法识别的事件源输出 %r", type(event))
+                return
+            self.emit(event_type, source, payload)
+            sink = self._event_sink
+            if sink is not None and event_type.startswith("waf."):
+                try:
+                    sink(event_type, payload)
+                except Exception as e:  # noqa: BLE001 - sink must stay best effort
+                    self._logger.error("PluginManager: 事件落盘失败: %s", e)
+        except Exception:  # noqa: BLE001 - never break the adapter thread
+            self._logger.exception("PluginManager: 事件源回调处理失败")
 
     # ── 初始化 ──────────────────────────────────────────
 
@@ -163,6 +217,7 @@ class PluginManager:
                     self._notifiers[name] = plugin
                 if isinstance(plugin, EventSource):
                     self._event_sources[name] = plugin
+                    self._start_event_source(plugin)
 
                 for event_type in plugin.supported_events:
                     self._event_handlers.setdefault(event_type, []).append(plugin)
@@ -179,6 +234,11 @@ class PluginManager:
             plugin = self._plugins.pop(name, None)
             if plugin is None:
                 return False
+            if isinstance(plugin, EventSource):
+                try:
+                    plugin.stop()
+                except Exception as e:
+                    self._logger.error("PluginManager: 事件源 '%s' 停止失败: %s", name, e)
             try:
                 plugin.deactivate()
             except Exception as e:
@@ -344,6 +404,50 @@ class PluginManager:
                     }
                 )
             return result
+
+    def available_plugins(self) -> List[Dict[str, Any]]:
+        """Every plugin this build can load, loaded or not.
+
+        `list_all()` only shows what is running, which makes a plugin that is
+        installed but missing from `[plugins] builtin`, or one whose activation
+        failed, invisible exactly when an operator needs to see it.
+        """
+        with self._rwlock:
+            loaded = dict(self._plugins)
+            configured = list(self._config.get("builtin", []) or [])
+            factories = dict(self._plugin_factories)
+
+        result: List[Dict[str, Any]] = []
+        for name in sorted(set(factories) | set(configured)):
+            # A factory key can be dotted (`waf_adapters.modsecurity`) while the
+            # plugin registers itself under the short name, and its config
+            # section is the short name too. Resolve both, or the panel would
+            # claim a running adapter is not loaded and miss `enabled = false`.
+            tail = name.rsplit(".", 1)[-1]
+            plugin = loaded.get(name) or loaded.get(tail)
+            section = self._config.get(name)
+            if not isinstance(section, Mapping):
+                section = self._config.get(tail, {})
+            enabled = True
+            if isinstance(section, Mapping):
+                enabled = bool(section.get("enabled", True))
+            result.append(
+                {
+                    "name": name,
+                    "loaded": plugin is not None,
+                    "installed": name in factories,
+                    "in_builtin": name in configured or tail in configured,
+                    "enabled": enabled,
+                    "version": plugin.version if plugin is not None else None,
+                    "type": (
+                        type(plugin).__bases__[0].__name__
+                        if plugin is not None and type(plugin).__bases__
+                        else None
+                    ),
+                    "events": plugin.supported_events if plugin is not None else [],
+                }
+            )
+        return result
 
     def shutdown(self) -> None:
         """停用所有插件（线程安全）"""

@@ -9,6 +9,7 @@ from typing import Any, Callable, Protocol
 
 from anteumbra.application.jsonl_consumer import JsonlEventTailer
 from anteumbra.application.runtime_container import RuntimeContainer
+from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 from anteumbra.domain.runtime import (
     ConfigProviderPort,
     DetectionRegistryPort,
@@ -67,6 +68,7 @@ def _start_site_monitors(
     config_provider: ConfigProviderPort | None = None,
     notifier: NotifierPort | None = None,
     registry: DetectionRegistryPort | None = None,
+    internal_artifacts: InternalArtifactRegistryPort | None = None,
 ) -> tuple[list[MonitorResourcePort], list[MonitorResourcePort], list[str]]:
     if monitor_factory is None:
         raise ValueError("monitor_factory must be supplied by the composition root")
@@ -121,6 +123,7 @@ def _start_site_monitors(
                     config_provider=config_provider,
                     notifier=notifier,
                     registry=registry,
+                    internal_artifacts=internal_artifacts,
                 )
             log_monitor.start()
             if getattr(log_monitor, "is_running", True):

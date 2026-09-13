@@ -30,10 +30,12 @@ if TYPE_CHECKING:
     from anteumbra.application.config_history_service import ConfigHistoryLogger
     from anteumbra.application.log_analysis_service import AccessLogAnalysisService
     from anteumbra.application.login_rate_service import LoginRateLimiter
+    from anteumbra.application.memory_shell_service import MemoryShellService
     from anteumbra.application.password_service import PasswordService
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
     from anteumbra.application.scan_state_service import ScanRuntimeState
+    from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 
 
 @dataclass
@@ -69,3 +71,5 @@ class RuntimeContainer:
     plugin_manager: PluginManagerPort | None = None
     ip_blocker: IPBlockerPort | None = None
     waf_poller: WAFPollerPort | None = None
+    internal_artifacts: InternalArtifactRegistryPort | None = None
+    memory_shell: MemoryShellService | None = None
