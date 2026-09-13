@@ -14,25 +14,19 @@ from typing import Any
 from anteumbra.domain import Repository, registry_records
 from anteumbra.domain.runtime import ConfigProviderPort, EventPublisherPort
 from anteumbra.domain.site import SiteIdentity
+from anteumbra.infrastructure.registry_errors import (
+    RegistryDataError,
+    RegistryPersistenceError,
+)
 from anteumbra.infrastructure.registry_events import RegistryEventNotifier
 from anteumbra.infrastructure.registry_storage import (
     RegistryJsonStore,
     RegistryShadowStore,
+    RegistrySqlStore,
+    RegistryStorage,
 )
 from anteumbra.infrastructure.utils.path_utils import path_to_key
 from anteumbra.infrastructure.wal_manager import WalManager
-
-
-class RegistryError(RuntimeError):
-    """Base class for Registry failures."""
-
-
-class RegistryDataError(RegistryError):
-    """Raised when no valid authoritative or recovery data can be loaded."""
-
-
-class RegistryPersistenceError(RegistryError):
-    """Raised when a Registry mutation cannot be durably persisted."""
 
 
 class SuspiciousRegistry:
@@ -66,12 +60,34 @@ class SuspiciousRegistry:
         self._shadow_store = RegistryShadowStore(
             shadow_repository, self._logger, registry_records.record_id
         )
+        self._sql_store = (
+            RegistrySqlStore(
+                shadow_repository,
+                self._json_store,
+                self._logger,
+                registry_records.record_id,
+            )
+            if shadow_repository is not None
+            else None
+        )
+        self._storage = RegistryStorage(
+            json_store=self._json_store,
+            shadow_store=self._shadow_store,
+            sql_store=self._sql_store,
+            logger=self._logger,
+            record_id=registry_records.record_id,
+            authority_marker=self.path.with_name(f"{self.path.name}.sqlite-authority"),
+        )
         self._event_notifier = RegistryEventNotifier(event_publisher, self._logger, change_callback)
         self._lock = threading.RLock()
         records, normalized = self._load_records()
         self._records = records
         if normalized:
             self._persist(records, previous=[])
+        elif self._storage.sqlite_authoritative:
+            # Keep the readable file in step with the authoritative store even
+            # when nothing needed migrating.
+            self._storage.snapshot(self._records)
 
     def add(
         self,
@@ -97,8 +113,10 @@ class SuspiciousRegistry:
         key = path_to_key(file_path)
         now = self._now()
         with self._lock:
-            records = copy.deepcopy(self._records)
-            index = self._find_index(records, key, identity.site_id)
+            # Mutate in place: copying the whole record list per detection made
+            # every write cost grow with the Registry size (measured 19 ms of
+            # deepcopy alone at 940 records).  Readers take the lock and copy.
+            index = self._find_index(self._records, key, identity.site_id)
             if index is None:
                 record = registry_records.create_detection_record(
                     key,
@@ -110,9 +128,10 @@ class SuspiciousRegistry:
                     content_hash,
                     alert_emitted,
                 )
-                records.append(record)
+                records = [*self._records, record]
             else:
-                record = records[index]
+                record = self._records[index]
+                records = self._records
                 registry_records.refresh_detection_record(
                     record,
                     features,
@@ -344,11 +363,8 @@ class SuspiciousRegistry:
     def reconcile_filesystem(self, site_id: str | None = None) -> dict[str, int]:
         """Align stored ``file_exists`` with the real filesystem.
 
-        The watcher only sees deletions that happen while it is running, so a
-        file removed during a restart or any downtime would otherwise stay
-        recorded as present forever.  Only filesystem-observed absences are
-        reversed: a record the operator soft-deleted has no ``missing_reason``
-        and is left alone even while its file is still on disk.
+        Only filesystem-observed absences are reversed: a record the operator
+        soft-deleted has no ``missing_reason`` and is left alone.
         """
         normalized_site_id = self._normalize_site_id(site_id) if site_id else None
         now = self._now()
@@ -416,7 +432,7 @@ class SuspiciousRegistry:
                 copy.deepcopy(record)
                 for record in self._records
                 if bool(record.get("file_exists", True))
-                or self._parse_timestamp(record.get("detected_at")) > cutoff
+                or registry_records.parse_timestamp(record.get("detected_at")) > cutoff
             ]
             original_count = len(self._records)
             if len(records) != original_count:
@@ -467,8 +483,9 @@ class SuspiciousRegistry:
         return self._wal.replay(self._apply_replay_entry)
 
     def close(self) -> None:
-        """Close the injected shadow repository when it owns such a method."""
-        self._shadow_store.close()
+        """Flush a final snapshot and close whatever storage owns a handle."""
+        with self._lock:
+            self._storage.close(self._records)
 
     def _update_record(
         self,
@@ -482,14 +499,13 @@ class SuspiciousRegistry:
         key = path_to_key(file_path)
         target_site = self._site_id_for_lookup(file_path, site_id)
         with self._lock:
-            records = copy.deepcopy(self._records)
-            index = self._find_index(records, key, target_site)
+            index = self._find_index(self._records, key, target_site)
             if index is None:
                 return False
-            record = records[index]
+            record = self._records[index]
             mutate(record)
             self._commit_upsert(
-                records,
+                self._records,
                 record,
                 event_type="registry_changed",
                 event_payload={
@@ -510,17 +526,27 @@ class SuspiciousRegistry:
         event_type: str,
         event_payload: Mapping[str, Any],
     ) -> None:
+        if self._storage.sqlite_authoritative:
+            # SQLite's journal is the durability boundary here; the Registry WAL
+            # would only add two fsyncs per detection for a replay nobody needs.
+            try:
+                self._storage.commit_upsert(record, records)
+            except Exception as exc:
+                raise RegistryPersistenceError(f"Registry commit failed: {exc}") from exc
+            self._records = records
+            self._notify(event_type, event_payload)
+            return
+
         transaction_id = self._wal.write_entry(
             "registry_upsert", payload={"record": copy.deepcopy(record)}
         )
-        previous = self._records
         try:
-            self._persist(records, previous=previous)
+            self._persist(records, previous=self._records)
         except Exception as exc:
             raise RegistryPersistenceError(
-                f"Registry JSON commit failed; WAL transaction {transaction_id} is pending"
+                f"Registry commit failed; WAL transaction {transaction_id} is pending"
             ) from exc
-        self._records = copy.deepcopy(records)
+        self._records = records
         try:
             self._wal.mark_completed(transaction_id)
         except Exception as exc:
@@ -543,9 +569,9 @@ class SuspiciousRegistry:
             self._persist(records, previous=previous)
         except Exception as exc:
             raise RegistryPersistenceError(
-                f"Registry JSON commit failed; WAL transaction {transaction_id} is pending"
+                f"Registry commit failed; WAL transaction {transaction_id} is pending"
             ) from exc
-        self._records = copy.deepcopy(records)
+        self._records = records
         try:
             self._wal.mark_completed(transaction_id)
         except Exception as exc:
@@ -561,45 +587,22 @@ class SuspiciousRegistry:
         previous: list[dict[str, Any]],
     ) -> None:
         try:
-            self._json_store.persist(records)
+            self._storage.persist_all(records, previous=previous)
         except OSError as exc:
             raise RegistryPersistenceError(
                 f"cannot atomically write Registry at {self.path}: {exc}"
             ) from exc
-        self._shadow_store.sync(records, previous)
 
     def _load_records(self) -> tuple[list[dict[str, Any]], bool]:
-        failures: list[str] = []
-        for candidate, source in self._json_store.candidates():
-            if not candidate.exists():
-                continue
-            try:
-                raw = self._json_store.read(candidate)
-                records, normalized = self._normalize_records(raw)
-            except (OSError, json.JSONDecodeError, RegistryDataError) as exc:
-                failures.append(f"{source}: {exc}")
-                continue
-            if candidate == self.backup_path:
-                self._logger.warning("Registry primary recovered from backup %s", candidate)
-                normalized = True
-            return records, normalized
+        # Stored rows may predate a re-keying and hold the same record twice;
+        # the newest copy wins and the next write heals the store.
+        return self._storage.load(
+            lambda raw: self._normalize_records(raw, on_duplicate="keep-latest")
+        )
 
-        try:
-            shadow_records = self._shadow_store.recover()
-            if shadow_records:
-                records, _ = self._normalize_records(shadow_records)
-                self._logger.warning(
-                    "Registry recovered %d records from SQLite shadow", len(records)
-                )
-                return records, True
-        except Exception as exc:
-            failures.append(f"shadow: {exc}")
-
-        if failures:
-            raise RegistryDataError("Registry has no valid recovery source: " + "; ".join(failures))
-        return [], False
-
-    def _normalize_records(self, raw: Any) -> tuple[list[dict[str, Any]], bool]:
+    def _normalize_records(
+        self, raw: Any, *, on_duplicate: str = "error"
+    ) -> tuple[list[dict[str, Any]], bool]:
         normalized = isinstance(raw, dict)
         if isinstance(raw, dict):
             values = []
@@ -613,7 +616,7 @@ class SuspiciousRegistry:
             raise RegistryDataError("Registry root must be an array or object")
 
         records: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        positions: dict[str, int] = {}
         for index, value in enumerate(values):
             if not isinstance(value, dict):
                 raise RegistryDataError(f"record {index} is not an object")
@@ -658,9 +661,18 @@ class SuspiciousRegistry:
             record.setdefault("false_positive_at", None)
             record.setdefault("quarantine_id", None)
             record_id = self._record_id(record)
-            if record_id in seen:
-                raise RegistryDataError(f"duplicate Registry identity: {record_id}")
-            seen.add(record_id)
+            if record_id in positions:
+                if on_duplicate == "error":
+                    raise RegistryDataError(f"duplicate Registry identity: {record_id}")
+                normalized = True
+                existing = records[positions[record_id]]
+                if str(record.get("detected_at") or "") > str(existing.get("detected_at") or ""):
+                    records[positions[record_id]] = record
+                self._logger.warning(
+                    "Registry kept the newest of two records stored under %s", record_id
+                )
+                continue
+            positions[record_id] = len(records)
             records.append(record)
         return records, normalized
 
@@ -793,16 +805,6 @@ class SuspiciousRegistry:
             if isinstance(parsed, list):
                 return [str(item) for item in parsed]
         return [str(value)]
-
-    @staticmethod
-    def _parse_timestamp(value: Any) -> datetime:
-        try:
-            parsed = datetime.fromisoformat(str(value))
-        except (TypeError, ValueError):
-            return datetime.min.replace(tzinfo=timezone.utc)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
 
     @staticmethod
     def _now() -> str:

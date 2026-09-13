@@ -53,6 +53,17 @@ class EventStub:
         self.events.append((event_type, source, dict(payload)))
 
 
+def _authority_marker(registry_path: Path) -> Path:
+    return registry_path.with_name(f"{registry_path.name}.sqlite-authority")
+
+
+def _claim_sqlite_authority(registry_path: Path) -> None:
+    """Mark the store as the one already holding every record."""
+    marker = _authority_marker(registry_path)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("sqlite\n", encoding="utf-8")
+
+
 class ShadowStub:
     def __init__(self, records=None, fail=False):
         self.records = dict(records or {})
@@ -62,7 +73,8 @@ class ShadowStub:
     def save(self, record_id, data):
         if self.fail:
             raise RuntimeError("shadow unavailable")
-        self.records[record_id] = dict(data)
+        # The real repository exposes its key column on the way back out.
+        self.records[record_id] = {"record_id": record_id, **data}
 
     def delete(self, record_id):
         return self.records.pop(record_id, None) is not None
@@ -283,7 +295,12 @@ def test_dict_format_is_migrated_to_canonical_list(tmp_path):
     assert isinstance(json.loads(path.read_text(encoding="utf-8")), list)
 
 
-def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
+def test_sqlite_is_authoritative_and_adopts_records_only_the_json_knows(tmp_path):
+    """Once SQLite is the store of record, it wins — but the readable file is not lost.
+
+    A store that is only half populated must not erase history that is still
+    sitting in the JSON snapshot.
+    """
     shadow = ShadowStub(
         {
             "shadow:only": {
@@ -306,6 +323,7 @@ def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
         ),
         encoding="utf-8",
     )
+    _claim_sqlite_authority(path)
 
     registry = SuspiciousRegistry(
         path,
@@ -315,11 +333,124 @@ def test_shadow_is_diagnostic_and_never_overrides_valid_json(tmp_path):
         shadow_repository=shadow,
     )
 
+    # the stored row is authoritative ...
+    assert registry.get(Path("/srv/beta/shadow.php")) is not None
+    # ... and the record only the JSON file had is adopted, not dropped
     assert registry.get(Path("/srv/alpha/json.php")) is not None
-    assert registry.get(Path("/srv/beta/shadow.php")) is None
+    assert any("json.php" in key for key in shadow.records), (
+        "the adopted record has to be written back to the store"
+    )
 
 
-def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(tmp_path, caplog):
+def test_the_first_start_trusts_the_json_snapshot_over_stray_rows(tmp_path):
+    """A leftover row in the database must not become the source of truth."""
+    shadow = ShadowStub()
+    shadow.save("stray", {"file_path": "/srv/beta/stray.php", "features": ["stray"]})
+    path = tmp_path / "registry.json"
+    path.write_text(
+        json.dumps([{"file_path": "/srv/alpha/real.php", "features": ["real"]}]),
+        encoding="utf-8",
+    )
+
+    registry = SuspiciousRegistry(
+        path,
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+
+    assert registry.get(Path("/srv/alpha/real.php")) is not None
+    assert registry.get(Path("/srv/beta/stray.php")) is None
+    assert not any("stray" in key for key in shadow.records), "the stray row is dropped"
+    assert _authority_marker(path).exists(), "the store is claimed for the next start"
+
+    reopened = SuspiciousRegistry(
+        path,
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+    # now the store is the authority, so a row only it knows about wins
+    shadow.records["extra"] = {"file_path": "/srv/beta/extra.php", "features": ["extra"]}
+    third = SuspiciousRegistry(
+        path,
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+    assert third.get(Path("/srv/beta/extra.php")) is not None
+    assert reopened.get(Path("/srv/alpha/real.php")) is not None
+
+
+def test_duplicate_identities_in_the_store_are_healed_not_fatal(tmp_path, caplog):
+    """Legacy rows can hold the same record twice; that must not stop startup."""
+    shadow = ShadowStub(
+        {
+            "old-key": {
+                "file_path": "/srv/alpha/shell.php",
+                "detected_at": "2026-01-01T00:00:00",
+                "features": ["old"],
+            },
+            "alpha:/srv/alpha/shell.php": {
+                "file_path": "/srv/alpha/shell.php",
+                "detected_at": "2026-02-02T00:00:00",
+                "features": ["new"],
+            },
+        }
+    )
+    path = tmp_path / "registry.json"
+    path.write_text("[]", encoding="utf-8")
+    _claim_sqlite_authority(path)
+
+    with caplog.at_level("WARNING"):
+        registry = SuspiciousRegistry(
+            path,
+            config=ConfigStub(),
+            wal=WalManager(tmp_path / "wal.log"),
+            event_publisher=EventStub(),
+            shadow_repository=shadow,
+        )
+
+    record = registry.get(Path("/srv/alpha/shell.php"))
+    assert record is not None
+    assert record["features"] == ["new"], "the newest copy has to win"
+    assert "newest of two records" in caplog.text
+
+
+def test_first_sqlite_start_migrates_the_json_snapshot(tmp_path, caplog):
+    shadow = ShadowStub()
+    path = tmp_path / "registry.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "file_path": "/srv/alpha/old.php",
+                    "detected_at": "2026-01-01T00:00:00",
+                    "features": ["old"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level("INFO"):
+        registry = SuspiciousRegistry(
+            path,
+            config=ConfigStub(),
+            wal=WalManager(tmp_path / "wal.log"),
+            event_publisher=EventStub(),
+            shadow_repository=shadow,
+        )
+
+    assert registry.get(Path("/srv/alpha/old.php")) is not None
+    assert len(shadow.records) == 1, "the empty store has to be filled from JSON"
+    assert "migrated" in caplog.text
+
+
+def test_sqlite_recovery_rekeys_without_leaking_storage_fields(tmp_path, caplog):
     old_record_id = "/srv/alpha/recovered.php"
     shadow = SqliteRepository(str(tmp_path / "anteumbra.db"))
     shadow.save(
@@ -341,8 +472,7 @@ def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(tmp_path, 
         shadow_repository=shadow,
     )
     try:
-        authoritative = json.loads(registry.path.read_text(encoding="utf-8"))
-        recovered = authoritative[0]
+        recovered = registry.get(Path(old_record_id))
         canonical_record_id = f"alpha:{recovered['file_path']}"
 
         assert recovered["features"] == ["recovered"]
@@ -350,11 +480,15 @@ def test_sqlite_shadow_recovery_rekeys_without_leaking_storage_fields(tmp_path, 
         assert shadow.get(old_record_id) is None
         assert shadow.get(canonical_record_id)["site_id"] == "alpha"
         assert "SQLite shadow synchronization failed" not in caplog.text
+        # the readable snapshot is refreshed from the authoritative store
+        snapshot = json.loads(registry.path.read_text(encoding="utf-8"))
+        assert [record["file_path"] for record in snapshot] == [recovered["file_path"]]
     finally:
         registry.close()
 
 
-def test_shadow_failure_does_not_undo_authoritative_json(tmp_path):
+def test_a_failed_primary_write_leaves_its_wal_transaction_pending(tmp_path):
+    """SQLite is the authority now, so its failure is the caller's failure."""
     registry = SuspiciousRegistry(
         tmp_path / "registry.json",
         config=ConfigStub(),
@@ -363,10 +497,29 @@ def test_shadow_failure_does_not_undo_authoritative_json(tmp_path):
         shadow_repository=ShadowStub(fail=True),
     )
 
+    with pytest.raises(RegistryPersistenceError):
+        registry.add(Path("/srv/alpha/shell.php"), ["eval"])
+
+
+def test_a_failed_json_snapshot_does_not_undo_the_stored_record(tmp_path, monkeypatch):
+    shadow = ShadowStub()
+    registry = SuspiciousRegistry(
+        tmp_path / "registry.json",
+        config=ConfigStub(),
+        wal=WalManager(tmp_path / "wal.log"),
+        event_publisher=EventStub(),
+        shadow_repository=shadow,
+    )
+    monkeypatch.setattr(
+        type(registry._json_store),  # noqa: SLF001 - the snapshot is deliberately broken
+        "persist",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
     registry.add(Path("/srv/alpha/shell.php"), ["eval"])
 
     assert registry.get(Path("/srv/alpha/shell.php")) is not None
-    assert registry.path.exists()
+    assert shadow.records, "the authoritative store kept the record"
 
 
 def test_compaction_removes_only_old_inactive_records(registry_bundle):
