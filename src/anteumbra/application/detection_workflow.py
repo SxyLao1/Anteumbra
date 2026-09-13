@@ -115,21 +115,34 @@ class DetectionWorkflow:
     ) -> None:
         try:
             first_seen_ip = resolve_first_seen_ip(event_path)
-            emit_alert(
-                "local_detection",
-                str(event_path),
-                scan_result.engine,
-                scan_result.features,
-                first_seen_ip,
-                "CRITICAL",
+            content_hash = file_content_hash(event_path)
+            # Suppression is decided by content, never by "we know this path":
+            # a record whose alert already covered these exact bytes is already
+            # handled, while a file that was deleted and uploaded again has no
+            # standing alert left and is reported a second time.
+            already_alerted = bool(
+                content_hash
+                and self._registry.was_alerted(event_path, content_hash, site_id=self._site.site_id)
             )
+            if already_alerted:
+                self._logger.debug("[ALERT][SKIP] 同一内容已告警，不再重复: %s", event_path.name)
+            else:
+                emit_alert(
+                    "local_detection",
+                    str(event_path),
+                    scan_result.engine,
+                    scan_result.features,
+                    first_seen_ip,
+                    "CRITICAL",
+                )
             self._registry.add(
                 event_path,
                 scan_result.features,
                 first_seen_ip=first_seen_ip,
                 detection_source="passive",
                 site=self._site,
-                content_hash=file_content_hash(event_path),
+                content_hash=content_hash,
+                alert_emitted=not already_alerted,
             )
             self._handle_quarantine(
                 event_path,
@@ -155,16 +168,12 @@ class DetectionWorkflow:
         emit_file_quarantined: QuarantineEmitter,
     ) -> None:
         if not self._auto_quarantine_enabled():
-            self._logger.info("[QUARANTINE] 总开关关闭，跳过隔离: %s", event_path.name)
-            emit_alert(
-                "quarantine_skipped",
-                str(event_path),
-                scan_result.engine,
-                scan_result.features,
-                first_seen_ip,
-                "WARNING",
-                reason="auto_quarantine_disabled",
-            )
+            # The switch is a standing configuration, not an event: announcing
+            # it once per run belongs to startup, and one WARNING per hit only
+            # doubled the notification volume for an operator who turned
+            # quarantine off on purpose.  Measured before this change: 14,198
+            # "quarantine_skipped" alerts against 14,000 detections.
+            self._logger.debug("[QUARANTINE] 总开关关闭，跳过隔离: %s", event_path.name)
             return
 
         if self._is_recently_restored(event_path):

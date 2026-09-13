@@ -59,6 +59,8 @@
         <tr><td>{{ _('Alerted') }}</td><td>
           {% if record.alerted %}
             <span class="badge badge-green">{{ _('Yes') }}</span>
+            <button class="btn btn-sm btn-ghost" type="button"
+                    data-action="records.detail-rearm" data-file-path="{{ record.file_path|e }}">{{ _('Alert me again') }}</button>
           {% else %}
             <span class="badge badge-gray">{{ _('No') }}</span>
           {% endif %}

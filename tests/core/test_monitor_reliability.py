@@ -37,7 +37,10 @@ def _services(
         context=context,
         registry=registry
         or SimpleNamespace(
-            add=lambda *_args, **_kwargs: None, remove=lambda *_args, **_kwargs: True
+            add=lambda *_args, **_kwargs: None,
+            remove=lambda *_args, **_kwargs: True,
+            was_alerted=lambda *_args, **_kwargs: False,
+            mark_present=lambda *_args, **_kwargs: False,
         ),
         metrics=SimpleNamespace(
             increment=lambda *_args, **_kwargs: None,
@@ -166,6 +169,8 @@ def _run_suspicious_scan_with_log_attribution(
     registry = SimpleNamespace(
         add=lambda path, features, **kwargs: recorded.append((path, features, kwargs)),
         remove=lambda *_args, **_kwargs: True,
+        was_alerted=lambda *_args, **_kwargs: False,
+        mark_present=lambda *_args, **_kwargs: False,
     )
     config = _scanner_config()
     config["quarantine"] = {"auto_quarantine_enabled": False}
@@ -408,6 +413,60 @@ def test_touched_path_clears_a_missing_record_before_the_scan_is_queued(monkeypa
         handler.shutdown()
 
     assert [entry[0] for entry in order] == ["mark_present", "scan"]
+
+
+def test_startup_announces_a_disabled_quarantine_switch(tmp_path, caplog):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    config = _scanner_config()
+    config["quarantine"] = {"auto_quarantine_enabled": False}
+    logger = logging.getLogger("test.monitor.quarantine-announcement")
+    website = Website(
+        name="Quiet",
+        path=tmp_path,
+        port=8080,
+        enabled=True,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+    )
+    monitor = monitor_module.WebsiteMonitor(
+        website,
+        lambda *_args: None,
+        logger,
+        services=_services(tmp_path, config=config, website=website),
+    )
+
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        monitor._announce_quarantine_state()
+
+    announcements = [record for record in caplog.records if "自动隔离总开关关闭" in record.message]
+    assert len(announcements) == 1
+    assert announcements[0].levelno == logging.INFO
+
+
+def test_startup_stays_silent_while_quarantine_is_enabled(tmp_path, caplog):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    config = _scanner_config()
+    config["quarantine"] = {"auto_quarantine_enabled": True}
+    logger = logging.getLogger("test.monitor.quarantine-silent")
+    website = Website(
+        name="Loud",
+        path=tmp_path,
+        port=8080,
+        enabled=True,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+    )
+    monitor = monitor_module.WebsiteMonitor(
+        website,
+        lambda *_args: None,
+        logger,
+        services=_services(tmp_path, config=config, website=website),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger=logger.name):
+        monitor._announce_quarantine_state()
+
+    assert not [record for record in caplog.records if "自动隔离总开关关闭" in record.message]
 
 
 def test_startup_reconcile_aligns_registry_with_the_filesystem(monkeypatch, tmp_path):

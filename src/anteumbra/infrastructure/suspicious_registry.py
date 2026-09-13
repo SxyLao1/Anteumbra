@@ -84,8 +84,15 @@ class SuspiciousRegistry:
         *,
         site: SiteIdentity | None = None,
         content_hash: str = "",
+        alert_emitted: bool = False,
     ) -> None:
-        """Create or refresh one detection within its explicit site boundary."""
+        """Create or refresh one detection within its explicit site boundary.
+
+        ``alert_emitted`` records whether this pass raised an alert. When it did
+        not, because a standing alert already covers this content, the alert
+        state is left alone rather than cleared — that is what keeps a re-scan
+        quiet while a file that was deleted and returned is still reported.
+        """
         identity = self._resolve_site(file_path, site, site_id, site_name)
         key = path_to_key(file_path)
         now = self._now()
@@ -101,6 +108,7 @@ class SuspiciousRegistry:
                     identity,
                     now,
                     content_hash,
+                    alert_emitted,
                 )
                 records.append(record)
             else:
@@ -113,6 +121,7 @@ class SuspiciousRegistry:
                     identity,
                     now,
                     content_hash,
+                    alert_emitted,
                 )
             self._commit_upsert(
                 records,
@@ -159,13 +168,31 @@ class SuspiciousRegistry:
         """Return whether a Registry record exists for the path and site."""
         return self.get(file_path, site_id) is not None
 
-    def mark_alerted(self, file_path: str | Path, site_id: str | None = None) -> bool:
-        """Mark one record as having emitted its alert."""
+    def mark_alerted(
+        self, file_path: str | Path, site_id: str | None = None, content_hash: str = ""
+    ) -> bool:
+        """Mark one record as having emitted its alert, and for which content."""
         return self._update_record(
             file_path,
             site_id,
             operation="mark_alerted",
-            mutate=registry_records.mark_alerted,
+            mutate=lambda record: registry_records.mark_alerted(record, content_hash),
+        )
+
+    def was_alerted(
+        self, file_path: str | Path, content_hash: str, site_id: str | None = None
+    ) -> bool:
+        """Return whether a standing alert already covers this exact content."""
+        record = self.get(file_path, site_id)
+        return bool(record) and registry_records.alert_covers_content(record, content_hash)
+
+    def clear_alert_state(self, file_path: str | Path, site_id: str | None = None) -> bool:
+        """Re-arm alerting so the next detection of this file reports again."""
+        return self._update_record(
+            file_path,
+            site_id,
+            operation="clear_alert",
+            mutate=registry_records.clear_alert_state,
         )
 
     def mark_quarantined(
@@ -297,9 +324,7 @@ class SuspiciousRegistry:
         """Clear a previously recorded removal once the path exists again.
 
         Cheap and idempotent on purpose: watcher events call this for every
-        touched path, and a registry rewrite plus WAL transaction per event
-        would be pure churn.  Only a record that is currently stored as missing
-        is worth a write.
+        touched path, so only a record stored as missing is worth a write.
         """
         resolved_site_id = site.site_id if site is not None else site_id
         key = path_to_key(file_path)
@@ -320,13 +345,10 @@ class SuspiciousRegistry:
         """Align stored ``file_exists`` with the real filesystem.
 
         The watcher only sees deletions that happen while it is running, so a
-        file removed during a restart, a reboot, or any window where the service
-        was down would otherwise stay recorded as present forever.  This is the
-        catch-up pass; it is cheap because it only stats recorded paths.
-
-        Only filesystem-observed absences are reversed.  A record the operator
-        soft-deleted stays deleted even while the file is still on disk, because
-        ``missing_reason`` is empty for those.
+        file removed during a restart or any downtime would otherwise stay
+        recorded as present forever.  Only filesystem-observed absences are
+        reversed: a record the operator soft-deleted has no ``missing_reason``
+        and is left alone even while its file is still on disk.
         """
         normalized_site_id = self._normalize_site_id(site_id) if site_id else None
         now = self._now()
@@ -628,6 +650,7 @@ class SuspiciousRegistry:
             record.setdefault("communication_count", 0)
             record.setdefault("deleted_at", None)
             record.setdefault("content_hash", "")
+            record.setdefault("alerted_hash", "")
             record.setdefault("missing_at", None)
             record.setdefault("missing_reason", "")
             record.setdefault("detection_source", "passive")

@@ -85,6 +85,7 @@ class DetectionRegistryPort(Protocol):
         *,
         site: SiteIdentity | None = None,
         content_hash: str = "",
+        alert_emitted: bool = False,
     ) -> None:
         """Store or update a suspicious-file record."""
 
@@ -144,8 +145,24 @@ class DetectionRegistryPort(Protocol):
         self,
         file_path: str | Path,
         site_id: str | None = None,
+        content_hash: str = "",
     ) -> bool:
         """Mark a record after alert delivery."""
+
+    def was_alerted(
+        self,
+        file_path: str | Path,
+        content_hash: str,
+        site_id: str | None = None,
+    ) -> bool:
+        """Return whether a standing alert already covers this exact content."""
+
+    def clear_alert_state(
+        self,
+        file_path: str | Path,
+        site_id: str | None = None,
+    ) -> bool:
+        """Re-arm alerting for one record."""
 
     def mark_false_positive(
         self,

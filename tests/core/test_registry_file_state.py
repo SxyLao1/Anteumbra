@@ -203,6 +203,102 @@ def test_mark_present_restores_a_record_that_was_marked_missing(bundle):
     assert record["missing_reason"] == ""
 
 
+# ── repeated-alert suppression ────────────────────────────────────────
+
+
+def test_a_recorded_alert_covers_only_its_own_content(bundle):
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is True
+    assert registry.was_alerted(path, "hash-two", site_id="alpha") is False
+    assert registry.was_alerted(path, "", site_id="alpha") is False
+    assert registry.was_alerted(tmp_path / "alpha" / "other.php", "hash-one", site_id="alpha") is False
+
+
+def test_a_suppressed_pass_keeps_the_standing_alert(bundle):
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=False)
+
+    record = registry.get(path, site_id="alpha")
+    assert record["alerted"] is True
+    assert record["alerted_hash"] == "hash-one"
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is True
+
+
+def test_deletion_and_return_break_the_suppression_guarantee(bundle):
+    """The scenario that must never go quiet: delete, then upload the same bytes."""
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is True
+
+    registry.remove(path, site_id="alpha", reason="deleted-on-disk")
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+
+    registry.mark_present(path, site_id="alpha")
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+
+    # the same bytes come back and are detected again
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is True
+    assert registry.get(path, site_id="alpha")["alerted_hash"] == "hash-one"
+
+
+def test_a_reviewed_false_positive_is_silent_by_review_not_by_suppression(bundle):
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+
+    registry.mark_false_positive(path, "reviewed", site_id="alpha")
+
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+
+
+def test_clearing_the_alert_state_re_arms_the_next_detection(bundle):
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one", alert_emitted=True)
+
+    assert registry.clear_alert_state(path, site_id="alpha") is True
+
+    record = registry.get(path, site_id="alpha")
+    assert record["alerted"] is False
+    assert record["alerted_hash"] == ""
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+    assert registry.clear_alert_state(tmp_path / "alpha" / "other.php", site_id="alpha") is False
+
+
+def test_alert_state_does_not_leak_from_a_log_heuristic_alert(bundle):
+    """``mark_alerted`` without a digest must not authorise suppression."""
+    registry, _changes, _events, tmp_path = bundle
+    path = tmp_path / "alpha" / "shell.php"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<?php eval($_POST);", encoding="utf-8")
+    registry.add(path, ["rule"], None, "passive", content_hash="hash-one")
+
+    assert registry.mark_alerted(path, site_id="alpha") is True
+
+    assert registry.was_alerted(path, "hash-one", site_id="alpha") is False
+
+
 # ── startup reconciliation ────────────────────────────────────────────
 
 

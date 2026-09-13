@@ -17,16 +17,21 @@ def create_detection_record(
     identity: SiteIdentity,
     now: str,
     content_hash: str = "",
+    alert_emitted: bool = False,
 ) -> dict[str, Any]:
     return {
         "file_path": file_path,
         "detected_at": now,
         "features": list(features),
-        "alerted": False,
+        "alerted": bool(alert_emitted),
         "file_exists": True,
         # Digest of the last flagged content at this path, so a later "is this
         # the same file again?" question can be answered after the file is gone.
         "content_hash": str(content_hash or ""),
+        # The digest an alert was actually sent for. Equal to content_hash while
+        # the alert stands; cleared when the file disappears, so a returning
+        # file can never be mistaken for one already reported.
+        "alerted_hash": str(content_hash or "") if alert_emitted else "",
         "missing_at": None,
         "missing_reason": "",
         "first_seen_ip": first_seen_ip,
@@ -49,19 +54,20 @@ def refresh_detection_record(
     identity: SiteIdentity,
     now: str,
     content_hash: str = "",
+    alert_emitted: bool = False,
 ) -> None:
     existing_source = str(record.get("detection_source") or "passive")
     record.update(
         {
             "file_exists": True,
             # Detecting the file again means it is present again, so any earlier
-            # "missing" state is cleared and the alert is re-armed. That is what
-            # makes a deleted-then-re-uploaded webshell alert a second time.
+            # "missing" state is cleared. That is what makes a deleted-then-re-
+            # uploaded webshell alert a second time: the deletion cleared the
+            # alert state, so this pass cannot be suppressed.
             "missing_at": None,
             "missing_reason": "",
             "content_hash": str(content_hash or record.get("content_hash") or ""),
             "deleted_at": None,
-            "alerted": False,
             "communication_count": 0,
             "first_seen_ip": first_seen_ip if first_seen_ip else record.get("first_seen_ip"),
             "detected_at": now,
@@ -72,6 +78,10 @@ def refresh_detection_record(
             **identity.as_dict(),
         }
     )
+    if alert_emitted:
+        mark_alerted(record, str(content_hash or ""))
+    # Without an alert this pass leaves ``alerted``/``alerted_hash`` alone: that
+    # is the state a suppressed re-detection depends on.
 
 
 def create_access_record(
@@ -96,8 +106,45 @@ def increment_access(record: dict[str, Any], ip: str) -> None:
         record["first_seen_ip"] = ip
 
 
-def mark_alerted(record: dict[str, Any]) -> None:
+def mark_alerted(record: dict[str, Any], content_hash: str = "") -> None:
+    """Record that an alert was sent, and for which content."""
     record["alerted"] = True
+    if content_hash:
+        record["alerted_hash"] = str(content_hash)
+
+
+def clear_alert_state(record: dict[str, Any]) -> None:
+    """Re-arm alerting for this record, so the next detection reports again."""
+    record["alerted"] = False
+    record["alerted_hash"] = ""
+
+
+def alert_covers_content(record: Mapping[str, Any], content_hash: str) -> bool:
+    """Return whether this record's standing alert already covers that content.
+
+    Every condition is a safety requirement, not a convenience:
+
+    * there has to be a record, and it has to be about this exact content;
+    * an alert has to have been sent for that same digest;
+    * the file has to be recorded as present and never seen missing — a file
+      that was deleted and uploaded again must be reported again, which is why
+      deletion clears the alert state in the first place;
+    * a reviewed false positive is silent by design, not by suppression.
+    """
+    digest = str(content_hash or "")
+    if not digest:
+        return False
+    if not record:
+        return False
+    if bool(record.get("marked_false_positive", False)):
+        return False
+    if not bool(record.get("file_exists", True)):
+        return False
+    if record.get("missing_at"):
+        return False
+    if str(record.get("content_hash") or "") != digest:
+        return False
+    return str(record.get("alerted_hash") or "") == digest
 
 
 def mark_quarantined(record: dict[str, Any], quarantine_id: str, now: str) -> None:
@@ -152,6 +199,7 @@ def mark_removed(record: dict[str, Any], now: str, reason: str = "") -> None:
         missing_at=now,
         missing_reason=str(reason or ""),
         alerted=False,
+        alerted_hash="",
     )
     if not record.get("quarantine_id"):
         record["deleted_at"] = now
@@ -174,6 +222,7 @@ def mark_present(record: dict[str, Any], now: str) -> None:
     )
     if rearmed:
         record["alerted"] = False
+        record["alerted_hash"] = ""
         record["reappeared_at"] = now
 
 

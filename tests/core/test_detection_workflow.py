@@ -16,11 +16,16 @@ class _QuarantineGuard:
         return self.restored
 
 
-def _build_workflow(calls, *, quarantine_enabled=True, restored=False, guard=None):
+def _build_workflow(
+    calls, *, quarantine_enabled=True, restored=False, guard=None, already_alerted=False
+):
     from anteumbra.application.detection_workflow import DetectionWorkflow
 
     registry = SimpleNamespace(
-        add=lambda path, features, **kwargs: calls.append(("registry", str(path), features, kwargs))
+        add=lambda path, features, **kwargs: calls.append(("registry", str(path), features, kwargs)),
+        was_alerted=lambda path, content_hash, site_id=None: (
+            calls.append(("was_alerted", str(path), content_hash)) or already_alerted
+        ),
     )
     metrics = SimpleNamespace(
         increment_site=lambda metric, site_id: calls.append(("metric", metric, site_id))
@@ -67,6 +72,7 @@ def test_restored_file_is_rejected_before_scanning(tmp_path):
 def test_suspicious_detection_preserves_side_effect_order(tmp_path):
     calls = []
     target = tmp_path / "shell.php"
+    target.write_bytes(b"<?php eval($_POST['cmd']); ?>")
     result = ScanResult(target, True, ["webshell-rule"], score=0.9, engine="yara")
     workflow = _build_workflow(calls)
 
@@ -85,6 +91,7 @@ def test_suspicious_detection_preserves_side_effect_order(tmp_path):
         "metric",
         "event",
         "attribute",
+        "was_alerted",
         "alert",
         "registry",
         "restore_guard",
@@ -101,9 +108,10 @@ def test_suspicious_detection_preserves_side_effect_order(tmp_path):
         "site_id": "alpha",
         "site_name": "Alpha",
     }
-    assert calls[6][3]["first_seen_ip"] == "203.0.113.8"
-    assert calls[6][3]["detection_source"] == "passive"
-    assert calls[8][2] == {
+    assert calls[7][3]["first_seen_ip"] == "203.0.113.8"
+    assert calls[7][3]["detection_source"] == "passive"
+    assert calls[7][3]["alert_emitted"] is True
+    assert calls[9][2] == {
         "file_path": str(target),
         "rule_name": "webshell-rule",
         "features": ["webshell-rule"],
@@ -112,7 +120,58 @@ def test_suspicious_detection_preserves_side_effect_order(tmp_path):
     }
 
 
-def test_disabled_auto_quarantine_still_registers_and_emits_skip_alert(tmp_path):
+def test_already_alerted_content_is_not_reported_again(tmp_path):
+    """A re-scan of bytes we already alerted for stays quiet."""
+    calls = []
+    target = tmp_path / "known.php"
+    payload = b"<?php eval($_POST['cmd']); ?>"
+    target.write_bytes(payload)
+    result = ScanResult(target, True, ["webshell-rule"], engine="yara")
+    workflow = _build_workflow(calls, already_alerted=True)
+
+    workflow.execute(
+        target,
+        "MODIFY",
+        scan=lambda _path: result,
+        resolve_first_seen_ip=lambda _path: "127.0.0.1",
+        emit_alert=lambda *_args, **_kwargs: calls.append(("alert",)),
+        emit_file_quarantined=lambda *_args, **_kwargs: calls.append(("quarantine",)),
+    )
+
+    assert not [call for call in calls if call[0] == "alert"]
+    registry_call = next(call for call in calls if call[0] == "registry")
+    assert registry_call[3]["alert_emitted"] is False
+    assert registry_call[3]["content_hash"] == hashlib.sha256(payload).hexdigest()
+
+
+def test_suppression_lookup_receives_the_digest_of_the_current_bytes(tmp_path):
+    calls = []
+    target = tmp_path / "changed.php"
+    payload = b"<?php system($_GET['c']); ?>"
+    target.write_bytes(payload)
+    result = ScanResult(target, True, ["webshell-rule"], engine="yara")
+    workflow = _build_workflow(calls)
+
+    workflow.execute(
+        target,
+        "MODIFY",
+        scan=lambda _path: result,
+        resolve_first_seen_ip=lambda _path: "127.0.0.1",
+        emit_alert=lambda *_args, **_kwargs: calls.append(("alert",)),
+        emit_file_quarantined=lambda *_args, **_kwargs: calls.append(("quarantine",)),
+    )
+
+    lookup = next(call for call in calls if call[0] == "was_alerted")
+    assert lookup[2] == hashlib.sha256(payload).hexdigest()
+
+
+def test_disabled_auto_quarantine_registers_without_a_per_hit_skip_alert(tmp_path):
+    """A standing switch is announced once at startup, not once per hit.
+
+    The per-hit "quarantine skipped" WARNING doubled the notification volume of
+    an operator who turned quarantine off on purpose: 14,198 of them against
+    14,000 detections on the live instance.
+    """
     calls = []
     target = tmp_path / "shell.php"
     result = ScanResult(target, True, [], engine="static")
@@ -129,11 +188,7 @@ def test_disabled_auto_quarantine_still_registers_and_emits_skip_alert(tmp_path)
 
     assert [call[0] for call in calls].count("registry") == 1
     alerts = [call for call in calls if call[0] == "alert"]
-    assert [call[1][0] for call in alerts] == [
-        "local_detection",
-        "quarantine_skipped",
-    ]
-    assert alerts[1][2] == {"reason": "auto_quarantine_disabled"}
+    assert [call[1][0] for call in alerts] == ["local_detection"]
     assert not any(call[0] == "quarantine" for call in calls)
 
 

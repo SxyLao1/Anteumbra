@@ -1728,3 +1728,12 @@ msgstr "内容 SHA-256"
 
 msgid "Not recorded"
 msgstr "未记录"
+
+msgid "Alert me again"
+msgstr "重新告警"
+
+msgid "Alert re-armed."
+msgstr "已重新告警。"
+
+msgid "Re-arm failed: %(message)s"
+msgstr "重新告警失败：%(message)s"
