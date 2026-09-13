@@ -524,7 +524,7 @@ enabled = true
 
 # 内置插件列表（PluginManager 启动时自动加载）
 # 可用: stdout_logger, quarantine_handler, notifier_handler,
-#       threat_graph_handler, siem_handler,
+#       threat_graph_handler, siem_handler, memory_shell_probe,
 #       waf_adapters.modsecurity, waf_adapters.cloudflare,
 #       waf_adapters.aws_waf, waf_adapters.syslog_waf
 builtin = [
@@ -533,6 +533,7 @@ builtin = [
     "notifier_handler",
     "threat_graph_handler",
     "siem_handler",
+    "memory_shell_probe",
 ]
 
 # 事件处理采用有界队列。满载时事件会同步处理而非丢失。
@@ -579,6 +580,39 @@ enabled = false
 host = "0.0.0.0"
 port = 514
 format = "cef"
+
+# 内存马探针 (Memory Shell Probe)
+# 内存马只存在于 Servlet 容器的内存中，磁盘上没有文件，文件监控永远看不到它。
+# 唯一的办法是从容器内部询问它自己：探针会向被监控的网站根目录写入一个随机
+# 命名的、带令牌保护的 JSP 文件，用一次 HTTP 请求读回容器中已注册的组件，
+# 然后立即删除该文件和它的目录。
+# 探针文件的生命周期只有几秒：它一写入就登记为 Anteumbra 自建文件，扫描器、
+# 文件监控和日志监控都会忽略它，因此不会产生误报；目录和文件名随机、令牌每次
+# 不同，未携带令牌的请求不会被应答。
+[plugins.memory_shell_probe]
+# 探针总开关（关闭后既不自动探测，也不响应手动探测）
+enabled = true
+# 检出 webshell 文件后自动探测同站点容器的内存
+auto_probe_on_detection = true
+# 触发自动探测的文件扩展名
+trigger_extensions = [".jsp", ".jspx", ".jspf", ".jsw", ".jsv"]
+# 只探测这些站点（site_id 列表；留空表示全部启用站点）
+site_ids = []
+# 同一站点的两次探测最小间隔（秒）
+cooldown_seconds = 300
+# 探针 HTTP 请求超时（秒）
+http_timeout_seconds = 8
+# 探针文件在注册表中的存活时间（秒），仅作兜底，正常路径下探测结束即注销
+artifact_ttl_seconds = 120
+# 探针目录名前缀
+directory_prefix = "mb-"
+# 面板保留的历史探测记录条数
+history_size = 50
+# 内存中发现可疑组件时是否告警
+alert_on_suspects = true
+# 探针请求使用的主机与协议
+host = "127.0.0.1"
+scheme = "http"
 
 # ============================================================================
 # v1.9.5: SIEM 导出配置

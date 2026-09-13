@@ -328,6 +328,8 @@ class FileMonitorHandler(FileSystemEventHandler):
 
     def _should_monitor(self, event_path: Path) -> bool:
         """v1.7.5-Patch5: 监控决策 (保持原有逻辑)"""
+        if self._is_internal_artifact(event_path):
+            return False
         try:
             if event_path.suffix.lower() not in self.monitor_extensions:
                 return False
@@ -354,6 +356,14 @@ class FileMonitorHandler(FileSystemEventHandler):
                 )
                 return False
 
+        return True
+
+    def _is_internal_artifact(self, event_path: Path) -> bool:
+        """True while the path is one Anteumbra itself created (probe artifacts)."""
+        registry = getattr(self.services, "internal_artifacts", None)
+        if registry is None or not registry.is_internal_path(event_path):
+            return False
+        self.logger.debug("跳过 Anteumbra 自建文件: %s", event_path)
         return True
 
     def _is_duplicate(self, event_path: Path, event_type: str = "") -> bool:

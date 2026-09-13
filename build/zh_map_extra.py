@@ -91,7 +91,7 @@ TRANSLATIONS = {
     "Quarantine": "隔离",
     "Mark as FP": "标记为误报",
     "Block Selected IPs": "封禁所选 IP",
-    "%(count)s selected": "已选 %(count) 项",
+    "%(count)s selected": "%(count)s 项",
     "Please enter a target directory.": "请输入目标目录。",
     "Quarantine %(count)s selected files?": "隔离所选的 %(count) 个文件？",
     "Done: %(count)s quarantined": "完成: 已隔离 %(count) 个",
@@ -225,4 +225,104 @@ TRANSLATIONS = {
     "Every config.toml reload is logged here with the keys that changed.":
         "每次 config.toml 热加载都会连同变更的键记录在此。",
     "Loading panel...": "正在加载面板...",
+    # memory-shell (内存马) probe page + panel
+    "Memory Shell": "内存马检测",
+    "Memory Shell Detection": "内存马检测",
+    "Anteumbra drops a short-lived JSP probe into a watched web root, asks the servlet container what it has registered in memory, then removes the probe again.":
+        "Anteumbra 会向受监控的网站根目录投放一个短生命周期的 JSP 探测器，"
+        "向 Servlet 容器查询内存中已注册的组件（过滤器 / Servlet / 监听器），随后删除该探测器。",
+    "Memory-shell probe unavailable": "内存马探测不可用",
+    "The memory-shell probe service is not attached to this runtime. Enable the memory_shell_probe plugin in config.toml and restart Anteumbra.":
+        "内存马探测服务未挂载到当前运行时。请在 config.toml 中启用 memory_shell_probe 插件并重启 Anteumbra。",
+    "The memory-shell probe service is not available.": "内存马探测服务不可用。",
+    "The memory-shell probe service did not answer: %(error)s":
+        "内存马探测服务无响应: %(error)s",
+    "The memory-shell probe service returned no usable state.":
+        "内存马探测服务未返回可用状态。",
+    "The memory-shell panel failed to render: %(error)s": "内存马面板渲染失败: %(error)s",
+    "No site was selected for the probe.": "未选择要探测的站点。",
+    "Unknown site: %(site_id)s": "未知站点: %(site_id)s",
+    "The probe could not be started: %(error)s": "探测无法启动: %(error)s",
+    "The memory-shell probe is disabled in config.toml; manual probes would only be recorded as failures.":
+        "配置中已关闭内存马探测；手动探测只会被记录为失败。",
+    # status row
+    "Probe:": "探测：",
+    "Enabled": "已启用",
+    "Disabled": "已禁用",
+    "Auto probe:": "自动探测：",
+    "Cooldown:": "冷却时间：",
+    "HTTP timeout:": "HTTP 超时：",
+    "Runs:": "运行次数：",
+    "Failures:": "失败次数：",
+    "Probing...": "探测中...",
+    "Trigger extensions:": "触发扩展名：",
+    # per-site table
+    "Monitored sites": "受监控站点",
+    "Site": "站点",
+    "Root": "根目录",
+    "Base URL": "基础 URL",
+    "Last run": "上次运行",
+    "Entries": "条目",
+    "Suspicious": "可疑",
+    "Cooldown": "冷却",
+    "Cleanup failed": "清理失败",
+    "Run a memory-shell probe on this site now?": "立即对该站点执行内存马探测？",
+    "Probe Memory Shell": "探测内存马",
+    "No watched site is configured for probing.": "没有可用于探测的受监控站点。",
+    # findings
+    "Findings": "发现",
+    "Container:": "容器：",
+    "Kind": "类型",
+    "Name": "名称",
+    "URLs": "URL",
+    "Class name": "类名",
+    "Class loader": "类加载器",
+    "On disk": "磁盘存在",
+    "Reasons": "判定依据",
+    "%(count)s non-suspicious entries collapsed": "已折叠 %(count)s 个非可疑条目",
+    "No suspicious entry has been reported yet.": "尚未发现可疑条目。",
+    # recent runs
+    "Recent runs": "最近运行",
+    "Trigger:": "触发方式：",
+    "Triggered by:": "触发来源：",
+    "Probe failed:": "探测失败：",
+    "Probe cleanup failed:": "探测清理失败：",
+    "A probe file may still exist in the web root. Remove it manually.":
+        "探测文件可能仍残留在网站根目录中，请手动删除。",
+    "Report error:": "报告错误：",
+    "No probe has run yet.": "尚未执行任何探测。",
+    # strings extracted alongside the memory-shell work; wordings match the
+    # translations already shipped in the catalog before this rebuild
+    "Alert re-armed.": "已重新告警。",
+    "Re-arm failed: %(message)s": "重新告警失败：%(message)s",
+    "Deleted outside the product": "被外部删除（人工或脚本）",
+    "Moved to quarantine": "已移入隔离区",
+    "Missing after restart": "重启后已不存在",
+    "Content SHA-256": "内容 SHA-256",
+    "Not recorded": "未记录",
+    "Alert me again": "重新告警",
+    "Clear selection": "清除选中",
+    "Select this page": "全选本页",
+    "Select every page": "全选每页",
+    # plugin inventory panel (settings)
+    "Loaded:": "已加载：",
+    "Not loaded": "未加载",
+    "Plugin system off": "插件系统已关闭",
+    "Not installed": "未安装",
+    "Not in builtin": "未列入 builtin",
+    "Disabled in config": "配置已关闭",
+    "Not registered": "未注册",
+    "The plugin system is switched off; no plugin is loaded.":
+        "插件系统已关闭，未加载任何插件。",
+    "The [plugins] section is disabled, so nothing is loaded from builtin.":
+        "[plugins] 段已关闭，因此不会加载 builtin 中的任何插件。",
+    "Listed in config.toml, but this build has no implementation for it.":
+        "已在 config.toml 中列出，但本构建没有对应实现。",
+    "This build can load it, but [plugins] builtin does not list it.":
+        "本构建可以加载该插件，但 [plugins] builtin 未列出它。",
+    "Installed but switched off in config.toml.": "已安装，但在 config.toml 中被关闭。",
+    "Enabled and listed, but the plugin is not registered — check the startup log.":
+        "已启用且已列出，但插件未注册——请检查启动日志。",
+    "Add to config.toml:": "在 config.toml 中添加：",
+    "No plugin is available in this build.": "本构建没有可用的插件。",
 }

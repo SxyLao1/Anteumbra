@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
+from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
 from anteumbra.domain.quarantine import QuarantineGuardPort
 from anteumbra.domain.site import SiteIdentity, SiteResolver
 
@@ -298,3 +299,4 @@ class RuntimeServices:
     metrics: MetricsPort
     events: EventPublisherPort
     quarantine: QuarantineGuardPort
+    internal_artifacts: InternalArtifactRegistryPort | None = None

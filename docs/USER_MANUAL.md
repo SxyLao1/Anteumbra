@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.35
+# Anteumbra User Manual v1.0.36
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -753,7 +753,9 @@ builtin = [
     "stdout_logger",
     "quarantine_handler",
     "notifier_handler",
-    "threat_graph_handler"
+    "threat_graph_handler",
+    "siem_handler",
+    "memory_shell_probe"
 ]
 ```
 
@@ -763,14 +765,26 @@ builtin = [
 | `quarantine_handler` | Performs quarantine + post-quarantine bookkeeping |
 | `notifier_handler` | Sends alerts via email/WeChat/webhook |
 | `threat_graph_handler` | Updates attacker profiles from detection events |
+| `siem_handler` | Exports events in a SIEM-consumable form |
+| `memory_shell_probe` | Detects webshells that exist only in memory, with no file on disk (see 10.4) |
 
 ### 10.2 WAF Adapters
 
+WAF adapters are **event-source plugins**: they pull or receive events from an external
+WAF and hand them to Anteumbra. Enabling one takes **two switches** — list it in
+`builtin` *and* set `enabled = true` in its own section:
+
 ```toml
+[plugins]
+builtin = [
+    "waf_adapters.modsecurity",   # note the module-style plugin name
+]
+
 [plugins.modsecurity]
-enabled = false
+enabled = true
 audit_log_path = "data/modsec_audit.log"
 poll_interval = 5
+min_score = 5.0
 
 [plugins.cloudflare]
 enabled = false
@@ -779,7 +793,26 @@ api_token = "${CLOUDFLARE_API_TOKEN:-}"
 poll_interval = 60
 ```
 
-Available adapters: `modsecurity`, `cloudflare`, `aws_waf`, `syslog_waf`. All disabled by default.
+| Plugin name | Adapter | Purpose |
+|-------------|---------|---------|
+| `waf_adapters.modsecurity` | `ModSecurityAdapter` | Polls ModSecurity v2/v3 JSON audit logs |
+| `waf_adapters.cloudflare` | `CloudflareAdapter` | Polls the Cloudflare firewall events API |
+| `waf_adapters.aws_waf` | `AWSWAFAdapter` | Polls AWS WAF; degrades to inactive without `boto3` |
+| `waf_adapters.syslog_waf` | `SyslogWAFReceiver` | Listens on syslog for WAF events |
+
+Behaviour:
+
+- A source plugin is started (`start()`) at registration and stopped (`stop()`) on
+  unload; a failing adapter degrades to "loaded but inert" instead of affecting other
+  plugins or the runtime.
+- Adapter events are published as `waf.event` **and** appended to
+  `data/waf_events.jsonl`, the same file the runtime's own WAF poller writes and the
+  threat graph's `JsonlEventTailer` reads, so collected events reach profiles and SIEM
+  exports.
+- Every adapter ships with `enabled = false` and none is in the default `builtin` list,
+  so an unconfigured install makes no network calls and opens no ports.
+- The settings-page plugin panel distinguishes "loaded", "installed but disabled in
+  config" and "not listed in `builtin`", with a copy-ready config snippet for each.
 
 ### 10.3 Event Flow
 
@@ -796,6 +829,110 @@ PluginManager.dispatch()
         ▼
 Plugin.on_event(event) → Optional[List[DomainEvent]]
 ```
+
+### 10.4 Memory-Shell Probe (`memory_shell_probe`)
+
+A file-based webshell disappears when the file is deleted; a memory shell does not,
+because it never existed as a file and the file monitor cannot see it. This plugin
+asks the servlet container itself what is registered in memory:
+
+```
+random directory + random file name: the probe JSP lands in the site root
+        │  (the probe file and its URL are registered as internal artifacts first)
+        ├─ HTTP GET http://<site>:<port>/<random path>/<random name>.jsp?t=<run token>
+        │     the probe enumerates the StandardContext: Filter / Servlet / Listener,
+        │     and any Class parked in an HttpSession
+        ▼
+parse JSON → suspicious components become probe findings and alerts
+        │
+        └─ finally: delete the probe file and its random directory (only that one)
+```
+
+Enable it with:
+
+```toml
+[plugins]
+enabled = true
+builtin = ["memory_shell_probe"]
+
+[plugins.memory_shell_probe]
+enabled = true
+auto_probe_on_detection = true
+trigger_extensions = [".jsp", ".jspx", ".jspf", ".jsw", ".jsv"]
+site_ids = []
+probe_base_dirs = {}
+url_prefixes = {}
+cooldown_seconds = 300
+http_timeout_seconds = 8
+artifact_ttl_seconds = 120
+directory_prefix = "mb-"
+history_size = 50
+alert_on_suspects = true
+host = "127.0.0.1"
+scheme = "http"
+```
+
+| Option | Meaning |
+|--------|---------|
+| `enabled` | Master switch; when off, neither automatic nor manual probing runs |
+| `auto_probe_on_detection` | Probe the site automatically after a webshell alert |
+| `trigger_extensions` | File suffixes that trigger an automatic probe; JSP family by default |
+| `site_ids` | Restrict probing to these sites; empty means every enabled site with an existing path |
+| `probe_base_dirs` | `{ site id = "subdir" }`: which deployed context the probe is written into (required for a Tomcat `webapps` root) |
+| `url_prefixes` | `{ site id = "/prefix" }`: URL prefix when the site path is a subdirectory of the document root |
+| `cooldown_seconds` | Minimum interval between two automatic probes of the same site |
+| `http_timeout_seconds` | Timeout for reading the probe |
+| `artifact_ttl_seconds` | Lifetime of the internal-artifact registration (released as soon as the probe is deleted) |
+| `directory_prefix` | Prefix of the random directory, for humans looking at the filesystem |
+| `history_size` | How many recent probe runs the admin page keeps |
+| `alert_on_suspects` | Raise an alert as soon as a suspicious component is found |
+| `host` / `scheme` | Address and protocol used to reach the probe |
+
+A component is marked suspicious when any of these hold:
+
+- the class has no file on disk (defined at runtime with `defineClass`, the hallmark of a memory shell);
+- the class or registration name carries tool signatures (`behinder`, `godzilla`, `memshell`, `shell`, `inject`, `payload`, ...);
+- the class name is a short random string (tools randomise it per deployment);
+- the class loader is anonymous or JSP-generated (names like `..._jsp$U`);
+- the class has no `CodeSource`;
+- method/field fingerprints: `getMagic`, `fillContext`, `getBasicsInfo`, `equals(Object)` returning `boolean`, or `whatever`/`shellCode`/`classBody` fields;
+- an HttpSession holds a non-JDK class that has no file on disk (Godzilla-style clients cache their payload class in the session).
+  JDK classes (for example `String.class` stored in a session) are skipped, so ordinary session state stays quiet.
+
+Self-noise handling: the probe file and its URL are registered as *internal artifacts*,
+and the file monitor, the baseline sweep, manual scans and the access-log monitor all
+skip them, so Anteumbra never alerts on its own probe. Registration matches the exact
+path and URL of the current run, with a time limit, and never uses a name wildcard such
+as `probe-*` — otherwise naming a backdoor `probe-x.jsp` would earn it an exemption.
+
+Limits and boundaries:
+
+- Only applicable to Java containers that serve a watched filesystem path directly
+  (Tomcat / Jetty / Resin). The probe is a JSP; PHP and IIS sites are never triggered.
+- The probe must land inside a **deployed context**; a JSP that belongs to no context
+  answers 404. Three cases: (1) the site `path` is itself a document root (contains
+  `WEB-INF/web.xml`) — the probe goes there with an empty URL prefix; (2) exactly one
+  context exists below the site root — it is selected automatically and its name becomes
+  the URL prefix; (3) several contexts exist (Tomcat's `webapps`) — set
+  `probe_base_dirs = { tomcat = "dshlab" }` explicitly, otherwise the run fails with an
+  honest "probe HTTP 404" and the reason is written to the log and the page rather than
+  being retried silently. When the site `path` is a subdirectory of the document root,
+  add `url_prefixes = { tomcat = "/blog" }`.
+- The probe only sees what the container **registered**. Bytecode-enhancement memory
+  shells (`retransform` / `instrument`) register no Filter or Servlet and are invisible
+  to it: Behinder 4.1's native memory shell, for example, uses javassist to insert code
+  before `org.apache.catalina.core.ApplicationFilterChain.internalDoFilter`, adds no
+  FilterDef/FilterMap and does not change `web.xml`, so `findFilterDefs()`,
+  `findFilterMaps()` and `filterConfigs` all miss it (verified in the lab against the
+  real tool). Finding those requires diffing the bytecode of `catalina.jar` or watching
+  for agent attachment (`-javaagent`, `jdk.attach.allowAttachSelf`, a
+  `ClassFileTransformer` appearing); the probe reports `javaagent`, `attach_self` and the
+  JVM input arguments as manual-judgement hints.
+- A probe result is a point-in-time snapshot kept in memory (the last `history_size`
+  runs) and is cleared on restart; findings still go through the normal alert channels.
+- Every failure mode (container down, site unreachable, probe replaced, cleanup failed)
+  is surfaced on the page and in the log. **A failed cleanup is shown in red**, because it
+  means a file that should not exist was left behind in the site.
 
 ---
 
@@ -950,5 +1087,5 @@ minimal `/admin/api/v1/health` when only a status is required.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.35 — MIT License</sub>
+  <sub>Anteumbra v1.0.36 — MIT License</sub>
 </div>

@@ -1,0 +1,20 @@
+<section id="memory-shell-view" class="memory-shell-view">
+  <section class="card">
+    <div class="card-header">
+      <span><span class="card-header-icon">◈</span> {{ _('Memory Shell Detection') }}</span>
+    </div>
+    <div class="card-body">
+      <p style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;margin:0 0 12px 0;">
+        {{ _('Anteumbra drops a short-lived JSP probe into a watched web root, asks the servlet container what it has registered in memory, then removes the probe again.') }}
+      </p>
+      {# The panel is fetched so the page shell renders even when the probe plugin
+         is not enabled; the panel itself reports that state. #}
+      <div id="memory-shell-panel"
+           hx-get="/admin/memory-shell/panel"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div>
+      </div>
+    </div>
+  </section>
+</section>
