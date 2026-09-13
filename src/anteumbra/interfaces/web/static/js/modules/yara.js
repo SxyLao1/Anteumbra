@@ -6,13 +6,9 @@
   var selected = new Set();
   var uploadFile = null;
 
-  // [hidden] is now an author-level baseline rule, so visibility must be
-  // toggled through the attribute itself and not only through inline display.
-  function setVisible(node, visible) {
-    node.hidden = !visible;
-    node.style.display = visible ? '' : 'none';
-  }
-
+  // Selection controls keep their place and are disabled instead of hidden: a
+  // toolbar that swaps "select all" for "delete selected" in the same spot gets
+  // clicked twice, and the second click lands on whichever button moved there.
   function refreshSelection(root) {
     var scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('.yara-checkbox').forEach(function (checkbox) {
@@ -21,13 +17,9 @@
     var count = selected.size;
     document.querySelectorAll('#yara-selected-count').forEach(function (node) {
       node.textContent = app.t('%(count)s selected', { count: count });
-      setVisible(node, count > 0);
     });
     document.querySelectorAll('#yara-batch-delete-btn, #yara-deselect-btn').forEach(function (node) {
-      setVisible(node, count > 0);
-    });
-    document.querySelectorAll('#yara-select-all-btn').forEach(function (node) {
-      setVisible(node, count === 0);
+      node.disabled = count === 0;
     });
   }
 
