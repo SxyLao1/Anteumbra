@@ -33,6 +33,8 @@ from anteumbra.interfaces.web.auth import (
     require_auth,
 )
 from anteumbra.interfaces.web.log_history import (
+    LIVE_LOG_LINES,
+    allowed_levels,
     collect_log_history,
     render_log_history,
 )
@@ -136,7 +138,12 @@ def overview():
 
         runtime = get_runtime()
         log_history_html = render_log_history(
-            collect_log_history(runtime, limit=500, log=current_app.logger)
+            collect_log_history(
+                runtime,
+                limit=LIVE_LOG_LINES,
+                levels=allowed_levels(runtime.config.get()),
+                log=current_app.logger,
+            )
         )
 
         from anteumbra.application.runtime_health_service import assess_runtime_capabilities
