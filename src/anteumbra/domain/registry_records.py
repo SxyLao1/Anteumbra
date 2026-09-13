@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from anteumbra.domain.site import SiteIdentity
@@ -250,3 +251,14 @@ def project_records(
 
 def record_id(record: Mapping[str, Any]) -> str:
     return f"{record['site_id']}:{record['file_path']}"
+
+
+def parse_timestamp(value: Any) -> datetime:
+    """Parse a stored timestamp, treating an unusable one as the epoch."""
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
