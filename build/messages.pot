@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra VERSION\n"
 "Report-Msgid-Bugs-To: noreply@example.com\n"
-"POT-Creation-Date: 2026-09-13 10:25+0800\n"
+"POT-Creation-Date: 2026-09-13 13:17+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -82,7 +82,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:89
 #: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:65
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:19
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:18
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:33
 #: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:24
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:54
@@ -122,7 +122,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:90
 #: src/anteumbra/interfaces/web/templates/admin/config_watcher.html:10
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:21
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:22
 msgid "Loading history..."
 msgstr ""
 
@@ -224,7 +224,6 @@ msgid "Hits only"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:97
-#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:87
 msgid "Apply / Refresh"
 msgstr ""
 
@@ -474,7 +473,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:112
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:24
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/threats.html:5
 msgid "Quarantine"
 msgstr ""
@@ -640,7 +639,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:132
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:72
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:42
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:44
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:43
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
 msgid "Prev"
@@ -648,14 +647,14 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:132
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:72
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:45
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:47
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:45
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
 msgid "Next"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:133
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:71
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:72
 #, python-format
 msgid "Page %(page)s / %(total_pages)s (%(total)s total)"
 msgstr ""
@@ -672,7 +671,7 @@ msgid "Off"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:135
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:15
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:14
 msgid "Auto: OFF"
 msgstr ""
 
@@ -940,7 +939,6 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:7
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:13
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:8
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:21
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:18
 msgid "All"
 msgstr ""
@@ -950,15 +948,7 @@ msgid "Search IP/reason..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:5
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:92
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:9
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:21
-#: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:68
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:92
-msgid "Refresh"
+msgid "Refresh ledger"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:6
@@ -1028,7 +1018,6 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/dashboard.html:81
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:3
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:9
 msgid "Profiles"
 msgstr ""
 
@@ -1042,6 +1031,15 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/dashboard.html:84
 msgid "Settings"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:92
+#: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:68
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:92
+msgid "Refresh"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/dashboard.html:125
@@ -1199,6 +1197,10 @@ msgstr ""
 msgid "space separated terms match the same line"
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:87
+msgid "Apply filters"
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:105
 msgid "VOLUME OVER TIME"
 msgstr ""
@@ -1221,7 +1223,7 @@ msgid "Message"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:155
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 msgid "Actions"
 msgstr ""
 
@@ -1500,7 +1502,7 @@ msgid "Last Seen"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:72
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:43
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:45
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:44
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:68
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
@@ -1613,7 +1615,7 @@ msgid "Search UA / IP / Tool..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:5
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:43
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:45
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:44
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:68
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
@@ -1628,52 +1630,59 @@ msgstr ""
 msgid "Traffic"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:14
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:13
 msgid "BLOCK STATUS"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:16
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:15
 msgid "Devices: -"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:17
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:16
 msgid "Queue: -"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:18
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:17
 msgid "Blocked: -"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "UA:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "unknown"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "IPs:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "Files:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "Seen:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:31
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:30
 msgid "Sample IPs:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:33
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:32
 msgid "RISK"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:36
 msgid "No active profiles yet"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:37
+msgid ""
+"Profiles are built from detections and blocked requests, so this list "
+"fills up once the instance records matching traffic. Clear the search box"
+" if you filtered it down."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:3
@@ -1743,7 +1752,6 @@ msgid "Feature list"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:6
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:20
 msgid "Sel Page"
 msgstr ""
 
@@ -1872,6 +1880,14 @@ msgid ""
 " active set."
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:20
+msgid "Select page"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:21
+msgid "Select all"
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:35
 msgid "Select record"
 msgstr ""
@@ -1909,14 +1925,14 @@ msgstr ""
 msgid "No detection records match this filter"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:70
-#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:45
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:71
+#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:46
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:67
 msgid "← Prev"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:79
-#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:54
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:80
+#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:55
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:70
 msgid "Next →"
 msgstr ""
@@ -1983,30 +1999,40 @@ msgid "SCAN RESULTS"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+msgid ""
+"New: first time this scan has flagged the file. Known: already in the "
+"detection ledger from an earlier scan. All: both."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:93
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:114
 msgid "File"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:93
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:114
 msgid "Path"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:93
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:114
 msgid "Engine"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:19
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:93
 msgid "Features"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:21
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:22
 msgid "SCAN HISTORY"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:22
+msgid "Refresh history"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:6
@@ -2118,6 +2144,13 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/settings.html:4
 msgid "EXPORT & SIEM"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:4
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:5
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:6
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:7
+msgid "Loading panel..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/settings.html:5
@@ -2258,6 +2291,14 @@ msgstr ""
 msgid "Credentials never committed to git."
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:59
+msgid "No config reloads recorded yet"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:60
+msgid "Every config.toml reload is logged here with the keys that changed."
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/panels/notify_config.html:5
 msgid "Email"
 msgstr ""
@@ -2368,7 +2409,17 @@ msgstr ""
 msgid "Enable in config.toml:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:46
+#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:34
+msgid "No active sessions"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:35
+msgid ""
+"A session shows up here while a login is alive; it disappears on logout "
+"or when the session expires."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:47
 #, python-format
 msgid "Page %(page)s / %(total_pages)s (%(session_count)s total)"
 msgstr ""

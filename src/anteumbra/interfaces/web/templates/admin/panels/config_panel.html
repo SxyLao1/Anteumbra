@@ -56,7 +56,8 @@
       {% else %}
         <div class="empty-state">
           <span class="empty-icon">📋</span>
-          <p>暂无热加载记录</p>
+          <p>{{ _('No config reloads recorded yet') }}</p>
+          <p class="empty-state-hint">{{ _('Every config.toml reload is logged here with the keys that changed.') }}</p>
         </div>
       {% endif %}
     </div>
@@ -176,7 +177,7 @@
   font-family: monospace;
 }
 .config-path {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 11px;
 }
 .config-section {
@@ -195,7 +196,7 @@
 }
 .stat-label {
   display: block;
-  color: #888;
+  color: var(--color-text-secondary);
   font-size: 11px;
   margin-bottom: 4px;
 }
@@ -223,12 +224,12 @@
 }
 .history-content {
   font-size: 11px;
-  color: #888;
+  color: var(--color-text-secondary);
 }
 .empty-state {
   text-align: center;
   padding: 20px;
-  color: #888;
+  color: var(--color-text-secondary);
 }
 .empty-icon {
   font-size: 24px;

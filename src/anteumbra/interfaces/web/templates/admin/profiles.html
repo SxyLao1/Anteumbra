@@ -6,7 +6,6 @@
     <button class="btn btn-ghost btn-sm" hx-get="/admin/profiles?sort=risk{% if query %}&q={{ query }}{% endif %}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Risk') }}</button>
     <button class="btn btn-ghost btn-sm" hx-get="/admin/profiles?sort=time{% if query %}&q={{ query }}{% endif %}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Time') }}</button>
     <button class="btn btn-ghost btn-sm" hx-get="/admin/profiles?sort=traffic{% if query %}&q={{ query }}{% endif %}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Traffic') }}</button>
-    <button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.navigate" data-path="profiles" data-title="{{ _('Profiles') }}">{{ _('Refresh') }}</button>
   </div>
 
   <section id="block-status-panel" class="block-status-panel">
@@ -33,7 +32,10 @@
       <div class="profile-risk"><strong>{{ p.risk_score|int }}</strong><span>{{ _('RISK') }}</span></div>
     </article>
     {% else %}
-    <div class="empty-state"><p>{{ _('No active profiles yet') }}</p></div>
+    <div class="empty-state">
+      <p>{{ _('No active profiles yet') }}</p>
+      <p class="empty-state-hint">{{ _('Profiles are built from detections and blocked requests, so this list fills up once the instance records matching traffic. Clear the search box if you filtered it down.') }}</p>
+    </div>
     {% endfor %}
   </div>
 

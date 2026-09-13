@@ -31,7 +31,8 @@
     {% else %}
       <div class="empty-state">
         <span class="empty-icon">📋</span>
-        <p>暂无活跃Session</p>
+        <p>{{ _('No active sessions') }}</p>
+        <p class="empty-state-hint">{{ _('A session shows up here while a login is alive; it disappears on logout or when the session expires.') }}</p>
       </div>
     {% endif %}
   </div>
@@ -99,7 +100,7 @@
 }
 .session-row-meta {
   font-size: 10px;
-  color: #888;
+  color: var(--color-text-secondary);
 }
 .state-dot {
   display: inline-block;

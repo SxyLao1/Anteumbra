@@ -203,4 +203,22 @@ TRANSLATIONS = {
     "Session expired": "登录状态已过期",
     "Your session has expired. Please sign in again.": "身份凭据已过期，请重新登录。",
     "Sign in again": "重新登录",
+    # issue #9: clearer labels for abbreviated / duplicated controls
+    "Select page": "选中本页",
+    "Select all": "全选",
+    "Refresh history": "刷新历史",
+    "Refresh ledger": "刷新台账",
+    "Apply filters": "应用过滤",
+    "New: first time this scan has flagged the file. Known: already in the detection ledger from an earlier scan. All: both.":
+        "新增：本次扫描首次命中该文件。已知：此前扫描已记录在检测台账中。全部：两者都显示。",
+    # issue #9: empty-state explanations
+    "Profiles are built from detections and blocked requests, so this list fills up once the instance records matching traffic. Clear the search box if you filtered it down.":
+        "画像由检测记录与封禁请求自动生成；实例产生匹配流量后这里就会有数据。如果你用了搜索框，清空它再试。",
+    "No active sessions": "暂无活跃会话",
+    "A session shows up here while a login is alive; it disappears on logout or when the session expires.":
+        "登录有效期间会话会显示在此；退出登录或会话过期后消失。",
+    "No config reloads recorded yet": "暂无热加载记录",
+    "Every config.toml reload is logged here with the keys that changed.":
+        "每次 config.toml 热加载都会连同变更的键记录在此。",
+    "Loading panel...": "正在加载面板...",
 }
