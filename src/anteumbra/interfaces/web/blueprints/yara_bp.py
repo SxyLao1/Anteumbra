@@ -207,6 +207,7 @@ def list_rules():
         return render_page(
             "admin/yara_rules.html",
             rules=paginated_rules,
+            all_filenames=[rule["filename"] for rule in all_rules],
             page=page,
             total_pages=total_pages,
             total=total,

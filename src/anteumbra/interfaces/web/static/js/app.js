@@ -270,7 +270,17 @@
         }
       });
       document.addEventListener('htmx:afterSwap', function (event) {
-        mount(event.detail.target);
+        // An outerHTML swap replaces the target, so this event still points at
+        // the detached old element.  Mounting that one runs every module's
+        // restore logic against a node that is no longer in the page: table
+        // selections and checkbox state silently fail to come back after
+        // pagination.  Mount what actually replaced it.
+        var target = event.detail.target;
+        if (target && target.isConnected) {
+          mount(target);
+          return;
+        }
+        mount((target && target.parentElement) || document);
       });
       mount(document);
     }

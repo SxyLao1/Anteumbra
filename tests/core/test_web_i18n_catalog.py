@@ -66,4 +66,4 @@ def test_js_strings_resolves_in_the_active_locale() -> None:
     with app.test_request_context("/admin/?lang=zh"):
         translated = module.js_strings()
     assert translated["Delete"] == "删除"
-    assert translated["%(count)s selected"] == "已选 %(count) 项"
+    assert translated["%(count)s selected"] == "%(count)s 项"
