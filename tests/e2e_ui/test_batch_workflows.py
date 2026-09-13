@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """E2E UI coverage for cross-page record and quarantine batch workflows."""
 
+import re
 from pathlib import Path
 
 from playwright.sync_api import expect
@@ -52,29 +53,110 @@ def _open_threats(page):
     page.wait_for_timeout(500)
 
 
+PAGE_RE = re.compile(r"Page\s+(\d+)\s*/\s*(\d+)")
+
+
+def _page_indicator(page, cid: str) -> str:
+    """The rendered 'Page n / m (total)' text, or '' when there is a single page."""
+    node = page.locator(f"#{cid} .page-info")
+    return node.inner_text().strip() if node.count() else ""
+
+
+def _current_page(page, cid: str) -> int | None:
+    match = PAGE_RE.search(_page_indicator(page, cid))
+    return int(match.group(1)) if match else None
+
+
+def _total_pages(page, cid: str) -> int:
+    match = PAGE_RE.search(_page_indicator(page, cid))
+    return int(match.group(2)) if match else 1
+
+
+def _goto_page(page, cid: str, target: int) -> None:
+    """Page the list forward with its own Next control and wait for it to render.
+
+    The previous helper called ``htmx.ajax`` for page N and then slept a fixed
+    500ms without checking that page N arrived.  The server clamps ``page`` to
+    ``total_pages``, so asking for a page past the end silently re-rendered the
+    *last* page: the loop then re-clicked rows it had already selected, and
+    clicking an already-checked box toggles it back off.  That is exactly what
+    made the selection set (4) disagree with the click count (8) in issue #16.
+
+    Clicking the rendered paging control is the path a human takes, and waiting
+    for the page indicator to change is a deterministic completion signal rather
+    than a guess.
+    """
+    for _ in range(8):
+        current = _current_page(page, cid)
+        if current is None or current >= target:
+            return
+        # The paging bar is [Prev] info [jump] [Next]; the Next button is the
+        # button that follows the page indicator, and it is absent on the last
+        # page -- picking ``button:last`` would grab Prev instead and oscillate.
+        next_button = page.locator(f"#{cid} .pagination-bar .page-info ~ button").last
+        if not next_button.count() or next_button.is_disabled():
+            return
+        before = _page_indicator(page, cid)
+        next_button.click()
+        try:
+            page.wait_for_function(
+                """([cid, prev]) => {
+                    const el = document.querySelector('#' + cid + ' .page-info');
+                    return !!el && el.textContent !== prev;
+                }""",
+                arg=[cid, before],
+                timeout=8000,
+            )
+        except Exception:  # noqa: BLE001 - a late refresh may have raced us
+            return
+    raise AssertionError(
+        f"{cid} never reached page {target}; indicator reads {_page_indicator(page, cid)!r}"
+    )
+
+
 def _load_records_page(page, page_no: int, audit: bool = False):
     # one ledger now: the audit view is the "deleted" status filter
     cid = "records-table-container"
-    url = f"/admin/records?page={page_no}&compact=1&status=all"  # the audit view is now the unified ledger
-    page.evaluate(
-        "([url,cid]) => htmx.ajax('GET', url, {target:'#'+cid, swap:'outerHTML'})",
-        [url, cid],
-    )
-    page.wait_for_timeout(500)
+    _goto_page(page, cid, page_no)
     return cid
+
+
+def _is_selected(page, value: str) -> bool:
+    return page.evaluate(
+        "v => window.Anteumbra.module('records').selectedRecords().has(v)", value
+    )
 
 
 def _select_matching_records(page, needle: str, count: int, audit: bool = False) -> int:
     # one ledger now: the audit view is the "deleted" status filter
     cid = "records-table-container"
     selected = 0
+    visited_pages: set[str] = set()
     for page_no in range(1, 5):
         _load_records_page(page, page_no, audit=audit)
+        indicator = _page_indicator(page, cid)
+        if indicator in visited_pages:
+            break  # paging no longer moves; stop instead of re-clicking the same rows
+        visited_pages.add(indicator)
+
         rows = page.locator(f"#{cid} .record-item").filter(has_text=needle)
         for idx in range(rows.count()):
             if selected >= count:
                 return selected
-            rows.nth(idx).locator("input.rec-checkbox").click()
+            checkbox = rows.nth(idx).locator("input.rec-checkbox")
+            value = checkbox.input_value()
+            # Clicking an already-selected box would toggle it *off*, so a record
+            # seen on an earlier page must be skipped rather than re-clicked.
+            if _is_selected(page, value):
+                continue
+            checkbox.click()
+            # Verify the click registered before moving on: a click that lands on
+            # a detached node is otherwise counted but never selected.
+            page.wait_for_function(
+                "v => window.Anteumbra.module('records').selectedRecords().has(v)",
+                arg=value,
+                timeout=5000,
+            )
             selected += 1
     return selected
 
@@ -85,23 +167,35 @@ def _switch_tab(page, tab: str):
 
 
 def _load_quarantine_page(page, page_no: int, status: str = "quarantined"):
-    page.evaluate(
-        "([pageNo,status]) => htmx.ajax('GET', '/admin/quarantine?status='+status+'&page='+pageNo, "
-        "{target:'#quarantine-list-container', swap:'outerHTML'})",
-        [str(page_no), status],
-    )
-    page.wait_for_timeout(500)
+    _goto_page(page, "quarantine-list-container", page_no)
 
 
 def _select_matching_quarantine(page, needle: str, count: int) -> int:
     selected = 0
+    visited_pages: set[str] = set()
     for page_no in range(1, 5):
         _load_quarantine_page(page, page_no)
+        indicator = _page_indicator(page, "quarantine-list-container")
+        if indicator in visited_pages:
+            break
+        visited_pages.add(indicator)
+
         rows = page.locator("#quarantine-list-container .record-item").filter(has_text=needle)
         for idx in range(rows.count()):
             if selected >= count:
                 return selected
-            rows.nth(idx).locator("input.q-checkbox").click()
+            checkbox = rows.nth(idx).locator("input.q-checkbox")
+            value = checkbox.input_value()
+            if page.evaluate(
+                "v => window.Anteumbra.module('records').selectedQuarantine().has(v)", value
+            ):
+                continue
+            checkbox.click()
+            page.wait_for_function(
+                "v => window.Anteumbra.module('records').selectedQuarantine().has(v)",
+                arg=value,
+                timeout=5000,
+            )
             selected += 1
     return selected
 
