@@ -36,6 +36,10 @@ from anteumbra.infrastructure.monitoring.detection_attribution import resolve_fi
 from anteumbra.infrastructure.utils.path_utils import normalize_path, path_to_key
 from anteumbra.infrastructure.utils.platform_utils import get_optimal_observer
 
+# Event kinds that mean "the set of files changed", as opposed to "this file was
+# touched again".  They are never suppressed by the duplicate window.
+STRUCTURAL_EVENTS = frozenset({"CREATE", "MOVE"})
+
 
 class FileMonitorHandler(FileSystemEventHandler):
     """
@@ -337,13 +341,22 @@ class FileMonitorHandler(FileSystemEventHandler):
 
         return True
 
-    def _is_duplicate(self, event_path: Path) -> bool:
-        """检查重复事件 (保持原有逻辑)"""
+    def _is_duplicate(self, event_path: Path, event_type: str = "") -> bool:
+        """检查重复事件 (保持原有逻辑)
+
+        The window exists to collapse event storms — one write makes Windows
+        emit MODIFY, CLOSE and often several more for the same path.  It must
+        not swallow a *structural* change though: a file deleted and uploaded
+        again within the window would otherwise never be scanned, and the record
+        would keep reading "missing" while the file sits on disk.  Measured: an
+        identical webshell re-uploaded 1.4s after deletion was dropped here.
+        """
         now = time.time()
         path_key = path_to_key(event_path)
+        structural = event_type.upper() in STRUCTURAL_EVENTS
 
         last_time = self._recent_files.get(path_key)
-        if last_time and (now - last_time) < self._dedupe_window:
+        if not structural and last_time and (now - last_time) < self._dedupe_window:
             log_with_symbol(
                 "skip_duplicate",
                 "info",
@@ -352,6 +365,8 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
             return True
 
+        # Structural events still refresh the timestamp so the MODIFY/CLOSE
+        # noise that follows a create stays collapsed.
         self._recent_files[path_key] = now
         self._recent_files = {
             k: v for k, v in self._recent_files.items() if now - v < self._dedupe_window * 2
@@ -540,7 +555,7 @@ class FileMonitorHandler(FileSystemEventHandler):
         if not self._should_monitor(event_path):
             return
 
-        if self._is_duplicate(event_path):
+        if self._is_duplicate(event_path, event_type):
             log_with_symbol(
                 "skip_duplicate",
                 "info",
