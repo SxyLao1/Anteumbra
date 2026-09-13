@@ -29,7 +29,7 @@ from anteumbra.domain.runtime import (
     DetectionRegistryPort,
     MetricsPort,
 )
-from anteumbra.domain.scan import ScanOptions
+from anteumbra.domain.scan import DEFAULT_EXCLUDE_DIRS, ScanOptions
 from anteumbra.domain.service_ports import ScannerPort
 from anteumbra.domain.site import SiteIdentity
 
@@ -178,13 +178,13 @@ class ManualScanner:
         # ── 排除目录 ──
         # A manual scan uses the selected site's policy. An unassigned path
         # intentionally receives only conservative defaults, never another
-        # site's [website] table.
+        # site's [website] table. Both branches now share one default set.
         if website is not None:
             exclude_dirs = {
                 str(directory).lower() for directory in website.scan_options.exclude_dirs
             }
         else:
-            exclude_dirs = {"cache", "logs", "temp", "data", ".git"}
+            exclude_dirs = {name.lower() for name in DEFAULT_EXCLUDE_DIRS}
 
         # ── 构建已知索引 ──
         self._build_known_index()

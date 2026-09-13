@@ -704,6 +704,12 @@ class FileMonitorHandler(FileSystemEventHandler):
         """Queue a scan or apply backpressure without losing the event."""
         if self._scan_worker_shutdown.is_set():
             return
+        self.logger.debug(
+            "[MONITOR][TRIGGER] event=%s observer=%s path=%s",
+            event_type,
+            type(getattr(self, "observer", None)).__name__,
+            event_path,
+        )
         try:
             self._scan_queue.put(
                 (event_path, event_type),

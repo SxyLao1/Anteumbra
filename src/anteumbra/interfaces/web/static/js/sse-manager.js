@@ -8,7 +8,10 @@ window.AnteumbraSSEManager = {
   reconnectAttempts: 0,
   MAX_RECONNECT_DELAY: 30000,
   healthCheckTimer: null,
-  MAX_LOG_LINES: 500,
+  // Must match LIVE_LOG_LINES on the server so the panel keeps one size as it
+  // switches from the initial history load to the live stream.  New lines are
+  // appended at the bottom and the oldest are dropped off the top.
+  MAX_LOG_LINES: 1000,
   historyLoaded: false,
   historyLoading: null,
   _analyzerOpen: false,
