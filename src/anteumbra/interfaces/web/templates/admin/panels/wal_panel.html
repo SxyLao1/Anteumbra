@@ -45,7 +45,7 @@
             <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #ffaa00; min-height: 200px;">
                 <span class="empty-icon" style="font-size: 48px; margin-bottom: 12px;">📭</span>
                 <p style="font-size: 16px; margin-bottom: 8px;">WAL文件不存在</p>
-                <small style="color: #666;">这通常是首次启动或WAL被清理后的正常状态</small>
+                <small style="color: var(--color-text-muted);">这通常是首次启动或WAL被清理后的正常状态</small>
             </div>
             {% endif %}
         </div>
@@ -69,7 +69,7 @@
             <div class="empty-state">
                 <span class="empty-icon">📭</span>
                 <p>暂无归档文件</p>
-                <small style="color: #666;">归档文件将在WAL轮转后生成</small>
+                <small style="color: var(--color-text-muted);">归档文件将在WAL轮转后生成</small>
             </div>
             {% endif %}
         </div>
@@ -175,7 +175,7 @@
     margin-bottom: 20px;
 }
 .info-item label {
-    color: #888;
+    color: var(--color-text-secondary);
     font-size: 11px;
     display: block;
     margin-bottom: 4px;
@@ -183,7 +183,7 @@
 .wal-filename { color: #00ff00; }
 .wal-size { font-weight: bold; }
 .wal-size.size-warning { color: #ffaa00; }
-.wal-path { color: #666; }
+.wal-path { color: var(--color-text-muted); }
 .wal-actions { text-align: right; }
 .wal-history h3 {
     margin-bottom: 15px;
@@ -226,12 +226,12 @@
 }
 .file-info { display: flex; gap: 15px; align-items: center; }
 .file-name { font-weight: bold; color: #00ff00; }
-.file-size { color: #888; font-size: 11px; }
-.file-time { color: #666; font-size: 11px; }
+.file-size { color: var(--color-text-secondary); font-size: 11px; }
+.file-time { color: var(--color-text-muted); font-size: 11px; }
 .empty-state {
     text-align: center;
     padding: 40px;
-    color: #888;
+    color: var(--color-text-secondary);
 }
 .empty-icon {
     font-size: 48px;

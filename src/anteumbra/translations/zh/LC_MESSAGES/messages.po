@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra\n"
-"POT-Creation-Date: 2026-09-13 10:25+0800\n"
+"POT-Creation-Date: 2026-09-13 13:17+0800\n"
 "Language: zh\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -561,8 +561,8 @@ msgstr "全部"
 msgid "Search IP/reason..."
 msgstr "搜索 IP/原因..."
 
-msgid "Refresh"
-msgstr "刷新"
+msgid "Refresh ledger"
+msgstr "刷新台账"
 
 msgid "IP"
 msgstr "IP"
@@ -620,6 +620,9 @@ msgstr "日志分析"
 
 msgid "Settings"
 msgstr "设置"
+
+msgid "Refresh"
+msgstr "刷新"
 
 msgid "Cancel"
 msgstr "取消"
@@ -728,6 +731,9 @@ msgstr "过滤条件"
 
 msgid "space separated terms match the same line"
 msgstr "以空格分隔的多个词需匹配同一行"
+
+msgid "Apply filters"
+msgstr "应用过滤"
 
 msgid "VOLUME OVER TIME"
 msgstr "日志量趋势"
@@ -1059,6 +1065,9 @@ msgstr "风险"
 msgid "No active profiles yet"
 msgstr "暂无活跃画像"
 
+msgid "Profiles are built from detections and blocked requests, so this list fills up once the instance records matching traffic. Clear the search box if you filtered it down."
+msgstr "画像由检测记录与封禁请求自动生成；实例产生匹配流量后这里就会有数据。如果你用了搜索框，清空它再试。"
+
 msgid "Quarantine Detail"
 msgstr "隔离详情"
 
@@ -1194,6 +1203,12 @@ msgstr "误报"
 msgid "False positives stay listed here — clear the mark to return a file to the active set."
 msgstr "误报会保留在此列表中，取消标记即可让该文件回到活跃集合。"
 
+msgid "Select page"
+msgstr "选中本页"
+
+msgid "Select all"
+msgstr "全选"
+
 msgid "Select record"
 msgstr "选择记录"
 
@@ -1272,6 +1287,9 @@ msgstr "停止"
 msgid "SCAN RESULTS"
 msgstr "扫描结果"
 
+msgid "New: first time this scan has flagged the file. Known: already in the detection ledger from an earlier scan. All: both."
+msgstr "新增：本次扫描首次命中该文件。已知：此前扫描已记录在检测台账中。全部：两者都显示。"
+
 msgid "File"
 msgstr "文件"
 
@@ -1286,6 +1304,9 @@ msgstr "特征"
 
 msgid "SCAN HISTORY"
 msgstr "扫描历史"
+
+msgid "Refresh history"
+msgstr "刷新历史"
 
 msgid "Scan Report"
 msgstr "扫描报告"
@@ -1367,6 +1388,9 @@ msgstr "配置重载"
 
 msgid "EXPORT & SIEM"
 msgstr "导出与 SIEM"
+
+msgid "Loading panel..."
+msgstr "正在加载面板..."
 
 msgid "STORAGE"
 msgstr "存储"
@@ -1470,6 +1494,12 @@ msgstr "保存 .env"
 msgid "Credentials never committed to git."
 msgstr "凭据绝不会提交到 git。"
 
+msgid "No config reloads recorded yet"
+msgstr "暂无热加载记录"
+
+msgid "Every config.toml reload is logged here with the keys that changed."
+msgstr "每次 config.toml 热加载都会连同变更的键记录在此。"
+
 msgid "Email"
 msgstr "邮件"
 
@@ -1550,6 +1580,12 @@ msgstr "中添加，位于 config.toml。"
 
 msgid "Enable in config.toml:"
 msgstr "在 config.toml 中启用："
+
+msgid "No active sessions"
+msgstr "暂无活跃会话"
+
+msgid "A session shows up here while a login is alive; it disappears on logout or when the session expires."
+msgstr "登录有效期间会话会显示在此；退出登录或会话过期后消失。"
 
 msgid "Page %(page)s / %(total_pages)s (%(session_count)s total)"
 msgstr "第 %(page)s / %(total_pages)s 页（共 %(session_count)s 个会话）"

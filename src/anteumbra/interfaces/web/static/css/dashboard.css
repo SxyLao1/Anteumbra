@@ -272,6 +272,18 @@
   opacity: 0.3;
 }
 
+/* Empty states used to be a single line stating absence; this carries the
+   "so what / what next" line under it. */
+.empty-state-hint {
+  max-width: 46ch;
+  margin: 8px 0 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.empty-state p { margin: 0; }
+
 /* ---- SSE状态指示器 ---- */
 .sse-status {
   display: flex;

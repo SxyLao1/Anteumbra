@@ -914,7 +914,7 @@
   white-space: nowrap;
 }
 
-.config-editor .env-field > .btn { justify-self: start; min-height: 38px; }
+.config-editor .env-field > .btn { justify-self: start; min-height: 36px; }
 .config-editor .environment-editor > .page-toolbar { gap: 12px; padding-top: 4px; }
 
 @container config-editor (min-width: 720px) {
@@ -1014,7 +1014,10 @@
   border-radius: var(--radius-md);
   background: var(--color-bg-secondary);
 }
-.threats-view .batch-toolbar .btn { min-height: 34px; white-space: nowrap; }
+/* One toolbar tier everywhere.  This used to force 34px while every other
+   .batch-toolbar sat at 28px (the shared rule below), so the ledger's batch row
+   was visibly taller than the blocklist / rules toolbars. */
+.threats-view .batch-toolbar .btn { white-space: nowrap; }
 .threats-view .batch-toolbar .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .threats-view .batch-toolbar .rec-count,
 .threats-view .batch-toolbar .q-count { color: var(--color-text-secondary); font: 11px/1.5 var(--font-mono); white-space: nowrap; }
@@ -1283,7 +1286,8 @@
 .blocklist-view { display: flex; flex-direction: column; gap: 16px; }
 .blocklist-manual { display: flex; flex-direction: column; gap: 10px; }
 .blocklist-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.blocklist-actions .btn { min-height: 34px; }
+/* Form actions use the default .btn tier (36px), not an ad-hoc 34px. */
+.blocklist-actions .btn { min-height: 36px; }
 .device-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .device-row > span:first-child { color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; }
 .device-row .form-input { flex: 1 1 220px; width: auto; min-width: 160px; }
@@ -1308,7 +1312,10 @@
 .btn-info:hover { background: rgba(0, 204, 255, 0.2); border-color: var(--color-info); box-shadow: 0 0 12px rgba(0, 204, 255, 0.25); transform: translateY(-1px); }
 
 /* Button sizes: one height per step so a row of controls always lines up.
-   line-height is pinned so an icon span can no longer add a stray pixel. */
+   line-height is pinned so an icon span can no longer add a stray pixel.
+   The scale is 22 (xs) / 28 (sm: toolbars, card headers, list rows) /
+   36 (default: form actions), plus 32 for in-row Source/Detail pairs which are
+   measured and documented further down. */
 .btn { min-height: 36px; line-height: 1.2; }
 .btn-sm { min-height: 28px; line-height: 1.2; }
 .btn-xs { min-height: 22px; padding: 3px 8px; font-size: 10px; line-height: 1.2; }
@@ -1615,6 +1622,15 @@
 .cluster-file-actions .btn { min-height: 32px; }
 /* The scanner's start button sits in a grid cell; without this it stretches. */
 .scanner-view .scanner-config-grid #scan-start-btn { width: auto; justify-self: start; }
+
+/* Explains what the New / Known / All tabs mean, so "Known" no longer looks like
+   a tab that hides results for no reason. */
+.scanner-tab-hint {
+  padding: 8px 16px 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
 
 /* ---- Detail modals: record + quarantine ----
    The shell markup carries .detail-section / .detail-table, but no stylesheet
