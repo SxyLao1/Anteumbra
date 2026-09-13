@@ -126,10 +126,6 @@ class FileMonitorHandler(FileSystemEventHandler):
         # _recent_files 初始化
         self._recent_files: Dict[str, float] = {}
 
-        # 魔术头检测缓存
-        self._magic_cache: Dict[str, tuple[bool, float]] = {}
-        self._magic_cache_ttl = 0.5
-
         # 异步告警系统（无锁队列）
         self._alert_queue = queue.Queue(maxsize=0)
         self._alert_thread = None
@@ -245,13 +241,6 @@ class FileMonitorHandler(FileSystemEventHandler):
             # 任何异常都返回False (避免误判文件为目录)
             log_with_symbol("error_dir_cache", "debug", f"目录验证异常: {e}", self.logger)
             return False
-
-    def _is_known_directory(self, path: Path) -> bool:
-        """
-        v1.8.1: 兼容旧接口，委托给 _verify_directory
-        保持向后兼容性，同时统一验证逻辑
-        """
-        return self._verify_directory(path)
 
     def _record_directory(self, path: Path):
         """
@@ -369,25 +358,6 @@ class FileMonitorHandler(FileSystemEventHandler):
         }
         return False
 
-    def _get_system_status(self) -> dict:
-        """v1.8.4: 读取系统运行状态（供通知消息使用）"""
-        status = {
-            "auto_quarantine_enabled": True,
-            "auto_block_enabled": False,
-            "block_device_count": 0,
-        }
-        try:
-            cfg = self.runtime.config
-            status["auto_quarantine_enabled"] = cfg.get("quarantine", {}).get(
-                "auto_quarantine_enabled", True
-            )
-            blocker_cfg = cfg.get("ip_blocker", {})
-            status["auto_block_enabled"] = blocker_cfg.get("auto_block_enabled", False)
-            status["block_device_count"] = len(blocker_cfg.get("devices", []))
-        except Exception:
-            self.logger.debug("Failed to read system status from config", exc_info=True)
-        return status
-
     # ── v1.0.9: EDA bridge helpers (Surgery 4 completion) ─────
 
     def _emit_alert(
@@ -447,175 +417,6 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
         except Exception:
             self.logger.debug("PluginManager emit file_quarantined failed", exc_info=True)
-
-    def _flush_batch_notify(self):
-        """v1.0.9: emit batch notification via event bus → notifier_handler."""
-        try:
-            self.services.events.publish(
-                "alert_requested",
-                "monitor",
-                {
-                    "alert_type": "quarantine_batch",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "level": "INFO",
-                    **self.site.as_dict(),
-                },
-            )
-        except Exception as e:
-            self.logger.warning(f"[BATCH_NOTIFY] emit 失败: {e}")
-
-    def _detect_script_magic_number(self, file_path: Path) -> bool:
-        """魔术头检测 (保持原有逻辑)"""
-        cache_key = str(file_path.resolve())
-        now = time.time()
-
-        if cache_key in self._magic_cache:
-            is_script, timestamp = self._magic_cache[cache_key]
-            if now - timestamp < self._magic_cache_ttl:
-                return is_script
-
-        result = self._do_detect_magic_number(file_path)
-        self._magic_cache[cache_key] = (result, now)
-
-        if len(self._magic_cache) > 1000:
-            self._magic_cache = {
-                k: v for k, v in self._magic_cache.items() if now - v[1] < self._magic_cache_ttl
-            }
-
-        return result
-
-    def _do_detect_magic_number(self, file_path: Path) -> bool:
-        """魔术头检测实现 (保持原有逻辑)"""
-        try:
-            config = self.runtime.config
-            filesizes_cfg = config.get("filesizes", {})
-            max_size_mb = filesizes_cfg.get("magic_detection_size_mb", 10)
-
-            if file_path.stat().st_size > max_size_mb * 1024 * 1024:
-                return False
-
-            content = file_path.read_bytes()
-
-            php_patterns = [
-                b"<?php",
-                b"<?=",
-                b"<? ",
-                b"eval($_POST",
-                b"eval($_GET",
-                b"system($_POST",
-                b"exec($_POST",
-            ]
-
-            for pattern in php_patterns:
-                if pattern in content[:1024]:
-                    log_with_symbol(
-                        "detect_php",
-                        "warning",
-                        f"PHP signature detected: {file_path.name}",
-                        self.logger,
-                    )
-                    return True
-
-            if b"<%@" in content[:256] or b"runtime" in content.lower()[:256]:
-                log_with_symbol(
-                    "detect_jsp",
-                    "warning",
-                    f"JSP signature detected: {file_path.name}",
-                    self.logger,
-                )
-                return True
-
-            if b"<%" in content[:256] and b"%>" in content[:256]:
-                log_with_symbol(
-                    "detect_asp",
-                    "warning",
-                    f"ASP signature detected: {file_path.name}",
-                    self.logger,
-                )
-                return True
-
-        except Exception as e:
-            log_with_symbol(
-                "detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger
-            )
-
-        return False
-
-    def _is_force_scan_file(self, file_path: Path) -> bool:
-        """强制扫描检测 (保持原有逻辑)"""
-        if file_path.is_dir():
-            return False
-
-        config = self.runtime.config
-        paths_cfg = config.get("paths", {})
-        default_extensions = paths_cfg.get(
-            "monitor_extensions",
-            [
-                ".php",
-                ".php3",
-                ".php4",
-                ".php5",
-                ".php7",
-                ".php8",
-                ".phtml",
-                ".phar",
-                ".phpt",
-                ".phtm",
-                ".asp",
-                ".aspx",
-                ".asa",
-                ".ashx",
-                ".asmx",
-                ".asax",
-                ".jsp",
-                ".jspx",
-                ".jspa",
-                ".jspf",
-                ".jsw",
-                ".jsv",
-                ".txt",
-                ".inc",
-                ".bak",
-                ".old",
-            ],
-        )
-
-        if file_path.suffix.lower() in default_extensions:
-            return True
-
-        try:
-            filesizes_cfg = config.get("filesizes", {})
-            max_size_mb = filesizes_cfg.get("max_scan_file_size_mb", 5)
-
-            if file_path.stat().st_size > max_size_mb * 1024 * 1024:
-                return False
-
-            header = file_path.read_bytes()[:256]
-
-            if header.startswith(b"<?php") or b"<?=" in header or b"<? " in header:
-                log_with_symbol(
-                    "detect_php", "warning", f"PHP script detected: {file_path.name}", self.logger
-                )
-                return True
-
-            if header.startswith(b"<%@") or b"%!" in header or b"%\n" in header:
-                log_with_symbol(
-                    "detect_jsp", "warning", f"JSP script detected: {file_path.name}", self.logger
-                )
-                return True
-
-            if header.startswith(b"<%") and b"%>" in header[:100]:
-                log_with_symbol(
-                    "detect_asp", "warning", f"ASP script detected: {file_path.name}", self.logger
-                )
-                return True
-
-        except Exception as e:
-            log_with_symbol(
-                "detect_error", "warning", f"Detection failed {file_path}: {e}", self.logger
-            )
-
-        return False
 
     # ===== v1.7.9: 异步扫描工作线程 =====
     def _start_scan_worker(self):
@@ -748,10 +549,25 @@ class FileMonitorHandler(FileSystemEventHandler):
             )
             return
 
+        self._mark_record_present(event_path)
+
         try:
             self.enqueue_scan(event_path, event_type)
         except Exception as e:
             log_with_symbol("error_scan", "error", f"{event_path}: {e}", self.logger)
+
+    def _mark_record_present(self, event_path: Path) -> None:
+        """Keep a stored "missing" record honest once its path is back.
+
+        Deletion flips a record to missing; a re-upload of the same file must
+        not leave it reading as deleted while the file sits on disk again.  The
+        registry ignores this for paths it has no missing record for, so the
+        call is free for ordinary traffic.
+        """
+        try:
+            self.services.registry.mark_present(event_path, site=self.site)
+        except Exception:
+            self.logger.debug("[REGISTRY] mark_present failed: %s", event_path, exc_info=True)
 
     # ===== v1.8.1: 事件处理方法 (使用新的 _verify_directory) =====
 
@@ -936,6 +752,7 @@ class FileMonitorHandler(FileSystemEventHandler):
                 for new, old in self._path_aliases.items()
                 if not (old.startswith(path_key) or new.startswith(path_key))
             }
+            missing_reason = ""
         else:
             # v2.0 fix: Check if this file was quarantined before logging DELETE
             is_quarantined = False
@@ -949,6 +766,8 @@ class FileMonitorHandler(FileSystemEventHandler):
                 )
 
             if is_quarantined:
+                # 我们自己把文件移进隔离区,不是外部删除
+                missing_reason = "quarantined"
                 log_with_symbol(
                     "quarantine_add",
                     "info",
@@ -956,14 +775,16 @@ class FileMonitorHandler(FileSystemEventHandler):
                     self.logger,
                 )
             else:
+                missing_reason = "deleted-on-disk"
                 log_with_symbol(
                     "delete_file", "info", f"[DELETE][FILE] {event_path.name}", self.logger
                 )
 
-        # Registry清理
-        if self.services.registry.remove(event_path, site=self.site):
+        # Registry状态更新: 文件被外部删除(人工/脚本/攻击者清理),记录保留
+        # 只改变状态,这样同一个webshell再次上传时不会被当成"已处理"。
+        if self.services.registry.remove(event_path, site=self.site, reason=missing_reason):
             log_with_symbol(
-                "registry_remove", "info", f"Registry清理: {event_path.name}", self.logger
+                "registry_remove", "info", f"Registry标记文件已消失: {event_path.name}", self.logger
             )
 
     def on_closed(self, event):
@@ -1041,7 +862,37 @@ class WebsiteMonitor:
             return
 
         log_with_symbol("success", "info", "Monitor started successfully", self.logger)
+        self._reconcile_registry_state()
         self._start_baseline_scan()
+
+    def _reconcile_registry_state(self) -> None:
+        """Catch up on deletions the watcher could not have seen.
+
+        The observer only reports deletions that happen while it runs, so a
+        webshell deleted during a restart, a reboot, or any window where the
+        service was down would stay recorded as present forever.  Aligning the
+        stored state with the filesystem once at startup keeps the record
+        honest, which is what makes a later re-upload of the identical file
+        alert again instead of looking like a file we already handled.
+
+        The pass is not limited to this site: records that could not be
+        attributed to a configured site would otherwise never be checked, and
+        alignment is idempotent, so a second site starting later is a no-op.
+        """
+        try:
+            counters = self.services.registry.reconcile_filesystem()
+        except Exception as exc:
+            self.logger.warning("[REGISTRY][RECONCILE] 失败: %s", exc)
+            return
+
+        if not counters.get("marked_missing") and not counters.get("marked_present"):
+            return
+        self.logger.info(
+            "[REGISTRY][RECONCILE] 核对 %d 条，标记已消失 %d 条，恢复在册 %d 条",
+            counters.get("checked", 0),
+            counters.get("marked_missing", 0),
+            counters.get("marked_present", 0),
+        )
 
     def _start_baseline_scan(self):
         config = self.services.context.config

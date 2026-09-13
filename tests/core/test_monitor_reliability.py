@@ -260,6 +260,189 @@ def test_recently_restored_file_does_not_emit_a_duplicate_detection(monkeypatch,
         handler.shutdown()
 
 
+def test_out_of_band_delete_marks_the_registry_record_missing(tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    removed = []
+    registry = SimpleNamespace(
+        get=lambda *_args, **_kwargs: None,
+        remove=lambda path, **kwargs: removed.append((path, kwargs)) or True,
+        mark_present=lambda *_args, **_kwargs: False,
+    )
+    gone = tmp_path / "cleaned-up.php"
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.delete-reason"),
+        services=_services(tmp_path, registry=registry),
+    )
+    try:
+        handler.on_deleted(SimpleNamespace(src_path=str(gone)))
+    finally:
+        handler.shutdown()
+
+    assert len(removed) == 1
+    assert removed[0][1]["reason"] == "deleted-on-disk"
+    assert removed[0][1]["site"] == handler.site
+
+
+def test_quarantine_completion_is_not_recorded_as_an_operator_deletion(tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    removed = []
+    registry = SimpleNamespace(
+        get=lambda *_args, **_kwargs: {"quarantine_id": "q-1", "file_exists": False},
+        remove=lambda path, **kwargs: removed.append((path, kwargs)) or True,
+        mark_present=lambda *_args, **_kwargs: False,
+    )
+    gone = tmp_path / "quarantined.php"
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.delete-quarantine"),
+        services=_services(tmp_path, registry=registry),
+    )
+    try:
+        handler.on_deleted(SimpleNamespace(src_path=str(gone)))
+    finally:
+        handler.shutdown()
+
+    assert removed[0][1]["reason"] == "quarantined"
+
+
+def test_touched_path_clears_a_missing_record_before_the_scan_is_queued(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    order = []
+    registry = SimpleNamespace(
+        add=lambda *_args, **_kwargs: None,
+        remove=lambda *_args, **_kwargs: True,
+        mark_present=lambda path, **kwargs: order.append(("mark_present", str(path))),
+    )
+    returning = tmp_path / "back.php"
+    returning.write_text("<?php", encoding="utf-8")
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.mark-present"),
+        website=SimpleNamespace(log_config={"log_monitor_enabled": False}),
+        services=_services(tmp_path, registry=registry),
+    )
+    try:
+        monkeypatch.setattr(
+            handler, "enqueue_scan", lambda path, event_type: order.append(("scan", str(path)))
+        )
+
+        handler._handle_event(SimpleNamespace(src_path=str(returning)), "CREATE")
+    finally:
+        handler.shutdown()
+
+    assert [entry[0] for entry in order] == ["mark_present", "scan"]
+
+
+def test_startup_reconcile_aligns_registry_with_the_filesystem(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    class Observer:
+        def schedule(self, *_args, **_kwargs):
+            return None
+
+        def start(self):
+            return None
+
+        def stop(self):
+            return None
+
+        def join(self, *_args, **_kwargs):
+            return None
+
+        def is_alive(self):
+            return True
+
+    calls = []
+    registry = SimpleNamespace(
+        add=lambda *_args, **_kwargs: None,
+        remove=lambda *_args, **_kwargs: True,
+        mark_present=lambda *_args, **_kwargs: False,
+        reconcile_filesystem=lambda *args: (
+            calls.append(args) or {"checked": 940, "marked_missing": 2, "marked_present": 0}
+        ),
+    )
+    monkeypatch.setattr(
+        "anteumbra.infrastructure.utils.platform_utils.get_optimal_observer", Observer
+    )
+    website = Website(
+        name="Reconcile",
+        path=tmp_path,
+        port=8080,
+        enabled=True,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+    )
+    monitor = monitor_module.WebsiteMonitor(
+        website,
+        lambda *_args: None,
+        logging.getLogger("test.monitor.reconcile"),
+        services=_services(tmp_path, config=_scanner_config(), website=website, registry=registry),
+    )
+
+    monitor._reconcile_registry_state()
+
+    # Unfiltered on purpose: records that belong to no configured site would
+    # otherwise never be checked against the filesystem.
+    assert calls == [()]
+
+
+def test_startup_reconcile_failure_does_not_stop_the_monitor(monkeypatch, tmp_path):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    class Observer:
+        def schedule(self, *_args, **_kwargs):
+            return None
+
+        def start(self):
+            return None
+
+        def stop(self):
+            return None
+
+        def join(self, *_args, **_kwargs):
+            return None
+
+        def is_alive(self):
+            return True
+
+    def explode(_site_id):
+        raise OSError("registry unavailable")
+
+    registry = SimpleNamespace(
+        add=lambda *_args, **_kwargs: None,
+        remove=lambda *_args, **_kwargs: True,
+        mark_present=lambda *_args, **_kwargs: False,
+        reconcile_filesystem=explode,
+    )
+    monkeypatch.setattr(
+        "anteumbra.infrastructure.utils.platform_utils.get_optimal_observer", Observer
+    )
+    website = Website(
+        name="ReconcileFail",
+        path=tmp_path,
+        port=8080,
+        enabled=True,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+    )
+    monitor = monitor_module.WebsiteMonitor(
+        website,
+        lambda *_args: None,
+        logging.getLogger("test.monitor.reconcile-failure"),
+        services=_services(tmp_path, config=_scanner_config(), website=website, registry=registry),
+    )
+
+    monitor._reconcile_registry_state()  # must not raise
+
+
 def test_stale_delete_event_does_not_hide_a_restored_file(tmp_path):
     from anteumbra.infrastructure.monitoring import monitor as monitor_module
 
