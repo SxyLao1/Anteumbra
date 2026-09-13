@@ -448,7 +448,8 @@ Web Server (Nginx/Apache/IIS)
 │ FileMonitorHandler      │  infrastructure/monitoring/monitor.py
 │ (watchdog Observer)     │
 │                         │
-│ Windows: ReadDirectoryChangesW (PollingObserver, 50ms delay)
+│ Windows: ReadDirectoryChangesW, access-time notify flags masked
+│          out (falls back to PollingObserver when unsupported)
 │ Linux:   InotifyObserver (kernel-level, 0 delay)
 └───────────┬─────────────┘
             │
