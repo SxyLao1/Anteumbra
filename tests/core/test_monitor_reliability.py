@@ -16,6 +16,9 @@ def _scanner_config():
             "event_queue_size": 1,
             "event_queue_put_timeout_seconds": 0.01,
             "scan_existing_on_start": True,
+            # One worker keeps the queue assertions in this file deterministic;
+            # the pool size itself is covered by its own test.
+            "worker_threads": 1,
         },
         "monitor": {},
         "paths": {"monitor_extensions": [".php"]},
@@ -127,7 +130,7 @@ def test_baseline_sweep_waits_for_capacity_instead_of_scanning_inline(monkeypatc
 
         assert accepted is True
         assert elapsed >= 0.3, f"the sweep did not wait for capacity ({elapsed:.2f}s)"
-        inline = [entry for entry in calls if entry[0] != "ScanWorker"]
+        inline = [entry for entry in calls if not entry[0].startswith("ScanWorker")]
         assert inline == [], f"the sweep scanned a file inline: {inline}"
     finally:
         blocker.set()
@@ -192,6 +195,62 @@ def test_baseline_sweep_leaves_room_for_real_events(monkeypatch, tmp_path):
     finally:
         blocker.set()
         handler.shutdown()
+
+
+def test_scan_workers_follow_the_configured_count(tmp_path):
+    """One file at a time per worker; YARA releases the GIL, so a few help."""
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    config = _scanner_config()
+    config["scanner"]["worker_threads"] = 3
+    handler = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.worker-pool"),
+        services=_services(tmp_path, config=config),
+    )
+    try:
+        workers = [thread for thread in handler._scan_worker_threads if thread.is_alive()]
+        assert len(workers) == 3
+        assert handler._scan_worker_thread is workers[0]
+    finally:
+        handler.shutdown()
+
+    assert not [thread for thread in handler._scan_worker_threads if thread.is_alive()]
+
+
+def test_scan_worker_count_defaults_to_a_share_of_the_cores(tmp_path, monkeypatch):
+    from anteumbra.infrastructure.monitoring import monitor as monitor_module
+
+    adaptive = _scanner_config()
+    adaptive["scanner"].pop("worker_threads")  # exercise the adaptive default
+
+    monkeypatch.setattr(monitor_module.os, "cpu_count", lambda: 16)
+    big = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.worker-default-big"),
+        services=_services(tmp_path, config=adaptive),
+    )
+    try:
+        assert big._scan_worker_count == 4
+    finally:
+        big.shutdown()
+
+    monkeypatch.setattr(monitor_module.os, "cpu_count", lambda: 2)
+    small = monitor_module.FileMonitorHandler(
+        scan_callback=lambda *_args: None,
+        scan_options=ScanOptions(monitor_extensions=[".php"]),
+        base_path=tmp_path,
+        logger=logging.getLogger("test.monitor.worker-default-small"),
+        services=_services(tmp_path, config=adaptive),
+    )
+    try:
+        assert small._scan_worker_count == 1, "a two-core box stays at one worker"
+    finally:
+        small.shutdown()
 
 
 def test_handler_shutdown_stops_scan_worker(monkeypatch, tmp_path):
