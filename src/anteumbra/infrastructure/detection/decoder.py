@@ -190,6 +190,8 @@ class WebShellDecoder:
                 pass
         return text
 
+    _FUNCTION_NAME = re.compile(r"@?\w+\Z")
+
     @staticmethod
     def _inline_variable_call(text: str) -> str:
         """关键步骤：$v=\"eval\"; $v($_POST) → eval($_POST)
@@ -214,15 +216,22 @@ class WebShellDecoder:
         for m in re.finditer(r'\$(\w+)\s*=\s*["\']([^"\']+)["\']\s*;', text):
             var_name = m.group(1)
             value = m.group(2).strip()
+            # A Windows path such as 'c:\windows\system32\cmd.exe' contains
+            # "system" and was therefore taken for a function name; handing it
+            # to re.sub as a replacement template raised "bad escape \w" and
+            # killed the whole decode pass for that file.  Only a bare function
+            # name is a function name.
+            if not WebShellDecoder._FUNCTION_NAME.match(value):
+                continue
             if any(d in value.lower() for d in dangerous):
                 assignments[var_name] = value
 
         # Replace $var(...) with decoded_func(...)
         for var_name, func_name in assignments.items():
-            # $var($x) → func_name($x)
-            text = re.sub(
-                r"\$" + re.escape(var_name) + r"\s*\(([^)]*)\)", func_name + r"(\1)", text
-            )
+            # $var($x) → func_name($x); a callable keeps backslashes in the
+            # replacement literal instead of re-parsing them as escapes.
+            pattern = re.compile(r"\$" + re.escape(var_name) + r"\s*\(([^)]*)\)")
+            text = pattern.sub(lambda match, name=func_name: f"{name}({match.group(1)})", text)
 
         return text
 
