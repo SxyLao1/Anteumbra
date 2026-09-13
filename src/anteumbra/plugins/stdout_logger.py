@@ -74,9 +74,16 @@ class StdoutLoggerPlugin(Plugin, Notifier):
             extra = f" (x{batch})" if batch else f" -> {file_path}" if file_path else ""
             print(f"[STDOUT][{ts}] {level:8s} {alert_type}{extra}")
         elif event.event_type == "file_scanned":
+            # A clean file is not a result.  Printing one [SAFE] line per file
+            # meant a single site sweep emitted thousands of lines that said
+            # nothing, and because they carry no level token the live log panel
+            # counted every one of them as INFO.  Clean files are verbose detail;
+            # hits are always reported.
             fp = payload.get("file_path", "?")
-            tag = "HIT" if payload.get("is_suspicious") else "SAFE"
-            print(f"[STDOUT][{ts}] SCAN    [{tag}] {fp}")
+            if payload.get("is_suspicious"):
+                print(f"[STDOUT][{ts}] SCAN    [HIT] {fp}")
+            elif self._verbose:
+                print(f"[STDOUT][{ts}] SCAN    [SAFE] {fp}")
         elif event.event_type == "block_executed":
             ip = payload.get("ip", "?")
             print(f"[STDOUT][{ts}] BLOCK   {ip}")
