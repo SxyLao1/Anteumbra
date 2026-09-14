@@ -130,6 +130,11 @@ For the full command reference, see [CLI Commands](docs/USER_MANUAL.md#4-cli-com
 - SIEM export in CEF, JSON Lines, and Syslog formats
 - Web dashboard with merged historical/live SSE logs, runtime capability status, and configuration management
 - Plugin manager and WAF/event-source integration points
+- Multi-site operations in the UI: a navigation site switcher, per-site overview, and site-scoped detection, quarantine and cluster views
+- Memory-shell detection, forensics and remediation for webshells that exist only in container memory, with an honest boundary for bytecode-enhancement tools
+- MCP server (`anteumbra mcp serve`) plus a shipped agent skill, so a local AI agent can configure and verify a deployment
+- Advanced configuration editor with a searchable TOML tree, validation, timestamped backups and version rollback
+- Per-plugin configuration from the settings page, with the effective value and its source shown for every field
 
 ## Source Install
 
