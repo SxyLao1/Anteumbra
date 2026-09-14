@@ -6,6 +6,44 @@
 
 ---
 
+## [1.0.39] - 2026-09-14
+
+### Added
+- Advanced configuration editor at `/admin/config`, reachable from the navigation and from
+  the settings page. Three views over one document: typed form controls, a searchable tree
+  of the real TOML structure, and a raw text view. Leaves can be added, removed and edited.
+- Version history and rollback: every revision (UI or CLI) is listed with its time, source
+  and changed-key count, and can be diffed, downloaded or restored. Restoring backs up the
+  current file, revalidates and reports which changes need a restart.
+- Plugin configuration forms: each installed plugin renders typed controls generated from
+  the schema the plugin itself declares, with every field showing its effective value and
+  where it comes from (`config.toml`, `.env` or the built-in default).
+
+### Changed
+- Saving configuration is gated: a semantic diff of only the changed keys, the real
+  validation path (blocking only on errors the change introduces, never on pre-existing
+  ones), a timestamped backup, then an atomic write, a re-read and a reload.
+- A single-value edit rewrites exactly one line and preserves comments and line endings;
+  only structural edits reformat the document, and they say so beforehand.
+- Secrets are write-only everywhere: `.env` values and the legacy `.env` panel no longer
+  render stored credentials into the page, and `web_admin.password_hash` can only be
+  changed through a hashing password flow.
+- Settings readability: filters for non-default values and for values differing from the
+  shipped defaults, per-section change counts, jump-to-section links, and explicit risk
+  notes on dangerous keys.
+
+### Fixed
+- The plugin panel rendered as an empty area in a real browser: an HTML comment opened with
+  `<!--` was closed with Jinja's `#}`, so the whole fragment parsed as a comment node while
+  string-based tests passed. A parser-based test now guards it.
+- Shipped-default lookups never matched (flat dotted keys compared against a nested walk),
+  which silently disabled the change counters, the "changed from shipped" filter and the
+  source shown for guarded keys.
+- Boolean toggles could not be switched on, and a toggle hidden by a readability filter was
+  written as `false` on save.
+- `config_history_service` and the editor read configuration as text, so a single value edit
+  rewrote every CRLF line ending; both are byte-faithful now.
+- `remove_table("website[0]")` removed every `[[website]]` block instead of one.
 ## [1.0.38] - 2026-09-14
 
 ### Added

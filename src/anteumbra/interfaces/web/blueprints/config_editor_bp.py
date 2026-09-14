@@ -254,6 +254,10 @@ class _Plan:
     changes: list[cd.Change] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: Errors the file already had before this change.  Only errors the change
+    #: *introduces* block a save, before or after the write, so a config that
+    #: already warns stays editable - exactly how ``config set`` treats it.
+    baseline_errors: list[str] = field(default_factory=list)
     restart: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     payload: dict[str, str] = field(default_factory=dict)
@@ -273,9 +277,16 @@ class _Plan:
 
     @property
     def can_confirm(self) -> bool:
+        """Whether this plan may render a confirm button.
+
+        ``confirm_url`` is part of the test on purpose: a history record that
+        stores no content has no endpoint to post to, and a button that cannot
+        be completed must not be offered.
+        """
         return (
             not self.written
             and not self.blocked
+            and bool(self.confirm_url)
             and (bool(self.changes) or self.text_only)
         )
 
@@ -307,21 +318,30 @@ def _write_document(target: Path, candidate: _Candidate) -> None:
     through the project's own writer; a surgical or raw candidate is written
     verbatim, because re-serializing *that* is exactly what would destroy the
     comments this editor promises to keep.
+
+    The verbatim branch writes bytes: ``Path.write_text`` translates ``"\\n"``
+    to ``os.linesep``, which on Windows would silently turn a Unix ``config.toml``
+    into a CRLF file on the first value edit - the one thing a surgical edit
+    must never do.
     """
     if candidate.structural:
         write_toml_file(target, copy.deepcopy(candidate.doc.data()))
     else:
-        target.write_text(candidate.doc.text, encoding="utf-8")
+        target.write_bytes(candidate.doc.text.encode("utf-8"))
 
 
-def _validate_candidate(candidate: _Candidate, config_path: Path) -> tuple[list[str], list[str]]:
+def _validate_candidate(
+    candidate: _Candidate, config_path: Path
+) -> tuple[list[str], list[str], list[str]]:
     """Run the real validator on the candidate, delta against the live file.
 
     ``validate_config_file`` resolves relative website and log paths against the
     file's own directory, so the candidate has to sit beside ``config.toml`` for
     its answers to mean anything.  Only errors this change *introduces* block the
     save - a config that already warns must stay editable, which is how the CLI
-    treats it too.
+    treats it too.  The baseline comes back with the verdict so the post-write
+    check below can use the same rule instead of calling a pre-existing error a
+    new one.
     """
     check_path = config_path.with_name(
         f"{config_path.name}.{os.getpid()}.{threading.get_ident()}.editor-check.tmp"
@@ -333,7 +353,7 @@ def _validate_candidate(candidate: _Candidate, config_path: Path) -> tuple[list[
     finally:
         check_path.unlink(missing_ok=True)
     new_errors = [error for error in candidate_errors if error not in baseline_errors]
-    return new_errors, candidate_warnings
+    return new_errors, candidate_warnings, baseline_errors
 
 
 def _reload_runtime() -> str:
@@ -402,8 +422,15 @@ def _submit(builder: Callable[[cd.ConfigDocument], _Candidate], *, confirm: bool
         plan.payload = _confirm_payload()
         plan.confirm_url = request.path
         plan.changes = current.diff(candidate.doc)
+        # A candidate can move the text without moving a key value: a raw edit of
+        # a comment, or a structural add of an *empty* table (``[siem]``, or one
+        # more ``[[website]]`` block, both of which the tree view offers as a
+        # button).  Both are changes the operator asked for, so neither may be
+        # reported as "nothing to save".
         plan.text_only = (
-            candidate.raw_edit and not plan.changes and candidate.doc.text != current.text
+            not plan.changes
+            and candidate.doc.text != current.text
+            and (candidate.raw_edit or candidate.structural)
         )
 
         if not plan.changes and not plan.text_only:
@@ -412,12 +439,19 @@ def _submit(builder: Callable[[cd.ConfigDocument], _Candidate], *, confirm: bool
         if plan.text_only:
             plan.notes.append(
                 gettext(
+                    "Saving an empty table: no key value changed, and the file is "
+                    "re-serialized with the project writer."
+                )
+                if candidate.structural
+                else gettext(
                     "Only comments or formatting changed: no configuration key moved, and "
                     "the file is still rewritten verbatim."
                 )
             )
 
-        plan.errors, plan.warnings = _validate_candidate(candidate, config_path)
+        plan.errors, plan.warnings, plan.baseline_errors = _validate_candidate(
+            candidate, config_path
+        )
         plan.restart = _restart_keys([change.path for change in plan.changes])
         if plan.errors:
             plan.notice = _notice(
@@ -447,12 +481,14 @@ def _submit(builder: Callable[[cd.ConfigDocument], _Candidate], *, confirm: bool
         plan.backup = backup.name if backup is not None else ""
         _write_document(config_path, candidate)
         # Re-validate what is actually on disk: the operator is told what the
-        # runtime will read, not what this code intended to write.
+        # runtime will read, not what this code intended to write.  The verdict is
+        # a delta against the pre-write baseline for the same reason the gate is:
+        # a config that already had an unrelated error must not be reported as
+        # broken by this save.
         post_errors, post_warnings = validate_config_file(config_path)
         plan.written = True
         plan.warnings = post_warnings
-        if post_errors:
-            plan.errors = post_errors
+        plan.errors = [error for error in post_errors if error not in plan.baseline_errors]
         plan.reload_error = _reload_runtime()
         plan.revision_id = _record_revision(plan.changes, candidate.label)
         if plan.errors:
@@ -606,7 +642,14 @@ def _secret_hint(path: str) -> str:
 
 
 def _tree_rows(doc: cd.ConfigDocument, rows: list[_Row]) -> list[dict[str, Any]]:
-    """The document tree with each node's rows attached, for the tree view."""
+    """The document tree with each node's rows attached, for the tree view.
+
+    The node key is ``rows``, not ``keys``: Jinja resolves ``node.keys`` to the
+    ``dict.keys`` method before it ever looks at the item, so a node built with
+    a ``keys`` entry renders as a bound method and the length filter below blows
+    up.  The root node is included when it owns keys, otherwise a key written
+    above the first ``[table]`` header would be invisible in the tree view.
+    """
     by_path: dict[str, list[_Row]] = {}
     for row in rows:
         by_path.setdefault(row.table, []).append(row)
@@ -617,11 +660,15 @@ def _tree_rows(doc: cd.ConfigDocument, rows: list[_Row]) -> list[dict[str, Any]]
             "label": node.label,
             "kind": node.kind,
             "line": node.line,
-            "keys": by_path.get(node.path, []),
+            "rows": by_path.get(node.path, []),
             "children": [convert(child) for child in node.children],
         }
 
-    return [convert(child) for child in doc.tree().children]
+    root = doc.tree()
+    nodes = [convert(child) for child in root.children]
+    if root.keys:
+        nodes.insert(0, convert(root))
+    return nodes
 
 
 def _array_items(doc: cd.ConfigDocument) -> list[dict[str, Any]]:
@@ -672,6 +719,62 @@ def _current_validation(config_path: Path) -> dict[str, list[str]]:
         logger.error("Config validation failed", exc_info=True)
         return {"errors": [str(exc)], "warnings": []}
     return {"errors": errors, "warnings": warnings}
+
+
+#: How many changed key names the history list spells out per revision.
+_HISTORY_KEY_PREVIEW = 6
+
+
+def _revision_rows(
+    store: ConfigRevisionStore, current: cd.ConfigDocument, *, limit: int = 80
+) -> list[dict[str, Any]]:
+    """The version history as the list renders it.
+
+    A ``backup`` owns the file content, so its "changed keys" are *computed* by
+    diffing it against the file on disk: that is the number the operator cares
+    about ("what would restoring this take back"), and the entry itself only
+    knows it is a copy.  A ``change`` entry is a history record - it remembers
+    which keys moved and nothing else - so it reports its own count and is never
+    offered a restore or a download it cannot honour.
+    """
+    rows: list[dict[str, Any]] = []
+    for revision in store.list_revisions(limit=limit):
+        changed_keys: list[str] = []
+        changed_count = revision.changed_count
+        text_differs = False
+        if revision.kind == "backup":
+            text = store.read(revision.revision_id)
+            if text is not None:
+                text_differs = text != current.text
+                try:
+                    changed_keys = [
+                        change.path for change in current.diff(current.with_text(text))
+                    ]
+                except cd.ConfigDocumentError:
+                    # A backup that no longer parses can still be downloaded and
+                    # read; it just has no comparable key set.
+                    logger.debug("Revision %s is not comparable", revision.revision_id)
+                changed_count = len(changed_keys)
+        else:
+            changed_keys = list(revision.changed_keys)
+        rows.append(
+            {
+                "revision_id": revision.revision_id,
+                "kind": revision.kind,
+                "source": revision.source,
+                "timestamp": revision.timestamp,
+                "display_time": revision.display_time,
+                "detail": revision.detail,
+                "size_bytes": revision.size_bytes,
+                "changed_count": changed_count,
+                "changed_keys": changed_keys[:_HISTORY_KEY_PREVIEW],
+                "extra_keys": max(0, len(changed_keys) - _HISTORY_KEY_PREVIEW),
+                "restoreable": revision.restoreable and text_differs,
+                "downloadable": revision.kind == "backup",
+                "text_differs": text_differs,
+            }
+        )
+    return rows
 
 
 def _page_context(
@@ -732,6 +835,12 @@ def _page_context(
         set_only=set_only,
         non_default_only=non_default_only,
     )
+    revisions: list[dict[str, Any]] = []
+    if tab == "history":
+        try:
+            revisions = _revision_rows(_revision_store(config_path), doc)
+        except Exception:  # noqa: BLE001 - the history list is never fatal
+            logger.error("Failed to list config revisions", exc_info=True)
     context.update(
         {
             "rows": rows,
@@ -739,9 +848,7 @@ def _page_context(
             "tree": _tree_rows(doc, rows),
             "arrays": _array_items(doc),
             "env_rows": _env_rows(config_path),
-            "revisions": _revision_store(config_path).list_revisions(limit=80)
-            if tab == "history"
-            else [],
+            "revisions": revisions,
             "raw_text": doc.redacted_text() if view == "raw" else "",
             "highlighted": _highlight_toml(doc.redacted_text()) if view == "raw" else Markup(""),
             "reference_available": bool(reference.keys),
@@ -1047,10 +1154,20 @@ def config_raw():
 
 
 def _restore_secrets(doc: cd.ConfigDocument, submitted: str) -> str:
-    """Put the real secret values back, or refuse a save that touched them."""
+    """Put the real secret values back, or refuse a save that touched them.
+
+    Three cases, and only three:
+
+    * the redaction marker is re-posted where it came from - the operator did not
+      touch that line, so the real value is written back from disk;
+    * a secret-designated line is re-posted byte for byte - that is a
+      ``${ENV_VAR:?}`` placeholder, which is visible documentation rather than a
+      secret, and re-posting it is not an edit;
+    * anything else on a secret-designated line is a hand-written secret, and
+      that is refused: it is what would let a literal hash be typed here instead
+      of set through the password flow.
+    """
     spans = doc.secret_spans()
-    if not spans:
-        return submitted
     markers = {span.redacted.strip('"') for span in spans}
     lines = cd.split_lines(submitted)
     for index, line in enumerate(lines):
@@ -1063,6 +1180,8 @@ def _restore_secrets(doc: cd.ConfigDocument, submitted: str) -> str:
             original = _original_secret_line(doc, name)
             if original is not None and carries_marker:
                 lines[index] = original
+                continue
+            if original is not None and line == original:
                 continue
             raise cd.ConfigDocumentError(
                 gettext(
@@ -1259,6 +1378,10 @@ def _revision_diff_plan(revision_id: str) -> _Plan:
                 return plan
             # ``current.diff(old)`` reads as "what restoring this would change".
             plan.changes = current.diff(current.with_text(text))
+            # A backup that differs only in comments or layout is still a real
+            # restore target; without this the diff view would show no table and
+            # offer no confirm, and the restore could never be completed.
+            plan.text_only = not plan.changes and text != current.text
             plan.restart = _restart_keys([change.path for change in plan.changes])
             plan.fingerprint = _fingerprint(current.text)
             plan.payload = {"revision": revision_id, "base": plan.fingerprint}
@@ -1278,10 +1401,11 @@ def _revision_diff_plan(revision_id: str) -> _Plan:
         if revision is None:
             plan.errors = [gettext("Unknown revision.")]
             return plan
-        plan.changes = [
-            cd.Change(path, "changed", None, None) for path in revision.changed_keys
-        ]
+        plan.changes = [cd.Change(path, "changed", None, None) for path in revision.changed_keys]
         plan.notes = [gettext("Recorded keys only: this entry stores no content to restore.")]
+        # ``confirm_url`` stays empty: a recorded change owns no content, so the
+        # template renders this as a read-only report instead of a button that
+        # would post to a route that only answers GET.
         plan.notice = _notice(
             "warning",
             gettext(
@@ -1335,8 +1459,13 @@ def config_revision_restore():
             # The backup is re-validated exactly like any other candidate: a
             # restore that would introduce errors is refused, and one that only
             # removes them is allowed.
+            #
+            # ``raw_edit`` is set because a backup is restored verbatim: a copy
+            # that differs only in comments or layout is still a restore the
+            # operator asked for, and without the flag the gate below would call
+            # it "no changes" and quietly do nothing.
             plan = _submit(
-                lambda doc: _Candidate(doc.with_text(text), False, label),
+                lambda doc: _Candidate(doc.with_text(text), False, label, raw_edit=True),
                 confirm=True,
                 base="",
             )
@@ -1368,8 +1497,21 @@ def config_revision_download():
         )
     try:
         body = cd.ConfigDocument(text).redacted_text()
-    except cd.ConfigDocumentError:
-        body = text
+    except cd.ConfigDocumentError as exc:
+        # Never fall back to the raw text here.  This response is a *download*,
+        # and an unredactable file is exactly the one that may carry a literal
+        # secret: refusing is the only safe answer.
+        logger.warning("Refused an unredactable config download: %s", exc)
+        return _render_result(
+            _Plan(
+                notice=_notice(
+                    "error",
+                    gettext(
+                        "That revision could not be redacted, so it will not be downloaded."
+                    ),
+                )
+            )
+        )
     name = revision_id.partition(":")[2] or f"{config_path.name}.bak"
     response = Response(body, mimetype="text/plain")
     response.headers["Content-Disposition"] = f'attachment; filename="{name}"'

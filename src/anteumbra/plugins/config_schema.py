@@ -244,6 +244,20 @@ _ADAPTER_MODULES: dict[str, str] = {
     "syslog_waf": "anteumbra.plugins.waf_adapters.syslog_receiver",
 }
 
+#: Non-adapter built-ins that can be built without injected services, so their
+#: ``config_schema()`` is adopted at import time as well.  ``PluginManager``
+#: already prefers the live class, but the panel also runs when no manager is
+#: attached (``plugin system not attached``) or when a plugin is listed in
+#: ``config.toml`` without an implementation in this build: without a registered
+#: schema those rows would fall back to inferring types from raw values, which is
+#: exactly the "these controls were guessed" state the typed form exists to avoid.
+_BUILTIN_PLUGIN_MODULES: dict[str, str] = {
+    "stdout_logger": "anteumbra.plugins.stdout_logger",
+    "quarantine_handler": "anteumbra.plugins.quarantine_handler",
+    "memory_shell_probe": "anteumbra.plugins.memory_shell_probe",
+    **_ADAPTER_MODULES,
+}
+
 #: Every built-in schema this build knows, whether or not the plugin can be
 #: instantiated here: an adapter whose optional dependency is missing still has a
 #: config section an operator is entitled to edit.
@@ -258,17 +272,18 @@ def register_builtin_schema(module_path: str, fields: Any) -> None:
     _BUILTIN_SCHEMAS[name] = tuple(normalize_fields(fields))
 
 
-def load_adapter_schemas() -> None:
-    """Adopt each WAF adapter's own ``config_schema()``.
+def load_builtin_schemas() -> None:
+    """Adopt the ``config_schema()`` of every built-in plugin that can declare one.
 
-    Called once at the bottom of this module.  The adapters keep their schema next
+    Called once at the bottom of this module.  Each plugin keeps its schema next
     to the ``activate()`` that reads it; this only saves the settings page from
-    importing an adapter (and its optional dependencies) to learn what its form
-    looks like.
+    importing a plugin (and its optional dependencies) to learn what its form
+    looks like.  An import or schema failure is swallowed - a plugin that cannot
+    be described here still gets its config.toml keys rendered as controls.
     """
     import importlib
 
-    for short_name, module_path in _ADAPTER_MODULES.items():
+    for short_name, module_path in _BUILTIN_PLUGIN_MODULES.items():
         try:
             module = importlib.import_module(module_path)
         except Exception:  # noqa: BLE001 - an unimportable adapter keeps its section
@@ -292,6 +307,11 @@ def load_adapter_schemas() -> None:
             continue
 
 
+#: Earlier name of ``load_builtin_schemas``, when it only covered the WAF
+#: adapters.  Kept because it is exported and a third-party tool may call it.
+load_adapter_schemas = load_builtin_schemas
+
+
 def schema_for_module(module_name: str) -> tuple[ConfigField, ...]:
     """Registered schema for one plugin module/name, or an empty tuple.
 
@@ -309,7 +329,7 @@ def has_builtin_schema(module_name: str) -> bool:
     return name in _BUILTIN_SCHEMAS or name.rsplit(".", 1)[-1] in _BUILTIN_SCHEMAS
 
 
-load_adapter_schemas()
+load_builtin_schemas()
 
 
 __all__ = [
@@ -319,6 +339,7 @@ __all__ = [
     "field_values_equal",
     "has_builtin_schema",
     "load_adapter_schemas",
+    "load_builtin_schemas",
     "normalize_fields",
     "register_builtin_schema",
     "schema_for_module",

@@ -28,13 +28,24 @@
       {{ _('%(count)s setting(s), %(changed)s differ from the default', count=field_count, changed=changed_count) }}
     </span>
     {% if filter_name != 'all' %}
-    <span class="badge badge-blue" style="font-size:8px;">{{ _('filtered') }}</span>
+    <span class="badge badge-blue" style="font-size:8px;" data-plugin-form-filter="{{ filter_name }}">{{ _('filtered') }}</span>
     {% endif %}
+    {# A close affordance, because a form the operator opened must be closable
+       without saving.  Nothing here needs a script file: the shell's htmx swaps
+       innerHTML, so an inline handler on the element is what runs. #}
+    <button class="btn btn-ghost btn-sm" type="button" data-plugin-config-close="1"
+            aria-controls="plugin-config-form"
+            onclick="var t=document.getElementById('plugin-config-form'); if(t){t.innerHTML='';}"
+            style="margin-left:auto;font-size:9px;padding:2px 8px;">{{ _('Close') }}</button>
   </div>
 
   {% for n in notices %}
   <div data-plugin-notice="{{ n.level }}" style="padding:6px 8px;border-radius:3px;font-size:10px;line-height:1.6;margin-bottom:6px;background:#0a0a0a;border-left:3px solid {{ '#ff4444' if n.level == 'error' else ('#ffaa00' if n.level == 'warning' else ('#00ff41' if n.level == 'success' else '#4a9eff')) }};color:{{ '#ff8888' if n.level == 'error' else ('#ffcc66' if n.level == 'warning' else ('#8fe38f' if n.level == 'success' else 'var(--color-text-secondary)')) }};">{{ n.text }}</div>
   {% endfor %}
+
+  {% if errors.get('form') %}
+  <div data-plugin-form-error="1" style="padding:6px 8px;border-radius:3px;margin-bottom:6px;background:rgba(255,68,68,0.08);border-left:3px solid #ff4444;color:#ff8888;font-size:10px;line-height:1.6;">{{ errors.get('form') }}</div>
+  {% endif %}
 
   {% if not has_schema %}
   <p style="color:#ffaa00;font-size:10px;margin:0 0 6px 0;line-height:1.6;">
@@ -131,6 +142,18 @@
         {%- if f.differs_from_shipped %} · {{ _('differs from the shipped config.toml') }}{% endif %}
         {%- if not f.in_config %} · {{ _('not present in config.toml yet') }}{% endif %}
       </div>
+
+      {% if f.unresolved_env %}
+      <div data-plugin-field-unresolved="{{ f.key }}" style="color:#ffaa00;font-size:9px;line-height:1.6;">
+        {{ _('No value is in effect: config.toml refers to ${%(var)s}, which .env does not define and which has no fallback.', var=f.unresolved_env) }}
+      </div>
+      {% endif %}
+
+      {% if f.secret_in_config %}
+      <div data-plugin-field-inline-secret="{{ f.key }}" style="color:#ffaa00;font-size:9px;line-height:1.6;">
+        {{ _('This is a literal value in config.toml, so a value saved to .env will not take effect until config.toml references the variable.') }}
+      </div>
+      {% endif %}
 
       {% if errors.get(f.key) %}
       <div data-plugin-field-error="{{ f.key }}" style="padding:4px 6px;border-radius:3px;background:rgba(255,68,68,0.08);border-left:3px solid #ff4444;color:#ff8888;font-size:10px;">{{ errors.get(f.key) }}</div>

@@ -8,10 +8,10 @@
   <summary style="cursor:pointer;">
     <code style="font-size:12px;">{{ node.label }}</code>
     <span class="muted-copy" style="font-size:11px;">L{{ node.line }}</span>
-    <span class="badge badge-gray">{{ _('%(count)s key(s)', count=node.keys|length) }}</span>
+    <span class="badge badge-gray">{{ _('%(count)s key(s)', count=node.rows|length) }}</span>
   </summary>
   <div style="margin-top:6px;">
-    {% for row in node.keys %}{{ key_row(row) }}{% endfor %}
+    {% for row in node.rows %}{{ key_row(row) }}{% endfor %}
 
     <form hx-post="/admin/config/editor/key/add" hx-target="#ce-result" hx-swap="innerHTML"
           style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap;">
@@ -110,7 +110,7 @@
     </details>
     {% endif %}
 
-    {% if not tree and not rows %}
+    {% if not rows %}
       <div class="empty-state"><p>{{ _('No key matches the current filters.') }}</p></div>
     {% endif %}
     {% for node in tree %}{{ table_node(node, 0) }}{% endfor %}

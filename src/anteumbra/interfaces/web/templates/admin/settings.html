@@ -82,11 +82,24 @@
       <form hx-post="/admin/settings/environment/save" hx-target="#main-content" hx-swap="innerHTML" style="display:grid;gap:8px;">
         {% for key in env_keys %}
         {% set secret = ('PASSWORD' in key or 'KEY' in key or 'SECRET' in key or 'TOKEN' in key) %}
+        {% set is_set = env_vars.get(key, '')|trim != '' %}
+        {# A credential is write-only: its stored value is never rendered - not even
+           inside a password input, where it would still sit in the page source.
+           The field reports whether one is set, and an empty field means "keep it",
+           which is what the save endpoint already does with a blank value. #}
         <label class="cfg-field" style="display:flex;align-items:center;gap:10px;font-size:11px;"><span style="flex:0 0 220px;color:var(--color-text-secondary);">{{ key }}</span>
-          <input type="{{ 'password' if secret else 'text' }}" name="{{ key }}" value="{{ env_vars.get(key, '') }}" autocomplete="{{ 'new-password' if secret else 'off' }}" style="flex:1 1 auto;min-width:0;">
+          {% if secret %}
+          <span class="badge {{ 'badge-success' if is_set else 'badge-danger' }}" style="font-size:8px;"
+                data-env-secret-state="{{ 'set' if is_set else 'unset' }}">{{ _('set') if is_set else _('not set') }}</span>
+          <input type="password" name="{{ key }}" value="" autocomplete="new-password"
+                 placeholder="{{ _('Set a new value (leave blank to keep the stored one)') }}" style="flex:1 1 auto;min-width:0;">
+          {% else %}
+          <input type="text" name="{{ key }}" value="{{ env_vars.get(key, '') }}" autocomplete="off" style="flex:1 1 auto;min-width:0;">
+          {% endif %}
         </label>
         {% endfor %}
-        {{ row(_('Admin password hash'), (env_vars.get('ANTEUMBRA_PASSWORD_HASH', '')[:16] + '...') if env_vars.get('ANTEUMBRA_PASSWORD_HASH') else _('Not set')) }}
+        {% set hash_set = env_vars.get('ANTEUMBRA_PASSWORD_HASH', '')|trim != '' %}
+        <div style="display:flex;gap:10px;font-size:11px;line-height:1.8;" data-env-password-hash="1"><span style="flex:0 0 220px;color:var(--color-text-secondary);">{{ _('Admin password hash') }}</span><span style="color:var(--color-text-primary);"><span class="badge {{ 'badge-success' if hash_set else 'badge-danger' }}" style="font-size:8px;" data-env-secret-state="{{ 'set' if hash_set else 'unset' }}">{{ _('set') if hash_set else _('not set') }}</span> <span class="muted-copy" style="font-size:9px;">{{ _('The hash itself is never displayed; set a new password in the advanced section below.') }}</span></span></div>
         <div class="page-toolbar"><button class="btn btn-primary btn-sm" type="submit">{{ _('Save environment') }}</button><span class="muted-copy">{{ _('Written to .env and reloaded.') }}</span></div>
       </form>
     </div>

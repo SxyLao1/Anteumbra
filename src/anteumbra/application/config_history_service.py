@@ -297,12 +297,18 @@ class ConfigRevisionStore:
         return path if path.is_file() else None
 
     def read(self, revision_id: str) -> str | None:
+        """The backup's content, byte for byte.
+
+        Read as bytes on purpose: ``read_text`` translates ``\\r\\n`` to ``\\n``,
+        and a restore writes this text straight back - a Windows checkout would
+        come out of a rollback with every line ending rewritten.
+        """
         path = self.resolve(revision_id)
         if path is None:
             return None
         try:
-            return path.read_text(encoding="utf-8")
-        except OSError:
+            return path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
             logger.debug("Failed to read config backup %s", path, exc_info=True)
             return None
 

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra\n"
-"POT-Creation-Date: 2026-09-14 12:50+0800\n"
+"POT-Creation-Date: 2026-09-14 19:01+0800\n"
 "Language: zh\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -489,6 +489,198 @@ msgstr "部分成功"
 msgid "ok %(ok)s / failed %(failed)s / skipped %(skipped)s"
 msgstr "成功 %(ok)s / 失败 %(failed)s / 跳过 %(skipped)s"
 
+msgid "Turning automatic quarantine on moves every matching file out of the website directory."
+msgstr "开启自动隔离会把所有命中文件移出网站目录。"
+
+msgid "This list is the admin IP allow-list: an entry that does not cover your current address locks you out of this UI."
+msgstr "此列表是管理端 IP 白名单：若其中的条目不包含你当前地址，你将无法登录本界面。"
+
+msgid "Only a proxy you control belongs here; a wrong entry lets a client forge its own address in logs, profiles and blocking."
+msgstr "此处只应填写你控制的代理地址；填错会让客户端在日志、画像与封禁中伪造来源地址。"
+
+msgid "Forcing secure cookies over plain HTTP makes the login cookie unusable and locks everyone out."
+msgstr "在纯 HTTP 下强制安全 Cookie 会导致登录 Cookie 失效，所有人都会被锁在外面。"
+
+msgid "The IP blocker acts on live attacker addresses; a wrong threshold blocks real users at the WAF or firewall."
+msgstr "IP 封禁会直接作用于真实攻击者地址；阈值填错会在 WAF 或防火墙上误封正常用户。"
+
+msgid "The storage backend decides where detections are written; changing it splits the ledger this dashboard reads."
+msgstr "存储后端决定检测记录的写入位置；更改它会让本仪表盘读取的台账出现分叉。"
+
+msgid "No changes: nothing to save."
+msgstr "没有变化：无需保存。"
+
+msgid "Saving an empty table: no key value changed, and the file is re-serialized with the project writer."
+msgstr "保存空表：没有任何配置项的值发生变化，文件将用项目写入器重新序列化。"
+
+msgid "Only comments or formatting changed: no configuration key moved, and the file is still rewritten verbatim."
+msgstr "仅注释或排版发生变化：没有任何配置项改变，文件仍会原样重写。"
+
+msgid "Not saved: the change introduces configuration errors."
+msgstr "未保存：该修改会引入配置错误。"
+
+msgid "Review the changes below, then confirm to write config.toml."
+msgstr "请确认下方变更，然后确认写入 config.toml。"
+
+msgid "config.toml changed on disk since this preview (another editor, the CLI, or the runtime). Re-open the editor before saving."
+msgstr "自本次预览以来 config.toml 已在磁盘上被改动（其他编辑器、CLI 或运行时）。请重新打开编辑器后再保存。"
+
+msgid "Not saved: the file moved under us."
+msgstr "未保存：文件在预览之后发生了变化。"
+
+msgid "Written, but the resulting config.toml does not validate - restore a revision below."
+msgstr "已写入，但生成的 config.toml 未通过校验——请在下方恢复某个版本。"
+
+msgid "Saved and backed up, but the runtime could not reload: it is still running the previous configuration."
+msgstr "已保存并备份，但运行时重载失败：它仍在运行旧的配置。"
+
+msgid "Saved: config.toml written and reloaded."
+msgstr "已保存：config.toml 已写入并重新加载。"
+
+msgid "Add key %(key)s"
+msgstr "添加配置项 %(key)s"
+
+msgid "Edit %(key)s"
+msgstr "修改 %(key)s"
+
+msgid "No values were submitted."
+msgstr "没有提交任何值。"
+
+msgid "Edit %(count)s value(s)"
+msgstr "修改 %(count)s 个值"
+
+msgid "Set a new password instead of editing this hash."
+msgstr "请改用“设置新密码”，不要直接编辑该哈希。"
+
+msgid "Secret: set it in .env, never here."
+msgstr "密钥：请在 .env 中设置，不要在此处填写。"
+
+msgid "config.toml could not be read: %(detail)s"
+msgstr "无法读取 config.toml：%(detail)s"
+
+msgid "The change could not be prepared: %(detail)s"
+msgstr "无法准备该修改：%(detail)s"
+
+msgid "No key was submitted."
+msgstr "没有提交配置项。"
+
+msgid "One value at a time: use Save changed fields instead."
+msgstr "一次只能修改一个值：请改用“保存已修改字段”。"
+
+msgid "A key name must be a bare TOML key."
+msgstr "配置项名必须是裸 TOML 键名。"
+
+msgid "Remove key %(key)s"
+msgstr "删除配置项 %(key)s"
+
+msgid "No table was submitted."
+msgstr "没有提交表。"
+
+msgid "Add table %(table)s"
+msgstr "添加表 %(table)s"
+
+msgid "Remove table %(table)s"
+msgstr "删除表 %(table)s"
+
+msgid "Add an item to %(key)s"
+msgstr "向 %(key)s 添加一项"
+
+msgid "A key and an array index are required."
+msgstr "需要配置项名与数组下标。"
+
+msgid "Remove item %(index)s of %(key)s"
+msgstr "删除 %(key)s 的第 %(index)s 项"
+
+msgid "The submitted text is too large to save."
+msgstr "提交的文本过大，无法保存。"
+
+msgid "Save the raw config.toml"
+msgstr "保存 config.toml 原文"
+
+msgid "Secret values are not editable here: leave %(key)s as it is, or set a new password / .env value on the Secrets tab."
+msgstr "此处不可编辑密钥值：请保持 %(key)s 原样，或在“密钥”页设置新密码 / .env 值。"
+
+msgid "A redacted value was moved or duplicated; reload the raw view."
+msgstr "脱敏值被移动或复制；请重新加载原文视图。"
+
+msgid "That variable cannot be edited here."
+msgstr "该变量不能在此处编辑。"
+
+msgid "Enter a value first; nothing was written."
+msgstr "请先输入值；未写入任何内容。"
+
+msgid "The .env value could not be written: %(detail)s"
+msgstr "无法写入 .env 值：%(detail)s"
+
+msgid "Set %(key)s in .env"
+msgstr "在 .env 中设置 %(key)s"
+
+msgid "Credentials are read when the config loads, so the reload above is what applies this to the running runtime."
+msgstr "凭据在配置加载时读取，因此上面的重载才会让它对运行中的实例生效。"
+
+msgid "%(key)s written to .env; the value is never shown again."
+msgstr "%(key)s 已写入 .env；该值不会再显示。"
+
+msgid "Use at least 8 characters for the admin password."
+msgstr "管理员密码至少需要 8 个字符。"
+
+msgid "The two passwords do not match."
+msgstr "两次输入的密码不一致。"
+
+msgid "The new password could not be written: %(detail)s"
+msgstr "无法写入新密码：%(detail)s"
+
+msgid "Set a new admin password"
+msgstr "设置新的管理员密码"
+
+msgid "The hash is never displayed, not even to you."
+msgstr "该哈希不会显示，对你也不例外。"
+
+msgid "web_admin.password_hash resolves this value, and it is read on every sign-in, so the reload above is what activates the new password."
+msgstr "web_admin.password_hash 会解析该值，且每次登录都会读取，因此上面的重载才会让新密码生效。"
+
+msgid "The new password is active for the next sign-in."
+msgstr "新密码将在下次登录时生效。"
+
+msgid "Validate %(name)s"
+msgstr "校验 %(name)s"
+
+msgid "Validated %(name)s."
+msgstr "已校验 %(name)s。"
+
+msgid "Revision %(id)s"
+msgstr "版本 %(id)s"
+
+msgid "Unknown revision."
+msgstr "未知版本。"
+
+msgid "That backup is no longer on disk."
+msgstr "该备份已不在磁盘上。"
+
+msgid "Restoring this backup applies the changes below; the current file is backed up first."
+msgstr "恢复该备份将应用下方变更；当前文件会先备份。"
+
+msgid "Recorded keys only: this entry stores no content to restore."
+msgstr "仅记录配置项名：该条目没有可用于恢复的内容。"
+
+msgid "This entry records which keys changed, not their content: it can be read but not restored or downloaded."
+msgstr "该条目只记录哪些配置项发生了变更，不保存其内容：可以查看，但无法恢复或下载。"
+
+msgid "That revision has no stored content to restore."
+msgstr "该版本没有可恢复的内容。"
+
+msgid "config.toml changed on disk since the preview; re-open the editor before restoring."
+msgstr "自预览以来 config.toml 已在磁盘上被改动；请重新打开编辑器后再恢复。"
+
+msgid "Restore revision %(id)s"
+msgstr "恢复版本 %(id)s"
+
+msgid "That revision has no stored content to download."
+msgstr "该版本没有可下载的内容。"
+
+msgid "That revision could not be redacted, so it will not be downloaded."
+msgstr "该版本无法脱敏，因此不会提供下载。"
+
 msgid "The memory-shell probe service did not answer: %(error)s"
 msgstr "内存马探测服务无响应: %(error)s"
 
@@ -603,8 +795,41 @@ msgstr "已加载 %(loaded)s / 共 %(total)s 个"
 msgid "config file %(name)s"
 msgstr "配置文件 %(name)s"
 
+msgid "%(count)s changed"
+msgstr "已修改 %(count) 项"
+
+msgid "all defaults"
+msgstr "全部为默认值"
+
+msgid "ENVIRONMENT & SECRETS"
+msgstr "环境与密钥"
+
+msgid "ACCOUNT"
+msgstr "账户"
+
+msgid "SITE CONFIGURATION"
+msgstr "站点配置"
+
+msgid "MONITORING & DETECTION"
+msgstr "监控与检测"
+
+msgid "NOTIFICATIONS"
+msgstr "通知设置"
+
+msgid "STORAGE & PATHS"
+msgstr "存储与路径"
+
+msgid "PLUGINS"
+msgstr "插件"
+
+msgid "ADVANCED"
+msgstr "高级"
+
 msgid "not configured"
 msgstr "未配置"
+
+msgid "shipped default"
+msgstr "出厂默认值"
 
 msgid "%(count)s value(s) written to .env"
 msgstr "已写入 .env：%(count)s 项"
@@ -614,6 +839,69 @@ msgstr "没有可保存的内容：所有字段都留空了。"
 
 msgid "Environment save failed: %(detail)s"
 msgstr "环境变量保存失败：%(detail)s"
+
+msgid "Password too short: at least %(count)s characters are required."
+msgstr "密码过短：至少需要 %(count)s 个字符。"
+
+msgid "New password hash written to .env. Existing sessions stay signed in until they expire; the next sign-in uses the new password."
+msgstr "新密码哈希已写入 .env。已登录的会话会保持到过期，下次登录请使用新密码。"
+
+msgid "Changing the password failed: %(detail)s"
+msgstr "修改密码失败：%(detail)s"
+
+msgid "This value is required."
+msgstr "此项为必填。"
+
+msgid "Expected a boolean (true or false)."
+msgstr "应为布尔值（true 或 false）。"
+
+msgid "Expected a number."
+msgstr "应为数字。"
+
+msgid "Must be at least %(min)s."
+msgstr "不得小于 %(min)s。"
+
+msgid "Must be at most %(max)s."
+msgstr "不得大于 %(max)s。"
+
+msgid "Must be one of: %(choices)s."
+msgstr "必须是以下之一：%(choices)s。"
+
+msgid "Expected a list, for example a, b, c."
+msgstr "应为列表，例如 a, b, c。"
+
+msgid "At least one value is required."
+msgstr "至少需要一项。"
+
+msgid "Every entry must be %(hint)s: %(item)s"
+msgstr "每一项都必须是%(hint)s：%(item)s"
+
+msgid "valid"
+msgstr "合法取值"
+
+msgid "Expected %(hint)s."
+msgstr "应为%(hint)s。"
+
+msgid "a different format"
+msgstr "其他格式"
+
+msgid "%(fields)s has no .env variable name in this build, so it stays read-only here. Set it in .env and reference it from config.toml."
+msgstr "%(fields)s 在本构建中没有对应的 .env 变量名，因此在此保持只读。请在 .env 中设置它，并在 config.toml 中引用。"
+
+msgid "%(fields)s is a literal value in config.toml, and the loader only substitutes ${VAR} placeholders: a value saved to .env will not take effect until config.toml references the variable instead."
+msgstr "%(fields)s 是 config.toml 中的字面量，而加载器只会替换 ${VAR} 占位符：在 config.toml 改为引用该变量之前，保存到 .env 的值不会生效。"
+
+msgid "No value is in effect for %(fields)s yet: config.toml refers to %(vars)s, which .env does not define and which has no fallback."
+msgstr "%(fields)s 目前没有生效的值：config.toml 引用了 %(vars)s，而 .env 未定义该变量，且没有回退值。"
+
+msgid "The plugin reads this section once, at activation: a saved value takes effect after the plugin is reloaded or Anteumbra is restarted."
+msgstr "该插件在激活时只读取本配置段一次：保存的值需在插件重新加载或 Anteumbra 重启后生效。"
+
+msgid "%(changed)s of %(total)s plugins have values that differ from their defaults; showing those %(shown)s."
+msgstr "%(total)s 个插件中有 %(changed)s 个存在与默认值不同的配置；当前显示其中 %(shown)s 个。"
+
+msgid "%(changed)s of %(total)s plugins have values that differ from the shipped config.toml defaults; showing those %(shown)s."
+msgstr "%(total)s 个插件中有 %(changed)s 个与出厂 config.toml 默认值不同；当前显示其中 %(shown)s 个。"
 
 msgid "Runtime alerting is delivered by this plugin; switching it off would silently drop every alert."
 msgstr "运行时的告警投递依赖该插件；关闭它会静默丢弃所有告警。"
@@ -692,6 +980,42 @@ msgstr "未知插件：%(name)s"
 
 msgid "Plugin control failed: %(detail)s"
 msgstr "插件控制失败：%(detail)s"
+
+msgid "Saved %(count)s value(s) for %(name)s and reloaded the plugin, so the running runtime uses them now."
+msgstr "已为 %(name)s 保存 %(count)s 项，并重新加载该插件，运行中的运行时立即生效。"
+
+msgid "Saved %(count)s value(s) for %(name)s. The plugin is not loaded right now, so they apply the next time it activates."
+msgstr "已为 %(name)s 保存 %(count)s 项。该插件当前未加载，将在下次激活时生效。"
+
+msgid "Saved %(count)s value(s) for %(name)s, but reloading the plugin failed (%(detail)s). A restart is required; the previous instance may have been unloaded."
+msgstr "已为 %(name)s 保存 %(count)s 项，但重新加载插件失败（%(detail)s）。需要重启；原实例可能已被卸载。"
+
+msgid "Saved %(count)s value(s) for %(name)s to disk, but they could not be applied to the running runtime (%(detail)s). A restart is required."
+msgstr "已为 %(name)s 将 %(count)s 项写入磁盘，但无法应用到运行中的运行时（%(detail)s）。需要重启生效。"
+
+msgid "%(count)s secret(s) written to .env. Their values are never shown or logged; the field only reports whether one is set."
+msgstr "已向 .env 写入 %(count)s 个密钥。其取值不会被显示或记录日志；字段只报告是否已设置。"
+
+msgid "%(fields)s is still a literal value in config.toml, which the loader does not replace: the .env value that was just written is not in effect. Change config.toml to reference the variable, then restart."
+msgstr "%(fields)s 仍是 config.toml 中的字面量，加载器不会替换它：刚写入 .env 的值并未生效。请将 config.toml 改为引用该变量，然后重启。"
+
+msgid "%(name)s declares no settings this build can write."
+msgstr "%(name)s 在本构建中未声明可写入的设置项。"
+
+msgid "No .env variable is declared for this secret, so it cannot be written safely from here."
+msgstr "该密钥未声明对应的 .env 变量，无法从此处安全写入。"
+
+msgid "Nothing to save: every value is unchanged."
+msgstr "没有可保存的内容：所有取值均未变化。"
+
+msgid ".env write failed after %(written)s of %(total)s secret(s) were stored (%(detail)s). Nothing else was changed."
+msgstr "已存入 %(written)s / %(total)s 个密钥后 .env 写入失败（%(detail)s）。其余内容未改动。"
+
+msgid "No plugin was named."
+msgstr "未指定插件。"
+
+msgid "Nothing was written: %(count)s value(s) were rejected. Fix the fields marked below and save again."
+msgstr "未写入任何内容：%(count)s 项被拒绝。请修正下方标记的字段后重新保存。"
 
 msgid "🔐 Change Admin Password"
 msgstr "🔐 修改管理员密码"
@@ -792,6 +1116,291 @@ msgstr "状态"
 msgid "Loading ledger..."
 msgstr "正在加载台账..."
 
+msgid "Editor"
+msgstr "编辑器"
+
+msgid "Secrets"
+msgstr "密钥"
+
+msgid "History"
+msgstr "历史版本"
+
+msgid "Configuration editor"
+msgstr "配置编辑器"
+
+msgid "%(keys)s keys"
+msgstr "%(keys)s 个配置项"
+
+msgid "%(count)s tables"
+msgstr "%(count)s 个表"
+
+msgid "Validate now"
+msgstr "立即校验"
+
+msgid "Reload history"
+msgstr "重载记录"
+
+msgid "Form view"
+msgstr "表单视图"
+
+msgid "Review changed fields"
+msgstr "检查已修改字段"
+
+msgid "Every control shows the effective value and where it comes from. A single-value edit rewrites only that key's line, so comments and formatting survive."
+msgstr "每个控件显示生效值及其来源。单值编辑只重写该配置项所在的行，注释与格式保持不变。"
+
+msgid "No key matches the current filters."
+msgstr "没有配置项符合当前筛选条件。"
+
+msgid "%(count)s key(s)"
+msgstr "%(count)s 项"
+
+msgid "Version history"
+msgstr "版本历史"
+
+msgid "%(count)s revision(s)"
+msgstr "%(count)s 个版本"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Every save keeps a timestamped copy of config.toml next to it. Restoring one copies the current file aside first, revalidates the result with the same validator the CLI uses, and reports which keys need a restart."
+msgstr "每次保存都会在 config.toml 旁保留一份带时间戳的副本。恢复某个版本时会先把当前文件另存为备份，再用与 CLI 相同的校验器重新校验，并说明哪些配置项需要重启。"
+
+msgid "No revision yet: nothing has written config.toml from this page."
+msgstr "暂无版本：尚未通过本页写入 config.toml。"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Changed keys"
+msgstr "变更的配置项"
+
+msgid "Actions"
+msgstr "操作"
+
+msgid "%(size)s bytes"
+msgstr "%(size)s 字节"
+
+msgid "backup of the file"
+msgstr "文件副本"
+
+msgid "recorded change"
+msgstr "变更记录"
+
+msgid "same keys as the file on disk"
+msgstr "与磁盘文件配置项相同"
+
+msgid "comments or layout only"
+msgstr "仅注释或排版不同"
+
+msgid "View diff"
+msgstr "查看差异"
+
+msgid "Restore this backup? The current config.toml is copied aside first."
+msgstr "恢复此备份？当前 config.toml 会先另存为备份。"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "read-only record"
+msgstr "只读记录"
+
+msgid "Form"
+msgstr "表单"
+
+msgid "Tree"
+msgstr "树形"
+
+msgid "Raw"
+msgstr "原文"
+
+msgid "Search keys, values and comments..."
+msgstr "搜索配置项、值与注释…"
+
+msgid "Only values set here"
+msgstr "仅显示已设置的值"
+
+msgid "Hide everything still identical to the shipped config.toml"
+msgstr "隐藏与随附 config.toml 完全相同的项"
+
+msgid "Only keys changed from the shipped defaults"
+msgstr "仅显示相对随附默认值有改动的项"
+
+msgid "%(shown)s of %(total)s keys shown"
+msgstr "已显示 %(shown)s / %(total)s 个配置项"
+
+msgid "%(count)s changed from defaults"
+msgstr "%(count)s 项与默认值不同"
+
+msgid "Raw view"
+msgstr "原文视图"
+
+msgid "secret values are redacted"
+msgstr "密钥值已脱敏"
+
+msgid "Highlighted view of the file on disk"
+msgstr "磁盘文件的语法高亮视图"
+
+msgid "Review raw changes"
+msgstr "检查原文修改"
+
+msgid "The text is validated with the same validator the CLI uses before anything is written; the current file is backed up first."
+msgstr "写入前会使用与 CLI 相同的校验器校验文本；当前文件会先备份。"
+
+msgid "Structural change: config.toml is re-serialized with the project writer, so comments and blank lines may be reformatted."
+msgstr "结构性修改：config.toml 由项目写入器重新序列化，注释与空行可能被重排。"
+
+msgid "Key"
+msgstr "配置项"
+
+msgid "Change"
+msgstr "变更"
+
+msgid "Old value"
+msgstr "原值"
+
+msgid "New value"
+msgstr "新值"
+
+msgid "No key value changed."
+msgstr "没有任何配置项的值发生变化。"
+
+msgid "blocking errors"
+msgstr "阻断性错误"
+
+msgid "warnings (they do not block)"
+msgstr "警告（不会阻断保存）"
+
+msgid "written"
+msgstr "已写入"
+
+msgid "backup: %(name)s"
+msgstr "备份：%(name)s"
+
+msgid "revision: %(id)s"
+msgstr "版本：%(id)s"
+
+msgid "restart required"
+msgstr "需要重启"
+
+msgid "Read once at startup: %(keys)s"
+msgstr "启动时读取一次：%(keys)s"
+
+msgid "runtime reload failed"
+msgstr "运行时重载失败"
+
+msgid "The runtime reloaded this change live."
+msgstr "运行时已即时重载本次修改。"
+
+msgid "Confirm save"
+msgstr "确认保存"
+
+msgid "A timestamped backup of the current file is written first."
+msgstr "会先为当前文件生成带时间戳的备份。"
+
+msgid "changed"
+msgstr "已改动"
+
+msgid "secret"
+msgstr "密钥"
+
+msgid "dangerous"
+msgstr "危险"
+
+msgid "Review change"
+msgstr "检查修改"
+
+msgid "Read-only"
+msgstr "只读"
+
+msgid "Secrets and credentials"
+msgstr "密钥与凭据"
+
+msgid "write-only: values are never shown"
+msgstr "只写：不会显示已有值"
+
+msgid "Credentials live in .env next to config.toml. Saving writes the variable and reloads the runtime; an empty field leaves the current value untouched, and no value is ever sent back to this page."
+msgstr "凭据保存在 config.toml 同目录的 .env 中。保存会写入该变量并重载运行时；留空则保持原值，已有值不会回传到本页。"
+
+msgid "set"
+msgstr "已设置"
+
+msgid "not set"
+msgstr "未设置"
+
+msgid "resolves web_admin.password_hash"
+msgstr "对应 web_admin.password_hash"
+
+msgid "New admin password"
+msgstr "新的管理员密码"
+
+msgid "Repeat it"
+msgstr "再输入一次"
+
+msgid "Set a new password"
+msgstr "设置新密码"
+
+msgid "Hashed here; the hash is never displayed."
+msgstr "在此处哈希；哈希值不会显示。"
+
+msgid "Save to .env"
+msgstr "保存到 .env"
+
+msgid "Clear this variable? Notifications or integrations using it stop working."
+msgstr "清空此变量？使用它的通知或集成将失效。"
+
+msgid "ANTEUMBRA_SECRET_KEY is deliberately not editable here: rotating it signs every session out."
+msgstr "此处刻意不允许修改 ANTEUMBRA_SECRET_KEY：轮换它会让所有会话退出登录。"
+
+msgid "new_key"
+msgstr "配置项名"
+
+msgid "value"
+msgstr "值"
+
+msgid "Adds one line at the end of this table; nothing else moves."
+msgstr "在该表末尾追加一行，其他内容不变。"
+
+msgid "Add key"
+msgstr "添加配置项"
+
+msgid "Add another block like this"
+msgstr "再添加一个同类块"
+
+msgid "Remove this block"
+msgstr "删除此块"
+
+msgid "Remove this table"
+msgstr "删除此表"
+
+msgid "Tree view"
+msgstr "树形视图"
+
+msgid "Structural changes re-serialize the file: comments may be reformatted."
+msgstr "结构性修改会重新序列化文件：注释格式可能被重排。"
+
+msgid "new.table"
+msgstr "表名"
+
+msgid "A new table, or one more [[array.of.tables]] block. Re-serializes the file."
+msgstr "新建一个表，或再添加一个 [[array.of.tables]] 块。会重新序列化文件。"
+
+msgid "Add table or block"
+msgstr "添加表或块"
+
+msgid "Arrays"
+msgstr "数组"
+
+msgid "%(count)s item(s)"
+msgstr "%(count)s 项"
+
+msgid "Add item"
+msgstr "添加项"
+
+msgid "Remove item"
+msgstr "删除项"
+
 msgid "Config Load History"
 msgstr "配置加载历史"
 
@@ -806,9 +1415,6 @@ msgstr "全部站点"
 
 msgid "Reload the current view"
 msgstr "重新加载当前视图"
-
-msgid "Refresh"
-msgstr "刷新"
 
 msgid "Live log stream connection"
 msgstr "实时日志流连接状态"
@@ -857,6 +1463,9 @@ msgstr "日志分析"
 
 msgid "Settings"
 msgstr "设置"
+
+msgid "Config Editor"
+msgstr "配置编辑器"
 
 msgid "Cancel"
 msgstr "取消"
@@ -1026,14 +1635,8 @@ msgstr "分布统计"
 msgid "LOG LINES"
 msgstr "日志行"
 
-msgid "Time"
-msgstr "时间"
-
 msgid "Message"
 msgstr "消息"
-
-msgid "Actions"
-msgstr "操作"
 
 msgid "Loading log history..."
 msgstr "正在加载日志历史..."
@@ -1911,29 +2514,38 @@ msgstr "清理"
 msgid "Loading sessions..."
 msgstr "正在加载会话..."
 
-msgid "ENVIRONMENT & SECRETS"
-msgstr "环境与密钥"
+msgid "Show:"
+msgstr "显示："
+
+msgid "Jump to:"
+msgstr "跳转到："
+
+msgid "choose a section..."
+msgstr "选择一个分区..."
+
+msgid "Advanced config editor"
+msgstr "高级配置编辑器"
 
 msgid "Mail credentials, tokens and keys are stored in .env next to config.toml. Empty fields are left untouched; values are never committed to git."
 msgstr "邮件凭据、令牌与密钥保存在 config.toml 同目录的 .env 中。留空的字段不会被改写；这些值不会进入 git。"
 
+msgid "This section is the only place on this page that writes .env. The config editor below is a legacy copy of the same fields; it is kept for compatibility and is not needed for a normal change."
+msgstr "本分区是本页唯一写入 .env 的地方。下方配置编辑器是同一批字段的遗留副本，仅为兼容保留，正常修改不需要使用它。"
+
+msgid "Set a new value (leave blank to keep the stored one)"
+msgstr "输入新值（留空则保留已存的值）"
+
 msgid "Admin password hash"
 msgstr "管理员密码哈希"
 
-msgid "Not set"
-msgstr "未设置"
+msgid "The hash itself is never displayed; set a new password in the advanced section below."
+msgstr "哈希本身不会显示；请在下方高级分区中设置新密码。"
 
 msgid "Save environment"
 msgstr "保存环境变量"
 
 msgid "Written to .env and reloaded."
 msgstr "已写入 .env 并重新加载。"
-
-msgid "ACCOUNT"
-msgstr "账户"
-
-msgid "SITE CONFIGURATION"
-msgstr "站点配置"
 
 msgid "Access log:"
 msgstr "访问日志："
@@ -1943,9 +2555,6 @@ msgstr "未启用"
 
 msgid "No website is configured."
 msgstr "尚未配置任何站点。"
-
-msgid "MONITORING & DETECTION"
-msgstr "监控与检测"
 
 msgid "Watched paths"
 msgstr "监控路径"
@@ -1965,17 +2574,23 @@ msgstr "自动封禁 IP"
 msgid "WAF source"
 msgstr "WAF 事件源"
 
-msgid "NOTIFICATIONS"
-msgstr "通知设置"
+msgid "Keys that remove a protection"
+msgstr "会移除防护的配置项"
 
-msgid "STORAGE & PATHS"
-msgstr "存储与路径"
+msgid "caution"
+msgstr "注意"
 
-msgid "PLUGINS"
-msgstr "插件"
+msgid "current:"
+msgstr "当前值："
 
-msgid "ADVANCED"
-msgstr "高级"
+msgid "from"
+msgstr "来源"
+
+msgid "These keys are edited in the advanced config editor, which validates them before writing."
+msgstr "这些配置项在高级配置编辑器中修改，写入前会经过校验。"
+
+msgid "The readability filter is active; plugin rows and settings are shown accordingly."
+msgstr "可读性过滤已生效；插件行与设置项按该条件显示。"
 
 msgid "Registry Status"
 msgstr "注册表状态"
@@ -1988,6 +2603,27 @@ msgstr "会话管理"
 
 msgid "Config Reload"
 msgstr "配置重载"
+
+msgid "Admin password"
+msgstr "管理员密码"
+
+msgid "config.toml stores only a hash (web_admin.password_hash). Set a new password here; it is hashed before it is written, so no plaintext ever reaches disk."
+msgstr "config.toml 只保存哈希（web_admin.password_hash）。在此设置新密码，写入前会先做哈希，明文不会落盘。"
+
+msgid "New password (min 6 characters)"
+msgstr "新密码（至少 6 个字符）"
+
+msgid "Repeat the new password"
+msgstr "再次输入新密码"
+
+msgid "Hash: scrypt via werkzeug"
+msgstr "哈希算法：werkzeug scrypt"
+
+msgid "Raw config.toml editing (advanced)"
+msgstr "直接编辑 config.toml（高级）"
+
+msgid "Every key in the file, full validation, and a backup on every save."
+msgstr "文件中的每一个键、完整校验，且每次保存都会留备份。"
 
 msgid "Loading config editor..."
 msgstr "正在加载配置编辑器..."
@@ -2244,6 +2880,66 @@ msgstr "文件管理，以确保安全。"
 msgid "Toggle switches above enable/disable each notification channel in"
 msgstr "上方的开关用于启用/禁用各通知渠道，配置位于"
 
+msgid "Configuration:"
+msgstr "配置："
+
+msgid "%(count)s setting(s), %(changed)s differ from the default"
+msgstr "共 %(count)s 项设置，其中 %(changed)s 项与默认值不同"
+
+msgid "filtered"
+msgstr "已过滤"
+
+msgid "This plugin declares no schema in this build, so these controls were derived from the keys present in config.toml. Types inferred from a value can be wrong — check the effective value after saving."
+msgstr "该插件在本构建中未声明配置结构，以下控件依据 config.toml 中实际存在的键推导而来。由取值推断的类型可能有误——保存后请核对当前生效值。"
+
+msgid "No setting is shown: every field is at its default and the readability filter is active."
+msgstr "未显示任何设置项：所有字段均为默认值，且当前启用了可读性过滤。"
+
+msgid "%(count)s field(s) differ from the default."
+msgstr "%(count)s 个字段与默认值不同。"
+
+msgid "changed from default"
+msgstr "已偏离默认值"
+
+msgid "default"
+msgstr "默认值"
+
+msgid "effective from:"
+msgstr "当前生效来源："
+
+msgid "No .env variable is declared for this secret, so it cannot be changed from here."
+msgstr "该密钥未声明对应的 .env 变量，无法在此修改。"
+
+msgid "A value is stored; it is never displayed."
+msgstr "已存有值；该值不会显示。"
+
+msgid "No value is stored yet."
+msgstr "尚未存有值。"
+
+msgid "comma separated, or a JSON list"
+msgstr "逗号分隔，或使用 JSON 列表"
+
+msgid "default:"
+msgstr "默认："
+
+msgid "differs from the shipped config.toml"
+msgstr "与出厂 config.toml 不同"
+
+msgid "not present in config.toml yet"
+msgstr "config.toml 中尚无此项"
+
+msgid "No value is in effect: config.toml refers to ${%(var)s}, which .env does not define and which has no fallback."
+msgstr "当前没有生效的值：config.toml 引用了 ${%(var)s}，而 .env 未定义该变量且没有回退值。"
+
+msgid "This is a literal value in config.toml, so a value saved to .env will not take effect until config.toml references the variable."
+msgstr "该值以字面量形式写在 config.toml 中，因此保存到 .env 的值不会生效，除非 config.toml 改为引用该变量。"
+
+msgid "Save plugin settings"
+msgstr "保存插件设置"
+
+msgid "Written to config.toml with a timestamped backup; secrets go to .env."
+msgstr "写入 config.toml 并保留带时间戳的备份；密钥写入 .env。"
+
 msgid "System:"
 msgstr "系统："
 
@@ -2267,6 +2963,15 @@ msgstr "通知器："
 
 msgid "Sources:"
 msgstr "数据源："
+
+msgid "Configured:"
+msgstr "已配置："
+
+msgid "Showing %(shown)s of %(total)s"
+msgstr "显示 %(shown)s / %(total)s"
+
+msgid "%(count)s with changed values"
+msgstr "%(count)s 个存在已修改的值"
 
 msgid "The plugin system is switched off; no plugin is loaded."
 msgstr "插件系统已关闭，未加载任何插件。"
@@ -2319,6 +3024,18 @@ msgstr "未显式配置"
 msgid "enabled is not reported for a plugin that is not loaded"
 msgstr "插件未加载时不显示 enabled 状态"
 
+msgid "Settings:"
+msgstr "设置项："
+
+msgid "%(count)s differ from defaults"
+msgstr "%(count)s 项与默认值不同"
+
+msgid "all at defaults"
+msgstr "全部为默认值"
+
+msgid "%(count)s differ from the shipped file"
+msgstr "%(count)s 项与出厂文件不同"
+
 msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
 msgstr "[plugins] 段已关闭，因此不会加载 builtin 中的任何插件。"
 
@@ -2336,6 +3053,9 @@ msgstr "已启用且已列出，但插件未注册——请检查启动日志。
 
 msgid "Add to config.toml:"
 msgstr "在 config.toml 中添加："
+
+msgid "Configure"
+msgstr "配置"
 
 msgid "Disable"
 msgstr "关闭"

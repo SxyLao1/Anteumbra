@@ -194,10 +194,12 @@ def coerce_value(text: str, current: Any = _MISSING) -> Any:
 
     The form view posts text, so the type has to come from somewhere.  It comes
     from the value on disk: a bool field cannot become the string ``"true"`` and
-    a port cannot silently become ``"8080"``.  Strings are *always* taken
-    literally (so ``logging.symbols.success = "[MONITOR][START][SUCCESS]"``
-    keeps working), and containers are parsed as TOML because that is the only
-    way to express one in a text field.
+    a port cannot silently become ``"8080"``.  Containers are parsed as TOML
+    because that is the only way to express one in a text field, and so is a
+    *quoted* string field - the field shows TOML text, so re-posting what the
+    form rendered has to yield the value it came from.  Unquoted text is taken
+    literally, which is what an operator typing ``nginx`` means, and keeps
+    ``logging.symbols.success = "[MONITOR][START][SUCCESS]"`` round-tripping.
     """
     stripped = text.strip()
     if current is _MISSING:
@@ -229,7 +231,28 @@ def coerce_value(text: str, current: Any = _MISSING) -> Any:
         return parsed
     if current is None:
         return infer_value(stripped) if stripped else None
+    if isinstance(current, str):
+        return _string_from_field(stripped)
     return stripped
+
+
+def _string_from_field(text: str) -> str:
+    """Read a string field the way ``format_value`` wrote it.
+
+    ``format_value`` renders a string as TOML text (``json.dumps``), so the
+    field for ``system = "probe"`` holds ``"probe"`` with its quotes.  Without
+    this a save of an *untouched* field would store a second layer of quotes and
+    every string key would drift on each pass through the form.  Text that is
+    not a quoted TOML string - or is a broken one - is the operator's literal
+    answer, not a syntax error.
+    """
+    if text[:1] not in ('"', "'"):
+        return text
+    try:
+        parsed = load_value_text(text)
+    except ConfigDocumentError:
+        return text
+    return parsed if isinstance(parsed, str) else text
 
 
 @dataclass(frozen=True)
@@ -463,7 +486,10 @@ class ConfigDocument:
         dotenv_names: Iterable[str] | None = None,
     ) -> "ConfigDocument":
         target = Path(path)
-        text = target.read_text(encoding="utf-8")
+        # Bytes, not ``read_text``: universal-newline translation would fold a
+        # CRLF file into LF before the document ever saw it, and the next
+        # surgical edit would rewrite every line ending in the file.
+        text = target.read_bytes().decode("utf-8")
         return cls(text, path=target, env=env, dotenv_names=dotenv_names)
 
     def with_text(self, text: str) -> "ConfigDocument":
@@ -828,21 +854,30 @@ class ConfigDocument:
         return "\r\n" if total and crlf >= (total - crlf) else "\n"
 
     def remove_table(self, path: str) -> "ConfigDocument":
-        """Remove a table (or one ``[[array.of.tables]]`` item) entirely."""
+        """Remove a table, or exactly one ``[[array.of.tables]]`` item.
+
+        The path is used as it was given: ``website[1]`` removes that block and
+        ``website`` removes the whole array.  Stripping the index here - as this
+        did - turned the tree view's "remove this block" into "remove every
+        site", which is a data loss the operator never asked for.
+        """
         data = copy.deepcopy(self.data())
         if not self.has_table(path):
             raise KeyNotFound(f"{path} is not a table of {self._name()}")
-        if not _delete_in(data, _strip_index(path)):
+        if not _delete_in(data, path):
             raise KeyNotFound(f"{path} is not set in {self._name()}")
         return self.with_data(data)
 
     def add_table(self, path: str, value: Mapping[str, Any] | None = None) -> "ConfigDocument":
         """Add a table, or one more item to an array of tables.
 
-        ``add_table("website")`` on a document where ``[website]`` is a single
-        table converts it to ``[[website]]`` with the existing entry first: that
-        is what "add a second site" means in TOML, and it keeps the existing
-        site's values.
+        A name the document does not have yet becomes a plain ``[table]``: every
+        consumer in this project reads those sections as mappings, so quietly
+        creating ``[[name]]`` (a list of one) would change the shape of the
+        config instead of adding to it.  ``add_table("website")`` on a document
+        where ``[website]`` is a single table still converts it to
+        ``[[website]]`` with the existing entry first - that is what "add a
+        second site" means in TOML, and it keeps the existing site's values.
         """
         data = copy.deepcopy(self.data())
         base = _strip_index(path)
@@ -862,7 +897,7 @@ class ConfigDocument:
         new_item = dict(value or {})
         existing = node.get(name)
         if existing is None:
-            node[name] = [new_item]
+            node[name] = new_item
         elif isinstance(existing, dict):
             node[name] = [existing, new_item]
         elif isinstance(existing, list):
@@ -892,9 +927,19 @@ class ConfigDocument:
         return self.with_data(data)
 
     def add_array_item(self, path: str, value: Any) -> "ConfigDocument":
-        """Append one item to an array (a scalar, a list, or a table)."""
+        """Append one item to an array (a scalar, a list, or a table).
+
+        An indexed path names one *item* of an array (``website[0]``), so
+        appending to it means appending to that array - which is exactly what
+        the tree view's "add another block like this" button asks for.  Only the
+        trailing index is dropped, so ``devices[0].rules`` still appends to the
+        rules of that device.
+        """
         data = copy.deepcopy(self.data())
         segments = _path_segments(path)
+        if segments and segments[-1][1] is not None:
+            path = path[: path.rfind("[")]
+            segments = _path_segments(path)
         if not segments or segments[-1][1] is not None:
             raise ConfigDocumentError(f"Invalid array path: {path!r}")
         node: Any = data

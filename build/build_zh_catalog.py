@@ -38,6 +38,7 @@ def load_map() -> dict[str, str]:
         ("zh_map_extra_sites.py", "ZH_MAP_EXTRA_SITES"),
         ("zh_map_extra_memshell.py", "ZH_MAP_EXTRA_MEMSSHELL"),
         ("zh_map_extra_settings.py", "ZH_MAP_EXTRA_SETTINGS"),
+        ("zh_map_extra_config.py", "ZH_MAP_EXTRA_CONFIG"),
         ("zh_map_extra_mcp.py", "ZH_MAP_EXTRA_MCP"),
     ):
         path = REPO / "build" / name
