@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.37
+# Anteumbra 用户手册 v1.0.38
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -20,6 +20,7 @@
 10. [插件系统](#10-插件系统)
 11. [部署](#11-部署)
 12. [故障排查](#12-故障排查)
+13. [MCP 服务与 Agent Skill](#13-mcp-服务与-agent-skill)
 
 ---
 
@@ -356,6 +357,10 @@ anteumbra config          # 仅显示配置子命令帮助，不写文件
 anteumbra config init     # 显式创建 config.toml、.env、规则和默认站点
 anteumbra config wizard   # 交互式首次配置
 anteumbra config validate # 校验路径、端口、.env 和已启用集成
+anteumbra mcp             # 向本机 AI Agent 提供 MCP 工具面
+anteumbra mcp serve       # stdio MCP 服务；默认只读，--allow-write 才开放写工具
+anteumbra mcp tools       # 列出该实例当前会暴露的工具
+anteumbra skill export    # 把内置 Agent Skill 导出到指定目录
 ```
 
 ### 全局选项
@@ -824,6 +829,10 @@ history_size = 50
 alert_on_suspects = true
 host = "127.0.0.1"
 scheme = "http"
+forensics_enabled = true
+heap_dump_enabled = true
+forensics_history = 200
+forensics_max_dump_mb = 2048
 ```
 
 | 配置项 | 说明 |
@@ -841,6 +850,10 @@ scheme = "http"
 | `history_size` | 页面保留的最近探测次数 |
 | `alert_on_suspects` | 检出可疑组件时是否立即告警 |
 | `host` / `scheme` | 访问探针使用的地址与协议 |
+| `forensics_enabled` | 是否允许取证：关闭后取证页会如实显示，并拒绝任何转储 |
+| `heap_dump_enabled` | 取证时是否同时申请堆转储（无论开关如何，清单都会保存） |
+| `forensics_history` | 磁盘索引保留的取证次数（1–10000，默认 200） |
+| `forensics_max_dump_mb` | 堆转储前的剩余空间预检上限（0 表示不做预检） |
 
 判定依据（任一命中即标记为可疑）：
 
@@ -868,6 +881,64 @@ scheme = "http"
 - 探针只能看到容器**自己注册**的东西。纯字节码增强型（`retransform` / `instrument`）内存马不注册 Filter/Servlet，本探针看不到：例如冰蝎（Behinder 4.1）真正的内存马用 javassist 往 `org.apache.catalina.core.ApplicationFilterChain.internalDoFilter` 前插入代码，既不新增 FilterDef/FilterMap，也不改 `web.xml`，`findFilterDefs()`、`findFilterMaps()`、`filterConfigs` 全部查不到它（这一点已在实验环境用真实工具验证过）。这类内存马需要比对 `catalina.jar` 里的原始字节码，或监测 agent 附着（`-javaagent`、`jdk.attach.allowAttachSelf`、`ClassFileTransformer` 是否出现）；探针会把 `javaagent`、`attach_self` 与 JVM 启动参数一并回报，作为人工研判线索。
 - 探测结果是"某时刻的快照"，保存在内存中（最近 `history_size` 次），进程重启后清空；命中会照常走告警通道。
 - 探测失败（容器未启动、站点不可达、探针被替换、清理失败）都会在页面与日志中如实呈现；**清理失败会标红**，因为它意味着站点里留下了一个本不该存在的文件。
+
+#### 取证（forensics）：这匹内存马到底是什么
+
+检测回答的是"内存里是不是注册了不该有的东西"，取证回答的是"它究竟是什么"——而且要在**动手移除之前**问清楚。同一个探针文件额外支持 `action=dump`，针对单个组件（`kind` = `filter` | `servlet` | `listener`，加上注册的 `name`）返回取证结果，Anteumbra 将其保存为"取证制品"。
+
+会转储的内容：
+
+- **清单（manifest）**：类型、名称、URL 匹配、类名、类加载器标识、代码来源、`on_disk` 标记、声明的方法与字段（名称与签名，各自上限 200 条）、保护域、容器/服务端信息、站点与上下文路径、探针 URL（不含本次 token）、JVM 启动参数与 `jdk.attach.allowAttachSelf`；
+- **类字节码**（base64），**仅当该类真的能通过类加载器解析到资源时**才返回（正常部署的类、JSP 生成的类、来自 jar 或目录的类都属于此类）；
+- 可选的**堆转储**：由目标 JVM 自己通过 `com.sun.management:type=HotSpotDiagnostic` 的 `dumpHeap(<绝对路径>, <live>)` 写出。
+
+拿不到的东西，以及为什么宁可说明也不编造：
+
+- 运行时用 `defineClass` 动态定义的类（内存马的典型特征，冰蝎/哥斯拉的 payload 都是这样）**没有字节码资源**。JSP 无法从运行中的 JVM 里取回一个已加载 `Class` 的字节码——JVM 并没有提供这样的受支持接口。此时会返回 `class_bytes_unavailable_reason`（`class_defined_at_runtime_without_bytecode_resource`），而不会返回空字节码，也不会写出 `class-<名字>.class`。这个"拿不到"本身就是证据：一个在磁盘上任何地方都找不到对应 class 文件的过滤器，正是你要找的东西。
+- 堆转储可能失败：没有 HotSpot 诊断 MXBean（非 HotSpot JVM）、权限或 attach 受限、磁盘空间不足、`live` 模式不被支持等。此时响应里带 `heap_error` 与真实原因，**清单照常返回、照常落盘**。堆转储失败绝不会牵连已经拿到的取证结果。另外，当剩余空间明显低于本 JVM 可能需要的量时，探针会直接拒绝转储；没有绝对目标路径时从不尝试转储。
+- 清单记录的是**类加载器提供的字节码**（即编译产物），而不是 `retransform` 类 agent 在内存中改写后的版本。清单会写出字节码来源（`class_bytes_source`），让这个区别可见。
+
+制品存放位置：
+
+```
+<data_dir>/forensics/<site_id>/<UTC 时间戳>-<kind>-<slug>/
+    manifest.json          探针报告的该组件信息
+    class-<名字>.class      能解析到字节码时保存
+    heap.hprof             生成堆转储时保存
+<data_dir>/forensics/index.json
+    每次取证一条，最新的在前，最多 forensics_history 条：
+    制品 id、站点、时间、触发方式、组件、类、文件（大小 + sha256）、
+    堆转储状态，以及该组件的处置历史
+```
+
+索引采用原子写入（临时文件 + `os.replace`），只保留最近 `forensics_history` 次；文件大小与哈希按磁盘上真实存在的文件计算。索引读取失败会在页面上如实上报，而不是静默清空——"没有证据"和"证据丢了"是两件事。这里刻意不使用数据库表：制品就是文件加一个索引。
+
+堆转储有三处不同的字段形态，因为它们属于三个层次：探针 `action=dump` 的**原始响应**用 `heap_path` / `heap_bytes` / `heap_sha256` / `heap_live`（外加 `heap_error`）；落盘的 `manifest.json` 与索引条目里是一个 `heap` 对象，字段为 `path` / `bytes` / `sha256` / `live`；而索引的文件列表里始终有一条名为 `heap.hprof` 的记录，带存储层自己实测的大小与哈希（`sha256_source` 为 `computed`；转储过大、再算一遍不划算时为 `probe`，即直接采用探针回报的值）。因此在 `<data_dir>/forensics/index.json` 里读堆转储字节数应取 `runs[i].heap.bytes`，**不是** `heap_bytes`——那个名字只存在于探针的原始响应里。
+
+取证页（`/admin/memory-shell/forensics`）按站点列出制品及其大小、文件、类字节码/堆转储状态与处置结果，可查看已保存的清单、下载任一被索引的文件，并可对当前选中的组件直接发起取证。从检测页的检出结果点进来会自动带上该组件。堆较大时勾选"仅转储存活对象"：文件更小，但 JVM 暂停时间更长。
+
+#### 处置（remediation）：把组件从内存里摘掉
+
+处置会从运行中的容器里注销**恰好一个**组件。这是 Anteumbra 中唯一会改动被保护系统的动作，因此它围绕三个问题构建——这三个问题决定的正是"它还是不是 Anteumbra 看见的那个东西"：
+
+1. **该组件有取证文件吗？** 没有取证文件时一律拒绝，除非请求显式确认（`acknowledge_no_forensics=1`）。界面会先问服务端再提交：有取证文件时给出普通确认；没有时给出
+   `没有对应的取证文件。确认要在不取证的情况下处置内存马吗？`，并且只提供三个按钮——立即处置（提交 `acknowledge_no_forensics=1`）、前往取证（跳到该组件的取证页）、取消。
+2. **它还是同一个类吗？** 请求必须带上 Anteumbra 记录的类名，探针在动手之前会在 **JVM 内部**再次与容器报告的类名比对。不一致就拒绝（`class_name_mismatch`）——因为有东西在我们眼皮底下变了，原判断已经不成立。根本没有记录过类名时，什么都不会被移除（`no_recorded_class`）。
+3. **它是磁盘上的真实文件吗？** 能在 jar 或目录里解析到 class 文件的组件是正常部署的组件，不是内存马：除非显式传 `force=1`，否则拒绝（`class_on_disk`）。
+
+成功时它会把组件彻底摘除，并且在宣布结果之前会先核对：
+
+- **Filter**：先删该名字的**全部 FilterMap**（下一个请求就不再经过它），再通过 `removeFilterDef(FilterDef)` 删 FilterDef，最后**显式**把 `ApplicationFilterConfig` 从 `StandardContext` 的私有字段 `filterConfigs` 里删除并释放。第三步不可省：Tomcat 的 `removeFilterDef()` 只清理 `filterDefs`，完全不碰 `filterConfigs`（已用 Tomcat 7.0.108 与 9.0.96 的字节码核对过；参考工具 `tools/memory-shell/java/tomcat-memshell-scanner.jsp` 也把这一遗留问题写在注释里）。少了这一步，内存马虽然失效，却会一直留在注册表里，之后每次探测都会继续报它。若清理后该名字仍然存在，探针会调用 `filterStop()` + `filterStart()` 让容器按剩下的定义重建过滤链，然后再核对一次。
+- **Servlet**：先对每个 URL 匹配调用 `removeServletMapping(String)`，再调用 `removeChild(Container)`。
+- **Listener**：从容器存放应用事件监听器的地方移除该实例——Tomcat 8/9 是 `List`，Tomcat 6/7 是 `Object[]`，两者都在 `getApplicationEventListeners()` / `setApplicationEventListeners()` 这套公开接口后面。
+
+只有**重新枚举后确实找不到该组件**才会报告成功。无法核实的移除会如实回报 `removed=false` 并给出具体原因（`filter_configs_unavailable`、`filter_still_registered_after_cleanup`、`servlet_still_registered_after_cleanup`、`listener_still_registered_after_cleanup`、`remove_filter_map_failed: ...`），绝不会把"删了一半"当成"删掉了"；响应里始终附带处置后的组件列表供调用方核对。它绝不删除文件、绝不修改 `web.xml`、绝不触碰被识别组件之外的任何东西。
+
+`filterStop()` / `filterStart()` 会连带重建其他 Filter（这本就是容器自身的重载路径），因此只有在显式清理后该名字仍然存在、也就是"不这么做就会把内存马留在原地"时才会尝试。
+
+**对内存中组件的移除是不可恢复的。** 没有撤销，也没有副本：类、它的注册关系以及它持有的东西都会消失。这正是取证这一步存在的理由，也是确认动作必须显式的原因——先取证是唯一能"事后还能分析"的做法。注意堆转储也不等于该组件的副本，它是 JVM 的快照，可能包含该组件。
+
+每一次处置尝试（已移除、被拒绝、失败）都会发布 `memory_shell_remediated` 事件，带上处置前后的组件状态，并在日志中写一行 WARNING；成功移除会写入该制品的处置历史（`remediated_at`、结果、操作者）。检测告警通道保持原样。
 
 ---
 
@@ -1012,6 +1083,124 @@ GET /admin/health           # 需认证的完整诊断
 
 ---
 
+## 13. MCP 服务与 Agent Skill
+
+Anteumbra 提供 **MCP（Model Context Protocol）服务**和一份 **Agent Skill**，
+但**不自带 AI Agent**。Agent 属于用户：把你自己本机的 Agent（Claude Desktop、
+Cursor、VS Code 或任何 MCP 客户端）指向这个服务，它就能发现本机 Web 服务、
+与你一起确定要监控什么、完成配置与校验、重启、验证检测确实生效，并向你汇报。
+所有写操作走的是 CLI 同一条代码路径。
+
+### 13.1 安装可选依赖
+
+官方 `mcp` Python SDK 是可选依赖，基础安装不包含任何 Agent 协议代码。只在需要
+运行服务的地方安装：
+
+```bash
+pip install "anteumbra[mcp]"
+```
+
+未安装时 `anteumbra mcp serve` 会在 stderr 上打印一行可执行的指引并以退出码 1
+结束，不会抛 `ImportError` 堆栈：
+
+```
+Error: The MCP server needs the optional "mcp" Python SDK. Install it with:
+pip install "anteumbra[mcp]" - then run "anteumbra mcp serve" again.
+```
+
+`anteumbra mcp tools`、`anteumbra skill export` 以及其他所有命令在基础安装下都能
+正常使用，SDK 只在真正启动服务时才导入。
+
+### 13.2 用 stdio 提供一个实例
+
+```bash
+anteumbra --home /opt/anteumbra mcp tools                  # 查看客户端会看到的工具
+anteumbra --home /opt/anteumbra mcp serve                  # 只读
+anteumbra --home /opt/anteumbra mcp serve --allow-write    # 额外开放写工具
+```
+
+传输方式是 **stdio**：由客户端启动该进程，并在它的 stdin/stdout 上通信。
+`--home` 与 `status`、`config` 一样用于选择运行实例，且必须写在 `mcp` 之前。
+
+### 13.3 在客户端中注册
+
+```json
+{
+  "mcpServers": {
+    "anteumbra": {
+      "command": "anteumbra",
+      "args": ["--home", "/opt/anteumbra", "mcp", "serve", "--allow-write"]
+    }
+  }
+}
+```
+
+Windows 下 `--home` 填 Windows 路径（如 `"E:\\Software\\Anteumbra"`）；如果
+`anteumbra.exe` 不在 `PATH` 中，`command` 需要写完整路径。只读 Agent 请去掉
+`--allow-write`。
+
+### 13.4 Agent 能做什么
+
+始终可用的只读工具：
+
+| 工具 | 返回内容 |
+|------|---------|
+| `get_status` | 运行状态、版本、管理地址、运行时长、健康检查、已监控站点数 |
+| `list_sites` | 每个站点的稳定 ID、名称、路径、端口、是否启用、是否可达、是否提供 JSP |
+| `get_config` | 生效配置，所有凭据已脱敏 |
+| `validate_config` | 与 `anteumbra config validate` 完全一致的输出，另有结构化 errors/warnings |
+| `list_detections` | Registry 记录，按时间倒序，可按站点与状态过滤 |
+| `list_quarantine` | 隔离区记录（只有元数据，绝不返回文件内容） |
+| `list_sites_summary` | 面向汇报的分站点检出/隔离统计 |
+| `list_listening_ports` | 本机 TCP 监听端口及所属进程 |
+| `discover_web_services` | 疑似 Web 服务的监听端口，操作系统能给出时附带网站根目录 |
+
+需要 `--allow-write` 才存在的写工具（只读模式下**不在工具列表里**）：
+
+| 工具 | 作用 |
+|------|------|
+| `add_site` / `update_site` / `disable_site` | 在 `config.toml` 中新增、修改或停用被监控站点 |
+| `set_config_value` | 设置一个点分隔配置项，与 `anteumbra config set` 完全一致 |
+| `set_env_value` | 把一个密钥写入 `.env`（绝不写 `config.toml`），需重启生效 |
+| `run_memory_shell_probe` | 运行 Anteumbra 自带的 JSP 探针，仅在实例已停止时提供 |
+
+每次写操作都会重新校验配置并在响应中返回校验结果，配置被改坏时 Agent 会立刻
+看到错误。
+
+### 13.5 默认安全边界
+
+* **默认只读。** 没有 `--allow-write` 时写工具不是"存在但会失败"，而是根本不在
+  工具列表里。
+* **密钥不会出现在响应里。** `get_config` 会把任何形如凭据的字段替换为
+  `***REDACTED***`；此外所有工具响应都会被扫一遍，凡与实例 `.env` 中保存的密钥
+  值相同的字符串都会被抹掉，因此被解析过的 `${VAR}` 占位符或藏在 URL 里的凭据也
+  不会泄露。`set_env_value` 从不回显写入的值。
+* **发现能力有界且只在本机。** 它读取操作系统连接表和所属进程，不遍历文件系统、
+  不扫端口、不访问外部地址；除非 Agent 明确要求，否则不会对候选端口发 HTTP 请求
+  ——那些请求会出现在 Anteumbra 正在监控的访问日志里。
+* **不做猜测。** 无法确定的网站根目录返回 `null` 并附上原因。
+* **不暴露进程生命周期。** 启动、停止、重启仍由 CLI 完成，由人或 Agent 显式执行。
+
+### 13.6 Agent Skill
+
+面向 AI 的操作手册随包发布，可按需导出：
+
+```bash
+anteumbra skill export ~/.agents/skills     # 写入 ~/.agents/skills/anteumbra/SKILL.md
+anteumbra skill export ./skills --flat      # 写入 ./skills/SKILL.md
+anteumbra skill show                        # 只打印，不复制
+```
+
+大多数 Agent 以 `<skills-root>/<name>/SKILL.md` 的形式发现技能，因此默认布局会
+自动创建 `anteumbra` 目录；覆盖已有副本请加 `--force`。
+
+Skill 会告诉 Agent：每一步该调用哪个工具、需要向用户索取哪些信息以及原因
+（管理密码、通知渠道、SMTP 服务器与邮箱**授权码**——不是邮箱登录密码、
+Server酱/企业微信的 SendKey 或 webhook、可选的 WAF Token、是否开启自动隔离与
+IP 封禁）、哪些安全规则不可妥协，以及在汇报成功之前必须完成的验证清单。
+
+---
+
 <div align="center">
-  <sub>Anteumbra v1.0.37 — MIT License</sub>
+  <sub>Anteumbra v1.0.38 — MIT License</sub>
 </div>

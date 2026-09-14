@@ -6,6 +6,188 @@
 
 ---
 
+## [1.0.38] - 2026-09-14
+
+### Added
+- MCP server: `anteumbra mcp serve` serves one instance over stdio (Model
+  Context Protocol) so a user's own local agent can drive Anteumbra instead of
+  Anteumbra embedding an agent. `--home` selects the instance exactly like
+  `status` and `config`; `anteumbra mcp tools` prints the surface a client would
+  see without needing the SDK.
+- Nine read-only tools: `get_status`, `list_sites`, `get_config`,
+  `validate_config`, `list_detections`, `list_quarantine`, `list_sites_summary`,
+  `list_listening_ports`, `discover_web_services`.
+- Six write tools, present only when the server is started with `--allow-write`
+  (in read-only mode they are absent from the tool list, not failing):
+  `add_site`, `update_site`, `disable_site`, `set_config_value`, `set_env_value`,
+  and `run_memory_shell_probe` - the last one only while the instance is
+  stopped, because a running monitor would report Anteumbra's own JSP probe as
+  a new file. Every mutation goes through the CLI's own code path
+  (`cli/config_support.py`, `anteumbra config set`, `config env set`) and
+  returns the full validation result of the config it just wrote.
+- Service discovery for an agent: `discover_web_services` and
+  `list_listening_ports` read the operating system's connection table (psutil,
+  with a `/proc/net/tcp` fallback on Linux) and report the owning process plus
+  the document root when the command line or working directory states it. No
+  filesystem walk, no port sweep, no network request: HTTP probing of candidates
+  is off unless the agent explicitly asks for it, because those requests appear
+  in the access log Anteumbra watches. Anything the platform cannot determine is
+  returned as `null` with the reason instead of a guess.
+- Agent skill: `src/anteumbra/skills/anteumbra/SKILL.md` ships inside the
+  package and `anteumbra skill export <DIR>` copies it out (with `--flat`,
+  `--force` and a `skill show` to print it). The skill is the operator manual
+  for an AI: the tool to call at each step, the item-by-item ask-list (admin
+  password, notification channel, SMTP settings and the mail provider's
+  authorization code rather than the account password, WeChat/WeCom send key or
+  webhook, optional WAF token, whether to enable auto-quarantine and IP
+  blocking), the non-negotiable safety rules, and the verification checklist it
+  must complete before reporting success.
+
+### Notes
+- The official `mcp` Python SDK is an optional extra and never a base
+  dependency: `pip install "anteumbra[mcp]"`. Without it `anteumbra mcp serve`
+  prints one actionable line on stderr and exits 1 instead of raising
+  `ImportError`; the SDK is imported lazily, so every other command and
+  `anteumbra mcp tools` work on a base install.
+- MCP responses cannot leak credentials. `get_config` replaces every
+  credential-shaped value with `***REDACTED***`, and every tool response is also
+  swept for the values stored in the instance `.env`, so a resolved `${VAR}`
+  placeholder or a credential embedded in a URL is removed too. `set_env_value`
+  masks the secret in the command it echoes and never returns the value.
+- Process lifecycle (start/stop/restart) is deliberately not exposed as a tool:
+  it stays in the CLI, where a human or the agent runs it on purpose.
+
+### Added (settings & plugin control)
+- Effective plugin status. Every row of the settings plugin panel now answers
+  "is this plugin actually installed and working?": the config section the
+  plugin really reads (`plugins.<name>`) and - only when it is loaded - the
+  `enabled` value found there; whether a loaded EventSource is actually running
+  (and "unknown" when the adapter cannot be asked); and one state per plugin:
+  `active`, `unverified`, `inactive`, `disabled`, `not_listed`, `not_installed`,
+  `not_registered`, `system_off`. No `enabled` value is printed for a plugin
+  that is not loaded, because that badge on a dead plugin is exactly the false
+  comfort the panel exists to remove. `PluginManager.available_plugins()` gained
+  `registered_name`, `event_source` and `running` (additive keys; every existing
+  method signature is unchanged).
+- Plugin control in the panel. Each plugin can be switched off or on and moved
+  in or out of `[plugins] builtin` without leaving the page. Every change goes
+  through the same config path the CLI uses (`load_toml_file` ->
+  `set_dotted_value` -> `write_toml_file` -> `validate_config_file`), keeps a
+  timestamped `config.toml.<stamp>.bak` copy first, blocks only the validation
+  errors the write newly introduces, and is then applied to the running runtime:
+  `PluginManager.unregister()` to switch off, a fresh instance from the same
+  factory (`PluginManager.load_plugin()`) to switch on. When a change cannot be
+  applied live, the panel says so and states that a restart is required instead
+  of pretending; it also warns when `[plugins] builtin` still lists a plugin
+  that was switched off (a restart loads it again) or when an enabled plugin is
+  missing from that list (a restart will not load it). New additive manager API:
+  `load_plugin`, `loaded_name`, `apply_plugin_config`; the inventory re-reads the
+  live `[plugins]` table before rendering, so a config edit made elsewhere no
+  longer leaves a stale panel.
+- Guard rail for alert delivery. `notifier_handler` cannot be switched off or
+  removed from `[plugins] builtin`. Every alert is delivered through it while the
+  monitor keeps emitting and the log keeps showing detections, so losing it is
+  silent; the refusal renders inline with the reason, and that row shows its
+  controls disabled with the same explanation.
+- New Chinese strings for the settings rework and the plugin controls live in
+  `build/zh_map_extra_settings.py` (`ZH_MAP_EXTRA_SETTINGS`). Plugin control
+  results are built and translated server-side, so no new frontend string was
+  added.
+
+### Changed (settings page)
+- Sections are ordered by importance - environment and secrets (`.env` values,
+  mail credentials, tokens) first, then account, site configuration,
+  monitoring/detection, notifications, storage/paths, plugins, and the
+  advanced/rarely-touched tools last. Each section collapses, all of them start
+  collapsed except the first, and every header carries a one-line state summary
+  ("2 site(s) enabled", "mail not configured") so the page can be read without
+  expanding anything. Expansion state lives in `?open=<sections>`, pushed into
+  the address bar, and is mirrored into the session, so returning to the page
+  restores it. Nothing was removed or renamed: the config editor, its field
+  names and ids, and its `.env` block are unchanged.
+- The environment/secrets section writes through the CLI's `write_env_value` and
+  saves only the fields that were filled in, so submitting it cannot blank a
+  credential that was configured elsewhere.
+
+### Added (memory-shell forensics & remediation)
+- Memory-shell forensics (取证). The probe JSP now answers three token-gated
+  actions instead of one: `action=probe` (the read-only report, unchanged),
+  `action=dump` (everything the JVM can still be asked about one component: url
+  patterns, class loader identity, code source, declared methods and fields,
+  protection domain, container/server info, JVM launch arguments and
+  `jdk.attach.allowAttachSelf`) and `action=kill` (removal). A dump also returns
+  the class bytes base64-encoded **only** when the class really resolves to a
+  classloader resource, with `class_bytes_unavailable_reason` when it does not -
+  a class defined at runtime with `defineClass` has no bytecode resource and a
+  JSP cannot recover bytes from a loaded `Class`, so it says so instead of
+  inventing them - plus an optional heap dump through
+  `com.sun.management:type=HotSpotDiagnostic` `dumpHeap(absolute path, live)`
+  reporting `heap_path`, `heap_bytes` and `heap_sha256`, or `heap_error` with the
+  real cause (no MXBean, permissions, disk space, unsupported JVM) while the
+  manifest is still returned.
+- Forensics storage. Artifacts are files plus one index, never a database table:
+  `<data_dir>/forensics/<site_id>/<UTC timestamp>-<kind>-<slug>/` holds
+  `manifest.json`, `class-<name>.class` when bytes were obtained and `heap.hprof`
+  when a dump was produced, and `<data_dir>/forensics/index.json` records every
+  run (artifact id, site, time, trigger, component, class, files with sizes and
+  sha256, and the remediation history of that component). The index is written
+  atomically (temp file + `os.replace`) and rotates to the last N runs
+  (`forensics_history`, default 200); sizes and hashes are computed from what is
+  actually on disk, and an unreadable index is reported instead of being
+  silently emptied. New `[plugins.memory_shell_probe]` keys: `forensics_enabled`,
+  `heap_dump_enabled`, `forensics_history`, `forensics_max_dump_mb`, all
+  validated in code.
+- Forensics tab (`/admin/memory-shell/forensics`, 取证) next to the detection tab
+  (检测): per-site artifacts with their size, files, class-bytes and heap state,
+  a manifest viewer, artifact download, and a run form for the component the
+  operator arrived with.
+- Memory-shell remediation (处置). Removing a memory-resident component is a
+  deliberate, guarded action: it refuses when there is no forensics artifact for
+  that component unless the request acknowledges it explicitly
+  (`acknowledge_no_forensics=1`), refuses when the class name is no longer the
+  one Anteumbra recorded (`expect_class`, re-checked inside the JVM), and refuses
+  a class that resolves to a file on disk as a legitimately deployed component
+  unless `force=1` is passed. A filter is removed in four verified steps -
+  `removeFilterMap` for every mapping, `removeFilterDef`, then the
+  `ApplicationFilterConfig` entry in `StandardContext`'s private `filterConfigs`
+  map (which Tomcat's own `removeFilterDef` never touches: verified against the
+  7.0.108 and 9.0.96 bytecode, and the reference scanner documents the same
+  leftover as an unfixed problem), and `filterStop()`/`filterStart()` only if the
+  name somehow survived that cleanup. Servlets (`removeServletMapping` +
+  `removeChild`) and listeners (a `List` on Tomcat 8/9, an `Object[]` on Tomcat
+  6/7) are verified the same way. Success is only reported when a fresh
+  enumeration no longer finds the component; otherwise the caller gets
+  `removed=false` with the concrete reason (`filter_configs_unavailable`,
+  `filter_still_registered_after_cleanup`, ...) plus the full post-action
+  component list. It never deletes a file, never edits `web.xml` and never touches
+  a second component. Every attempt publishes a `memory_shell_remediated` event
+  and is logged with the before/after component state; the detection alert path is
+  unchanged.
+- The 处置 flow in the UI asks the server first: with a forensics artifact it
+  shows a plain confirmation ("处置会移除容器内存中的该组件，且不可恢复"); without
+  one it shows the warning `没有对应的取证文件。确认要在不取证的情况下处置内存马吗？`
+  with exactly three buttons - 立即处置 (posts `acknowledge_no_forensics=1`),
+  前往取证 (the forensics tab for that component) and 取消. Plain HTMX and the
+  existing `app.js` actions, no new framework.
+
+### Added (multi-site frontend)
+- Site switcher in the navigation, rendered only when more than one enabled site is
+  configured. The scope resolves as: explicit `?site=<id>` (the legacy `?site_id=` still
+  works) -> remembered choice (session, then the `anteumbra_site` cookie) -> aggregate.
+  An explicit empty `?site=` means aggregate and clears the cookie; an unknown id falls
+  back to aggregate without persisting. Every fragment URL carries the scope, and rows
+  are labelled from the record's own site, never from the active filter, so aggregate
+  data can never be mistaken for one site's data.
+- Per-site overview: the global cards stay, and a labelled per-site table adds detection
+  count, quarantined count, open suspicious count, last detection, top profile and
+  memory-shell suspects per site. Figures that cannot be read render `-`, never `0`.
+- Site-scoped detection surfaces: records, quarantine and file clusters filter
+  server-side by site, show per-row site badges in aggregate mode, and keep pagination,
+  detail links and row actions carrying the scope. Records written before multi-site
+  support are shown as `未分配`/`Unassigned` and remain visible in aggregate.
+- File clusters are attributed by mapping every registry record to its cluster through
+  the engine's public API (no sample cap); a cluster with no registry member falls back
+  to sample paths and is marked as inferred.
 ## [1.0.37] - 2026-09-14
 
 ### Fixed

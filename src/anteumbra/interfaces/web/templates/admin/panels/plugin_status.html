@@ -1,15 +1,31 @@
-<!-- v2.1: Plugin inventory — what is loaded plus everything this build could load.
+<!-- v2.2: Plugin inventory + control — what is loaded, what could be loaded, and why not.
 
      `list_all()` only reports running plugins, so a plugin that is installed but
      missing from `[plugins] builtin`, or switched off in its own
      `[plugins.<name>]` section, stayed invisible exactly when an operator was
-     looking for it.  Every not-loaded row names its real reason and shows the
-     config lines that would change it. -->
-<div style="display:flex;flex-direction:column;gap:8px;">
+     looking for it.  Every row now answers the operator's real question - "is
+     this plugin installed and working?" - with one effective state, the reason
+     behind it, the config section the plugin actually reads, and whether an
+     event source is really running.
+
+     Nothing here claims `enabled` for a plugin that is not loaded: an "enabled"
+     badge on a dead plugin is the exact false comfort this panel exists to
+     remove, so the enabled value is printed only for loaded rows.
+
+     The controls are HTMX-only on purpose: no data-action, therefore no new
+     frontend strings, and the shell already adds X-CSRFToken to every htmx
+     request, which is what makes these POSTs CSRF-protected like every other
+     settings write. -->
+<div style="display:flex;flex-direction:column;gap:8px;" data-plugin-panel="1">
+  {% for n in notices %}
+  <div data-plugin-notice="{{ n.level }}" style="padding:6px 8px;border-radius:3px;font-size:10px;line-height:1.6;background:#0a0a0a;border-left:3px solid {{ '#ff4444' if n.level == 'error' else ('#ffaa00' if n.level == 'warning' else ('#00ff41' if n.level == 'success' else '#4a9eff')) }};color:{{ '#ff8888' if n.level == 'error' else ('#ffcc66' if n.level == 'warning' else ('#8fe38f' if n.level == 'success' else 'var(--color-text-secondary)')) }};">{{ n.text }}</div>
+  {% endfor %}
+
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ '#00ff41' if enabled else '#ff4444' }};"></span>
     <span style="color:var(--color-text-secondary);font-size:11px;">{{ _('System:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('ENABLED') if enabled else _('DISABLED') }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Loaded:') }} <strong style="color:#00ff41;">{{ loaded_count }}</strong> / {{ plugin_count }}</span>
+    <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Active:') }} <strong style="color:#00ff41;">{{ active_count }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Detectors:') }} <strong style="color:#00ff41;">{{ detector_count }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Notifiers:') }} <strong style="color:#00ff41;">{{ notifier_count }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Sources:') }} <strong style="color:#00ff41;">{{ source_count }}</strong></span>
@@ -26,12 +42,24 @@
   {% set type_labels = {'plugin': _('Plugin'), 'detector': _('Detector'), 'notifier': _('Notifier'), 'source': _('Source')} %}
   <div style="display:flex;flex-direction:column;gap:4px;">
     {% for p in plugins %}
-    <div style="padding:6px 8px;background:#0a0a0a;border-radius:3px;border-left:3px solid {{ '#00ff41' if p.loaded else '#ffaa00' }};">
+    <div data-plugin-row="{{ p.name }}" data-plugin-state="{{ p.state }}" data-plugin-loaded="{{ 'true' if p.loaded else 'false' }}"{% if focus_plugin and focus_plugin == p.name %} data-plugin-focus="1"{% endif %}
+         style="padding:6px 8px;background:#0a0a0a;border-radius:3px;border-left:3px solid {{ '#00ff41' if p.state == 'active' else ('#ff4444' if p.state == 'inactive' else '#ffaa00') }};{% if focus_plugin and focus_plugin == p.name %}outline:1px solid #4a9eff;{% endif %}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="color:{{ '#00ff41' if p.loaded else '#ffaa00' }};font-size:10px;">&#9679;</span>
+          <span style="color:{{ '#00ff41' if p.state == 'active' else '#ffaa00' }};font-size:10px;">&#9679;</span>
           <span style="color:{{ '#ccc' if p.loaded else '#888' }};font-size:10px;">{{ p.name }}</span>
           {% if p.loaded and p.type %}<span class="badge badge-blue" style="font-size:8px;">{{ type_labels.get(p.type | lower, p.type) }}</span>{% endif %}
+
+          {# Effective state of a loaded plugin. #}
+          {% if p.loaded and p.state == 'active' %}
+            {% if p.event_source %}<span class="badge badge-success" style="font-size:8px;">{{ _('Running') }}</span>
+            {% else %}<span class="badge badge-success" style="font-size:8px;">{{ _('Loaded') }}</span>{% endif %}
+          {% elif p.loaded and p.state == 'inactive' %}
+            <span class="badge badge-danger" style="font-size:8px;">{{ _('Not running') }}</span>
+          {% elif p.loaded and p.state == 'unverified' %}
+            <span class="badge badge-warning" style="font-size:8px;">{{ _('Run state unknown') }}</span>
+          {% endif %}
+
           {% if not p.loaded %}
             {% for reason in p.reasons %}
               {% if reason == 'system_off' %}<span class="badge badge-danger" style="font-size:8px;">{{ _('Plugin system off') }}</span>
@@ -48,6 +76,16 @@
           {% if p.loaded %}v{{ p.version }}{% else %}{{ _('Not loaded') }}{% endif %}
         </span>
       </div>
+
+      {# The section this plugin reads, and - only when it is loaded - the
+         enabled value found there.  The marker is what the tests (and grep)
+         assert on: this element is the only place a status claim is made. #}
+      <div data-plugin-config="1" style="color:var(--color-text-muted);font-size:9px;margin-top:3px;">
+        {{ _('Config section:') }} <code>plugins.{{ p.section }}</code>
+        {%- if p.show_enabled %} · <code>enabled = {{ 'true' if p.enabled else 'false' }}</code>{% if not p.enabled_declared %} ({{ _('not set explicitly') }}){% endif %}
+        {%- else %} · {{ _('enabled is not reported for a plugin that is not loaded') }}{% endif %}
+      </div>
+
       {% if not p.loaded %}
       <div style="color:var(--color-text-secondary);font-size:9px;line-height:1.6;margin-top:4px;padding-left:16px;">
         {% for reason in p.reasons %}
@@ -61,6 +99,34 @@
         {% if p.snippet %}
         <div style="margin-top:4px;">{{ _('Add to config.toml:') }}</div>
         <pre style="margin:2px 0 0 0;padding:6px 8px;background:#050505;border:1px solid #222;border-radius:3px;color:#8fe38f;font-family:var(--font-mono);font-size:9px;line-height:1.5;user-select:all;overflow-x:auto;">{{ p.snippet }}</pre>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if p.installed %}
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;padding-left:16px;">
+        {% if p.enabled %}
+        <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
+                hx-post="/admin/settings/plugins/control" hx-target="#settings-plugins" hx-swap="innerHTML"
+                hx-vals='{"plugin": "{{ p.name }}", "action": "disable"}'
+                {% if p.guard_reason %}disabled title="{{ p.guard_reason }}"{% endif %}>{{ _('Disable') }}</button>
+        {% else %}
+        <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
+                hx-post="/admin/settings/plugins/control" hx-target="#settings-plugins" hx-swap="innerHTML"
+                hx-vals='{"plugin": "{{ p.name }}", "action": "enable"}'>{{ _('Enable') }}</button>
+        {% endif %}
+        {% if p.in_builtin %}
+        <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
+                hx-post="/admin/settings/plugins/control" hx-target="#settings-plugins" hx-swap="innerHTML"
+                hx-vals='{"plugin": "{{ p.name }}", "action": "builtin_remove"}'
+                {% if p.guard_reason %}disabled title="{{ p.guard_reason }}"{% endif %}>{{ _('Remove from builtin') }}</button>
+        {% else %}
+        <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
+                hx-post="/admin/settings/plugins/control" hx-target="#settings-plugins" hx-swap="innerHTML"
+                hx-vals='{"plugin": "{{ p.name }}", "action": "builtin_add"}'>{{ _('Add to builtin') }}</button>
+        {% endif %}
+        {% if p.guard_reason %}
+        <span style="color:#ffaa00;font-size:9px;">{{ _('Protected:') }} {{ p.guard_reason }}</span>
         {% endif %}
       </div>
       {% endif %}

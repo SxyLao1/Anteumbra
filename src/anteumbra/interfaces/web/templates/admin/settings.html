@@ -1,10 +1,126 @@
-<section class="settings-grid">
-  <section class="card"><div class="card-header">{{ _('ACCOUNT') }}</div><div class="card-body" hx-get="/admin/account" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div></div></section>
-  <section class="card"><div class="card-header">{{ _('SYSTEM') }}</div><div class="card-body settings-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="registry">{{ _('Registry Status') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="wal">{{ _('WAL Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="session">{{ _('Session Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="config">{{ _('Config Reload') }}</button></div></section>
-  <section class="card"><div class="card-header">{{ _('EXPORT & SIEM') }}</div><div class="card-body" id="settings-siem" hx-get="/admin/settings/siem-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div></section>
-  <section class="card"><div class="card-header">{{ _('STORAGE') }}</div><div class="card-body" id="settings-storage" hx-get="/admin/settings/storage-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div></section>
-  <section class="card settings-grid--wide"><div class="card-header">{{ _('PLUGINS') }}</div><div class="card-body" id="settings-plugins" hx-get="/admin/settings/plugin-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div></section>
-  <section class="card settings-grid--wide"><div class="card-header">{{ _('NOTIFICATIONS') }}</div><div class="card-body" id="settings-notify" hx-get="/admin/settings/notifications" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div></section>
-  <section class="card settings-grid--wide"><div class="card-header">{{ _('CONFIG EDITOR') }}</div><div class="card-body" id="settings-config" hx-get="/admin/settings/config/editor" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading config editor...') }}</p></div></div></section>
+{# v1.0.38: Settings, ordered by importance and collapsible.
+
+   The page used to be one wall of cards in the order they were written, so the
+   mail password sat at the bottom of the config editor and an operator had to
+   scroll past every rarely-touched key to reach it.  Sections are now ordered
+   environment/secrets first, then account, site configuration, monitoring,
+   notifications, storage, plugins, and finally the advanced/rarely-touched
+   tools; each one collapses, remembers its state, and shows a one-line summary
+   in its header so the page can be read without expanding anything.
+
+   Collapsing is server-rendered on purpose: the header links push
+   ``?open=<sections>`` into the address bar via HTMX and the server re-renders
+   the sections from it (see settings_bp._open_sections).  That keeps the state
+   in the URL, in the session, and in the HTML itself, so it works with the
+   router's innerHTML swaps - where an inline <script> would never run. #}
+{% macro section_header(sid, title) %}
+<button type="button" class="card-header" data-settings-section="{{ sid }}"
+        aria-expanded="{{ 'true' if sid in open_sections else 'false' }}"
+        hx-get="{{ section_toggle_urls.get(sid, '/admin/settings') }}"
+        hx-target="#main-content" hx-swap="innerHTML" hx-push-url="true"
+        style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-bottom:1px solid var(--color-border);color:inherit;cursor:pointer;text-align:left;font:inherit;">
+  <span class="cfg-arrow" style="display:inline-block;transform:rotate({{ '0deg' if sid in open_sections else '-90deg' }});transition:transform .15s;">▼</span>
+  <strong>{{ title }}</strong>
+  <span style="margin-left:auto;color:var(--color-text-secondary);font-size:11px;font-weight:normal;">{{ section_summaries.get(sid, '') }}</span>
+</button>
+{% endmacro %}
+{% macro row(label, value) %}
+<div style="display:flex;gap:10px;font-size:11px;line-height:1.8;"><span style="flex:0 0 190px;color:var(--color-text-secondary);">{{ label }}</span><span style="color:var(--color-text-primary);word-break:break-all;">{{ value }}</span></div>
+{% endmacro %}
+<section class="settings-grid" style="column-count:1;">
+
+  {# 1. Environment and secrets - the part an operator cannot finish without. #}
+  <section class="card" data-settings-panel="environment">
+    {{ section_header('environment', _('ENVIRONMENT & SECRETS')) }}
+    <div class="card-body" id="settings-environment" {% if 'environment' not in open_sections %}style="display:none;"{% endif %}>
+      <p class="muted-copy" style="font-size:11px;margin:0 0 8px 0;">{{ _('Mail credentials, tokens and keys are stored in .env next to config.toml. Empty fields are left untouched; values are never committed to git.') }}</p>
+      {% if env_notice %}
+      <div class="form-result" data-env-notice="{{ env_notice.level }}" style="color:{{ '#ff4444' if env_notice.level == 'error' else '#00ff41' }};font-size:11px;margin-bottom:8px;">{{ env_notice.text }}</div>
+      {% endif %}
+      <form hx-post="/admin/settings/environment/save" hx-target="#main-content" hx-swap="innerHTML" style="display:grid;gap:8px;">
+        {% for key in env_keys %}
+        {% set secret = ('PASSWORD' in key or 'KEY' in key or 'SECRET' in key or 'TOKEN' in key) %}
+        <label class="cfg-field" style="display:flex;align-items:center;gap:10px;font-size:11px;"><span style="flex:0 0 220px;color:var(--color-text-secondary);">{{ key }}</span>
+          <input type="{{ 'password' if secret else 'text' }}" name="{{ key }}" value="{{ env_vars.get(key, '') }}" autocomplete="{{ 'new-password' if secret else 'off' }}" style="flex:1 1 auto;min-width:0;">
+        </label>
+        {% endfor %}
+        {{ row(_('Admin password hash'), (env_vars.get('ANTEUMBRA_PASSWORD_HASH', '')[:16] + '...') if env_vars.get('ANTEUMBRA_PASSWORD_HASH') else _('Not set')) }}
+        <div class="page-toolbar"><button class="btn btn-primary btn-sm" type="submit">{{ _('Save environment') }}</button><span class="muted-copy">{{ _('Written to .env and reloaded.') }}</span></div>
+      </form>
+    </div>
+  </section>
+
+  {# 2. Account - the operator's own credentials. #}
+  <section class="card" data-settings-panel="account">
+    {{ section_header('account', _('ACCOUNT')) }}
+    <div class="card-body" {% if 'account' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/account" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div></div>
+  </section>
+
+  {# 3. Site configuration. #}
+  <section class="card" data-settings-panel="sites">
+    {{ section_header('sites', _('SITE CONFIGURATION')) }}
+    <div class="card-body" {% if 'sites' not in open_sections %}style="display:none;"{% endif %}>
+      {% if site_rows %}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        {% for site in site_rows %}
+        <div style="padding:6px 8px;background:#0a0a0a;border-radius:3px;border-left:3px solid {{ '#00ff41' if site.enabled else '#666' }};">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;">
+            <strong>{{ site.name }}</strong>
+            <span class="badge badge-blue" style="font-size:8px;">{{ _('Enabled') if site.enabled else _('Disabled') }}</span>
+            <span style="color:var(--color-text-muted);font-size:10px;">{{ site.port }}</span>
+          </div>
+          <div style="color:var(--color-text-secondary);font-size:10px;word-break:break-all;">{{ site.path }}</div>
+          <div style="color:var(--color-text-muted);font-size:10px;">{{ _('Access log:') }} {{ site.access_log if site.log_monitor_enabled else _('not enabled') }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted-copy" style="font-size:11px;">{{ _('No website is configured.') }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# 4. Monitoring and detection. #}
+  <section class="card" data-settings-panel="detection">
+    {{ section_header('detection', _('MONITORING & DETECTION')) }}
+    <div class="card-body" {% if 'detection' not in open_sections %}style="display:none;"{% endif %}>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        {{ row(_('Watched paths'), watched_paths|join(', ') if watched_paths else _('none configured')) }}
+        {{ row(_('Monitored extensions'), monitored_extensions|join(' ') if monitored_extensions else _('none configured')) }}
+        {{ row(_('Access log analysis'), access_log_path if log_monitor_enabled else _('Disabled')) }}
+        {{ row(_('Auto quarantine'), _('Enabled') if auto_quarantine else _('Disabled')) }}
+        {{ row(_('Auto IP block'), _('Enabled') if auto_block else _('Disabled')) }}
+        {{ row(_('WAF source'), (waf_type ~ ' · ' ~ waf_url) if waf_enabled else _('Disabled')) }}
+      </div>
+    </div>
+  </section>
+
+  {# 5. Notifications. #}
+  <section class="card" data-settings-panel="notifications">
+    {{ section_header('notifications', _('NOTIFICATIONS')) }}
+    <div class="card-body" id="settings-notify" {% if 'notifications' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/settings/notifications" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+  </section>
+
+  {# 6. Storage and paths. #}
+  <section class="card" data-settings-panel="storage">
+    {{ section_header('storage', _('STORAGE & PATHS')) }}
+    <div class="card-body" id="settings-storage" {% if 'storage' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/settings/storage-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+  </section>
+
+  {# 7. Plugins - an operational control surface, so it precedes raw editing. #}
+  <section class="card" data-settings-panel="plugins">
+    {{ section_header('plugins', _('PLUGINS')) }}
+    <div class="card-body" id="settings-plugins" {% if 'plugins' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/settings/plugin-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+  </section>
+
+  {# 8. Advanced / rarely touched. #}
+  <section class="card" data-settings-panel="advanced">
+    {{ section_header('advanced', _('ADVANCED')) }}
+    <div class="card-body" {% if 'advanced' not in open_sections %}style="display:none;"{% endif %}>
+      <div class="settings-actions" style="margin-bottom:12px;"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="registry">{{ _('Registry Status') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="wal">{{ _('WAL Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="session">{{ _('Session Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="config">{{ _('Config Reload') }}</button></div>
+      <div id="settings-siem" hx-get="/admin/settings/siem-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+      <div id="settings-config" style="margin-top:12px;" hx-get="/admin/settings/config/editor" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading config editor...') }}</p></div></div>
+    </div>
+  </section>
 </section>
 <div id="system-modal" class="modal-overlay modal-overlay--front" aria-hidden="true" data-action="core.backdrop-close"><div class="modal-box modal-box--detail" role="dialog" aria-modal="true"><div class="modal-header"><h3 id="system-modal-title">{{ _('System') }}</h3><span id="system-modal-actions"></span><button class="btn btn-ghost btn-sm" type="button" data-action="core.modal-hide" data-modal="system-modal">{{ _('Close') }}</button></div><div class="modal-body" id="system-modal-body"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div></div></div></div>

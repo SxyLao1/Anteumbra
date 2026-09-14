@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.37
+# Anteumbra User Manual v1.0.38
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -20,6 +20,7 @@
 10. [Plugin System](#10-plugin-system)
 11. [Deployment](#11-deployment)
 12. [Troubleshooting](#12-troubleshooting)
+13. [MCP Server & Agent Skill](#13-mcp-server--agent-skill)
 
 ---
 
@@ -380,6 +381,10 @@ anteumbra config          # Show config subcommand help; never write files
 anteumbra config init     # Explicitly create config, env, rules, default site
 anteumbra config wizard   # Interactive first-run setup
 anteumbra config validate # Validate paths, ports, .env, enabled integrations
+anteumbra mcp             # Serve Anteumbra to a local AI agent (MCP)
+anteumbra mcp serve       # stdio MCP server; read-only unless --allow-write
+anteumbra mcp tools       # List the tools a client would see for this instance
+anteumbra skill export    # Copy the bundled agent skill out of the package
 ```
 
 ### Global Options
@@ -870,6 +875,10 @@ history_size = 50
 alert_on_suspects = true
 host = "127.0.0.1"
 scheme = "http"
+forensics_enabled = true
+heap_dump_enabled = true
+forensics_history = 200
+forensics_max_dump_mb = 2048
 ```
 
 | Option | Meaning |
@@ -887,6 +896,10 @@ scheme = "http"
 | `history_size` | How many recent probe runs the admin page keeps |
 | `alert_on_suspects` | Raise an alert as soon as a suspicious component is found |
 | `host` / `scheme` | Address and protocol used to reach the probe |
+| `forensics_enabled` | Allow forensics (取证) runs; when off, the tab says so and refuses to dump |
+| `heap_dump_enabled` | Ask for a heap dump during a forensics run (the manifest is stored either way) |
+| `forensics_history` | How many forensics runs the on-disk index keeps (1-10000, default 200) |
+| `forensics_max_dump_mb` | Free-space pre-check for a heap dump (0 disables the pre-check) |
 
 A component is marked suspicious when any of these hold:
 
@@ -933,6 +946,144 @@ Limits and boundaries:
 - Every failure mode (container down, site unreachable, probe replaced, cleanup failed)
   is surfaced on the page and in the log. **A failed cleanup is shown in red**, because it
   means a file that should not exist was left behind in the site.
+
+#### Forensics (取证) - what a memory shell actually was
+
+Detection answers "is something registered in memory that should not be". Forensics answers
+"what exactly is it", *before* anyone removes it. The same probe file answers an
+`action=dump` request for one component (`kind` = `filter` | `servlet` | `listener`, plus the
+registered `name`), and Anteumbra stores the result as an artifact.
+
+What is dumped:
+
+- the **manifest**: kind, name, url patterns, class name, class-loader identity, code
+  source, an `on_disk` flag, the declared methods and fields (names and signatures, bounded
+  to 200 each), the protection domain, the container/server info, the site and context path,
+  the probe URL (without the per-run token), the JVM input arguments and
+  `jdk.attach.allowAttachSelf`;
+- the **class bytes**, base64-encoded, **only when the class really resolves to a
+  classloader resource** (a deployed class, a JSP class, anything loaded from a jar or a
+  directory);
+- an optional **heap dump**, written by the target JVM itself through
+  `com.sun.management:type=HotSpotDiagnostic` `dumpHeap(<absolute path>, <live>)`.
+
+What cannot be dumped, and why it says so instead of guessing:
+
+- a class defined at runtime with `defineClass` (the hallmark of a memory shell, and what
+  Behinder/Godzilla payloads use) **has no bytecode resource**. A JSP cannot recover the
+  bytes of a loaded `Class` from a running JVM: there is no supported API for it. The dump
+  then returns `class_bytes_unavailable_reason`
+  (`class_defined_at_runtime_without_bytecode_resource`) instead of empty bytes, and no
+  `class-<name>.class` file is written. That absence is itself evidence: a filter whose class
+  exists nowhere on disk is exactly what you are looking for.
+- a heap dump can fail - no HotSpot diagnostic MXBean (a non-HotSpot JVM), a permission or
+  attach restriction, no free disk space, or an unsupported `live` mode. The response then
+  carries `heap_error` with the real cause, **and the manifest is still returned and still
+  stored**. A failed dump is never allowed to cost you the forensics you already have. The
+  probe refuses a dump up front when the free space is clearly below what this JVM could
+  need, and never runs one without an absolute target path.
+- the manifest records the bytes the *classloader* serves, which is what was compiled, not
+  what a `retransform`-based agent may have rewritten in memory. The manifest names its
+  source (`class_bytes_source`) so the distinction is visible.
+
+Where the artifacts live:
+
+```
+<data_dir>/forensics/<site_id>/<UTC timestamp>-<kind>-<slug>/
+    manifest.json          what the probe reported about the component
+    class-<name>.class     the class bytes, when they could be resolved
+    heap.hprof             the heap dump, when one was produced
+<data_dir>/forensics/index.json
+    every run, newest first, bounded to forensics_history entries:
+    artifact id, site, time, trigger, component, class, files (size + sha256),
+    heap state, and the remediation history of that component
+```
+
+The index is written atomically (a temporary file plus `os.replace`) and keeps the last
+`forensics_history` runs; sizes and hashes are computed from the files that are actually on
+disk. An index that cannot be read is reported on the page rather than silently reset, so
+"no evidence" is never confused with "the evidence was lost". There is deliberately no
+database table: artifacts are files plus one index.
+
+The heap dump appears under three different shapes, because three layers describe it: the
+probe's own `action=dump` response reports `heap_path` / `heap_bytes` / `heap_sha256` /
+`heap_live` (plus `heap_error`), the stored `manifest.json` and the index entry carry a `heap`
+object with `path` / `bytes` / `sha256` / `live`, and the indexed file list always contains a
+final entry named `heap.hprof` with the size and hash the store computed itself
+(`sha256_source` is `computed`, or `probe` for a dump large enough that re-hashing it would
+cost more than it is worth). So inside `<data_dir>/forensics/index.json` the byte count of a
+heap dump is `runs[i].heap.bytes` — **not** `heap_bytes`, which only exists in the raw probe
+response.
+
+The 取证 tab (`/admin/memory-shell/forensics`) lists the artifacts per site with their size,
+files, class-bytes/heap state and remediation result, opens the stored manifest, downloads
+any indexed file, and starts a dump for the component you arrived with. Starting from a
+finding on the 检测 tab pre-fills that component. Use "Dump live objects only" when the heap
+is large: it is a smaller file, but it pauses the JVM longer.
+
+#### Remediation (处置) - removing the component from memory
+
+处置 unregisters exactly one component from the running container. It is the only action in
+Anteumbra that changes a protected system, so it is built around the three questions that
+decide whether it is *the same thing* Anteumbra saw:
+
+1. **Is there forensics for this component?** Without an artifact, the request is refused
+   unless it acknowledges that explicitly (`acknowledge_no_forensics=1`). The UI asks before
+   it posts: with an artifact you get a plain confirmation; without one you get
+   `没有对应的取证文件。确认要在不取证的情况下处置内存马吗？` and three buttons - 立即处置
+   (posts `acknowledge_no_forensics=1`), 前往取证 (the forensics tab for that component) and
+   取消.
+2. **Is it still the same class?** The request must carry the class name Anteumbra recorded
+   for that component, and the probe compares it with the class the container reports *inside
+   the JVM* immediately before removing anything. A mismatch is a refusal
+   (`class_name_mismatch`), because something changed under us and the decision no longer
+   describes reality. Without a recorded class name, nothing is removed at all
+   (`no_recorded_class`).
+3. **Is it a real file on disk?** A component whose class resolves to a jar or a directory is
+   a legitimately deployed component, not a memory shell. It is refused (`class_on_disk`)
+   unless `force=1` is passed explicitly.
+
+On success it removes the component in full, and it verifies that before claiming anything:
+
+- **Filter**: every `FilterMap` of that name first (the filter stops being applied on the very
+  next request), then the `FilterDef` through `removeFilterDef(FilterDef)`, then the
+  `ApplicationFilterConfig`, which is removed from `StandardContext`'s private `filterConfigs`
+  map explicitly and released. That third step is not optional: Tomcat's `removeFilterDef()`
+  only drops the entry from `filterDefs` and leaves `filterConfigs` untouched (verified against
+  Tomcat 7.0.108 and 9.0.96 bytecode; the reference scanner in
+  `tools/memory-shell/java/tomcat-memshell-scanner.jsp` documents the same leftover as a known,
+  unfixed problem). Without it the shell stops answering but stays registered forever, and every
+  later probe keeps reporting it. If the name is somehow still registered afterwards, the probe
+  calls `filterStop()` + `filterStart()` so the container rebuilds its filter state from the
+  definitions that are left, and checks once more.
+- **Servlet**: `removeServletMapping(String)` for every pattern, then `removeChild(Container)`.
+- **Listener**: the instance is removed from wherever that container keeps application event
+  listeners - a `List` on Tomcat 8/9, an `Object[]` on Tomcat 6/7, both behind
+  `getApplicationEventListeners()` / `setApplicationEventListeners()`.
+
+Success is reported only when a fresh enumeration no longer finds the component. A removal that
+cannot be verified is reported as `removed=false` with a concrete reason
+(`filter_configs_unavailable`, `filter_still_registered_after_cleanup`,
+`servlet_still_registered_after_cleanup`, `listener_still_registered_after_cleanup`,
+`remove_filter_map_failed: ...`), so a half-finished removal is never mistaken for a finished
+one; the response always carries the post-action component list so the caller can check. It
+never deletes a file, never edits `web.xml`, and never touches anything outside the identified
+component.
+
+Because `filterStop()` / `filterStart()` re-create the other filters too (it is the container's
+own reload path), that repair is attempted only when the name survived the explicit cleanup -
+that is, only when the alternative would be leaving a memory shell in place.
+
+**Removing an in-memory component is irreversible for that component.** There is no undo and
+no copy: the class, its registrations and anything it held are gone. That is why the
+forensics step exists and why the confirmation is explicit - taking the dump first is the
+only way to keep something to analyse afterwards. The heap dump is not a copy of the
+component either; it is a snapshot of the JVM that may contain it.
+
+Every attempt - removed, refused or failed - publishes a `memory_shell_remediated` event with
+the before/after component state and writes one WARNING line to the log, and a successful
+removal is recorded in that artifact's remediation history (`remediated_at`, result,
+operator). The detection alert path is unchanged.
 
 ---
 
@@ -1086,6 +1237,135 @@ minimal `/admin/api/v1/health` when only a status is required.
 
 ---
 
+## 13. MCP Server & Agent Skill
+
+Anteumbra ships a **Model Context Protocol (MCP) server** and an **agent skill**.
+It does **not** embed an AI agent. The agent is yours: point your own local agent
+(Claude Desktop, Cursor, VS Code, or any other MCP client) at this server, and it
+can discover web services on the machine, decide with you what to monitor,
+configure it, validate, restart, verify that detection really works, and report
+back. Every write goes through the same code path the CLI uses.
+
+### 13.1 Install the optional extra
+
+The official `mcp` Python SDK is an optional dependency, so a base install
+carries no agent-protocol code. Install it only where you run the server:
+
+```bash
+pip install "anteumbra[mcp]"
+```
+
+Without it, `anteumbra mcp serve` fails with a single actionable line on stderr
+and exit code 1 - never an `ImportError` traceback:
+
+```
+Error: The MCP server needs the optional "mcp" Python SDK. Install it with:
+pip install "anteumbra[mcp]" - then run "anteumbra mcp serve" again.
+```
+
+`anteumbra mcp tools`, `anteumbra skill export` and every other command keep
+working on a base install; the server imports the SDK lazily.
+
+### 13.2 Serve one instance over stdio
+
+```bash
+anteumbra --home /opt/anteumbra mcp tools                  # what a client would see
+anteumbra --home /opt/anteumbra mcp serve                  # read-only
+anteumbra --home /opt/anteumbra mcp serve --allow-write    # adds the write tools
+```
+
+The transport is **stdio**: the client starts this process and speaks the
+protocol on its stdin/stdout. `--home` selects the runtime instance exactly like
+it does for `status` or `config`, and it must appear before `mcp`.
+
+### 13.3 Register the server in your client
+
+```json
+{
+  "mcpServers": {
+    "anteumbra": {
+      "command": "anteumbra",
+      "args": ["--home", "/opt/anteumbra", "mcp", "serve", "--allow-write"]
+    }
+  }
+}
+```
+
+On Windows use a Windows path (`"E:\\Software\\Anteumbra"`); the client may need
+the full path to `anteumbra.exe` when it is not on `PATH`. Omit `--allow-write`
+for a read-only agent.
+
+### 13.4 What the agent can do
+
+Read-only, always available:
+
+| Tool | Returns |
+|------|---------|
+| `get_status` | Running state, version, admin URL, uptime, health endpoint, monitored sites |
+| `list_sites` | Per site: stable id, name, path, port, enabled, reachable, whether it serves JSP |
+| `get_config` | Effective configuration with every credential redacted |
+| `validate_config` | Exactly what `anteumbra config validate` prints, plus structured errors and warnings |
+| `list_detections` | Registry rows, newest first, filtered by site and status |
+| `list_quarantine` | Quarantine rows (metadata only, never file contents) |
+| `list_sites_summary` | Per-site detection and quarantine counts for a report |
+| `list_listening_ports` | Local TCP listeners with the owning process |
+| `discover_web_services` | Listeners that look like web services, with the document root when the OS states it |
+
+Write-gated - these do **not exist** in the tool list unless the server was
+started with `--allow-write`:
+
+| Tool | Effect |
+|------|--------|
+| `add_site` / `update_site` / `disable_site` | Add, change or stop monitoring a site in `config.toml` |
+| `set_config_value` | Set one dotted key, identical to `anteumbra config set` |
+| `set_env_value` | Write one secret to `.env` (never `config.toml`); needs a restart |
+| `run_memory_shell_probe` | Run Anteumbra's own JSP probe - offered only while the instance is stopped |
+
+Every mutating call revalidates the configuration and returns the validation
+result, so a change that breaks the config tells the agent immediately.
+
+### 13.5 Safety defaults
+
+* **Read-only by default.** Without `--allow-write`, mutating tools are absent
+  from the tool list rather than present and failing.
+* **Secrets stay out of responses.** `get_config` replaces any credential-shaped
+  value with `***REDACTED***`, and every tool response is swept for the values
+  stored in the instance `.env`, so a resolved `${VAR}` placeholder or a
+  credential inside a URL cannot leak either. `set_env_value` never echoes the
+  value it wrote.
+* **Discovery is bounded and local.** It reads the operating system's connection
+  table and the owning process; it does not walk the filesystem, sweep ports, or
+  contact anything. HTTP probing of candidates is off unless the agent asks for
+  it, because those requests would appear in the access log Anteumbra watches.
+* **Nothing about the machine is guessed.** A document root that cannot be
+  derived is returned as `null` with the reason.
+* **Process lifecycle is not exposed.** Start, stop and restart stay in the CLI,
+  where a human or the agent runs them deliberately.
+
+### 13.6 The agent skill
+
+The operator manual for an AI lives inside the package and is exported on
+demand:
+
+```bash
+anteumbra skill export ~/.agents/skills     # writes ~/.agents/skills/anteumbra/SKILL.md
+anteumbra skill export ./skills --flat      # writes ./skills/SKILL.md
+anteumbra skill show                        # print it without copying
+```
+
+Most agents discover skills as `<skills-root>/<name>/SKILL.md`, so the default
+layout creates the `anteumbra` directory for you. Use `--force` to replace an
+existing copy.
+
+The skill tells the agent which tool to call at each step, what to ask you for
+and why (admin password, notification channel, SMTP settings and the mail
+provider's **authorization code** - not the account password, WeChat/WeCom send
+key or webhook, optional WAF token, whether to enable auto-quarantine and IP
+blocking), which safety rules are non-negotiable, and the verification checklist
+it must complete before reporting success.
+
+---
+
 <div align="center">
-  <sub>Anteumbra v1.0.37 — MIT License</sub>
+  <sub>Anteumbra v1.0.38 — MIT License</sub>
 </div>

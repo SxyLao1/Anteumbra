@@ -38,13 +38,24 @@ from anteumbra.interfaces.web.log_history import (
     collect_log_history,
     render_log_history,
 )
-from anteumbra.interfaces.web.pages import render_page
+from anteumbra.interfaces.web.pages import (
+    active_site_id,
+    render_page,
+    site_context,
+    with_site,
+)
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 
 # 创建Blueprint
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+@admin_bp.app_template_global("with_site")
+def _template_with_site(url: str) -> str:
+    """``with_site(url)`` keeps a fragment URL inside the active site scope."""
+    return with_site(url)
 
 # v1.9.0: 扫描结果缓存（供报告生成使用，1小时TTL）
 
@@ -119,6 +130,7 @@ def dashboard_index():
             username=username,
             client_ip=client_ip,
             website_info=website_info,
+            **site_context(),
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] dashboard_index失败: {e}", exc_info=True)
@@ -176,17 +188,19 @@ def threats():
 @admin_bp.route("/dashboard_content")
 @require_auth
 def dashboard_content():
-    """v1.7.9: 安全报告 Dashboard"""
+    """v1.7.9: 安全报告 Dashboard — 汇总卡片 + 每个站点一行"""
     try:
         from anteumbra.application.dashboard_service import build_dashboard_summary
 
         runtime = get_runtime()
         summary = build_dashboard_summary(
-            request.args.get("site_id") or None,
+            active_site_id(),
             metrics=runtime.metrics,
             websites=runtime.config.get_enabled_websites(),
             registry=runtime.registry,
             quarantine_stats_reader=runtime.quarantine.get_stats,
+            profile_reader=_active_profiles_reader(runtime),
+            memory_shell_reader=_memory_shell_snapshot_reader(runtime),
         )
         stats = summary["aggregate"]
         recent = summary["recent_events"]
@@ -197,6 +211,7 @@ def dashboard_content():
             recent_events=recent,
             site_summaries=summary["sites"],
             compact=request.args.get("compact") == "1",
+            **site_context(),
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] dashboard_content失败: {e}", exc_info=True)
@@ -212,7 +227,7 @@ def recent_detections():
 
         runtime = get_runtime()
         summary = build_dashboard_summary(
-            request.args.get("site_id") or None,
+            active_site_id(),
             metrics=runtime.metrics,
             websites=runtime.config.get_enabled_websites(),
             registry=runtime.registry,
@@ -221,10 +236,58 @@ def recent_detections():
         return render_template(
             "admin/recent_detections.html",
             recent_events=summary["recent_events"],
+            **site_context(),
         )
     except Exception as e:
         current_app.logger.error(f"[ADMIN] recent_detections失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
+
+
+def _active_profiles_reader(runtime):
+    """Return a ``site_id -> top profile`` reader, or ``None`` when unavailable.
+
+    The dashboard's per-site row shows the riskiest profile of the site.  The
+    graph may be absent in a thin runtime, so the whole reader degrades to
+    ``None`` and the page renders ``-`` instead of inventing a figure.
+    """
+    graph = getattr(runtime, "threat_graph", None)
+    if graph is None or not hasattr(graph, "get_active_profiles"):
+        return None
+
+    def _top_profile(site_id: str):
+        profiles = graph.get_active_profiles(min_score=0.1, site_id=site_id)
+        if not profiles:
+            return None
+        best = max(profiles, key=lambda profile: float(getattr(profile, "risk_score", 0.0) or 0.0))
+        return {
+            "profile_id": str(getattr(best, "profile_id", "") or ""),
+            "risk_score": round(float(getattr(best, "risk_score", 0.0) or 0.0) * 100, 1),
+            "tool_signature": str(getattr(best, "tool_signature", "") or ""),
+        }
+
+    return _top_profile
+
+
+def _memory_shell_snapshot_reader(runtime):
+    """Return a reader for ``site_id -> probe snapshot``, or ``None``.
+
+    A deployment without the probe plugin has no snapshot at all; the dashboard
+    then leaves the per-site column empty rather than reporting zero suspects.
+    """
+    service = getattr(runtime, "memory_shell", None)
+    snapshot_reader = getattr(service, "snapshot", None)
+    if not callable(snapshot_reader):
+        return None
+
+    def _snapshot():
+        try:
+            snapshot = snapshot_reader()
+        except Exception:
+            current_app.logger.debug("memory-shell snapshot unavailable", exc_info=True)
+            return None
+        return snapshot if isinstance(snapshot, dict) else None
+
+    return _snapshot
 
 
 @admin_bp.route("/monitor_content")
@@ -344,6 +407,7 @@ def dashboard():
         username=session.get("username"),
         client_ip=request.remote_addr,
         website_info=website_info,
+        **site_context(),
     )
 
 

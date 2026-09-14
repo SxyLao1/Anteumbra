@@ -8,6 +8,7 @@
       <h4>{{ _('Quarantine Info') }}</h4>
       <table class="detail-table">
         <tr><td>{{ _('Quarantine ID') }}</td><td><code>{{ record.quarantine_id }}</code></td></tr>
+        <tr><td>{{ _('Site') }}</td><td>{% if record.site_unassigned %}{{ _('Unassigned') }}{% else %}<span class="badge badge-gray">{{ record.site_name }}</span> <code>{{ record.site_id }}</code>{% endif %}</td></tr>
         <tr><td>{{ _('Status') }}</td><td><span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'safe' if record.status == 'restored' else 'gray' }}">{{ record.status.upper() }}</span></td></tr>
         <tr><td>{{ _('Quarantined at') }}</td><td>{{ record.quarantine_time }}</td></tr>
         {% if record.restore_time %}

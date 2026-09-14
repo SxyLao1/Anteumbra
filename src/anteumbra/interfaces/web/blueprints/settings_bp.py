@@ -8,13 +8,23 @@ import json
 import logging
 import os
 import re
+import shutil
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 
 import tomli_w
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask_babel import gettext
 
-from anteumbra.cli.config_support import load_toml_value, validate_config_file
+from anteumbra.cli.config_support import (
+    load_toml_file,
+    load_toml_value,
+    set_dotted_value,
+    validate_config_file,
+    write_env_value,
+    write_toml_file,
+)
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
@@ -222,15 +232,351 @@ def _siem_exporter():
     return get_runtime().siem_exporter
 
 
+# -- Settings page structure -------------------------------------------------
+#
+# The page grew one card at a time until it was a single wall an operator had to
+# scroll to reach "where do I put the mail password".  Sections are now ordered
+# by importance with the secrets first, every one of them collapsible, and each
+# header carries a one-line state summary so the page can be read without
+# expanding anything.
+#
+# Expansion state lives in the query string ("?open=a,b"), which the section
+# headers push into the address bar, and is mirrored into the session so coming
+# back through the sidebar lands on the same sections.  Both mechanisms are
+# server-rendered: no script has to run for the page to remember.
+
+SETTINGS_SECTIONS: tuple[str, ...] = (
+    "environment",
+    "account",
+    "sites",
+    "detection",
+    "notifications",
+    "storage",
+    "plugins",
+    "advanced",
+)
+
+#: Only the first section is open on a first visit.
+DEFAULT_OPEN_SECTIONS: tuple[str, ...] = ("environment",)
+
+#: ``.env`` variables the environment section edits: the credentials, tokens and
+#: keys an operator needs to finish a deployment.  ``ANTEUMBRA_PASSWORD_HASH`` is
+#: displayed read-only (the account panel owns the password) and
+#: ``ANTEUMBRA_SECRET_KEY`` is deliberately absent - rotating it silently signs
+#: every session out, which is not a side effect a "save" button may have.
+ENVIRONMENT_KEYS: tuple[str, ...] = (
+    "ANTEUMBRA_EMAIL_USERNAME",
+    "ANTEUMBRA_EMAIL_PASSWORD",
+    "ANTEUMBRA_EMAIL_FROM",
+    "ANTEUMBRA_EMAIL_TO",
+    "ANTEUMBRA_WECHAT_API_KEY",
+    "ANTEUMBRA_WAF_API_KEY",
+    "ANTEUMBRA_WEBHOOK_SECRET",
+)
+
+
+def _read_env_values(config_path: Path) -> dict[str, str]:
+    """Configured ``.env`` values, keyed by variable name."""
+    env_vars: dict[str, str] = {}
+    try:
+        env_path = Path(config_path).parent / ".env"
+        if not env_path.exists():
+            return env_vars
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key, value = stripped.split("=", 1)
+                env_vars[key.strip()] = value.strip()
+    except OSError:
+        logger.debug("Failed to read .env for the settings page", exc_info=True)
+    return env_vars
+
+
+def _parse_open_sections(raw) -> list[str] | None:
+    """Requested sections from ``?open=``; ``None`` when the parameter is absent."""
+    if raw is None:
+        return None
+    requested = {part.strip() for part in str(raw).split(",")}
+    return [name for name in SETTINGS_SECTIONS if name in requested]
+
+
+def _open_sections() -> list[str]:
+    """Which sections are expanded: the query string first, then the session."""
+    requested = _parse_open_sections(request.args.get("open"))
+    if requested is not None:
+        session["settings_open_sections"] = requested
+        return requested
+    stored = session.get("settings_open_sections")
+    if isinstance(stored, list):
+        # An explicitly empty set is a real choice ("everything collapsed");
+        # only a session that never saw the page falls back to the default.
+        return [name for name in SETTINGS_SECTIONS if name in stored]
+    return list(DEFAULT_OPEN_SECTIONS)
+
+
+def _section_toggle_url(open_sections: list[str], section_id: str) -> str:
+    """URL that re-renders the page with ``section_id`` flipped.
+
+    Built by hand rather than through ``urlencode`` so the address bar keeps a
+    readable ``?open=environment,plugins``; the section ids are fixed ASCII
+    identifiers, so there is nothing to escape.
+    """
+    if section_id in open_sections:
+        toggled = [name for name in open_sections if name != section_id]
+    else:
+        toggled = [*open_sections, section_id]
+    ordered = [name for name in SETTINGS_SECTIONS if name in toggled]
+    return "/admin/settings?open=" + ",".join(ordered)
+
+
+def _enabled_website_count(config: Mapping) -> int:
+    websites = config.get("website")
+    if isinstance(websites, Mapping):
+        return 1 if websites.get("enabled", True) else 0
+    if isinstance(websites, list):
+        return sum(
+            1
+            for site in websites
+            if isinstance(site, Mapping) and site.get("enabled", True)
+        )
+    return 0
+
+
+def _website_log_config(config: Mapping) -> Mapping:
+    websites = config.get("website")
+    if isinstance(websites, list):
+        websites = next((site for site in websites if isinstance(site, Mapping)), {})
+    if not isinstance(websites, Mapping):
+        return {}
+    log_config = websites.get("log_config", {})
+    return log_config if isinstance(log_config, Mapping) else {}
+
+
+def _settings_summaries(config_path: Path) -> dict[str, str]:
+    """One-line current state per section, so nothing needs expanding to be read."""
+    summaries = {name: "" for name in SETTINGS_SECTIONS}
+    try:
+        config = get_runtime().config.get()
+    except Exception:
+        logger.debug("Settings summaries without a runtime config", exc_info=True)
+        return summaries
+    if not isinstance(config, Mapping):
+        return summaries
+
+    env_values = _read_env_values(config_path)
+    filled = sum(1 for value in env_values.values() if str(value).strip())
+    mail_ready = bool(
+        str(env_values.get("ANTEUMBRA_EMAIL_USERNAME", "")).strip()
+        and str(env_values.get("ANTEUMBRA_EMAIL_PASSWORD", "")).strip()
+    )
+    summaries["environment"] = " · ".join(
+        [
+            gettext("%(count)s credentials set", count=filled),
+            gettext("mail configured") if mail_ready else gettext("mail not configured"),
+        ]
+    )
+
+    username = ""
+    try:
+        username = str(session.get("username") or "")
+    except Exception:
+        username = ""
+    if not username:
+        web_admin = config.get("web_admin", {})
+        web_admin = web_admin if isinstance(web_admin, Mapping) else {}
+        username = str(web_admin.get("username", "admin"))
+    summaries["account"] = gettext("signed in as %(user)s", user=username)
+
+    summaries["sites"] = gettext(
+        "%(count)s site(s) enabled", count=_enabled_website_count(config)
+    )
+
+    paths = config.get("paths", {})
+    paths = paths if isinstance(paths, Mapping) else {}
+    watched = paths.get("monitor_paths") or paths.get("watch_paths") or []
+    watched_count = len(watched) if isinstance(watched, (list, tuple)) else 0
+    log_config = _website_log_config(config)
+    log_enabled = bool(log_config.get("log_monitor_enabled"))
+    summaries["detection"] = gettext(
+        "%(count)s watched path(s)", count=watched_count
+    ) + " · " + (
+        gettext("access log on") if log_enabled else gettext("access log off")
+    )
+
+    notifier = config.get("notifier", {})
+    notifier = notifier if isinstance(notifier, Mapping) else {}
+    channels = [
+        name
+        for name in ("email", "wechat", "webhook")
+        if isinstance(notifier.get(name), Mapping) and notifier[name].get("enabled")
+    ]
+    summaries["notifications"] = (
+        gettext("%(count)s channel(s) enabled", count=len(channels))
+        if channels
+        else gettext("notifications off")
+    )
+
+    storage = config.get("storage", {})
+    storage = storage if isinstance(storage, Mapping) else {}
+    summaries["storage"] = gettext(
+        "backend %(backend)s", backend=str(storage.get("backend", "json"))
+    )
+
+    try:
+        manager = _plugin_panel_manager()
+        if manager is None:
+            summaries["plugins"] = gettext("plugin system not attached")
+        else:
+            rows = _plugin_rows(manager, _plugin_config_table(get_runtime()))
+            summaries["plugins"] = gettext(
+                "%(loaded)s loaded / %(total)s available",
+                loaded=sum(1 for row in rows if row["loaded"]),
+                total=len(rows),
+            )
+    except Exception:
+        logger.debug("Plugin summary unavailable", exc_info=True)
+        summaries["plugins"] = ""
+
+    summaries["advanced"] = gettext("config file %(name)s", name=config_path.name)
+    return summaries
+
+
+def _site_rows(config: Mapping) -> list[dict]:
+    """Website entries as the settings page renders them."""
+    websites = config.get("website", [])
+    if isinstance(websites, Mapping):
+        websites = [websites]
+    rows = []
+    for site in websites if isinstance(websites, list) else []:
+        if not isinstance(site, Mapping):
+            continue
+        log_config = site.get("log_config", {})
+        log_config = log_config if isinstance(log_config, Mapping) else {}
+        rows.append(
+            {
+                "name": str(site.get("name") or site.get("id") or site.get("site_id") or "?"),
+                "path": str(site.get("path", "")),
+                "port": site.get("port", ""),
+                "enabled": bool(site.get("enabled", True)),
+                "log_monitor_enabled": bool(log_config.get("log_monitor_enabled")),
+                "access_log": str(log_config.get("access_log_path", "")),
+            }
+        )
+    return rows
+
+
+def _render_settings_page(**extra):
+    """Render the settings page with its section state and live summaries."""
+    config_path = Path(get_runtime().config.path)
+    try:
+        config = get_runtime().config.get()
+    except Exception:
+        config = {}
+    config = config if isinstance(config, Mapping) else {}
+    open_sections = _open_sections()
+
+    paths = config.get("paths", {})
+    paths = paths if isinstance(paths, Mapping) else {}
+    watched = paths.get("monitor_paths") or paths.get("watch_paths") or []
+    extensions = paths.get("monitor_extensions") or []
+    log_config = _website_log_config(config)
+    waf_source = config.get("waf_source", {})
+    waf_source = waf_source if isinstance(waf_source, Mapping) else {}
+    quarantine = config.get("quarantine", {})
+    quarantine = quarantine if isinstance(quarantine, Mapping) else {}
+    ip_blocker = config.get("ip_blocker", {})
+    ip_blocker = ip_blocker if isinstance(ip_blocker, Mapping) else {}
+
+    context = {
+        "open_sections": open_sections,
+        "section_toggle_urls": {
+            name: _section_toggle_url(open_sections, name) for name in SETTINGS_SECTIONS
+        },
+        "section_summaries": _settings_summaries(config_path),
+        "env_vars": _read_env_values(config_path),
+        "env_keys": ENVIRONMENT_KEYS,
+        "env_notice": None,
+        "config_path": str(config_path),
+        "site_rows": _site_rows(config),
+        "watched_paths": [str(item) for item in watched if str(item).strip()]
+        if isinstance(watched, (list, tuple))
+        else [],
+        "monitored_extensions": [str(item) for item in extensions]
+        if isinstance(extensions, (list, tuple))
+        else [],
+        "log_monitor_enabled": bool(log_config.get("log_monitor_enabled")),
+        "access_log_path": str(log_config.get("access_log_path", "")),
+        "auto_quarantine": bool(quarantine.get("auto_quarantine_enabled", True)),
+        "auto_block": bool(ip_blocker.get("auto_block_enabled", False)),
+        "waf_enabled": bool(waf_source.get("enabled")),
+        "waf_type": str(waf_source.get("type", "")) or gettext("not configured"),
+        "waf_url": str(waf_source.get("url", "")),
+    }
+    context.update(extra)
+    return render_page("admin/settings.html", **context)
+
+
 @settings_bp.route("/settings")
 @require_auth
 def settings_page():
-    """v1.8.0: Settings -- system + account + notification config merged view"""
+    """v1.0.38: Settings -- ordered, collapsible sections with live state.
+
+    The .env / mail / token editor is the first section: it is the one part of
+    this page a new operator cannot finish without, and it used to sit at the
+    bottom of the config editor, below every config.toml field.
+    """
     try:
-        return render_page("admin/settings.html")
+        return _render_settings_page()
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] settings failed: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
+
+
+@settings_bp.route("/settings/environment/save", methods=["POST"])
+@require_auth
+def settings_environment_save():
+    """Save the environment/secrets section through the CLI's ``.env`` writer.
+
+    Only fields the operator actually filled in are written, so submitting the
+    section cannot blank a credential that was configured elsewhere.  The
+    response is the re-rendered page: the section keeps its values and shows the
+    result inline, and a bad write is an inline error rather than a 500.
+    """
+    notice = None
+    try:
+        env_path = Path(get_runtime().config.path).parent / ".env"
+        written = []
+        for key in ENVIRONMENT_KEYS:
+            raw = request.form.get(key)
+            if raw is None:
+                continue
+            value = str(raw).strip()
+            if not value:
+                continue
+            write_env_value(env_path, key, value)
+            os.environ[key] = value
+            written.append(key)
+        try:
+            get_runtime().config.reload()
+        except Exception:
+            logger.debug("Runtime config reload failed after .env save", exc_info=True)
+        notice = {
+            "level": "success" if written else "info",
+            "text": gettext("%(count)s value(s) written to .env", count=len(written))
+            if written
+            else gettext("Nothing to save: every field was left empty."),
+        }
+    except Exception as exc:  # noqa: BLE001 - inline error, never a 500
+        current_app.logger.error(f"[SETTINGS] environment save failed: {exc}", exc_info=True)
+        notice = {
+            "level": "error",
+            "text": gettext("Environment save failed: %(detail)s", detail=str(exc)),
+        }
+    try:
+        return _render_settings_page(env_notice=notice)
+    except Exception as exc:  # noqa: BLE001 - the page must still answer
+        current_app.logger.error(f"[SETTINGS] settings re-render failed: {exc}", exc_info=True)
+        return f'<div style="color:#ff4444;">Error: {exc}</div>'
 
 
 @settings_bp.route("/settings/notifications")
@@ -266,21 +612,12 @@ def settings_config_editor():
         sections = _collect_editor_sections(config, _harvest_descriptions(config_path))
         levels = {name: name.count(".") for name in sections}
 
-        env_vars = {}
-        env_path = config_path.parent / ".env"
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    env_vars[k.strip()] = v.strip()
-
         return render_page(
             "admin/panels/config_editor.html",
             sections=sections,
             sections_levels=levels,
             config_path=str(config_path),
-            env_vars=env_vars,
+            env_vars=_read_env_values(config_path),
             os=os,
         )
     except Exception as e:
@@ -585,12 +922,82 @@ def _plugin_section_name(name: str) -> str:
     return name.rsplit(".", 1)[-1] if name else ""
 
 
+def _plugin_config_table(runtime) -> dict:
+    """The ``[plugins]`` table of the current runtime configuration."""
+    try:
+        config = runtime.config.get()
+    except Exception:
+        logger.error("plugin config lookup failed", exc_info=True)
+        return {}
+    table = config.get("plugins", {}) if isinstance(config, Mapping) else {}
+    return dict(table) if isinstance(table, Mapping) else {}
+
+
+def _builtin_list(plugin_config: Mapping) -> list[str]:
+    """``[plugins] builtin`` as a plain list of factory keys."""
+    builtin = plugin_config.get("builtin") if isinstance(plugin_config, Mapping) else None
+    return [str(item) for item in builtin] if isinstance(builtin, (list, tuple)) else []
+
+
+def _plugin_panel_manager():
+    """The plugin manager of the current app, when one was attached."""
+    return current_app.extensions.get("anteumbra.plugin_manager")
+
+
+def _sync_plugin_config(manager, plugin_config: Mapping) -> None:
+    """Let the manager see the ``[plugins]`` table that is on disk right now.
+
+    ``available_plugins()`` reports what the manager read at startup, so a plugin
+    added to ``[plugins] builtin`` - or switched off in its own section - by an
+    edit elsewhere would stay invisible here until a restart.  The inventory is
+    the operator's answer to "is this plugin installed?", so it reads the live
+    table instead of a snapshot.
+    """
+    if manager is None or not isinstance(plugin_config, Mapping):
+        return
+    apply_config = getattr(manager, "apply_plugin_config", None)
+    if not callable(apply_config):
+        return
+    try:
+        apply_config(plugin_config)
+    except Exception:  # noqa: BLE001 - the panel still renders from the snapshot
+        logger.debug("Plugin manager refused the refreshed plugin config", exc_info=True)
+
+
+def _event_source_state(manager, name: str) -> bool | None:
+    """Whether a loaded EventSource reports itself as running.
+
+    ``None`` means "not answerable" - either the plugin is not an event source,
+    or its ``is_running`` is unavailable.  The panel prints that as unknown
+    rather than inventing a state it never observed.
+    """
+    sources = getattr(manager, "event_sources", None)
+    if not isinstance(sources, Mapping):
+        return None
+    source = sources.get(name)
+    if source is None:
+        return None
+    probe = getattr(source, "is_running", None)
+    if not callable(probe):
+        return None
+    try:
+        return bool(probe())
+    except Exception:  # noqa: BLE001 - a broken probe must not break the panel
+        return None
+
+
 def _plugin_rows(manager, plugin_config) -> list[dict]:
     """Build the plugin inventory: what is loaded plus what could be loaded.
 
     ``list_all()`` answers "what is running"; the inventory answers "what is
     there and why is it not running", which is the question an operator has when
     an adapter they configured never shows up in the UI.
+
+    Each row carries one effective ``state`` plus every fact behind it, so the
+    panel can answer "is this plugin actually installed and working?" without
+    the operator reading a log: loaded/active, whether an EventSource is really
+    running, the config section the plugin reads, and - only for loaded rows -
+    the ``enabled`` value found there.
     """
     loaded_by_name = {}
     try:
@@ -623,8 +1030,7 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
             for name, entry in loaded_by_name.items()
         ]
 
-    builtin = plugin_config.get("builtin") if isinstance(plugin_config, Mapping) else None
-    builtin_names = [str(item) for item in builtin] if isinstance(builtin, (list, tuple)) else []
+    builtin_names = _builtin_list(plugin_config)
     system_enabled = bool(getattr(manager, "is_enabled", False))
 
     rows = []
@@ -639,7 +1045,8 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
         in_builtin = bool(item.get("in_builtin", name in builtin_names))
         enabled = bool(item.get("enabled", True))
         section_config = plugin_config.get(section) if isinstance(plugin_config, Mapping) else None
-        if isinstance(section_config, Mapping) and "enabled" in section_config:
+        enabled_declared = isinstance(section_config, Mapping) and "enabled" in section_config
+        if enabled_declared:
             enabled = bool(section_config.get("enabled"))
 
         reasons = []
@@ -657,6 +1064,30 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
             if system_enabled and installed and in_builtin and enabled:
                 reasons.append("not_registered")
 
+        # A row that is not loaded keeps its first (most actionable) reason as
+        # the state; a loaded row takes its state from the run check below.
+        state = reasons[0] if reasons else "not_registered"
+        registered_name = item.get("registered_name")
+        if loaded and registered_name is None and loaded_entry is not None:
+            registered_name = str(loaded_entry.get("name") or "")
+        event_source = bool(item.get("event_source")) or (
+            bool(registered_name) and registered_name in (getattr(manager, "event_sources", None) or {})
+        )
+        running = item.get("running")
+        if loaded and event_source and running is None:
+            running = _event_source_state(manager, str(registered_name or section))
+        if loaded:
+            if not event_source:
+                state = "active"
+            elif running is True:
+                state = "active"
+            elif running is False:
+                state = "inactive"
+            else:
+                state = "unverified"
+        else:
+            running = None
+
         snippet_lines = []
         plugin_table = []
         if not system_enabled:
@@ -670,6 +1101,7 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
                 snippet_lines.append("")
             snippet_lines += [f"[plugins.{section}]", "enabled = true"]
 
+        guard_reason = _runtime_critical_reason(section) or _runtime_critical_reason(name)
         rows.append(
             {
                 "name": name,
@@ -678,10 +1110,19 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
                 "installed": installed,
                 "in_builtin": in_builtin,
                 "enabled": enabled,
+                "enabled_declared": enabled_declared,
+                # Only a loaded row may claim an enabled value: a plugin that is
+                # not running is not "enabled", it is not there.
+                "show_enabled": loaded,
                 "version": (loaded_entry or {}).get("version") or item.get("version"),
                 "type": (loaded_entry or {}).get("type") or item.get("type"),
                 "events": (loaded_entry or {}).get("events") or item.get("events") or [],
                 "reasons": reasons,
+                "state": state,
+                "event_source": event_source,
+                "running": running,
+                "registered_name": registered_name,
+                "guard_reason": guard_reason,
                 "snippet": "\n".join(snippet_lines),
             }
         )
@@ -690,36 +1131,430 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
     return rows
 
 
+def _plugin_panel_context(manager, plugin_config, *, notices=None, focus_plugin="") -> dict:
+    """Everything ``admin/panels/plugin_status.html`` renders."""
+    _sync_plugin_config(manager, plugin_config)
+    plugins = _plugin_rows(manager, plugin_config) if manager is not None else []
+    return {
+        "enabled": bool(getattr(manager, "is_enabled", False)) if manager is not None else False,
+        "manager_present": manager is not None,
+        "plugins": plugins,
+        "plugin_count": len(plugins),
+        "loaded_count": sum(1 for row in plugins if row["loaded"]),
+        "active_count": sum(1 for row in plugins if row["state"] == "active"),
+        "detector_count": len(manager.detectors) if manager is not None else 0,
+        "notifier_count": len(manager.notifiers) if manager is not None else 0,
+        "source_count": len(manager.event_sources) if manager is not None else 0,
+        "notices": list(notices or []),
+        "focus_plugin": focus_plugin,
+    }
+
+
 @settings_bp.route("/settings/plugin-status")
 @require_auth
 def settings_plugin_status():
     """Plugin inventory panel for Settings page."""
     try:
-        pm = current_app.extensions.get("anteumbra.plugin_manager")
-        plugin_config = get_runtime().config.get().get("plugins", {})
-        if not isinstance(plugin_config, Mapping):
-            plugin_config = {}
-        if pm is None:
-            return render_page(
-                "admin/panels/plugin_status.html",
-                enabled=False,
-                plugins=[],
-                plugin_count=0,
-                loaded_count=0,
-                detector_count=0,
-                notifier_count=0,
-                source_count=0,
-            )
-        plugins = _plugin_rows(pm, plugin_config)
+        pm = _plugin_panel_manager()
+        plugin_config = _plugin_config_table(get_runtime())
         return render_page(
             "admin/panels/plugin_status.html",
-            enabled=pm.is_enabled,
-            plugins=plugins,
-            plugin_count=len(plugins),
-            loaded_count=sum(1 for row in plugins if row["loaded"]),
-            detector_count=len(pm.detectors),
-            notifier_count=len(pm.notifiers),
-            source_count=len(pm.event_sources),
+            **_plugin_panel_context(pm, plugin_config),
         )
     except Exception as e:
+        current_app.logger.error(f"[SETTINGS] plugin status failed: {e}", exc_info=True)
         return f'<div style="color:#ff4444;">Error: {e}</div>'
+
+
+# -- Plugin control: enable/disable and [plugins] builtin membership ---------
+#
+# The panel used to be read-only, which left the last mile of plugin debugging to
+# hand-edited TOML plus a restart.  These handlers close that loop through the
+# SAME config path the CLI uses (load -> set_dotted_value -> write -> validate)
+# and then apply the change to the running runtime, saying so honestly whenever
+# they cannot.
+
+
+def _runtime_critical_reason(name: str) -> str:
+    """Refusal reason for a plugin the runtime cannot operate without.
+
+    This is a guard rail, not a permission check.  Switching ``notifier_handler``
+    off stops alert delivery with no other visible symptom: the monitor still
+    emits ``alert_requested``, the live log still shows the detection, and
+    nothing in the UI turns red - the mail simply never arrives.  That silence is
+    exactly what an operator cannot debug from a settings page, so the change is
+    refused with the reason attached.
+    """
+    known = {
+        "notifier_handler": gettext(
+            "Runtime alerting is delivered by this plugin; switching it off would "
+            "silently drop every alert."
+        ),
+    }
+    return known.get(name, "")
+
+
+def _config_backup_path(config_path: Path) -> Path:
+    """A free, timestamped sibling path for a config backup."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    candidate = config_path.with_name(f"{config_path.name}.{stamp}.bak")
+    index = 1
+    while candidate.exists():
+        candidate = config_path.with_name(f"{config_path.name}.{stamp}-{index}.bak")
+        index += 1
+    return candidate
+
+
+def _write_config_values(config_path: Path, updates: Mapping) -> tuple[bool, str, str]:
+    """Apply dotted updates the way ``anteumbra config set`` does.
+
+    Returns ``(ok, error, backup_name)``.  A timestamped copy of config.toml is
+    kept before it is replaced - this file is the runtime's only source of truth
+    and an operator editing plugins from the UI has no other undo.  The candidate
+    file is validated with the same validator the CLI uses, and only errors this
+    write newly introduces block it, so saving into a config that already warns
+    keeps working.
+    """
+    data = load_toml_file(config_path)
+    for key, value in updates.items():
+        set_dotted_value(data, str(key), value)
+    tmp_path = config_path.with_name(config_path.name + ".tmp")
+    try:
+        write_toml_file(tmp_path, data)
+        baseline_errors, _ = validate_config_file(config_path)
+        candidate_errors, _ = validate_config_file(tmp_path)
+        new_errors = [error for error in candidate_errors if error not in baseline_errors]
+        if new_errors:
+            return False, "; ".join(new_errors[:3]), ""
+        backup = _config_backup_path(config_path)
+        shutil.copy2(config_path, backup)
+        os.replace(tmp_path, config_path)
+        return True, "", backup.name
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Failed to remove the config write scratch file", exc_info=True)
+
+
+def _reload_runtime_config(runtime) -> str:
+    """Reload the runtime config; returns "" on success, else the reason."""
+    try:
+        runtime.config.reload()
+    except Exception as exc:  # noqa: BLE001 - reported to the operator, not raised
+        logger.error("Config reload failed after a plugin change", exc_info=True)
+        return str(exc) or exc.__class__.__name__
+    return ""
+
+
+def _apply_plugin_change_live(manager, *, action: str, row: Mapping) -> tuple[str, str]:
+    """Apply one plugin mutation to the running runtime.
+
+    Returns ``(outcome, detail)`` where outcome is ``live`` (the runtime already
+    reflects the new state), ``restart`` (it cannot be applied without one) or
+    ``failed`` (the attempt did not take).  Nothing here pretends: a plugin that
+    refuses to activate is reported as a failure instead of a success.
+    """
+    if manager is None:
+        return "restart", ""
+    if not getattr(manager, "is_enabled", False):
+        return "restart", ""
+    try:
+        if action in ("disable", "builtin_remove"):
+            if not row.get("loaded"):
+                return "live", ""  # already not running: nothing to unload
+            target = str(row.get("registered_name") or row.get("section") or row.get("name"))
+            return ("live", "") if manager.unregister(target) else ("failed", "")
+        if row.get("loaded"):
+            return "live", ""  # already registered
+        return ("live", "") if manager.load_plugin(str(row.get("name"))) else ("failed", "")
+    except Exception as exc:  # noqa: BLE001 - the panel reports it inline
+        logger.error("Plugin live apply failed for %s", row.get("name"), exc_info=True)
+        return "failed", str(exc) or exc.__class__.__name__
+
+
+def _notice(level: str, text: str) -> dict:
+    return {"level": level, "text": text}
+
+
+def _plugin_action_notices(
+    action: str,
+    row: Mapping,
+    *,
+    outcome: str,
+    detail: str,
+    builtin_after: list[str],
+    backup_name: str,
+) -> list[dict]:
+    """The operator-facing result of one plugin mutation."""
+    name = str(row.get("name"))
+    notices: list[dict] = []
+    if outcome == "live":
+        notices.append(
+            _notice(
+                "success",
+                {
+                    "disable": gettext(
+                        "Switched off %(name)s: config.toml written and the plugin was "
+                        "unloaded from the running runtime.",
+                        name=name,
+                    ),
+                    "enable": gettext(
+                        "Switched on %(name)s: config.toml written and the plugin was "
+                        "registered in the running runtime.",
+                        name=name,
+                    ),
+                    "builtin_add": gettext(
+                        "Added %(name)s to [plugins] builtin and loaded it in the running runtime.",
+                        name=name,
+                    ),
+                    "builtin_remove": gettext(
+                        "Removed %(name)s from [plugins] builtin and unloaded it from the "
+                        "running runtime.",
+                        name=name,
+                    ),
+                }[action],
+            )
+        )
+    elif outcome == "restart":
+        reason = gettext("the plugin system is switched off in this process")
+        if _plugin_panel_manager() is None:
+            reason = gettext("no plugin manager is attached to this runtime")
+        notices.append(
+            _notice(
+                "warning",
+                gettext(
+                    "Config written, but %(name)s could not be applied to the running runtime "
+                    "(%(reason)s). A restart is required.",
+                    name=name,
+                    reason=reason,
+                ),
+            )
+        )
+    else:
+        notices.append(
+            _notice(
+                "warning",
+                gettext(
+                    "Config written, but applying %(name)s to the running runtime failed: "
+                    "%(detail)s A restart is required to pick the configuration up.",
+                    name=name,
+                    detail=detail or gettext("the plugin did not activate"),
+                ),
+            )
+        )
+
+    listed = name in builtin_after
+    if action == "disable" and listed:
+        notices.append(
+            _notice(
+                "info",
+                gettext(
+                    "Note: %(name)s is still listed in [plugins] builtin, so a restart loads it "
+                    "again from there.",
+                    name=name,
+                ),
+            )
+        )
+    if action == "enable" and not listed:
+        notices.append(
+            _notice(
+                "info",
+                gettext(
+                    "Note: %(name)s is not listed in [plugins] builtin, so a restart will not "
+                    "load it.",
+                    name=name,
+                ),
+            )
+        )
+    if action == "builtin_remove":
+        notices.append(
+            _notice(
+                "info",
+                gettext(
+                    "Note: %(name)s is no longer listed in [plugins] builtin, so a restart will "
+                    "not load it.",
+                    name=name,
+                ),
+            )
+        )
+    if backup_name:
+        notices.append(
+            _notice(
+                "info",
+                gettext("Backup kept: %(file)s", file=backup_name),
+            )
+        )
+    return notices
+
+
+def _run_plugin_action(runtime, manager, plugin_config: Mapping, row: Mapping, action: str):
+    """Write one plugin mutation and apply it; returns the notices to render."""
+    name = str(row["name"])
+    section = str(row["section"])
+    if action not in ("enable", "disable", "builtin_add", "builtin_remove"):
+        return [_notice("error", gettext("Unsupported plugin action: %(action)s", action=action))]
+    if action in ("enable", "builtin_add") and not row["installed"]:
+        return [
+            _notice(
+                "error",
+                gettext(
+                    "%(name)s is listed in config.toml, but this build has no implementation "
+                    "for it.",
+                    name=name,
+                ),
+            )
+        ]
+    guard = _runtime_critical_reason(section) or _runtime_critical_reason(name)
+    if guard and action in ("disable", "builtin_remove"):
+        return [
+            _notice(
+                "error",
+                gettext(
+                    "Refused: %(name)s must stay switched on and listed in builtin. %(reason)s",
+                    name=name,
+                    reason=guard,
+                ),
+            )
+        ]
+
+    builtin_before = _builtin_list(plugin_config)
+    if action == "disable":
+        updates = {f"plugins.{section}.enabled": False}
+    elif action == "enable":
+        updates = {f"plugins.{section}.enabled": True}
+    elif action == "builtin_add":
+        if name in builtin_before:
+            return [
+                _notice(
+                    "info",
+                    gettext("%(name)s is already listed in [plugins] builtin.", name=name),
+                )
+            ]
+        updates = {"plugins.builtin": [*builtin_before, name]}
+    else:
+        remaining = [item for item in builtin_before if item not in (name, section)]
+        if remaining == builtin_before:
+            return [
+                _notice(
+                    "info",
+                    gettext("%(name)s is not listed in [plugins] builtin.", name=name),
+                )
+            ]
+        updates = {"plugins.builtin": remaining}
+
+    try:
+        config_path = Path(runtime.config.path)
+    except Exception:
+        logger.error("Plugin change without a resolvable config path", exc_info=True)
+        return [_notice("error", gettext("Configuration path is unavailable; nothing was written."))]
+
+    try:
+        ok, error, backup_name = _write_config_values(config_path, updates)
+    except Exception as exc:  # noqa: BLE001 - a bad config must not become a 500
+        logger.error("Plugin config write failed", exc_info=True)
+        return [
+            _notice(
+                "error",
+                gettext(
+                    "Config write failed for %(name)s: %(detail)s",
+                    name=name,
+                    detail=str(exc) or exc.__class__.__name__,
+                ),
+            )
+        ]
+    if not ok:
+        return [
+            _notice(
+                "error",
+                gettext(
+                    "Config write refused for %(name)s: %(detail)s",
+                    name=name,
+                    detail=error or gettext("validation failed"),
+                ),
+            )
+        ]
+
+    reload_error = _reload_runtime_config(runtime)
+    plugin_config_after = _plugin_config_table(runtime)
+    builtin_after = _builtin_list(plugin_config_after)
+    if reload_error:
+        return [
+            _notice(
+                "warning",
+                gettext(
+                    "Config written and the runtime reload failed (%(detail)s); the running "
+                    "plugin state was left untouched. A restart is required.",
+                    detail=reload_error,
+                ),
+            ),
+            _notice("info", gettext("Backup kept: %(file)s", file=backup_name)),
+        ]
+
+    if manager is not None:
+        try:
+            # The fresh instance must activate with what is on disk now.
+            manager.apply_plugin_config(plugin_config_after)
+        except Exception:  # noqa: BLE001 - older managers may not expose this
+            logger.debug("Plugin manager refused the refreshed plugin config", exc_info=True)
+
+    outcome, detail = _apply_plugin_change_live(manager, action=action, row=row)
+    return _plugin_action_notices(
+        action,
+        row,
+        outcome=outcome,
+        detail=detail,
+        builtin_after=builtin_after,
+        backup_name=backup_name,
+    )
+
+
+@settings_bp.route("/settings/plugins/control", methods=["POST"])
+@require_auth
+def settings_plugin_control():
+    """Switch one plugin on/off, or move it in/out of ``[plugins] builtin``.
+
+    The response is the re-rendered inventory, so the row an operator just
+    changed comes back with its resulting state.  Every failure - unknown
+    plugin, guard rail, invalid config, failed live apply - renders as an inline
+    notice inside that panel instead of a 500, because a plugin that will not
+    start is a normal operational outcome, not a server fault.
+    """
+    notices: list[dict] = []
+    focus = ""
+    try:
+        action = str(request.form.get("action") or "").strip()
+        plugin_key = str(request.form.get("plugin") or "").strip()
+        manager = _plugin_panel_manager()
+        runtime = get_runtime()
+        plugin_config = _plugin_config_table(runtime)
+        rows = {row["name"]: row for row in _plugin_rows(manager, plugin_config)}
+        row = rows.get(plugin_key)
+        if row is None:
+            notices.append(
+                _notice(
+                    "error",
+                    gettext("Unknown plugin: %(name)s", name=plugin_key or "?"),
+                )
+            )
+        else:
+            focus = plugin_key
+            notices = _run_plugin_action(runtime, manager, plugin_config, row, action)
+    except Exception as exc:  # noqa: BLE001 - inline error, never a 500
+        current_app.logger.error(f"[SETTINGS] plugin control failed: {exc}", exc_info=True)
+        notices = [
+            _notice(
+                "error",
+                gettext("Plugin control failed: %(detail)s", detail=str(exc)),
+            )
+        ]
+    try:
+        manager = _plugin_panel_manager()
+        plugin_config = _plugin_config_table(get_runtime())
+        return render_page(
+            "admin/panels/plugin_status.html",
+            **_plugin_panel_context(manager, plugin_config, notices=notices, focus_plugin=focus),
+        )
+    except Exception as exc:  # noqa: BLE001 - the panel itself must still answer
+        current_app.logger.error(f"[SETTINGS] plugin panel render failed: {exc}", exc_info=True)
+        return f'<div style="color:#ff4444;">Error: {exc}</div>'

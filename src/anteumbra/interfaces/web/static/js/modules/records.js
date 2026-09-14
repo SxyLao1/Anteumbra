@@ -19,6 +19,27 @@
   };
   var dangerousTokens = /(eval|assert|system|exec|passthru|shell_exec|popen|proc_open)\s*\(|\b(base64_decode|gzinflate|str_rot13|gzuncompress)\s*\(|\b(file_get_contents|file_put_contents|move_uploaded_file)\s*\(|\b\$_(?:GET|POST|REQUEST|SERVER|FILES|COOKIE)\b/gi;
 
+  function siteApi() { return window.AnteumbraSite; }
+
+  // The active scope is server state (URL + remembered choice), so every URL a
+  // module builds has to carry it or the request would silently answer with
+  // every site's data.
+  function siteUrl(url) {
+    var site = siteApi();
+    return site && site.withSite ? site.withSite(url) : url;
+  }
+
+  // A row belongs to its own site: acting on it from the aggregate list must
+  // stay inside that site instead of resolving an ambiguous path.
+  function scopedUrl(url, trigger) {
+    var site = siteApi();
+    if (!site) return url;
+    var siteId = (trigger && site.rowSite(trigger)) || site.current();
+    if (!siteId) return url;
+    var separator = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + separator + 'site_id=' + encodeURIComponent(siteId);
+  }
+
   function containerFor(element, selector) {
     return element && element.closest(selector);
   }
@@ -78,13 +99,13 @@
   function refreshRecords(container) {
     if (!container || !window.htmx) return;
     var audit = container.dataset.auditMode === 'true' ? '&audit=true' : '';
-    window.htmx.ajax('GET', '/admin/records?compact=1' + audit, { target: '#' + container.id, swap: 'outerHTML' });
+    window.htmx.ajax('GET', siteUrl('/admin/records?compact=1' + audit), { target: '#' + container.id, swap: 'outerHTML' });
   }
 
   function refreshQuarantine(container) {
     if (!container || !window.htmx) return;
     var status = encodeURIComponent(container.dataset.currentStatus || 'quarantined');
-    window.htmx.ajax('GET', '/admin/quarantine?status=' + status, { target: '#' + container.id, swap: 'outerHTML' });
+    window.htmx.ajax('GET', siteUrl('/admin/quarantine?status=' + status), { target: '#' + container.id, swap: 'outerHTML' });
   }
 
   function batchRecords(action, trigger) {
@@ -93,6 +114,8 @@
     var labels = { quarantine: app.t('Quarantine'), false_positive: app.t('Mark as FP'), delete: app.t('Delete') };
     if (!app.confirm(app.t('%(action)s %(count)s records?', { action: labels[action], count: records.length }))) return;
     var body = new URLSearchParams({ action: action });
+    var scope = siteApi() ? siteApi().current() : '';
+    if (scope) body.set('site_id', scope);
     records.forEach(function (path) { body.append('file_paths[]', path); });
     app.http.json('/admin/records/batch', {
       method: 'POST',
@@ -118,6 +141,8 @@
     var labels = { restore: app.t('Restore'), delete: app.t('Delete') };
     if (!app.confirm(app.t('%(action)s %(count)s quarantine records?', { action: labels[action], count: ids.length }))) return;
     var body = new URLSearchParams({ action: action });
+    var scope = siteApi() ? siteApi().current() : '';
+    if (scope) body.set('site_id', scope);
     ids.forEach(function (id) { body.append('qids[]', id); });
     app.http.json('/admin/quarantine/batch', {
       method: 'POST',
@@ -235,7 +260,7 @@
     if (!box || !overlay) return;
     box.innerHTML = '<div class="logs-placeholder">Loading detail...</div>';
     app.ui.showModal(overlay);
-    app.http.text('/admin/records/detail?file_path=' + encodeURIComponent(path), {
+    app.http.text(scopedUrl('/admin/records/detail?file_path=' + encodeURIComponent(path), trigger), {
       headers: { 'HX-Request': 'true' }
     }).then(function (html) {
       box.innerHTML = html;
@@ -253,17 +278,17 @@
   function reloadLedger() {
     var panel = document.querySelector('.records-panel[data-status]');
     if (!panel) return;
-    app.http.text('/admin/records?compact=1&status=' + encodeURIComponent(reviewStatus()), {
+    app.http.text(siteUrl('/admin/records?compact=1&status=' + encodeURIComponent(reviewStatus())), {
       headers: { 'HX-Request': 'true' }
     }).then(function (html) {
       app.swapHtml(panel, html, 'outerHTML');
     }).catch(function (error) { app.ui.toast(app.t('Reload failed: %(message)s', { message: error.message }), 'error'); });
   }
 
-  function reviewRecord(path, mark) {
+  function reviewRecord(path, mark, trigger) {
     if (!path) return;
     var action = mark ? 'mark_false_positive' : 'unmark_false_positive';
-    app.http.text('/admin/' + action + '/' + encodeURIComponent(path) + '?status=' + encodeURIComponent(reviewStatus()), {
+    app.http.text(scopedUrl('/admin/' + action + '/' + encodeURIComponent(path) + '?status=' + encodeURIComponent(reviewStatus()), trigger), {
       method: 'POST', headers: { 'HX-Request': 'true' }
     }).then(function () {
       app.ui.toast(app.t(mark ? 'Marked as false positive.' : 'False positive cleared.'), 'success');
@@ -276,7 +301,7 @@
   function rearmRecordAlert(trigger) {
     var path = trigger && trigger.dataset ? trigger.dataset.filePath : '';
     if (!path) return;
-    app.http.text('/admin/records/rearm_alert/' + encodeURIComponent(path), {
+    app.http.text(scopedUrl('/admin/records/rearm_alert/' + encodeURIComponent(path), trigger), {
       method: 'POST', headers: { 'HX-Request': 'true' }
     }).then(function () {
       app.ui.toast(app.t('Alert re-armed.'), 'success');
@@ -290,7 +315,7 @@
   function switchStatus(status) {
     var panel = document.querySelector('.records-panel[data-status]');
     if (!panel || !status) return;
-    app.http.text('/admin/records?compact=1&status=' + encodeURIComponent(status), {
+    app.http.text(siteUrl('/admin/records?compact=1&status=' + encodeURIComponent(status)), {
       headers: { 'HX-Request': 'true' }
     }).then(function (html) {
       app.swapHtml(panel, html, 'outerHTML');
@@ -361,8 +386,8 @@
         if (path) showSource(path, 'path=' + encodeURIComponent(path));
       } },
       'records.detail-open': { handler: function (context) { openRecordDetail(context.element); } },
-      'records.mark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, true); } },
-      'records.unmark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, false); } },
+      'records.mark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, true, context.element); } },
+      'records.unmark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, false, context.element); } },
       'records.status': { handler: function (context) { switchStatus(context.element.dataset.status); } },
       'records.view-quarantine': { handler: function (context) {
         var id = context.element.dataset.quarantineId;

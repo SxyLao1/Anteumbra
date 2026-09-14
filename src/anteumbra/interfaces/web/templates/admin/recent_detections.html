@@ -6,6 +6,9 @@
     <article class="recent-item" data-path="{{ event.path|e }}">
       <div class="recent-main">
         <span class="recent-file" title="{{ event.path or event.file }}">{{ event.file }}</span>
+        {% if aggregate_scope %}
+        <span class="badge badge-gray" title="{{ _('Site this record belongs to') }}">{% if event.site_unassigned %}{{ _('Unassigned') }}{% else %}{{ event.site_name }}{% endif %}</span>
+        {% endif %}
         {% if event.quarantined %}
           <span class="badge badge-success">{{ _('Quarantined') }}</span>
         {% elif event.false_positive %}

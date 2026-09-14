@@ -31,9 +31,22 @@ PYBABEL = shutil.which("pybabel") or str(Path(sys.executable).parent / "pybabel"
 
 def load_map() -> dict[str, str]:
     merged = dict(runpy.run_path(str(REPO / "build" / "zh_map.py"))["TRANSLATIONS"])
-    extra = REPO / "build" / "zh_map_extra.py"
-    if extra.exists():
-        merged.update(runpy.run_path(str(extra))["TRANSLATIONS"])
+    # Feature-scoped maps keep parallel work off one shared file; each holds a
+    # single dict and is optional so a checkout without it still builds.
+    for name, variable in (
+        ("zh_map_extra.py", "TRANSLATIONS"),
+        ("zh_map_extra_sites.py", "ZH_MAP_EXTRA_SITES"),
+        ("zh_map_extra_memshell.py", "ZH_MAP_EXTRA_MEMSSHELL"),
+        ("zh_map_extra_settings.py", "ZH_MAP_EXTRA_SETTINGS"),
+        ("zh_map_extra_mcp.py", "ZH_MAP_EXTRA_MCP"),
+    ):
+        path = REPO / "build" / name
+        if not path.exists():
+            continue
+        namespace = runpy.run_path(str(path))
+        entries = namespace.get(variable)
+        if isinstance(entries, dict):
+            merged.update(entries)
     return merged
 
 

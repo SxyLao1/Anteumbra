@@ -226,7 +226,7 @@ TRANSLATIONS = {
         "每次 config.toml 热加载都会连同变更的键记录在此。",
     "Loading panel...": "正在加载面板...",
     # memory-shell (内存马) probe page + panel
-    "Memory Shell": "内存马检测",
+    "Memory Shell": "内存马",
     "Memory Shell Detection": "内存马检测",
     "Anteumbra drops a short-lived JSP probe into a watched web root, asks the servlet container what it has registered in memory, then removes the probe again.":
         "Anteumbra 会向受监控的网站根目录投放一个短生命周期的 JSP 探测器，"
@@ -325,4 +325,30 @@ TRANSLATIONS = {
         "已启用且已列出，但插件未注册——请检查启动日志。",
     "Add to config.toml:": "在 config.toml 中添加：",
     "No plugin is available in this build.": "本构建没有可用的插件。",
+    # ── multi-site frontend ────────────────────────────────────────────
+    # nav: the site switcher and the active scope
+    "Site scope": "站点范围",
+    "All sites": "全部站点",
+    "Every figure on this page is filtered by this site scope":
+        "本页所有数字均已按该站点范围过滤",
+    "Forensics": "取证",
+    # records / quarantine rows: a row carries its own site
+    "Site this record belongs to": "该记录所属站点",
+    "Unassigned": "未分配",
+    # overview: aggregate totals followed by the per-site breakdown
+    "Per-site breakdown": "站点明细",
+    "All sites (aggregate)": "全部站点（汇总）",
+    "These totals cover this site only": "以上合计仅覆盖当前站点",
+    "These totals cover every site": "以上合计覆盖全部站点",
+    "Detections": "检测数",
+    "Open": "未处理",
+    "Last detection": "最近检测",
+    "Top profile": "主要画像",
+    "Memory shell suspects": "内存马可疑项",
+    "No site data is available": "暂无站点数据",
+    # file clusters: one cluster can span sites
+    "Sites whose detections belong to this cluster": "该簇成员记录所属站点",
+    "attributed from the cluster samples": "按簇样本推断",
+    "by sample": "按样本推断",
+    "No recorded detection belongs to this cluster": "该簇暂无对应检测记录",
 }

@@ -6,6 +6,138 @@
 
 ---
 
+## [1.0.38] - 2026-09-14
+
+### 新增
+- MCP 服务：`anteumbra mcp serve` 通过 stdio（Model Context Protocol）为单个实例
+  提供工具面，让**用户自己的**本地 AI Agent 来驱动 Anteumbra，而不是让 Anteumbra
+  内置 Agent。`--home` 的用法与 `status`、`config` 完全一致；`anteumbra mcp tools`
+  可以在不安装 SDK 的情况下列出客户端会看到的工具面。
+- 九个只读工具：`get_status`、`list_sites`、`get_config`、`validate_config`、
+  `list_detections`、`list_quarantine`、`list_sites_summary`、
+  `list_listening_ports`、`discover_web_services`。
+- 六个写工具，仅在启动时带 `--allow-write` 才存在（只读模式下它们**不在**工具列表
+  里，而不是"存在但调用失败"）：`add_site`、`update_site`、`disable_site`、
+  `set_config_value`、`set_env_value`，以及 `run_memory_shell_probe`——最后这个只在
+  实例已停止时提供，因为正在运行的监控会把 Anteumbra 自己的 JSP 探针当成新文件
+  上报。所有写操作都走 CLI 自己的代码路径（`cli/config_support.py`、
+  `anteumbra config set`、`config env set`），并在响应里返回刚写入配置的完整校验结果。
+- 面向 Agent 的服务发现：`discover_web_services` 与 `list_listening_ports` 读取
+  操作系统连接表（psutil，Linux 上回退 `/proc/net/tcp`），返回所属进程，并在命令行
+  参数或工作目录能确定时给出网站根目录。不做文件系统遍历、不扫端口、不发网络请求：
+  除非 Agent 明确要求，否则不会对候选端口发 HTTP 探测——那些请求会出现在 Anteumbra
+  正在监控的访问日志里。平台无法确定的信息一律返回 `null` 并附原因，而不是猜测。
+- Agent Skill：`src/anteumbra/skills/anteumbra/SKILL.md` 随包发布，
+  `anteumbra skill export <DIR>` 可将其导出（另有 `--flat`、`--force`，以及只打印
+  不复制的 `skill show`）。该 Skill 是给 AI 的操作手册：每一步调用哪个工具、
+  逐项索取清单（管理密码、通知渠道、SMTP 配置与**邮箱授权码**而非邮箱登录密码、
+  Server酱/企业微信的 SendKey 或 webhook、可选的 WAF Token、是否开启自动隔离与
+  IP 封禁）、不可妥协的安全规则，以及汇报成功前必须完成的验证清单。
+
+### 说明
+- 官方 `mcp` Python SDK 是可选依赖，绝不进入基础依赖：`pip install "anteumbra[mcp]"`。
+  未安装时 `anteumbra mcp serve` 在 stderr 打印一行可执行指引并以退出码 1 结束，
+  不会抛 `ImportError`；SDK 是惰性导入的，因此其余命令与 `anteumbra mcp tools`
+  在基础安装下均可正常使用。
+- MCP 响应不会泄露凭据。`get_config` 会把任何形如凭据的字段替换为
+  `***REDACTED***`；此外所有工具响应都会被扫一遍，凡与实例 `.env` 中保存的密钥值
+  相同的字符串都会被抹掉，因此被解析过的 `${VAR}` 占位符或藏在 URL 里的凭据同样
+  不会泄露。`set_env_value` 会在回显的命令中把密钥掩码，且从不返回写入的值。
+- 进程生命周期（启动/停止/重启）刻意不暴露为工具：它仍由 CLI 承担，由人或 Agent
+  显式执行。
+
+### 新增（设置页与插件控制）
+- 插件真实状态。设置页插件面板的每一行现在都能回答"这个插件到底装上了没有、在不在
+  干活"：它真正读取的配置段（`plugins.<name>`）以及——仅当插件已加载时——该段里的
+  `enabled` 值；事件源插件是否真的在运行（无法询问时显示"运行状态未知"）；以及每个
+  插件一个确定状态：`active`、`unverified`、`inactive`、`disabled`、`not_listed`、
+  `not_installed`、`not_registered`、`system_off`。未加载的插件一律不显示 `enabled`：
+  给一个已经死掉的插件挂上"已启用"，正是这个面板要消除的假安心。
+  `PluginManager.available_plugins()` 新增 `registered_name`、`event_source`、
+  `running` 三个键（纯新增，既有方法签名不变）。
+- 面板内直接控制插件。每个插件都可以在不离开页面的情况下开关，并加入或移出
+  `[plugins] builtin`。所有改动都走 CLI 用的同一条配置链路（`load_toml_file` ->
+  `set_dotted_value` -> `write_toml_file` -> `validate_config_file`），写入前先留一份
+  带时间戳的 `config.toml.<stamp>.bak`，只拦截本次写入新引入的校验错误，然后把改动
+  应用到运行中的实例：关闭走 `PluginManager.unregister()`，开启用同一个工厂新建实例
+  重新注册（`PluginManager.load_plugin()`）。无法在线生效时，面板会明说"需要重启生效"
+  而不是假装成功；当被关闭的插件仍列在 `[plugins] builtin` 中（重启会再次加载它），
+  或已开启的插件不在该列表里（重启不会加载它）时，也会给出提示。新增的方法还有
+  `loaded_name` 与 `apply_plugin_config`；面板渲染前会重新读取磁盘上的 `[plugins]`，
+  因此在别处改配置不会再留下一份过期的清单。
+- 告警投递护栏。`notifier_handler` 不允许被关闭，也不允许从 `[plugins] builtin` 中
+  移除。所有告警都经由它投递，而监控仍在发事件、日志仍在显示检出，一旦失去它是无声
+  的；拒绝会带原因就地显示，该行的按钮也以禁用状态渲染并给出同一原因。
+- 设置页改版与插件控制的新中文文案放在 `build/zh_map_extra_settings.py`
+  （`ZH_MAP_EXTRA_SETTINGS`）。插件控制结果在服务端生成并翻译，因此没有新增前端字符串。
+
+### 变更（设置页）
+- 分区按重要性排序：环境与密钥（`.env` 值、邮件凭据、令牌）在最前，其后是账户、站点
+  配置、监控与检测、通知、存储与路径、插件，最后是高级/极少改动的工具。每个分区都可
+  折叠，除第一个外默认全部收起，每个分区标题带一行当前状态摘要（"2 个站点已启用"、
+  "邮件未配置"），不展开也能看出哪里需要注意。展开状态记在 `?open=<分区>` 上并推入
+  地址栏，同时镜像到会话，因此再次进入页面仍保持原样。没有删除或改名任何字段：配置
+  编辑器、它的字段名与 id、以及其中的 `.env` 区块都保持原样。
+- 环境与密钥分区通过 CLI 的 `write_env_value` 写入，并且只保存真正填了值的字段，因此
+  提交该分区不可能把在别处配置好的凭据清空。
+
+### 新增（内存马取证与处置）
+- 内存马取证（forensics）。探针 JSP 不再只有一个只读动作，而是三个仍受 token 保护的动作：
+  `action=probe`（只读报告，行为不变）、`action=dump`（尽 JVM 所能回答的关于某个组件的
+  全部信息：URL 匹配、类加载器标识、代码来源、声明的方法与字段、保护域、容器/服务端信息、
+  JVM 启动参数与 `jdk.attach.allowAttachSelf`）、`action=kill`（移除）。dump 会返回
+  base64 的类字节码——**仅当**该类真的能通过类加载器解析到资源时；否则返回
+  `class_bytes_unavailable_reason`：运行时 `defineClass` 定义的类没有字节码资源，JSP 也无法
+  从已加载的 `Class` 里取回字节码，因此如实说明而不是伪造。dump 还可选地通过
+  `com.sun.management:type=HotSpotDiagnostic` 的 `dumpHeap(绝对路径, live)` 生成堆转储，
+  成功时回报 `heap_path`、`heap_bytes`、`heap_sha256`，失败时回报 `heap_error` 与真实原因
+  （无 MXBean、权限不足、磁盘空间不足、JVM 不支持），并且**仍然返回清单**。
+- 取证存储：制品是文件加一个索引，刻意不使用数据库表。
+  `<data_dir>/forensics/<site_id>/<UTC 时间戳>-<kind>-<slug>/` 下放 `manifest.json`、
+  取到字节码时的 `class-<名字>.class`、生成堆转储时的 `heap.hprof`；
+  `<data_dir>/forensics/index.json` 记录每次取证（制品 id、站点、时间、触发方式、组件、类、
+  文件大小与 sha256，以及该组件的处置历史）。索引采用原子写入（临时文件 + `os.replace`），
+  只保留最近 N 次（`forensics_history`，默认 200）；大小与哈希按磁盘上的真实文件计算，
+  索引损坏时如实上报而不是静默清空。`[plugins.memory_shell_probe]` 新增
+  `forensics_enabled`、`heap_dump_enabled`、`forensics_history`、`forensics_max_dump_mb`，
+  均在代码中校验。
+- 取证页（`/admin/memory-shell/forensics`，取证）与检测页（检测）并列：按站点列出取证制品
+  及其大小、文件、类字节码与堆转储状态，可查看清单、下载文件，并可对当前选中的组件直接
+  发起取证。
+- 内存马处置（remediation）。移除「只存在于内存中」的组件是一个有明确前置条件的动作：
+  该组件没有取证文件时拒绝（除非请求显式确认 `acknowledge_no_forensics=1`）；类名与
+  Anteumbra 记录的 `expect_class` 不一致时拒绝（探针在 JVM 内再次核对）；类在磁盘上能解析到
+  文件时，视为正常部署组件并拒绝，除非显式传 `force=1`。Filter 的删除分四步并逐步核对：
+  先删该名字的全部 `removeFilterMap`，再 `removeFilterDef`，然后**显式**删除
+  `StandardContext` 私有字段 `filterConfigs` 里同名的 `ApplicationFilterConfig`
+  （Tomcat 自己的 `removeFilterDef` 从不碰这个 map——已用 7.0.108 与 9.0.96 的字节码核对，
+  参考工具也把这一遗留问题写在注释里）；只有该名字在上述清理后仍然存在时，才调用
+  `filterStop()`/`filterStart()` 让容器按剩余定义重建。Servlet
+  （`removeServletMapping` + `removeChild`）与 Listener（Tomcat 8/9 是 `List`，
+  Tomcat 6/7 是 `Object[]`）同样逐条核对。**只有重新枚举后确实找不到该组件**才会报告成功；
+  否则如实返回 `removed=false` 与具体原因（`filter_configs_unavailable`、
+  `filter_still_registered_after_cleanup` 等），并附带处置后的完整组件列表。它绝不删除文件、
+  绝不修改 `web.xml`、绝不触碰第二个组件。每次处置都会发布 `memory_shell_remediated` 事件，
+  并记录处置前后的组件状态；检测告警通道保持原样。
+- 界面上的处置流程先询问服务端：有取证文件时给出普通确认（"处置会移除容器内存中的该组件，
+  且不可恢复"）；没有时给出警告
+  `没有对应的取证文件。确认要在不取证的情况下处置内存马吗？`，并严格提供三个按钮——
+  立即处置（提交 `acknowledge_no_forensics=1`）、前往取证（跳到该组件的取证页）、取消。
+  全部使用项目既有的 HTMX 与 `app.js` 动作，未引入任何新的前端框架。
+
+### 新增（多站点前端）
+- 导航栏新增站点切换器，仅在配置了多个启用站点时出现。作用域解析顺序为：显式
+  `?site=<id>`（旧的 `?site_id=` 仍兼容）→ 记忆的选择（会话，其次 `anteumbra_site` cookie）
+  → 全部站点。显式空 `?site=` 表示全部站点并清除 cookie；未知 id 回退为全部站点且不写入记忆。
+  所有片段 URL 都携带作用域，行内站点标签取自记录自身的站点而不是当前过滤条件，因此聚合数据
+  不会被误当成单站点数据。
+- 总览按站点展示：全局卡片保留，另加一张带标签的每站点表，包含检出数、隔离数、未处置可疑数、
+  最近检出时间、最高风险画像与内存马可疑数；读不到的指标显示 `-`，绝不用 `0` 冒充。
+- 按站点区分的检测面：检出记录、隔离区、文件类聚均按站点在服务端过滤，聚合模式下每行显示站点
+  标签，翻页、详情链接与行操作都带作用域。多站点能力之前写入的历史记录显示为 `未分配`，并且在
+  聚合模式下依然可见。
+- 文件类聚通过引擎公开接口把每条注册表记录映射到所属簇来判定站点（不受样本上限影响）；注册表里
+  没有成员的簇才回退到样本路径推断，并在页面上标注为"按样本推断"。
 ## [1.0.37] - 2026-09-14
 
 ### 修复

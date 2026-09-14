@@ -10,6 +10,14 @@
     clusters: '/admin/file-clusters'
   };
 
+  // Fragments are fetched without a page load, so the active site has to travel
+  // in the URL: the server cannot see which site the operator is looking at
+  // otherwise, and a scoped page would answer with every site's data.
+  function siteUrl(url) {
+    var site = window.AnteumbraSite;
+    return site && site.withSite ? site.withSite(url) : url;
+  }
+
   function elementIn(root, selector) {
     if (!root) return null;
     if (root.matches && root.matches(selector)) return root;
@@ -116,7 +124,7 @@
     var requestId = ++state.requestId;
     app.unmount(target);
     setLoading(target, 'Loading ' + state.title + '...');
-    return app.http.text('/admin/' + path, { headers: { 'HX-Request': 'true' } })
+    return app.http.text(siteUrl('/admin/' + path), { headers: { 'HX-Request': 'true' } })
       .then(function (html) {
         if (requestId !== state.requestId) return;
         applyFragment(target, html);
@@ -159,7 +167,7 @@
     var records = elementIn(root, '#records-table-container');
     if (records && !records.dataset.frontendLoaded) {
       records.dataset.frontendLoaded = 'true';
-      htmxReplace(records, '/admin/records?compact=1').catch(function () { records.removeAttribute('data-frontend-loaded'); });
+      htmxReplace(records, siteUrl('/admin/records?compact=1')).catch(function () { records.removeAttribute('data-frontend-loaded'); });
     }
 
     anchorLogStream(root);
@@ -203,7 +211,7 @@
     var panel = page.querySelector('#threats-tab-' + tab + ' [data-threat-target]');
     if (panel && !panel.dataset.loaded && threatUrls[tab]) {
       panel.dataset.loaded = 'true';
-      app.htmxGet(threatUrls[tab], '#' + panel.id, 'innerHTML');
+      app.htmxGet(siteUrl(threatUrls[tab]), '#' + panel.id, 'innerHTML');
     }
   }
 
@@ -213,7 +221,7 @@
     if (!container) return;
     var audit = container.dataset.auditMode === 'true';
     var url = audit ? '/admin/records?compact=1' : '/admin/records?audit=true&compact=1';
-    htmxReplace(container, url).then(function () {
+    htmxReplace(container, siteUrl(url)).then(function () {
       trigger.textContent = audit ? 'Audit' : '<- Normal';
     });
   }
@@ -306,9 +314,9 @@
 
   function refreshStatistics() {
     var stats = document.getElementById('overview-stats');
-    if (stats && window.htmx) app.htmxGet('/admin/dashboard_content', '#overview-stats', 'innerHTML');
+    if (stats && window.htmx) app.htmxGet(siteUrl('/admin/dashboard_content'), '#overview-stats', 'innerHTML');
     var threats = document.getElementById('overview-active-threats');
-    if (threats && window.htmx) app.htmxGet('/admin/records?compact=1', '#overview-active-threats', 'innerHTML');
+    if (threats && window.htmx) app.htmxGet(siteUrl('/admin/records?compact=1'), '#overview-active-threats', 'innerHTML');
   }
 
   app.register('dashboard', {

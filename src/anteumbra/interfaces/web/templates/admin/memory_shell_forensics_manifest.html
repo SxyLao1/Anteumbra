@@ -1,0 +1,104 @@
+{# One stored forensics manifest, rendered into #memory-shell-forensics-detail.
+
+   The raw JSON is shown verbatim as well: a manifest is evidence, and the
+   operator must be able to compare what the page shows with what was written
+   to disk.
+#}
+<div class="memory-shell-manifest" id="memory-shell-manifest"
+     data-manifest-state="{{ 'ready' if available else 'missing' }}"
+     style="border:1px solid #334455;background:#0a1018;border-radius:4px;padding:12px;margin-top:12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+    <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;">
+      {{ _('Manifest') }}
+      <span style="font-family:var(--font-mono);color:var(--color-text-muted);">{{ artifact_id }}</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" type="button"
+            hx-get="/admin/memory-shell/forensics/panel"
+            hx-target="#memory-shell-forensics-panel" hx-swap="innerHTML">{{ _('Close') }}</button>
+  </div>
+
+  {% if not available %}
+  <div style="color:#ffaa00;font-size:11px;line-height:1.7;">
+    {{ _('No stored manifest exists for this artifact: the index has no entry, or the manifest file is unreadable. The artifact directory may have been moved or deleted outside Anteumbra.') }}
+  </div>
+  {% else %}
+  <table class="data-table" style="width:100%;margin-bottom:12px;">
+    <tbody>
+      <tr><th style="width:22%;">{{ _('Kind') }}</th><td>{{ manifest.kind or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('Name') }}</th><td style="word-break:break-all;">{{ manifest.name or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('Class name') }}</th><td style="font-family:var(--font-mono);word-break:break-all;">{{ manifest.class_name or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('Class loader') }}</th><td style="font-family:var(--font-mono);word-break:break-all;">{{ manifest.class_loader or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('Loader identity') }}</th><td style="font-family:var(--font-mono);word-break:break-all;">{{ manifest.class_loader_identity or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('URL patterns') }}</th><td style="font-family:var(--font-mono);word-break:break-all;">{{ manifest.urls|join(', ') if manifest.urls else _('None') }}</td></tr>
+      <tr><th>{{ _('Code source') }}</th><td style="font-family:var(--font-mono);word-break:break-all;">{{ manifest.code_source or _('None') }}</td></tr>
+      <tr><th>{{ _('On disk') }}</th><td>
+        {% if manifest.on_disk %}<span class="badge badge-success">{{ _('Yes') }}</span>{% else %}<span class="badge badge-danger">{{ _('No') }}</span>{% endif %}
+        {% if manifest.on_disk_path %}<span style="font-family:var(--font-mono);font-size:10px;word-break:break-all;"> {{ manifest.on_disk_path }}</span>{% endif %}
+      </td></tr>
+      <tr><th>{{ _('Protection domain') }}</th><td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ manifest.protection_domain or _('Unknown') }}</td></tr>
+      <tr><th>{{ _('Context path') }}</th><td style="font-family:var(--font-mono);">{{ manifest.context_path or _('None') }}</td></tr>
+      <tr><th>{{ _('Probe URL') }}</th><td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ manifest.probe_url or _('None') }}</td></tr>
+      <tr><th>{{ _('JVM self-attach') }}</th><td style="font-family:var(--font-mono);">{{ manifest.attach_self or _('Unknown') }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if container %}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">{{ _('Container') }}</div>
+  <ul style="margin:0 0 12px 18px;padding:0;color:var(--color-text-secondary);font-size:10px;font-family:var(--font-mono);word-break:break-all;">
+    {% for item in container %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if jvm_arguments %}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">{{ _('JVM input arguments') }}</div>
+  <ul style="margin:0 0 12px 18px;padding:0;color:var(--color-text-secondary);font-size:10px;font-family:var(--font-mono);word-break:break-all;">
+    {% for item in jvm_arguments %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">
+    {{ _('Class bytes') }}
+  </div>
+  <div style="font-size:11px;line-height:1.7;margin-bottom:12px;">
+    {% if manifest.class_bytes_available %}
+    <span class="badge badge-success">{{ _('Stored') }}</span>
+    <span style="font-family:var(--font-mono);">{{ manifest.class_bytes_file }}</span>
+    <span style="color:var(--color-text-muted);">({{ manifest.class_bytes_source or _('source unknown') }})</span>
+    {% else %}
+    <span class="badge badge-warning">{{ _('Not available') }}</span>
+    <span style="color:#ffaa00;word-break:break-all;">{{ manifest.class_bytes_unavailable_reason or _('Reason not reported.') }}</span>
+    {% endif %}
+  </div>
+
+  {% if heap and heap.path %}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">{{ _('Heap dump') }}</div>
+  <div style="font-size:11px;line-height:1.7;margin-bottom:12px;word-break:break-all;">
+    <div style="font-family:var(--font-mono);">{{ heap.path }}</div>
+    <div style="color:var(--color-text-muted);">{{ heap.bytes }} {{ _('bytes') }} · sha256 {{ heap.sha256 or _('unknown') }}</div>
+  </div>
+  {% elif manifest.heap_error %}
+  <div style="color:#ff4444;font-size:11px;line-height:1.7;margin-bottom:12px;word-break:break-all;">
+    {{ _('Heap dump:') }} {{ manifest.heap_error }}
+  </div>
+  {% endif %}
+
+  {% if methods %}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">{{ _('Declared methods') }} ({{ methods|length }})</div>
+  <ul style="margin:0 0 12px 18px;padding:0;color:var(--color-text-secondary);font-size:10px;font-family:var(--font-mono);word-break:break-all;">
+    {% for item in methods %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if fields %}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;margin-bottom:4px;">{{ _('Declared fields') }} ({{ fields|length }})</div>
+  <ul style="margin:0 0 12px 18px;padding:0;color:var(--color-text-secondary);font-size:10px;font-family:var(--font-mono);word-break:break-all;">
+    {% for item in fields %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <details>
+    <summary style="cursor:pointer;color:var(--color-text-secondary);font-size:11px;">{{ _('Raw manifest.json') }}</summary>
+    <pre style="max-height:320px;overflow:auto;background:#05080c;border:1px solid #223344;border-radius:4px;padding:10px;font-size:10px;color:#9fe8b0;">{{ json_text }}</pre>
+  </details>
+  {% endif %}
+</div>

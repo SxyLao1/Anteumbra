@@ -20,11 +20,14 @@ import secrets
 import shutil
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Mapping
 
 from anteumbra.domain.memory_shell import (
+    ACTION_PROBE,
+    PROBE_ACTIONS,
     PROBE_MARKER,
     PROBE_VERSION,
     InternalArtifactRegistryPort,
@@ -34,6 +37,9 @@ from anteumbra.domain.memory_shell import (
     ProbeReport,
     SiteTarget,
     entry_from_payload,
+)
+from anteumbra.infrastructure.memory_shell.forensics_store import (
+    MemoryShellForensicsStore,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,7 +109,18 @@ class MemoryShellProbeDeployer:
         self._logger = log or logger
         self._template: str | None = None
 
-    # ── deploy ──────────────────────────────────────────────────────
+    # ── artifact lifecycle ──────────────────────────────────────────
+    def forensics_store_for(self, root: str | Path, **options) -> "MemoryShellForensicsStore":
+        """Build the forensics store that belongs next to this deployer's probes.
+
+        The deployer is the one infrastructure collaborator the probe service is
+        handed, and the application layer may not import infrastructure, so this
+        is where a service asks for the store that persists what a probe finds.
+        The caller supplies the data directory; nothing is created until the
+        store writes its first artifact.
+        """
+        return MemoryShellForensicsStore(root, **options)
+
     def deploy(self, target: SiteTarget, *, ttl: float, token: str | None = None) -> ProbeArtifact:
         """Create the random probe directory and write the probe into it."""
         root = Path(target.deployment_root)
@@ -142,25 +159,58 @@ class MemoryShellProbeDeployer:
 
     # ── read ────────────────────────────────────────────────────────
     def read(self, artifact: ProbeArtifact, *, timeout: float) -> bytes:
+        """Read the default action (``probe``): the read-only report."""
+        return self.read_action(artifact, action=ACTION_PROBE, timeout=timeout)
+
+    def read_action(
+        self,
+        artifact: ProbeArtifact,
+        *,
+        action: str = ACTION_PROBE,
+        params: Mapping[str, object] | None = None,
+        timeout: float,
+    ) -> bytes:
+        """Read one token-gated action, with its parameters in the query string.
+
+        The per-run token is already part of the artifact URL; everything else is
+        appended here.  Parameters are URL-encoded, and the action name must be
+        one of the three the probe implements, so a caller cannot smuggle an
+        unknown verb into a live web server.
+        """
+        if action not in PROBE_ACTIONS:
+            raise ProbeError(f"unknown probe action: {action}")
+        url = self.action_url(artifact, action=action, params=params)
         try:
-            payload = self._reader(artifact.url, timeout)
+            payload = self._reader(url, timeout)
         except urllib.error.HTTPError as exc:
-            raise ProbeError(f"probe HTTP {exc.code} at {artifact.url}") from exc
+            raise ProbeError(f"probe HTTP {exc.code} at {url}") from exc
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller as a failure
             raise ProbeError(f"probe request failed: {exc}") from exc
         if not payload:
             raise ProbeError("probe returned an empty body")
         return payload
 
+    def action_url(
+        self,
+        artifact: ProbeArtifact,
+        *,
+        action: str = ACTION_PROBE,
+        params: Mapping[str, object] | None = None,
+    ) -> str:
+        """The exact URL one action request goes to (token always included)."""
+        query: list[tuple[str, str]] = [("action", action)]
+        for key, value in (params or {}).items():
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                query.append((str(key), "1" if value else "0"))
+            else:
+                query.append((str(key), str(value)))
+        separator = "&" if "?" in artifact.url else "?"
+        return artifact.url + separator + urllib.parse.urlencode(query)
+
     def parse(self, payload: bytes, artifact: ProbeArtifact) -> ProbeReport:
-        try:
-            data = json.loads(payload.decode("utf-8", "replace"))
-        except ValueError as exc:
-            raise ProbeError(f"probe returned non-JSON output ({len(payload)} bytes)") from exc
-        if not isinstance(data, dict):
-            raise ProbeError("probe returned JSON that is not an object")
-        if data.get("probe") != PROBE_MARKER:
-            raise ProbeError("probe response does not carry the expected marker")
+        data = self.parse_action(payload, artifact)
 
         raw_entries = data.get("entries")
         entries: list[MemoryShellEntry] = []
@@ -182,6 +232,23 @@ class MemoryShellProbeDeployer:
             duration_ms=int(data.get("duration_ms") or 0),
             raw_bytes=len(payload),
         )
+
+    def parse_action(self, payload: bytes, artifact: ProbeArtifact) -> dict[str, object]:
+        """Decode one action response, rejecting anything that is not ours.
+
+        Every action answers with the same envelope, so the marker check is the
+        single gate that stops a 404 page, a WAF page or another application's
+        JSON from being read as a probe result.
+        """
+        try:
+            data = json.loads(payload.decode("utf-8", "replace"))
+        except ValueError as exc:
+            raise ProbeError(f"probe returned non-JSON output ({len(payload)} bytes)") from exc
+        if not isinstance(data, dict):
+            raise ProbeError("probe returned JSON that is not an object")
+        if data.get("probe") != PROBE_MARKER:
+            raise ProbeError("probe response does not carry the expected marker")
+        return data
 
     # ── cleanup ─────────────────────────────────────────────────────
     def cleanup(self, artifact: ProbeArtifact) -> None:

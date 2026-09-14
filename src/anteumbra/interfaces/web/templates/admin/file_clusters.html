@@ -40,7 +40,8 @@
 
   <div class="clusters-list" id="clusters-list">
     {% for c in clusters %}
-    {% set search_blob = c.cluster_id ~ ' ' ~ (c.sample_paths|join(' ')) %}
+    {% set site_names_blob = c.site_counts|map(attribute='site_name')|join(' ') if c.site_counts else '' %}
+    {% set search_blob = c.cluster_id ~ ' ' ~ (c.sample_paths|join(' ')) ~ ' ' ~ site_names_blob %}
     <article class="cluster-card" data-cluster-id="{{ c.cluster_id }}" data-search="{{ search_blob|e }}">
       <button class="cluster-card-head cluster-toggle" type="button"
               data-action="clusters.toggle" aria-expanded="false">
@@ -48,6 +49,17 @@
         <code class="cluster-id">{{ c.cluster_id }}</code>
         <span class="badge badge-success">{{ c.size }} {{ _('files') }}</span>
         {% if c.size > 1 %}<span class="badge badge-warning">{{ _('MULTI-FILE') }}</span>{% endif %}
+        {# A cluster groups files by content, so it is attributed to the sites
+           its members belong to; a cluster spanning roots says so. #}
+        {% if c.site_counts %}
+        <span class="badge {{ 'badge-warning' if c.site_multi else 'badge-gray' }} cluster-sites"
+              title="{{ _('Sites whose detections belong to this cluster') }}{% if c.site_inferred %} — {{ _('attributed from the cluster samples') }}{% endif %}">
+          {%- for entry in c.site_counts %}{% if not loop.first %}, {% endif %}{% if not entry.site_id %}{{ _('Unassigned') }}{% else %}{{ entry.site_name }}{% endif %} ×{{ entry.count }}{% endfor -%}
+        </span>
+        {% if c.site_inferred %}<span class="badge badge-gray">{{ _('by sample') }}</span>{% endif %}
+        {% else %}
+        <span class="badge badge-gray" title="{{ _('No recorded detection belongs to this cluster') }}">-</span>
+        {% endif %}
         <span class="cluster-meta">{{ c.hash_track }} · {{ _('threshold') }} {{ c.threshold }}</span>
         <span class="toolbar-spacer"></span>
         <span class="cluster-time">{{ c.created }}</span>

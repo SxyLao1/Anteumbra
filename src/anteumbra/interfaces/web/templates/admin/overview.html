@@ -22,7 +22,7 @@
       <span><span class="card-header-icon">◆</span> {{ _('Security Report') }}</span>
     </div>
     <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-stats"
-         hx-get="/admin/dashboard_content"
+         hx-get="{{ with_site('/admin/dashboard_content') }}"
          hx-trigger="load, every 10s"
          hx-swap="innerHTML">
       <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
@@ -47,12 +47,13 @@
   <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
     <div class="card-header">
       <span><span class="card-header-icon">📋</span> {{ _('Recent Detections') }}</span>
+      {% if active_site %}<span class="badge badge-warning">{{ active_site_name or active_site }}</span>{% endif %}
       <span class="toolbar-spacer"></span>
-      <a class="btn btn-ghost btn-sm" href="/admin/threats" data-action="core.navigate-location"
-         data-url="/admin/threats">{{ _('View all') }}</a>
+      <a class="btn btn-ghost btn-sm" href="{{ with_site('/admin/threats') }}" data-action="core.navigate-location"
+         data-url="{{ with_site('/admin/threats') }}">{{ _('View all') }}</a>
     </div>
     <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;" id="overview-recent"
-         hx-get="/admin/recent-detections"
+         hx-get="{{ with_site('/admin/recent-detections') }}"
          hx-trigger="load, every 30s"
          hx-swap="innerHTML">
       <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>

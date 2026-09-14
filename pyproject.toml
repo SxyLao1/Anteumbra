@@ -50,6 +50,10 @@ dependencies = [
 dev = ["pytest>=7.0", "pytest-cov", "playwright>=1.40", "ruff>=0.12.0,<1.0.0"]
 yara = []
 full = ["ssdeep", "py-tlsh"]
+# `anteumbra mcp serve` needs the official MCP Python SDK. It stays an extra so
+# the base install carries no agent-protocol dependency; the server imports it
+# lazily and fails with one install line when it is missing.
+mcp = ["mcp>=1.12.0,<2.0.0"]
 
 [project.scripts]
 anteumbra = "anteumbra.__main__:main"
@@ -80,6 +84,8 @@ anteumbra = [
     # Memory-shell probe template: deployed into a watched web root at runtime,
     # so a source-only wheel would break the feature after `pip install`.
     "infrastructure/memory_shell/assets/*.jsp",
+    # Agent skill exported by `anteumbra skill export`.
+    "skills/**/*.md",
 ]
 
 [tool.setuptools.exclude-package-data]
