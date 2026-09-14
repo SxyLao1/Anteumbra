@@ -1,0 +1,111 @@
+{# The gated-save result: semantic diff, validation, restart advice, and the
+   confirm button.  Nothing here reports a write that did not happen, and a
+   change that would break the config shows the errors instead of a save. #}
+{% set level_class = {'success': 'badge-success', 'warning': 'badge-warning',
+                      'error': 'badge-danger', 'info': 'badge-info'} %}
+{% if plan %}
+<div class="ce-result-panel" style="border:1px solid var(--color-border);border-radius:4px;padding:10px 12px;">
+  {% if plan.notice %}
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <span class="badge {{ level_class.get(plan.notice.level, 'badge-gray') }}">{{ plan.notice.level }}</span>
+    <strong>{{ plan.notice.text }}</strong>
+    {% if plan.label %}<span class="muted-copy">{{ plan.label }}</span>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if plan.structural %}
+  <div class="ce-notice-error" style="margin-top:8px;padding:8px 10px;border:1px solid var(--color-warning);border-radius:4px;">
+    ⚠ {{ _('Structural change: config.toml is re-serialized with the project writer, so comments and blank lines may be reformatted.') }}
+  </div>
+  {% endif %}
+
+  {% if plan.changes %}
+  <table class="data-table" style="margin-top:10px;width:100%;">
+    <thead>
+      <tr>
+        <th>{{ _('Key') }}</th>
+        <th>{{ _('Change') }}</th>
+        <th>{{ _('Old value') }}</th>
+        <th>{{ _('New value') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for change in plan.display_changes %}
+      <tr>
+        <td><code style="font-size:12px;">{{ change.path }}</code></td>
+        <td><span class="badge {{ 'badge-info' if change.kind == 'changed' else ('badge-success' if change.kind == 'added' else 'badge-danger') }}">{{ change.kind }}</span></td>
+        <td><code style="font-size:12px;">{{ change.old | truncate(80) if change.old else '—' }}</code></td>
+        <td><code style="font-size:12px;">{{ change.new | truncate(80) if change.new else '—' }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% elif plan.text_only %}
+  <p class="muted-copy">{{ _('No key value changed.') }}</p>
+  {% endif %}
+
+  {% if plan.errors %}
+  <div style="margin-top:10px;">
+    <span class="badge badge-danger">{{ _('blocking errors') }}</span>
+    <ul style="margin:6px 0 0 18px;">
+      {% for item in plan.errors %}<li><code style="font-size:12px;">{{ item }}</code></li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if plan.warnings %}
+  <div style="margin-top:10px;">
+    <span class="badge badge-warning">{{ _('warnings (they do not block)') }}</span>
+    <ul style="margin:6px 0 0 18px;">
+      {% for item in plan.warnings %}<li><code style="font-size:12px;">{{ item }}</code></li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if plan.written %}
+  <div style="margin-top:10px;">
+    <span class="badge badge-success">{{ _('written') }}</span>
+    {% if plan.backup %}
+    <span class="muted-copy">{{ _('backup: %(name)s', name=plan.backup) }}</span>
+    {% endif %}
+    {% if plan.revision_id %}
+    <span class="muted-copy">{{ _('revision: %(id)s', id=plan.revision_id) }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if plan.restart %}
+  <div style="margin-top:10px;">
+    <span class="badge badge-warning">{{ _('restart required') }}</span>
+    <span class="muted-copy">{{ _('Read once at startup: %(keys)s', keys=plan.restart | join(', ')) }}</span>
+  </div>
+  {% endif %}
+
+  {% if plan.reload_error %}
+  <div style="margin-top:8px;">
+    <span class="badge badge-danger">{{ _('runtime reload failed') }}</span>
+    <span class="muted-copy">{{ plan.reload_error }}</span>
+  </div>
+  {% elif plan.written %}
+  <div class="muted-copy" style="margin-top:8px;">{{ _('The runtime reloaded this change live.') }}</div>
+  {% endif %}
+
+  {% for note in plan.notes %}
+  <div class="muted-copy" style="margin-top:6px;">{{ note }}</div>
+  {% endfor %}
+
+  {% if plan.can_confirm %}
+  <form hx-post="{{ plan.confirm_url }}" hx-target="#ce-result" hx-swap="innerHTML"
+        style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirm" value="1">
+    <input type="hidden" name="base" value="{{ plan.fingerprint }}">
+    {% for name, value in plan.payload.items() %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    <button class="btn btn-primary btn-sm" type="submit">{{ _('Confirm save') }}</button>
+    <span class="muted-copy">{{ _('A timestamped backup of the current file is written first.') }}</span>
+  </form>
+  {% endif %}
+</div>
+{% endif %}

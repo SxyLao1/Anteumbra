@@ -1,0 +1,97 @@
+{# Version history: every write from this page keeps a timestamped copy of
+   config.toml beside it, and the runtime records which keys it reloaded.  A
+   backup owns the file content, so it can be diffed, restored and downloaded;
+   a recorded change only knows which keys moved, and the row says so instead
+   of offering an action it cannot complete. #}
+<div id="ce-history" class="card">
+  <div class="card-header">
+    <span><span class="card-header-icon">🕘</span> {{ _('Version history') }}</span>
+    <span class="toolbar-spacer"></span>
+    <span class="badge badge-gray">{{ _('%(count)s revision(s)', count=revisions|length) }}</span>
+    <button class="btn btn-ghost btn-sm" type="button"
+            hx-get="/admin/config/editor/history"
+            hx-target="#ce-history" hx-select="#ce-history" hx-swap="outerHTML">
+      {{ _('Refresh') }}
+    </button>
+  </div>
+  <div class="card-body">
+    <p class="muted-copy" style="margin-top:0;">
+      {{ _('Every save keeps a timestamped copy of config.toml next to it. Restoring one copies the current file aside first, revalidates the result with the same validator the CLI uses, and reports which keys need a restart.') }}
+    </p>
+
+    {% if not revisions %}
+      <div class="empty-state"><p>{{ _('No revision yet: nothing has written config.toml from this page.') }}</p></div>
+    {% endif %}
+
+    {% if revisions %}
+    <table class="data-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>{{ _('Time') }}</th>
+          <th>{{ _('Source') }}</th>
+          <th>{{ _('Changed keys') }}</th>
+          <th>{{ _('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for revision in revisions %}
+        <tr>
+          <td>
+            <code style="font-size:12px;">{{ revision.display_time }}</code>
+            {% if revision.kind == 'backup' and revision.size_bytes %}
+            <div class="muted-copy" style="font-size:11px;">{{ _('%(size)s bytes', size=revision.size_bytes) }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {{ 'badge-info' if revision.source == 'ui' else 'badge-gray' }}">{{ revision.source }}</span>
+            <div class="muted-copy" style="font-size:11px;">
+              {{ _('backup of the file') if revision.kind == 'backup' else _('recorded change') }}
+            </div>
+          </td>
+          <td>
+            <span class="badge badge-gray">{{ _('%(count)s key(s)', count=revision.changed_count) }}</span>
+            {% if revision.changed_keys %}
+            <div class="muted-copy" style="font-size:11px;">
+              {{ revision.changed_keys | join(', ') }}{% if revision.extra_keys %} +{{ revision.extra_keys }}{% endif %}
+            </div>
+            {% elif revision.kind == 'backup' %}
+            <div class="muted-copy" style="font-size:11px;">
+              {{ _('same keys as the file on disk') if not revision.text_differs else _('comments or layout only') }}
+            </div>
+            {% endif %}
+            {% if revision.detail %}<div class="muted-copy" style="font-size:11px;">{{ revision.detail }}</div>{% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            {% if revision.kind == 'backup' %}
+            <button class="btn btn-ghost btn-sm" type="button"
+                    hx-get="/admin/config/editor/revision/diff?revision={{ revision.revision_id | urlencode }}"
+                    hx-target="#ce-result" hx-swap="innerHTML">
+              {{ _('View diff') }}
+            </button>
+            {% if revision.restoreable %}
+            <form hx-post="/admin/config/editor/revision/restore" hx-target="#ce-result"
+                  hx-swap="innerHTML" style="display:inline-flex;gap:6px;align-items:center;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="revision" value="{{ revision.revision_id }}">
+              <input type="hidden" name="base" value="{{ fingerprint }}">
+              <button class="btn btn-ghost btn-sm" type="submit"
+                      hx-confirm="{{ _('Restore this backup? The current config.toml is copied aside first.') }}">
+                {{ _('Restore') }}
+              </button>
+            </form>
+            <a class="btn btn-ghost btn-sm"
+               href="/admin/config/editor/revision/download?revision={{ revision.revision_id | urlencode }}">
+              {{ _('Download') }}
+            </a>
+            {% endif %}
+            {% else %}
+            <span class="muted-copy" style="font-size:11px;">{{ _('read-only record') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>

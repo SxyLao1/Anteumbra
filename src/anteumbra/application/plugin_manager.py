@@ -21,6 +21,12 @@ from collections.abc import Callable, Mapping
 from typing import Any, Dict, List, Optional
 
 from anteumbra.domain import Detector, DomainEvent, EventSource, Notifier, Plugin
+from anteumbra.plugins.config_schema import (
+    normalize_fields as normalize_plugin_config_fields,
+)
+from anteumbra.plugins.config_schema import (
+    schema_for_module as plugin_schema_for_module,
+)
 
 
 class PluginManager:
@@ -52,6 +58,9 @@ class PluginManager:
         self._plugin_factories = dict(plugin_factories or {})
         self._event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
         self._logger = log or logging.getLogger(__name__)
+        # Names whose factory cannot be called without injected services; see
+        # ``plugin_config_schema``.
+        self._build_refusals: set[str] = set()
 
     def set_plugin_factories(
         self,
@@ -510,6 +519,68 @@ class PluginManager:
             )
         return result
 
+    def plugin_config_schema(self, name: str) -> List[Dict[str, Any]]:
+        """Declared settings for one plugin, or an empty list when it has none.
+
+        A plugin that reads its own ``[plugins.<name>]`` section in ``activate()``
+        knows its keys and defaults better than any template can, so the schema is
+        asked for from the plugin itself first: a live instance, then a fresh one
+        built through the same factory the runtime uses.  ``config_schema()`` is a
+        classmethod that must not need runtime services; a plugin whose factory
+        requires injected dependencies is answered from the module registry in
+        ``anteumbra.plugins.config_schema`` instead.
+
+        Returns plain mappings so the caller (a web panel, or a third-party
+        plugin tool) needs no import of the plugin package.
+        """
+        candidates = [entry for entry in (name, name.rsplit(".", 1)[-1] if name else "") if entry]
+        with self._rwlock:
+            loaded = dict(self._plugins)
+        instance = None
+        for candidate in candidates:
+            if candidate in loaded:
+                instance = loaded[candidate]
+                break
+        if instance is None:
+            for candidate in candidates:
+                if self._build_refusal(candidate):
+                    continue
+                built = self._build_plugin(candidate, allow_short_factory_key=True)
+                if built is not None:
+                    instance = built
+                    break
+                # Either the factory needs services this question cannot supply
+                # (bridge plugins) or the plugin is missing from this build.
+                # Remember it so a page render does not rebuild — and re-log —
+                # the same outcome on every request.
+                self._build_refusals.add(candidate)
+        classes: list[Any] = []
+        if instance is not None:
+            classes.append(type(instance))
+        for candidate in candidates:
+            plugin_class = self._import_plugin_class(candidate)
+            if plugin_class is not None and plugin_class not in classes:
+                classes.append(plugin_class)
+        for plugin_class in classes:
+            method = getattr(plugin_class, "config_schema", None)
+            if not callable(method):
+                continue
+            try:
+                declared = normalize_plugin_config_fields(method())
+            except Exception:  # noqa: BLE001 - a broken schema must not break the page
+                self._logger.error(
+                    "PluginManager: config_schema() failed for '%s'", name, exc_info=True
+                )
+                continue
+            if declared:
+                return [field.to_mapping() for field in declared]
+        # Nothing declared: the registry knows this plugin and says it has no
+        # settings of its own (``[]``) or knows nothing about it at all (also
+        # ``[]``).  The caller decides what to do with an empty list.
+        return [
+            field.to_mapping() for field in plugin_schema_for_module(name)
+        ]
+
     def shutdown(self) -> None:
         """停用所有插件（线程安全）"""
         # Stop the emit worker thread first
@@ -592,6 +663,33 @@ class PluginManager:
             self._metric_recorder(name)
         except Exception:
             self._logger.debug("PluginManager: failed to record metric %s", name, exc_info=True)
+
+    def _build_refusal(self, name: str) -> bool:
+        """Whether this plugin's factory is already known to need services."""
+        with self._rwlock:
+            return name in self._build_refusals
+
+    def _import_plugin_class(self, name: str) -> Any:
+        """The ``Plugin`` subclass a builtin name resolves to, without building it.
+
+        ``_build_plugin`` needs a callable factory; a plugin whose factory wants
+        injected services therefore cannot be instantiated to answer a question
+        about its config.  Importing the module and reading the class is enough
+        for ``config_schema()``, which is a classmethod by contract.
+        """
+        try:
+            module = importlib.import_module(f"anteumbra.plugins.{name}")
+        except Exception:  # noqa: BLE001 - a plugin this build does not ship
+            return None
+        for attribute in dir(module):
+            candidate = getattr(module, attribute)
+            if (
+                isinstance(candidate, type)
+                and issubclass(candidate, Plugin)
+                and candidate is not Plugin
+            ):
+                return candidate
+        return None
 
 
 def _positive_int(value: Any, *, default: int) -> int:

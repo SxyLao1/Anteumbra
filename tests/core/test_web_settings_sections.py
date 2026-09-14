@@ -369,3 +369,150 @@ def test_config_path_is_reported_in_the_advanced_summary(client, tmp_path):
 
     assert Path("config.toml").name in body
     assert "config file config.toml" in body
+
+
+# ── the readability pass ───────────────────────────────────────────────────
+#
+# The page was long and its values never said which of three sources was in
+# force.  These tests pin the controls that answer "what did I change here?":
+# two server-side filters, a jump-to-section list, a per-section count of values
+# that differ from the shipped defaults, and the link to the full config editor.
+
+
+def _filter_links(body: str) -> dict[str, str]:
+    return {
+        match.group(1): match.group(0)
+        for match in re.finditer(r'<a[^>]*data-settings-filter="([^"]+)"[^>]*>', body)
+    }
+
+
+def test_the_page_offers_the_readability_filters(client):
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+    links = _filter_links(body)
+
+    assert set(links) == {"all", "changed", "shipped"}
+    assert "Only non-default values" in body
+    assert "Only changed from shipped defaults" in body
+    # The chosen filter has to survive a reload, so it travels in the URL.
+    assert "only=changed" in links["changed"]
+    assert "only=shipped" in links["shipped"]
+    assert links["all"].count('data-settings-filter-active="true"') == 1
+
+
+def test_the_active_filter_is_marked_and_remembered(client):
+    body = client.get(
+        PAGE_URL + "?only=changed", headers={"HX-Request": "true"}
+    ).get_data(as_text=True)
+
+    assert _filter_links(body)["changed"].count('data-settings-filter-active="true"') == 1
+    assert _filter_links(body)["all"].count('data-settings-filter-active="false"') == 1
+
+    later = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+    assert _filter_links(later)["changed"].count('data-settings-filter-active="true"') == 1, (
+        "a filter, like the expansion state, must outlive the link that set it"
+    )
+
+
+def test_an_unknown_filter_falls_back_to_showing_everything(client):
+    body = client.get(
+        PAGE_URL + "?only=<script>", headers={"HX-Request": "true"}
+    ).get_data(as_text=True)
+
+    assert _filter_links(body)["all"].count('data-settings-filter-active="true"') == 1
+    assert "<script>" not in body
+
+
+def test_toggling_a_section_keeps_the_active_filter(client):
+    body = client.get(
+        PAGE_URL + "?only=changed&open=environment", headers={"HX-Request": "true"}
+    ).get_data(as_text=True)
+    headers = _headers(body)
+
+    assert "only=changed" in headers["storage"], (
+        "collapsing a section must not silently reset which values are shown"
+    )
+
+
+def test_the_jump_control_lists_every_section(client):
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    assert 'data-settings-jump="1"' in body
+    for name in SETTINGS_SECTIONS:
+        assert f"#settings-{name}" in body, f"no jump target for {name}"
+
+
+def test_each_section_header_counts_the_values_that_differ_from_defaults(client):
+    """The count is over values a reader can actually see, per section."""
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    storage = _section_html(body, "storage")
+    counts = re.findall(r'data-settings-changed="(\d+)"', storage)
+    assert counts, "the header must carry a count"
+    assert int(counts[0]) >= 1, "backend sqlite differs from the shipped json"
+    assert "changed" in storage
+
+    environment = _section_html(body, "environment")
+    assert 'data-settings-changed="0"' in environment, "no config.toml keys belong to it"
+    assert "all defaults" in environment
+
+
+def test_the_page_links_to_the_advanced_config_editor(client):
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    assert 'href="/admin/config"' in body
+    assert 'data-settings-advanced-editor-link="1"' in body
+    assert body.count('data-settings-advanced-editor-link="1"') >= 2, (
+        "both the page controls and the advanced section offer the editor"
+    )
+
+    from anteumbra.interfaces.web.pages import _NAV_TITLES
+
+    assert _NAV_TITLES.get("config") == "Config Editor"
+
+
+# ── secrets on the page ────────────────────────────────────────────────────
+
+
+def test_the_page_reports_stored_credentials_without_rendering_them(client):
+    """A credential must not sit in the page source, password input or not."""
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    assert "token-value" not in body, "ANTEUMBRA_WECHAT_API_KEY is set in .env"
+    assert 'data-env-secret-state="set"' in body
+    assert "ANTEUMBRA_WECHAT_API_KEY" in body
+    assert "leave blank to keep the stored one" in body
+
+
+def test_an_unset_credential_is_marked_unset(client, tmp_path):
+    (tmp_path / ".env").write_text("", encoding="utf-8")
+
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    assert 'data-env-secret-state="unset"' in body
+    assert 'data-env-secret-state="set"' not in body
+
+
+def test_the_page_offers_a_password_form_instead_of_the_hash(client):
+    body = client.get(PAGE_URL, headers={"HX-Request": "true"}).get_data(as_text=True)
+
+    assert 'data-settings-password="1"' in body
+    assert 'name="new_password"' in body
+    assert "/admin/settings/password/save" in body
+    assert 'data-env-password-hash="1"' in body
+    assert 'name="web_admin.password_hash"' not in body
+
+
+def test_a_shipped_default_resolves_from_both_map_shapes():
+    """A parsed config nests; ``_read_shipped_defaults`` returns flat dotted keys.
+
+    Looking the flat map up segment by segment finds nothing, and every count and
+    filter built on it then reports "nothing changed" - which is exactly the
+    failure this pins.
+    """
+    from anteumbra.interfaces.web.blueprints.settings_bp import _MISSING, _get_dotted
+
+    assert _get_dotted({"storage": {"backend": "json"}}, "storage.backend") == "json"
+    assert _get_dotted({"storage.backend": "json"}, "storage.backend") == "json"
+    assert _get_dotted({"storage.backend": "json"}, "storage.missing") is _MISSING
+    assert _get_dotted({"storage.backend": "json"}, "missing.backend") is _MISSING
+

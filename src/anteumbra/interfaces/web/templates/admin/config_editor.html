@@ -1,0 +1,51 @@
+{# Administration shell for the configuration editor.
+
+   One page, three tabs: the editor (form / tree / raw, all over the same
+   document model), the secrets tab (.env is write-only), and the version
+   history.  Tab switches re-render this whole root through HTMX so the address
+   bar keeps a shareable URL, and the filter/search controls reload only
+   ``#ce-list`` so typing never loses focus. #}
+{% set tab_titles = {'editor': _('Editor'), 'secrets': _('Secrets'), 'history': _('History')} %}
+<div id="config-editor-root" class="config-editor-page">
+  <div class="page-toolbar">
+    <h3 style="margin:0;">{{ _('Configuration editor') }}</h3>
+    <code class="muted-copy" style="font-size:12px;">{{ config_path }}</code>
+    <span class="toolbar-spacer"></span>
+    <span class="badge badge-gray">{{ _('%(keys)s keys', keys=key_count or 0) }}</span>
+    <span class="badge badge-gray">{{ _('%(count)s tables', count=table_count or 0) }}</span>
+    <button class="btn btn-ghost btn-sm" type="button"
+            hx-get="/admin/config/editor/validate" hx-target="#ce-result" hx-swap="innerHTML">
+      {{ _('Validate now') }}
+    </button>
+  </div>
+
+  <div role="tablist" style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
+    {% for name in tabs %}
+    <button class="btn btn-sm {{ 'btn-primary' if tab == name else 'btn-ghost' }}" type="button"
+            role="tab" aria-selected="{{ 'true' if tab == name else 'false' }}"
+            hx-get="/admin/config?tab={{ name }}&view={{ view }}"
+            hx-target="#config-editor-root" hx-select="#config-editor-root"
+            hx-swap="innerHTML" hx-push-url="true">
+      {{ tab_titles[name] }}
+    </button>
+    {% endfor %}
+    <span class="toolbar-spacer"></span>
+    <a class="btn btn-ghost btn-sm" href="/admin/config/watcher">{{ _('Reload history') }}</a>
+  </div>
+
+  {% if error %}
+  <div class="ce-notice ce-notice-error" style="padding:10px 12px;margin-bottom:10px;border:1px solid var(--color-danger);border-radius:4px;">
+    <strong>{{ _('Error') }}</strong> — {{ error }}
+  </div>
+  {% endif %}
+
+  {% if tab == 'secrets' %}
+    {% include 'admin/config_editor_secrets.html' %}
+  {% elif tab == 'history' %}
+    {% include 'admin/config_editor_history.html' %}
+  {% else %}
+    {% include 'admin/config_editor_panel.html' %}
+  {% endif %}
+
+  <div id="ce-result" class="ce-result" style="margin-top:12px;"></div>
+</div>

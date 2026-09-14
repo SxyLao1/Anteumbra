@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.38
+# Anteumbra 用户手册 v1.0.39
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -1202,5 +1202,5 @@ IP 封禁）、哪些安全规则不可妥协，以及在汇报成功之前必�
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.38 — MIT License</sub>
+  <sub>Anteumbra v1.0.39 — MIT License</sub>
 </div>

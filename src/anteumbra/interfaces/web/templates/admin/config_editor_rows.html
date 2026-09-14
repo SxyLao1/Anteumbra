@@ -1,0 +1,36 @@
+{# One editable key, shared by the form and tree views. #}
+{% macro key_row(row) %}
+{% set source_class = {'config.toml': 'badge-gray', '.env': 'badge-yellow', 'environment': 'badge-yellow',
+                       'default': 'badge-blue', 'unset': 'badge-muted', 'missing': 'badge-muted',
+                       'unresolved': 'badge-muted'}.get(row.source, 'badge-gray') %}
+<div class="ce-row" data-path="{{ row.path }}"
+     style="border:1px solid var(--color-border);border-radius:4px;padding:8px 10px;margin-bottom:6px;">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <code style="font-size:12px;">{{ row.path }}</code>
+    <span class="muted-copy" style="font-size:11px;">L{{ row.line }}</span>
+    <span class="badge {{ source_class }}">{{ row.source }}</span>
+    {% if row.non_default %}<span class="badge badge-info">{{ _('changed') }}</span>{% endif %}
+    {% if row.secret %}<span class="badge badge-warning">{{ _('secret') }}</span>{% endif %}
+    {% if row.dangerous %}
+    <span class="ce-danger" title="{{ row.dangerous }}" style="cursor:help;">⚠ {{ _('dangerous') }}</span>
+    {% endif %}
+  </div>
+  <form hx-post="/admin/config/editor/value" hx-target="#ce-result" hx-swap="innerHTML"
+        style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirm" value="0">
+    {% if row.editable %}
+    <input class="form-input ce-value" type="text" name="ce.{{ row.path }}" value="{{ row.raw }}"
+           spellcheck="false" autocomplete="off" style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:12px;">
+    <button class="btn btn-ghost btn-sm" type="submit">{{ _('Review change') }}</button>
+    {% else %}
+    <input class="form-input" type="text" value="{{ row.display }}" disabled
+           style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:12px;">
+    <span class="muted-copy" style="font-size:11px;">{{ row.hint or _('Read-only') }}</span>
+    {% endif %}
+  </form>
+  {% if row.dangerous %}
+  <div class="muted-copy" style="font-size:11px;margin-top:4px;">⚠ {{ row.dangerous }}</div>
+  {% endif %}
+</div>
+{% endmacro %}

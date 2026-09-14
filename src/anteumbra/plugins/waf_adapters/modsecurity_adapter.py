@@ -47,6 +47,42 @@ class ModSecurityAdapter(Plugin, PollableEventSource):
     def supported_events(self) -> List[str]:
         return ["waf.event"]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.modsecurity]``: the keys ``activate()`` reads and their defaults."""
+        return [
+            {
+                "name": "audit_log_path",
+                "type": "text",
+                "default": "/var/log/modsec_audit.log",
+                "required": True,
+                "allow_empty": False,
+                "label": "Audit log path",
+                "description": "ModSecurity v2/v3 JSON audit log the adapter tails.",
+            },
+            {
+                "name": "poll_interval",
+                "type": "number",
+                "default": 5,
+                "min": 1,
+                "max": 86400,
+                "label": "Poll interval (seconds)",
+                "description": "How often the audit log is read for new entries.",
+            },
+            {
+                "name": "min_score",
+                "type": "number",
+                "default": 5.0,
+                "min": 0.0,
+                "max": 10000.0,
+                "label": "Minimum anomaly score",
+                "description": (
+                    "Audit entries scoring below this are ignored, so ordinary "
+                    "rule noise does not reach the detector."
+                ),
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         self._config = config
         self._path = Path(config.get("audit_log_path", "/var/log/modsec_audit.log"))

@@ -52,6 +52,44 @@ class SyslogWAFReceiver(Plugin, StreamEventSource):
     def supported_events(self) -> List[str]:
         return ["waf.event", "waf.alert"]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.syslog_waf]``: the bind address and parser ``activate()`` reads."""
+        return [
+            {
+                "name": "host",
+                "type": "text",
+                "default": "0.0.0.0",
+                "required": True,
+                "allow_empty": False,
+                "pattern": r"^(\d{1,3}\.){3}\d{1,3}$|^[0-9A-Fa-f:]+$",
+                "pattern_hint": "an IPv4 or IPv6 address",
+                "label": "Listen address",
+                "description": "Interface the UDP syslog socket binds to.",
+            },
+            {
+                "name": "port",
+                "type": "number",
+                "default": 514,
+                "min": 1,
+                "max": 65535,
+                "required": True,
+                "label": "Listen port",
+                "description": (
+                    "UDP port the WAF forwards syslog to. Ports below 1024 need "
+                    "elevated privileges on Linux."
+                ),
+            },
+            {
+                "name": "format",
+                "type": "select",
+                "default": "cef",
+                "choices": ("cef", "modsecurity", "cloudflare"),
+                "label": "Message format",
+                "description": "Parser applied to each received datagram.",
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         self._config = config
         self._host = config.get("host", "0.0.0.0")
