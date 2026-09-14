@@ -188,6 +188,10 @@ class EmergencyScanner(BaseScanner):
                 engine=self.name,
                 error=str(exc),
             )
+        except FileNotFoundError:
+            # Vanished before the emergency pass: nothing to inspect, and the
+            # caller must not treat it as a scan error.
+            return ScanResult(file_path, False, [], engine=self.name)
         except OSError as exc:
             return ScanResult(file_path, False, [], engine=self.name, error=str(exc))
 
@@ -321,6 +325,12 @@ class ScannerService:
             decoded = WebShellDecoder.decode(raw_data)
             content = raw_data.decode("utf-8", errors="replace") + "\n" + decoded
             matches = self.yara_engine.scan_data(content, source_name=f"{file_path}#decoded")
+        except FileNotFoundError:
+            # The file vanished between the event and this pass: nothing to
+            # analyse, and not an operator-facing failure.
+            self.metrics.increment("scan_file_vanished")
+            logger.debug("[SCAN][GONE] 文件已不存在，跳过解码扫描: %s", file_path)
+            return None
         except OSError:
             logger.debug("Decoder pass could not read %s", file_path, exc_info=True)
             return None

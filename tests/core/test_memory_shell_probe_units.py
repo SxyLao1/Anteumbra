@@ -163,8 +163,32 @@ def test_cleanup_removes_probe_and_directory(tmp_path):
     deployer.cleanup(artifact)
 
     assert not directory.exists()
-    assert not artifacts.is_internal_path(artifact.file_path)
     assert list(tmp_path.iterdir()) == []
+    # The registration deliberately survives cleanup for a grace period: the
+    # monitor may still be holding create/modify events for this exact path, and
+    # dropping it immediately made Anteumbra treat its own probe as an unknown,
+    # vanished file (FileNotFoundError noise in the live log).
+    assert artifacts.is_internal_path(artifact.file_path)
+    assert artifacts.contains_url(artifact.relative_url_path)
+
+
+def test_cleanup_grace_expires_so_the_path_never_becomes_a_blind_spot(tmp_path):
+    clock = FakeClock()
+    artifacts = InMemoryInternalArtifactRegistry(clock=clock, default_ttl=5.0)
+    deployer = MemoryShellProbeDeployer(
+        artifacts=artifacts,
+        reader=lambda url, timeout: b"{}",
+        template_loader=lambda: JSP_TEMPLATE,
+        cleanup_grace_seconds=10.0,
+    )
+    artifact = deployer.deploy(make_target(tmp_path), ttl=5.0)
+
+    deployer.cleanup(artifact)
+    assert artifacts.is_internal_path(artifact.file_path)
+
+    clock.advance(11.0)
+    assert not artifacts.is_internal_path(artifact.file_path)
+    assert artifacts.snapshot() == []
 
 
 def test_cleanup_keeps_a_foreign_file_and_reports_failure(tmp_path):

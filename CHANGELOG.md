@@ -6,6 +6,26 @@
 
 ---
 
+## [1.0.37] - 2026-09-14
+
+### Fixed
+- Disappearing files no longer reach the live log as errors. A file can be
+  removed between its filesystem event and its scan - attackers delete a shell
+  right after using it, and Anteumbra's own memory-shell probe removes itself
+  within seconds - which produced `FileNotFoundError` tracebacks in the log
+  stream. The file monitor, the decoder pass, the emergency scanner and the
+  detection workflow now treat a vanished file as the normal condition it is:
+  one DEBUG line, a `scan_file_vanished` metric, and no operator-facing error.
+  Real scan failures still surface exactly as before.
+- The internal-artifact registration of a probe now outlives its deletion by a
+  grace period (60 s, `cleanup_grace_seconds`). Dropping it at cleanup time made
+  the monitor treat its own, already deleted probe as an unknown file, which is
+  what produced the tracebacks above; the path is random per run, so nothing
+  else can inherit the exemption, and it still expires on its own.
+- The file monitor no longer logs create/modify/move/delete events for paths
+  Anteumbra registered itself, so its own probe stays invisible in the live log
+  instead of appearing as a file that was created and instantly deleted.
+
 ## [1.0.36] - 2026-09-14
 
 ### Added
