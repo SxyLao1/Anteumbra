@@ -6,6 +6,18 @@
 
 ---
 
+## [1.0.40] - 2026-09-14
+
+### Fixed
+- The settings page and the plugin panel returned an error page once the Chinese catalog
+  was compiled: eight translations wrote a mapping placeholder without its conversion
+  character (for example '%(count)' where the message says '%(count)s'), so Python's
+  %-formatting read the following character as a conversion type and raised
+  "unsupported format character" (0x9879 is the character from the settings change
+  counter). The affected entries - quarantine confirmations, the rule-deletion
+  confirmation and the change counter - are repaired, and a new guard test compares the
+  placeholders of every authored translation against its message and scans the compiled
+  catalog, because a test that only checks whether a key exists cannot catch this.
 ## [1.0.39] - 2026-09-14
 
 ### Added
