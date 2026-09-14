@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra VERSION\n"
 "Report-Msgid-Bugs-To: noreply@example.com\n"
-"POT-Creation-Date: 2026-09-14 12:50+0800\n"
+"POT-Creation-Date: 2026-09-14 19:01+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -72,8 +72,9 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:89
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:6
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:31
 #: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:75
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:32
 #: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:25
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:60
@@ -97,6 +98,7 @@ msgid "Select All"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:90
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:63
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:63
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:8
 #: src/anteumbra/interfaces/web/templates/admin/records_table.html:23
@@ -138,7 +140,7 @@ msgid "Completed"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:93
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:55
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:78
 msgid "Running"
 msgstr ""
 
@@ -241,7 +243,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:99
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:93
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:90
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:145
 msgid "Access log analysis"
 msgstr ""
 
@@ -287,8 +289,8 @@ msgstr ""
 #: src/anteumbra/interfaces/web/js_strings.py:100
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:3
 #: src/anteumbra/interfaces/web/templates/admin/overview.html:28
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:56
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:111
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:225
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:23
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:48
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:76
@@ -385,26 +387,27 @@ msgid "Exported %(count)s lines as %(format)s"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:239
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:10
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:69
 msgid "Copy"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:239
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:14
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:169
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:27
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:113
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:17
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:39
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:43
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:225
 msgid "Close"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:239
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:12
 msgid "Wrap"
 msgstr ""
@@ -474,6 +477,7 @@ msgid "Delete"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:113
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:79
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:35
 msgid "Restore"
 msgstr ""
@@ -735,17 +739,17 @@ msgid "%(size)s | %(lines)s lines"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:145
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:225
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:226
 msgid "Session expired"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:145
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:227
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:228
 msgid "Your session has expired. Please sign in again."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:146
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:231
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:232
 msgid "Sign in again"
 msgstr ""
 
@@ -807,6 +811,7 @@ msgid "Unknown"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/blueprints/admin_diagnostic_routes.py:58
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:38
 msgid "Error"
 msgstr ""
 
@@ -860,6 +865,321 @@ msgstr ""
 #: src/anteumbra/interfaces/web/blueprints/admin_diagnostic_routes.py:144
 #, python-format
 msgid "ok %(ok)s / failed %(failed)s / skipped %(skipped)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:189
+msgid ""
+"Turning automatic quarantine on moves every matching file out of the "
+"website directory."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:194
+msgid ""
+"This list is the admin IP allow-list: an entry that does not cover your "
+"current address locks you out of this UI."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:199
+msgid ""
+"Only a proxy you control belongs here; a wrong entry lets a client forge "
+"its own address in logs, profiles and blocking."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:204
+msgid ""
+"Forcing secure cookies over plain HTTP makes the login cookie unusable "
+"and locks everyone out."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:209
+msgid ""
+"The IP blocker acts on live attacker addresses; a wrong threshold blocks "
+"real users at the WAF or firewall."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:214
+msgid ""
+"The storage backend decides where detections are written; changing it "
+"splits the ledger this dashboard reads."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:437
+msgid "No changes: nothing to save."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:442
+msgid ""
+"Saving an empty table: no key value changed, and the file is re-"
+"serialized with the project writer."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:447
+msgid ""
+"Only comments or formatting changed: no configuration key moved, and the "
+"file is still rewritten verbatim."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:458
+msgid "Not saved: the change introduces configuration errors."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:465
+msgid "Review the changes below, then confirm to write config.toml."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:472
+msgid ""
+"config.toml changed on disk since this preview (another editor, the CLI, "
+"or the runtime). Re-open the editor before saving."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:476
+msgid "Not saved: the file moved under us."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:498
+msgid ""
+"Written, but the resulting config.toml does not validate - restore a "
+"revision below."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:506
+msgid ""
+"Saved and backed up, but the runtime could not reload: it is still "
+"running the previous configuration."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:511
+msgid "Saved: config.toml written and reloaded."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:522
+#, python-format
+msgid "Add key %(key)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:524
+#, python-format
+msgid "Edit %(key)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:540
+msgid "No values were submitted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:551
+#, python-format
+msgid "Edit %(count)s value(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:638
+msgid "Set a new password instead of editing this hash."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:640
+msgid "Secret: set it in .env, never here."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:826
+#, python-format
+msgid "config.toml could not be read: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:986
+#, python-format
+msgid "The change could not be prepared: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1004
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1044
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1093
+msgid "No key was submitted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1009
+msgid "One value at a time: use Save changed fields instead."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1031
+msgid "A key name must be a bare TOML key."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1048
+#, python-format
+msgid "Remove key %(key)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1060
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1076
+msgid "No table was submitted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1064
+#, python-format
+msgid "Add table %(table)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1080
+#, python-format
+msgid "Remove table %(table)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1100
+#, python-format
+msgid "Add an item to %(key)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1118
+msgid "A key and an array index are required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1125
+#, python-format
+msgid "Remove item %(index)s of %(key)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1145
+msgid "The submitted text is too large to save."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1151
+msgid "Save the raw config.toml"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1188
+#, python-format
+msgid ""
+"Secret values are not editable here: leave %(key)s as it is, or set a new"
+" password / .env value on the Secrets tab."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1195
+msgid "A redacted value was moved or duplicated; reload the raw view."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1216
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1232
+msgid "That variable cannot be edited here."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1220
+msgid "Enter a value first; nothing was written."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1250
+#, python-format
+msgid "The .env value could not be written: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1254
+#, python-format
+msgid "Set %(key)s in .env"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1259
+msgid ""
+"Credentials are read when the config loads, so the reload above is what "
+"applies this to the running runtime."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1265
+#, python-format
+msgid "%(key)s written to .env; the value is never shown again."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1280
+msgid "Use at least 8 characters for the admin password."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1286
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1129
+msgid "The two passwords do not match."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1302
+#, python-format
+msgid "The new password could not be written: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1306
+msgid "Set a new admin password"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1310
+msgid "The hash is never displayed, not even to you."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1312
+msgid ""
+"web_admin.password_hash resolves this value, and it is read on every "
+"sign-in, so the reload above is what activates the new password."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1318
+msgid "The new password is active for the next sign-in."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1329
+#, python-format
+msgid "Validate %(name)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1334
+#, python-format
+msgid "Validated %(name)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1367
+#, python-format
+msgid "Revision %(id)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1369
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1402
+msgid "Unknown revision."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1377
+msgid "That backup is no longer on disk."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1392
+msgid ""
+"Restoring this backup applies the changes below; the current file is "
+"backed up first."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1405
+msgid "Recorded keys only: this entry stores no content to restore."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1412
+msgid ""
+"This entry records which keys changed, not their content: it can be read "
+"but not restored or downloaded."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1441
+msgid "That revision has no stored content to restore."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1452
+msgid ""
+"config.toml changed on disk since the preview; re-open the editor before "
+"restoring."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1458
+#, python-format
+msgid "Restore revision %(id)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1494
+msgid "That revision has no stored content to download."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/config_editor_bp.py:1510
+msgid "That revision could not be redacted, so it will not be downloaded."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:211
@@ -977,233 +1297,495 @@ msgstr ""
 msgid "The component is still registered: %(class_name)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:374
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:522
 #, python-format
 msgid "%(count)s credentials set"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:375
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:523
 msgid "mail configured"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:375
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:523
 msgid "mail not configured"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:388
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:536
 #, python-format
 msgid "signed in as %(user)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:391
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:539
 #, python-format
 msgid "%(count)s site(s) enabled"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:401
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:549
 #, python-format
 msgid "%(count)s watched path(s)"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:403
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:551
 msgid "access log on"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:403
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:551
 msgid "access log off"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:414
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:562
 #, python-format
 msgid "%(count)s channel(s) enabled"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:416
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:564
 msgid "notifications off"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:422
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:570
 #, python-format
 msgid "backend %(backend)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:428
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:576
 msgid "plugin system not attached"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:432
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:580
 #, python-format
 msgid "%(loaded)s loaded / %(total)s available"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:440
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:588
 #, python-format
 msgid "config file %(name)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:512
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:660
+#, python-format
+msgid "%(count)s changed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:662
+msgid "all defaults"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:680
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:75
+msgid "ENVIRONMENT & SECRETS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:681
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:110
+msgid "ACCOUNT"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:682
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:116
+msgid "SITE CONFIGURATION"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:683
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:140
+msgid "MONITORING & DETECTION"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:684
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:172
+msgid "NOTIFICATIONS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:685
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:178
+msgid "STORAGE & PATHS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:686
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:186
+msgid "PLUGINS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:687
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:197
+msgid "ADVANCED"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:706
 msgid "not configured"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:565
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:737
+msgid "config.toml"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:740
+msgid "shipped default"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:883
 #, python-format
 msgid "%(count)s value(s) written to .env"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:567
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:885
 msgid "Nothing to save: every field was left empty."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:573
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:891
 #, python-format
 msgid "Environment save failed: %(detail)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1190
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1124
+#, python-format
+msgid "Password too short: at least %(count)s characters are required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1138
+msgid ""
+"New password hash written to .env. Existing sessions stay signed in until"
+" they expire; the next sign-in uses the new password."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1146
+#, python-format
+msgid "Changing the password failed: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1776
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1793
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1844
+msgid "This value is required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1787
+msgid "Expected a boolean (true or false)."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1794
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1798
+msgid "Expected a number."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1800
+#, python-format
+msgid "Must be at least %(min)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1802
+#, python-format
+msgid "Must be at most %(max)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1813
+#, python-format
+msgid "Must be one of: %(choices)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1824
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1826
+msgid "Expected a list, for example a, b, c."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1831
+msgid "At least one value is required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1836
+#, python-format
+msgid "Every entry must be %(hint)s: %(item)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1837
+msgid "valid"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1848
+#, python-format
+msgid "Expected %(hint)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1848
+msgid "a different format"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1923
+#, python-format
+msgid ""
+"%(fields)s has no .env variable name in this build, so it stays read-only"
+" here. Set it in .env and reference it from config.toml."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1935
+#, python-brace-format, python-format
+msgid ""
+"%(fields)s is a literal value in config.toml, and the loader only "
+"substitutes ${VAR} placeholders: a value saved to .env will not take "
+"effect until config.toml references the variable instead."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1948
+#, python-format
+msgid ""
+"No value is in effect for %(fields)s yet: config.toml refers to %(vars)s,"
+" which .env does not define and which has no fallback."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1960
+msgid ""
+"The plugin reads this section once, at activation: a saved value takes "
+"effect after the plugin is reloaded or Anteumbra is restarted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2321
+#, python-format
+msgid ""
+"%(changed)s of %(total)s plugins have values that differ from their "
+"defaults; showing those %(shown)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2330
+#, python-format
+msgid ""
+"%(changed)s of %(total)s plugins have values that differ from the shipped"
+" config.toml defaults; showing those %(shown)s."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2416
 msgid ""
 "Runtime alerting is delivered by this plugin; switching it off would "
 "silently drop every alert."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1298
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2524
 #, python-format
 msgid ""
 "Switched off %(name)s: config.toml written and the plugin was unloaded "
 "from the running runtime."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1303
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2529
 #, python-format
 msgid ""
 "Switched on %(name)s: config.toml written and the plugin was registered "
 "in the running runtime."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1308
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2534
 #, python-format
 msgid "Added %(name)s to [plugins] builtin and loaded it in the running runtime."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1312
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2538
 #, python-format
 msgid ""
 "Removed %(name)s from [plugins] builtin and unloaded it from the running "
 "runtime."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1320
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2546
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2830
 msgid "the plugin system is switched off in this process"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1322
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2548
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2828
 msgid "no plugin manager is attached to this runtime"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1327
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2553
 #, python-format
 msgid ""
 "Config written, but %(name)s could not be applied to the running runtime "
 "(%(reason)s). A restart is required."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1339
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2565
 #, python-format
 msgid ""
 "Config written, but applying %(name)s to the running runtime failed: "
 "%(detail)s A restart is required to pick the configuration up."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1342
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2568
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2843
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2897
 msgid "the plugin did not activate"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1353
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2579
 #, python-format
 msgid ""
 "Note: %(name)s is still listed in [plugins] builtin, so a restart loads "
 "it again from there."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1364
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2590
 #, python-format
 msgid ""
 "Note: %(name)s is not listed in [plugins] builtin, so a restart will not "
 "load it."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1375
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2601
 #, python-format
 msgid ""
 "Note: %(name)s is no longer listed in [plugins] builtin, so a restart "
 "will not load it."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1385
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1491
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2611
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2717
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2938
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3085
 #, python-format
 msgid "Backup kept: %(file)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1396
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2622
 #, python-format
 msgid "Unsupported plugin action: %(action)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1402
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2628
 #, python-format
 msgid ""
 "%(name)s is listed in config.toml, but this build has no implementation "
 "for it."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1414
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2640
 #, python-format
 msgid "Refused: %(name)s must stay switched on and listed in builtin. %(reason)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1431
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2657
 #, python-format
 msgid "%(name)s is already listed in [plugins] builtin."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1441
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2667
 #, python-format
 msgid "%(name)s is not listed in [plugins] builtin."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1450
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2676
 msgid "Configuration path is unavailable; nothing was written."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1460
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2686
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3036
 #, python-format
 msgid "Config write failed for %(name)s: %(detail)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1471
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2697
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3047
 #, python-format
 msgid "Config write refused for %(name)s: %(detail)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1473
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2699
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3049
 msgid "validation failed"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1486
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2712
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3080
 #, python-format
 msgid ""
 "Config written and the runtime reload failed (%(detail)s); the running "
 "plugin state was left untouched. A restart is required."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1537
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2763
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2947
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3187
 #, python-format
 msgid "Unknown plugin: %(name)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1548
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2774
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3194
 #, python-format
 msgid "Plugin control failed: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2868
+#, python-format
+msgid ""
+"Saved %(count)s value(s) for %(name)s and reloaded the plugin, so the "
+"running runtime uses them now."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2880
+#, python-format
+msgid ""
+"Saved %(count)s value(s) for %(name)s. The plugin is not loaded right "
+"now, so they apply the next time it activates."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2892
+#, python-format
+msgid ""
+"Saved %(count)s value(s) for %(name)s, but reloading the plugin failed "
+"(%(detail)s). A restart is required; the previous instance may have been "
+"unloaded."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2906
+#, python-format
+msgid ""
+"Saved %(count)s value(s) for %(name)s to disk, but they could not be "
+"applied to the running runtime (%(detail)s). A restart is required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2919
+#, python-format
+msgid ""
+"%(count)s secret(s) written to .env. Their values are never shown or "
+"logged; the field only reports whether one is set."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2930
+#, python-format
+msgid ""
+"%(fields)s is still a literal value in config.toml, which the loader does"
+" not replace: the .env value that was just written is not in effect. "
+"Change config.toml to reference the variable, then restart."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2961
+#, python-format
+msgid "%(name)s declares no settings this build can write."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:2982
+msgid ""
+"No .env variable is declared for this secret, so it cannot be written "
+"safely from here."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3024
+msgid "Nothing to save: every value is unchanged."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3064
+#, python-format
+msgid ""
+".env write failed after %(written)s of %(total)s secret(s) were stored "
+"(%(detail)s). Nothing else was changed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3125
+msgid "No plugin was named."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:3213
+#, python-format
+msgid ""
+"Nothing was written: %(count)s value(s) were rejected. Fix the fields "
+"marked below and save again."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/account.html:4
@@ -1355,6 +1937,447 @@ msgstr ""
 msgid "Loading ledger..."
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:8
+msgid "Editor"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:8
+msgid "Secrets"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:8
+msgid "History"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:11
+msgid "Configuration editor"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:14
+#, python-format
+msgid "%(keys)s keys"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:15
+#, python-format
+msgid "%(count)s tables"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:18
+msgid "Validate now"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor.html:33
+msgid "Reload history"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_form.html:8
+msgid "Form view"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_form.html:14
+msgid "Review changed fields"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_form.html:19
+msgid ""
+"Every control shows the effective value and where it comes from. A "
+"single-value edit rewrites only that key's line, so comments and "
+"formatting survive."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_form.html:22
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:114
+msgid "No key matches the current filters."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_form.html:31
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:52
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:11
+#, python-format
+msgid "%(count)s key(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:8
+msgid "Version history"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:10
+#, python-format
+msgid "%(count)s revision(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:14
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:118
+#: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:68
+#: src/anteumbra/interfaces/web/templates/admin/system_management.html:92
+msgid "Refresh"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:19
+msgid ""
+"Every save keeps a timestamped copy of config.toml next to it. Restoring "
+"one copies the current file aside first, revalidates the result with the "
+"same validator the CLI uses, and reports which keys need a restart."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:23
+msgid "No revision yet: nothing has written config.toml from this page."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:30
+#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:151
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:82
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:182
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:7
+msgid "Time"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:32
+msgid "Changed keys"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:33
+#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:155
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:88
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:70
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:134
+#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
+msgid "Actions"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:42
+#, python-format
+msgid "%(size)s bytes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:48
+msgid "backup of the file"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:48
+msgid "recorded change"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:59
+msgid "same keys as the file on disk"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:59
+msgid "comments or layout only"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:69
+msgid "View diff"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:78
+msgid "Restore this backup? The current config.toml is copied aside first."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:84
+msgid "Download"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_history.html:88
+msgid "read-only record"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:4
+msgid "Form"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:4
+msgid "Tree"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:4
+msgid "Raw"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:16
+msgid "Search keys, values and comments..."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:26
+msgid "Only values set here"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:29
+msgid "Hide everything still identical to the shipped config.toml"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:33
+msgid "Only keys changed from the shipped defaults"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:37
+#, python-format
+msgid "%(shown)s of %(total)s keys shown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_panel.html:39
+#, python-format
+msgid "%(count)s changed from defaults"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_raw.html:20
+msgid "Raw view"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_raw.html:22
+msgid "secret values are redacted"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_raw.html:26
+msgid "Highlighted view of the file on disk"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_raw.html:34
+msgid "Review raw changes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_raw.html:36
+msgid ""
+"The text is validated with the same validator the CLI uses before "
+"anything is written; the current file is backed up first."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:18
+msgid ""
+"Structural change: config.toml is re-serialized with the project writer, "
+"so comments and blank lines may be reformatted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:26
+msgid "Key"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:27
+msgid "Change"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:28
+msgid "Old value"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:29
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:53
+msgid "New value"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:44
+msgid "No key value changed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:49
+msgid "blocking errors"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:58
+msgid "warnings (they do not block)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:67
+msgid "written"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:69
+#, python-format
+msgid "backup: %(name)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:72
+#, python-format
+msgid "revision: %(id)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:79
+msgid "restart required"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:80
+#, python-format
+msgid "Read once at startup: %(keys)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:86
+msgid "runtime reload failed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:90
+msgid "The runtime reloaded this change live."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:106
+msgid "Confirm save"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_result.html:107
+msgid "A timestamped backup of the current file is written first."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_rows.html:12
+msgid "changed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_rows.html:13
+msgid "secret"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_rows.html:15
+msgid "dangerous"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_rows.html:25
+msgid "Review change"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_rows.html:29
+msgid "Read-only"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:8
+msgid "Secrets and credentials"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:10
+msgid "write-only: values are never shown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:14
+msgid ""
+"Credentials live in .env next to config.toml. Saving writes the variable "
+"and reloads the runtime; an empty field leaves the current value "
+"untouched, and no value is ever sent back to this page."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:24
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:45
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:23
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:29
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:92
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:102
+msgid "set"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:24
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:45
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:23
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:29
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:92
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:102
+msgid "not set"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:26
+msgid "resolves web_admin.password_hash"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:32
+msgid "New admin password"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:34
+msgid "Repeat it"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:35
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:213
+msgid "Set a new password"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:36
+msgid "Hashed here; the hash is never displayed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:54
+msgid "Save to .env"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:62
+msgid "Clear this variable? Notifications or integrations using it stop working."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_secrets.html:72
+msgid ""
+"ANTEUMBRA_SECRET_KEY is deliberately not editable here: rotating it signs"
+" every session out."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:21
+msgid "new_key"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:23
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:93
+msgid "value"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:25
+msgid "Adds one line at the end of this table; nothing else moves."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:26
+msgid "Add key"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:37
+msgid "Add another block like this"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:44
+msgid "Remove this block"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:52
+msgid "Remove this table"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:63
+msgid "Tree view"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:65
+msgid "Structural changes re-serialize the file: comments may be reformatted."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:72
+msgid "new.table"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:75
+msgid ""
+"A new table, or one more [[array.of.tables]] block. Re-serializes the "
+"file."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:76
+msgid "Add table or block"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:82
+msgid "Arrays"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:86
+#, python-format
+msgid "%(count)s item(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:98
+msgid "Add item"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/config_editor_tree.html:106
+msgid "Remove item"
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/config_watcher.html:3
 msgid "Config Load History"
 msgstr ""
@@ -1374,15 +2397,6 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/dashboard.html:118
 msgid "Reload the current view"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:118
-#: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:68
-#: src/anteumbra/interfaces/web/templates/admin/system_management.html:92
-msgid "Refresh"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/dashboard.html:123
@@ -1456,13 +2470,17 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:214
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:178
+msgid "Config Editor"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:215
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:92
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:97
 msgid "Cancel"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:214
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:215
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:46
 msgid "Upload"
 msgstr ""
@@ -1702,23 +2720,8 @@ msgstr ""
 msgid "LOG LINES"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:151
-#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:82
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:182
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:7
-msgid "Time"
-msgstr ""
-
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:154
 msgid "Message"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:155
-#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:88
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:70
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:134
-#: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
-msgid "Actions"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:159
@@ -1742,10 +2745,10 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell.html:16
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics.html:16
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:101
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:107
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:113
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:121
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:173
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:179
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:187
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:220
 msgid "Loading panel..."
 msgstr ""
 
@@ -2012,9 +3015,10 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:33
 #: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
 #: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:38
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:69
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:114
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:124
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:146
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:147
 msgid "Enabled"
 msgstr ""
 
@@ -2022,11 +3026,12 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:33
 #: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
 #: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:38
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:69
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:90
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:114
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:124
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:145
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:146
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:147
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:148
 msgid "Disabled"
 msgstr ""
 
@@ -3034,118 +4039,176 @@ msgstr ""
 msgid "Loading sessions..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:34
-msgid "ENVIRONMENT & SECRETS"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:50
+msgid "Show:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:36
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:58
+msgid "Jump to:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:61
+msgid "choose a section..."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:67
+msgid "Advanced config editor"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:77
 msgid ""
 "Mail credentials, tokens and keys are stored in .env next to config.toml."
 " Empty fields are left untouched; values are never committed to git."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:47
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:78
+msgid ""
+"This section is the only place on this page that writes .env. The config "
+"editor below is a legacy copy of the same fields; it is kept for "
+"compatibility and is not needed for a normal change."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:29
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:98
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:95
+msgid "Set a new value (leave blank to keep the stored one)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:102
 msgid "Admin password hash"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:47
-msgid "Not set"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:102
+msgid ""
+"The hash itself is never displayed; set a new password in the advanced "
+"section below."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:48
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:103
 msgid "Save environment"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:48
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:103
 msgid "Written to .env and reloaded."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:55
-msgid "ACCOUNT"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:61
-msgid "SITE CONFIGURATION"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:73
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:128
 msgid "Access log:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:73
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:128
 msgid "not enabled"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:78
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:133
 msgid "No website is configured."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:85
-msgid "MONITORING & DETECTION"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:88
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:143
 msgid "Watched paths"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:88
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:89
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:143
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:144
 msgid "none configured"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:89
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:144
 msgid "Monitored extensions"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:146
 msgid "Auto quarantine"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:147
 msgid "Auto IP block"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:148
 msgid "WAF source"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:100
-msgid "NOTIFICATIONS"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:153
+msgid "Keys that remove a protection"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:106
-msgid "STORAGE & PATHS"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:158
+msgid "caution"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:112
-msgid "PLUGINS"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:159
+msgid "current:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:118
-msgid "ADVANCED"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:159
+msgid "from"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:164
+msgid ""
+"These keys are edited in the advanced config editor, which validates them"
+" before writing."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:190
+msgid ""
+"The readability filter is active; plugin rows and settings are shown "
+"accordingly."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:199
 msgid "Registry Status"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:199
 msgid "WAL Management"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:199
 msgid "Session Management"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:199
 msgid "Config Reload"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:122
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:205
+msgid "Admin password"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:206
+msgid ""
+"config.toml stores only a hash (web_admin.password_hash). Set a new "
+"password here; it is hashed before it is written, so no plaintext ever "
+"reaches disk."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:211
+msgid "New password (min 6 characters)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:212
+msgid "Repeat the new password"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:214
+msgid "Hash: scrypt via werkzeug"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:218
+msgid "Raw config.toml editing (advanced)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:218
+msgid "Every key in the file, full validation, and a backup on every save."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:221
 msgid "Loading config editor..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:225
 msgid "System"
 msgstr ""
 
@@ -3238,7 +4301,7 @@ msgid "Search config..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:2
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:27
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:31
 msgid "Saved"
 msgstr ""
 
@@ -3267,11 +4330,11 @@ msgstr ""
 msgid "Generate Hash"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:27
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:31
 msgid "Save .env"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:27
+#: src/anteumbra/interfaces/web/templates/admin/panels/config_editor.html:31
 msgid "Credentials never committed to git."
 msgstr ""
 
@@ -3491,155 +4554,285 @@ msgstr ""
 msgid "Toggle switches above enable/disable each notification channel in"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:26
+msgid "Configuration:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:28
+#, python-format
+msgid "%(count)s setting(s), %(changed)s differ from the default"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:31
+msgid "filtered"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:52
+msgid ""
+"This plugin declares no schema in this build, so these controls were "
+"derived from the keys present in config.toml. Types inferred from a value"
+" can be wrong — check the effective value after saving."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:58
+msgid ""
+"No setting is shown: every field is at its default and the readability "
+"filter is active."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:59
+#, python-format
+msgid "%(count)s field(s) differ from the default."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:79
+msgid "changed from default"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:79
+msgid "default"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:81
+msgid "effective from:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:94
+msgid ""
+"No .env variable is declared for this secret, so it cannot be changed "
+"from here."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:104
+msgid "A value is stored; it is never displayed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:106
+msgid "No value is stored yet."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:133
+msgid "comma separated, or a JSON list"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:141
+msgid "default:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:142
+msgid "differs from the shipped config.toml"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:143
+msgid "not present in config.toml yet"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:148
+#, python-brace-format, python-format
+msgid ""
+"No value is in effect: config.toml refers to ${%(var)s}, which .env does "
+"not define and which has no fallback."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:154
+msgid ""
+"This is a literal value in config.toml, so a value saved to .env will not"
+" take effect until config.toml references the variable."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:165
+msgid "Save plugin settings"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_config_form.html:166
+msgid "Written to config.toml with a timestamped backup; secrets go to .env."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:38
 msgid "System:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:38
 msgid "ENABLED"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:38
 #: src/anteumbra/interfaces/web/templates/admin/panels/siem_status.html:6
 msgid "DISABLED"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:27
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:39
 msgid "Loaded:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:28
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:40
 msgid "Active:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:29
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:41
 msgid "Detectors:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:30
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
 msgid "Notifiers:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:31
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:43
 msgid "Sources:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:36
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:44
+msgid "Configured:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:46
+#, python-format
+msgid "Showing %(shown)s of %(total)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:49
+#, python-format
+msgid "%(count)s with changed values"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:59
 msgid "The plugin system is switched off; no plugin is loaded."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:37
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:60
 #: src/anteumbra/interfaces/web/templates/admin/panels/siem_status.html:28
 msgid "Enable in config.toml:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
 msgid "Plugin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
 msgid "Detector"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
 msgid "Notifier"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:56
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:79
 msgid "Loaded"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:58
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:81
 msgid "Not running"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:60
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:83
 msgid "Run state unknown"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:88
 msgid "Plugin system off"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:66
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:89
 msgid "Not installed"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:67
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:90
 msgid "Not in builtin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:68
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:91
 msgid "Disabled in config"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:69
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:92
 msgid "Not registered"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:76
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:99
 msgid "Not loaded"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:84
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:107
 msgid "Config section:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:85
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:108
 msgid "not set explicitly"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:86
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:109
 msgid "enabled is not reported for a plugin that is not loaded"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:92
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:114
+msgid "Settings:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:115
+#, python-format
+msgid "%(count)s differ from defaults"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:116
+msgid "all at defaults"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:117
+#, python-format
+msgid "%(count)s differ from the shipped file"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:124
 msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:93
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:125
 msgid "Listed in config.toml, but this build has no implementation for it."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:94
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:126
 msgid "This build can load it, but [plugins] builtin does not list it."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:95
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:127
 msgid "Installed but switched off in config.toml."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:96
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:128
 msgid ""
 "Enabled and listed, but the plugin is not registered — check the startup "
 "log."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:100
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:132
 msgid "Add to config.toml:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:112
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:148
+msgid "Configure"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:154
 msgid "Disable"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:116
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:158
 msgid "Enable"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:122
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:164
 msgid "Remove from builtin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:126
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:168
 msgid "Add to builtin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:129
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:171
 msgid "Protected:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:138
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:180
 msgid "No plugin is available in this build."
 msgstr ""
 

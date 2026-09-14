@@ -1,0 +1,52 @@
+{# The editor tab: view switch, search and readability filters, then the view
+   itself.  Only ``#ce-list`` is replaced by search and filter requests, so the
+   input keeps focus while the operator types. #}
+{% set view_titles = {'form': _('Form'), 'tree': _('Tree'), 'raw': _('Raw')} %}
+<div id="ce-panel">
+  <div class="ce-toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+    {% for name in views %}
+    <button class="btn btn-sm {{ 'btn-primary' if view == name else 'btn-ghost' }}" type="button"
+            hx-get="/admin/config?tab=editor&view={{ name }}&q={{ query|urlencode }}&set_only={{ '1' if set_only else '0' }}&non_default={{ '1' if non_default_only else '0' }}"
+            hx-target="#config-editor-root" hx-select="#config-editor-root"
+            hx-swap="innerHTML" hx-push-url="true">
+      {{ view_titles[name] }}
+    </button>
+    {% endfor %}
+    <input type="search" class="form-input" name="q" value="{{ query }}"
+           placeholder="{{ _('Search keys, values and comments...') }}"
+           hx-get="{{ panel_url }}?view={{ view }}"
+           hx-trigger="keyup changed delay:400ms, search"
+           hx-include="#ce-filters input"
+           hx-target="#ce-list" hx-select="#ce-list" hx-swap="outerHTML">
+    <span id="ce-filters" style="display:flex;gap:10px;align-items:center;">
+      <label class="muted-copy" style="display:flex;gap:4px;align-items:center;">
+        <input type="checkbox" name="set_only" value="1" class="ce-filter" {% if set_only %}checked{% endif %}
+               hx-get="{{ panel_url }}?view={{ view }}" hx-include="#ce-filters input, input[name='q']"
+               hx-target="#ce-list" hx-select="#ce-list" hx-swap="outerHTML">
+        {{ _('Only values set here') }}
+      </label>
+      <label class="muted-copy" style="display:flex;gap:4px;align-items:center;"
+             title="{{ _('Hide everything still identical to the shipped config.toml') }}">
+        <input type="checkbox" name="non_default" value="1" class="ce-filter" {% if non_default_only %}checked{% endif %}
+               hx-get="{{ panel_url }}?view={{ view }}" hx-include="#ce-filters input, input[name='q']"
+               hx-target="#ce-list" hx-select="#ce-list" hx-swap="outerHTML">
+        {{ _('Only keys changed from the shipped defaults') }}
+      </label>
+    </span>
+    <span class="toolbar-spacer"></span>
+    <span class="muted-copy">{{ _('%(shown)s of %(total)s keys shown', shown=rows|length, total=key_count) }}</span>
+    {% if reference_available %}
+    <span class="badge badge-info">{{ _('%(count)s changed from defaults', count=changed_count) }}</span>
+    {% endif %}
+  </div>
+
+  <div id="ce-list">
+    {% if view == 'tree' %}
+      {% include 'admin/config_editor_tree.html' %}
+    {% elif view == 'raw' %}
+      {% include 'admin/config_editor_raw.html' %}
+    {% else %}
+      {% include 'admin/config_editor_form.html' %}
+    {% endif %}
+  </div>
+</div>

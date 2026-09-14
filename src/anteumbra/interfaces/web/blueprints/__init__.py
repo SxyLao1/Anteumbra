@@ -55,6 +55,14 @@ def register_blueprints(app: "Flask"):
 
     app.register_blueprint(settings_bp)
 
+    # Config editor (/admin/config). Registered before monitor_bp on purpose:
+    # monitor_bp also declares "/config" (the reload-history watcher page, kept
+    # reachable at /admin/config/watcher), and Werkzeug matches the rule that
+    # was added first.
+    from anteumbra.interfaces.web.blueprints.config_editor_bp import config_editor_bp
+
+    app.register_blueprint(config_editor_bp)
+
     from anteumbra.interfaces.web.blueprints.monitor_bp import monitor_bp
 
     app.register_blueprint(monitor_bp)

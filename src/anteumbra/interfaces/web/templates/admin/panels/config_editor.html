@@ -20,9 +20,13 @@
     {% for sec_name, fields in sections.items() %}{{ render_section(sec_name, fields, sections_levels.get(sec_name, 0)) }}{% endfor %}
   </div>
   <section class="config-section collapsed"><button class="config-section-header" type="button" data-action="settings.section-toggle"><span class="cfg-arrow">▼</span><strong>{{ _('.env File') }}</strong><span>{{ _('sensitive credentials') }}</span></button><div class="config-section-body environment-editor">
-    <div class="env-field"><label>ANTEUMBRA_PASSWORD_HASH</label><code id="env-pwd-display">{{ env_vars.get('ANTEUMBRA_PASSWORD_HASH', 'Not set')[:60] }}...</code><input type="password" id="env-pwd-input" placeholder="{{ _('New password') }}"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.password-hash">{{ _('Generate Hash') }}</button></div>
+    <div class="env-field"><label>ANTEUMBRA_PASSWORD_HASH</label><code id="env-pwd-display">{{ _('set') if env_vars.get('ANTEUMBRA_PASSWORD_HASH', '')|trim else _('not set') }}</code><input type="password" id="env-pwd-input" placeholder="{{ _('New password') }}"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.password-hash">{{ _('Generate Hash') }}</button></div>
+    {# Write-only on purpose: this panel used to print every stored credential into
+       the page source.  An empty field means "leave the stored value alone", which
+       is how the save handler already behaves, so nothing here needs the value. #}
     {% for key in ['ANTEUMBRA_WECHAT_API_KEY', 'ANTEUMBRA_EMAIL_USERNAME', 'ANTEUMBRA_EMAIL_PASSWORD', 'ANTEUMBRA_EMAIL_FROM', 'ANTEUMBRA_EMAIL_TO', 'ANTEUMBRA_WEBHOOK_SECRET'] %}
-    <label class="env-field"><span>{{ key }}</span><input type="{{ 'password' if key == 'ANTEUMBRA_EMAIL_PASSWORD' else 'text' }}" value="{{ env_vars.get(key, '') }}" data-env-key="{{ key }}"></label>
+    {% set is_set = env_vars.get(key, '')|trim != '' %}
+    <label class="env-field"><span>{{ key }}</span><code style="font-size:9px;color:var(--color-text-muted);" data-env-secret-state="{{ 'set' if is_set else 'unset' }}">{{ _('set') if is_set else _('not set') }}</code><input type="password" value="" autocomplete="new-password" placeholder="{{ _('Set a new value (leave blank to keep the stored one)') }}" data-env-key="{{ key }}"></label>
     {% endfor %}
     <div class="page-toolbar"><button class="btn btn-primary btn-sm" type="button" data-action="settings.environment-save">{{ _('Save .env') }}</button><span id="env-saved" class="form-result" hidden>{{ _('Saved') }}</span><span class="muted-copy">{{ _('Credentials never committed to git.') }}</span></div>
   </div></section>

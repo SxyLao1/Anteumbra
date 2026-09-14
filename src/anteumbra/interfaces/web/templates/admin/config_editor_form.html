@@ -1,0 +1,40 @@
+{# The form view: schema-shaped sections (one per table) with typed controls.
+   Values come from the document, the source badge next to each control says
+   where its effective value comes from, and a single button reviews every
+   changed field at once. #}
+{% from 'admin/config_editor_rows.html' import key_row %}
+<div class="card">
+  <div class="card-header">
+    <span><span class="card-header-icon">⚙</span> {{ _('Form view') }}</span>
+    <span class="toolbar-spacer"></span>
+    <button class="btn btn-primary btn-sm" type="button"
+            hx-post="/admin/config/editor/batch" hx-include=".ce-value"
+            hx-target="#ce-result" hx-swap="innerHTML"
+            hx-vals='{"confirm": "0"}'>
+      {{ _('Review changed fields') }}
+    </button>
+  </div>
+  <div class="card-body">
+    <p class="muted-copy" style="margin-top:0;">
+      {{ _('Every control shows the effective value and where it comes from. A single-value edit rewrites only that key\'s line, so comments and formatting survive.') }}
+    </p>
+    {% if not rows %}
+      <div class="empty-state"><p>{{ _('No key matches the current filters.') }}</p></div>
+    {% endif %}
+    {% set grouped = rows | groupby('table') %}
+    {% for table, table_rows in grouped %}
+    <details class="ce-section" {% if loop.index <= 3 %}open{% endif %}
+             style="border:1px solid var(--color-border);border-radius:4px;padding:8px 10px;margin-bottom:8px;">
+      <summary style="cursor:pointer;">
+        <strong>[{{ table or 'root' }}]</strong>
+        <span class="muted-copy" style="font-size:11px;">
+          {{ _('%(count)s key(s)', count=table_rows|length) }}
+        </span>
+      </summary>
+      <div style="margin-top:8px;">
+        {% for row in table_rows %}{{ key_row(row) }}{% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</div>

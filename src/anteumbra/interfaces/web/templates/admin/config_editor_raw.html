@@ -1,0 +1,41 @@
+{# The raw view: the file as text, with a syntax-highlighted read-only pane
+   (rendered server-side) above the editable textarea.  Secret values are shown
+   as the redaction marker in both panes; a save restores them from disk, and
+   refuses if a secret line was edited or removed. #}
+<style>
+  .ce-raw-view { font-family: var(--font-mono); font-size: 12px; line-height: 1.45; max-height: 340px; overflow: auto;
+                 background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; }
+  .ce-raw-view .ce-tok-comment { color: var(--color-text-muted); font-style: italic; }
+  .ce-raw-view .ce-tok-header { color: var(--color-info); font-weight: 600; }
+  .ce-raw-view .ce-tok-key { color: var(--color-accent); }
+  .ce-raw-view .ce-tok-string { color: var(--color-safe); }
+  .ce-raw-view .ce-tok-number { color: var(--color-warning); }
+  .ce-raw-view .ce-tok-literal { color: var(--color-danger); }
+  .ce-raw-edit { width: 100%; min-height: 360px; font-family: var(--font-mono); font-size: 12px; line-height: 1.45;
+                 background: var(--color-bg-secondary); color: var(--color-text-primary);
+                 border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; }
+</style>
+<div class="card">
+  <div class="card-header">
+    <span><span class="card-header-icon">⚙</span> {{ _('Raw view') }}</span>
+    <span class="toolbar-spacer"></span>
+    <span class="badge badge-warning">{{ _('secret values are redacted') }}</span>
+  </div>
+  <div class="card-body">
+    <details style="margin-bottom:10px;">
+      <summary style="cursor:pointer;">{{ _('Highlighted view of the file on disk') }}</summary>
+      <pre class="ce-raw-view">{{ highlighted }}</pre>
+    </details>
+    <form hx-post="/admin/config/editor/raw" hx-target="#ce-result" hx-swap="innerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <textarea class="ce-raw-edit" name="raw_text" spellcheck="false" wrap="off">{{ raw_text }}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" type="submit">{{ _('Review raw changes') }}</button>
+        <span class="muted-copy">
+          {{ _('The text is validated with the same validator the CLI uses before anything is written; the current file is backed up first.') }}
+        </span>
+      </div>
+    </form>
+  </div>
+</div>

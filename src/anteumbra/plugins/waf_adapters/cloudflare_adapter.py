@@ -68,6 +68,61 @@ class CloudflareAdapter(Plugin, PollableEventSource):
     def supported_events(self) -> List[str]:
         return ["waf.event"]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.cloudflare]``: region settings plus two credentials.
+
+        ``zone_id`` and ``api_token`` are ``secret`` fields on purpose: both
+        identify the account, and the shipped ``config.toml`` reads them from
+        ``.env`` through ``${VAR}`` placeholders.  The settings page shows them as
+        set/unset and writes new values to ``.env`` only.
+        """
+        return [
+            {
+                "name": "zone_id",
+                "type": "secret",
+                "default": "",
+                "label": "Zone ID",
+                "description": "Cloudflare zone the GraphQL analytics query runs against.",
+                "env_key": "CLOUDFLARE_ZONE_ID",
+                "required": True,
+            },
+            {
+                "name": "api_token",
+                "type": "secret",
+                "default": "",
+                "label": "API token",
+                "description": (
+                    "API token with Zone Analytics read access, stored in .env "
+                    "as CLOUDFLARE_API_TOKEN."
+                ),
+                "env_key": "CLOUDFLARE_API_TOKEN",
+                "required": True,
+            },
+            {
+                "name": "poll_interval",
+                "type": "number",
+                "default": 60,
+                "min": 10,
+                "max": 86400,
+                "label": "Poll interval (seconds)",
+                "description": (
+                    "The GraphQL API is rate limited, so 60s is the practical floor."
+                ),
+            },
+            {
+                "name": "lookback_minutes",
+                "type": "number",
+                "default": 5,
+                "min": 1,
+                "max": 1440,
+                "label": "Lookback window (minutes)",
+                "description": (
+                    "How far back the first poll reaches after a start or restart."
+                ),
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         self._config = config
         self._zone_id = config.get("zone_id", "")
