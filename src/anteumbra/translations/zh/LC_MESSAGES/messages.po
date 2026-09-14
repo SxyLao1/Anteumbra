@@ -88,10 +88,10 @@ msgid "Please enter a target directory."
 msgstr "请输入目标目录。"
 
 msgid "Quarantine %(count)s selected files?"
-msgstr "隔离所选的 %(count) 个文件？"
+msgstr "隔离所选的 %(count)s 个文件？"
 
 msgid "Done: %(count)s quarantined"
-msgstr "完成: 已隔离 %(count) 个"
+msgstr "完成: 已隔离 %(count)s 个"
 
 msgid "Lines scanned"
 msgstr "扫描行数"
@@ -349,7 +349,7 @@ msgid "Upload successful"
 msgstr "上传成功"
 
 msgid "Delete %(count)s selected rule(s)?"
-msgstr "删除所选的 %(count) 条规则？"
+msgstr "删除所选的 %(count)s 条规则？"
 
 msgid "Rule deletion failed: %(message)s"
 msgstr "规则删除失败: %(message)s"
@@ -796,7 +796,7 @@ msgid "config file %(name)s"
 msgstr "配置文件 %(name)s"
 
 msgid "%(count)s changed"
-msgstr "已修改 %(count) 项"
+msgstr "已修改 %(count)s 项"
 
 msgid "all defaults"
 msgstr "全部为默认值"

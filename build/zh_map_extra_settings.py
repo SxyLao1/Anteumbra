@@ -140,7 +140,7 @@ ZH_MAP_EXTRA_SETTINGS = {
     "Raw config.toml editing (advanced)": "直接编辑 config.toml（高级）",
     "Every key in the file, full validation, and a backup on every save.":
         "文件中的每一个键、完整校验，且每次保存都会留备份。",
-    "%(count)s changed": "已修改 %(count) 项",
+    "%(count)s changed": "已修改 %(count)s 项",
     "all defaults": "全部为默认值",
     "filtered": "已过滤",
     "The readability filter is active; plugin rows and settings are shown accordingly.":
