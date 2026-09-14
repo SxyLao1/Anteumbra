@@ -74,6 +74,22 @@ class PluginManager:
         """
         self._event_sink = sink
 
+    def apply_plugin_config(self, plugin_config: Mapping[str, Any]) -> None:
+        """Adopt a re-read ``[plugins]`` table on a running manager.
+
+        The settings page changes one plugin's section and applies it live, so
+        ``register()`` must activate the fresh instance with the values that are
+        now on disk instead of the snapshot taken at startup.  Only the table
+        itself is taken over: the system switch and the queue/timeout tuning are
+        startup decisions and are deliberately left alone, because changing them
+        mid-flight would alter dispatch behaviour without a restart to explain
+        it.
+        """
+        if not isinstance(plugin_config, Mapping):
+            return
+        with self._rwlock:
+            self._config = dict(plugin_config)
+
     def _start_event_source(self, plugin: Plugin) -> None:
         """Wire and start one EventSource plugin.
 
@@ -250,6 +266,45 @@ class PluginManager:
                 handlers[:] = [h for h in handlers if h.name != name]
             self._logger.info("PluginManager: 插件 '%s' 已卸载", name)
             return True
+
+    def loaded_name(self, name: str) -> Optional[str]:
+        """Return the name a plugin registered itself under, if it is loaded.
+
+        Factory keys are dotted (``waf_adapters.modsecurity``) while the instance
+        reports the short name (``modsecurity``), so a caller holding the config
+        or inventory key cannot call ``unregister`` with it directly.
+        """
+        if not name:
+            return None
+        tail = name.rsplit(".", 1)[-1]
+        with self._rwlock:
+            if name in self._plugins:
+                return name
+            if tail in self._plugins:
+                return tail
+        return None
+
+    def load_plugin(self, name: str) -> bool:
+        """Build one plugin from its factory (or module) and register it.
+
+        Additive companion to ``unregister``: the settings page switches a plugin
+        off by unloading it and back on by building a fresh instance through the
+        same factory the runtime used at startup, so no second wiring path exists
+        for plugins to drift apart from.  Returns False when the manager is
+        disabled, the plugin has no implementation in this build, or activation
+        raised — the caller reports that honestly instead of assuming success.
+        """
+        if not self._enabled:
+            return False
+        tail = name.rsplit(".", 1)[-1]
+        with self._rwlock:
+            already = name in self._plugins or tail in self._plugins
+        if already:
+            return True
+        instance = self._build_plugin(name, allow_short_factory_key=True)
+        if instance is None:
+            return False
+        return bool(self.register(instance))
 
     # ── 事件分发 ────────────────────────────────────────
 
@@ -445,6 +500,12 @@ class PluginManager:
                         else None
                     ),
                     "events": plugin.supported_events if plugin is not None else [],
+                    # "loaded" is not the same as "working": an EventSource can be
+                    # registered and inert (port taken, endpoint unreachable), and
+                    # the settings page has to be able to say which one it is.
+                    "registered_name": plugin.name if plugin is not None else None,
+                    "event_source": isinstance(plugin, EventSource),
+                    "running": _event_source_running(plugin),
                 }
             )
         return result
@@ -473,12 +534,37 @@ class PluginManager:
 
     def _load_builtin(self, name: str) -> Optional[Plugin]:
         """加载内置插件（从 plugins/ 目录）"""
+        instance = self._build_plugin(name)
+        if instance is None:
+            return None
+        self.register(instance)
+        return instance
+
+    def _build_plugin(self, name: str, *, allow_short_factory_key: bool = False) -> Optional[Plugin]:
+        """Instantiate one plugin from the factory map, then the module path.
+
+        ``allow_short_factory_key`` additionally resolves a short name against a
+        dotted factory key (``modsecurity`` -> ``waf_adapters.modsecurity``); the
+        startup path stays exact-key-only so the builtin list keeps meaning what
+        it always meant.
+        """
         try:
             factory = self._plugin_factories.get(name)
+            if factory is None and allow_short_factory_key:
+                factory = self._plugin_factories.get(name.rsplit(".", 1)[-1])
+                if factory is None and "." not in name:
+                    # Reverse direction: the caller holds the short plugin name
+                    # while the factory map is keyed by package path.
+                    factory = next(
+                        (
+                            candidate
+                            for key, candidate in self._plugin_factories.items()
+                            if key.rsplit(".", 1)[-1] == name
+                        ),
+                        None,
+                    )
             if factory is not None:
-                instance = factory()
-                self.register(instance)
-                return instance
+                return factory()
 
             module = importlib.import_module(f"anteumbra.plugins.{name}")
             # 查找模块中第一个 Plugin 子类
@@ -491,9 +577,7 @@ class PluginManager:
             if plugin_cls is None:
                 self._logger.warning("PluginManager: 内置插件 '%s' 未找到 Plugin 子类", name)
                 return None
-            instance = plugin_cls()
-            self.register(instance)
-            return instance
+            return plugin_cls()
         except ImportError:
             self._logger.info("PluginManager: 内置插件 '%s' 未安装或不可用", name)
             return None
@@ -522,3 +606,18 @@ def _positive_float(value: Any, *, default: float) -> float:
         return max(0.01, float(value))
     except (TypeError, ValueError):
         return default
+
+
+def _event_source_running(plugin: Plugin | None) -> Optional[bool]:
+    """Whether a loaded EventSource is actually running.
+
+    Returns ``None`` when the question cannot be answered (not an event source,
+    or the adapter has no working ``is_running``): the settings page then says
+    "unknown" instead of claiming a state it never verified.
+    """
+    if not isinstance(plugin, EventSource):
+        return None
+    try:
+        return bool(plugin.is_running())
+    except Exception:  # noqa: BLE001 - a broken probe must not break the panel
+        return None

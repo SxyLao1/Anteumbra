@@ -12,8 +12,15 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, render_template, request
 
+from anteumbra.application.site_read_model import (
+    cluster_path_indexer,
+    cluster_site_index,
+    cluster_site_view,
+    site_fields,
+    site_names,
+)
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.interfaces.web.pages import render_page
+from anteumbra.interfaces.web.pages import active_site_id, render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -305,7 +312,8 @@ def profile_report(profile_id):
 def file_clusters_page():
     """文件聚类列表页面"""
     try:
-        engine = get_runtime().file_cluster_engine
+        runtime = get_runtime()
+        engine = runtime.file_cluster_engine
         clusters = engine.list_clusters()
         enriched = []
         for c in clusters:
@@ -321,6 +329,14 @@ def file_clusters_page():
                     "threshold": c.threshold,
                 }
             )
+        # A cluster groups files by content and can span roots, so it is
+        # attributed to the sites its members belong to instead of being
+        # assigned to the site the operator happens to be looking at.
+        enriched = _annotate_clusters_with_sites(runtime, engine, enriched)
+        active_site = active_site_id()
+        if active_site:
+            enriched = [c for c in enriched if active_site in c["site_ids"]]
+
         total_files = sum(c["size"] for c in enriched)
         multi_count = sum(1 for c in enriched if c["size"] > 2)
         avg_sim = round(1 - 1 / (len(enriched) + 1), 2) if enriched else 0
@@ -336,6 +352,30 @@ def file_clusters_page():
     except Exception as e:
         current_app.logger.error(f"[PROFILES] clusters page error: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
+
+
+def _annotate_clusters_with_sites(runtime, engine, clusters: list[dict]) -> list[dict]:
+    """Attach each cluster's per-site membership, counted from the registry."""
+    try:
+        records = runtime.registry.get_all(include_deleted=True, include_false_positive=True)
+        names_by_id = site_names(runtime.config.get_enabled_websites())
+    except Exception:
+        logger.debug("site attribution for clusters is unavailable", exc_info=True)
+        return clusters
+
+    index = cluster_site_index(
+        records,
+        cluster_id_for_paths=cluster_path_indexer(engine),
+        names_by_id=names_by_id,
+    )
+    record_sites = {
+        str(record.get("file_path")): site_fields(record, names_by_id=names_by_id)
+        for record in records
+        if record.get("file_path")
+    }
+    for cluster in clusters:
+        cluster.update(cluster_site_view(cluster, index, record_sites=record_sites))
+    return clusters
 
 
 @profiles_bp.route("/clusters/stats")

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra\n"
-"POT-Creation-Date: 2026-09-14 00:05+0800\n"
+"POT-Creation-Date: 2026-09-14 12:50+0800\n"
 "Language: zh\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -501,6 +501,24 @@ msgstr "内存马探测服务未挂载到当前运行时。请在 config.toml �
 msgid "The memory-shell panel failed to render: %(error)s"
 msgstr "内存马面板渲染失败: %(error)s"
 
+msgid "The forensics store did not answer: %(error)s"
+msgstr "取证存储未响应：%(error)s"
+
+msgid "The forensics store returned no usable state."
+msgstr "取证存储未返回可用状态。"
+
+msgid "The forensics store is not available: %(reason)s"
+msgstr "取证存储不可用：%(reason)s"
+
+msgid "unknown reason"
+msgstr "原因未知"
+
+msgid "The forensics panel failed to render: %(error)s"
+msgstr "取证面板渲染失败：%(error)s"
+
+msgid "The remediation dialog failed to render: %(error)s"
+msgstr "处置对话框渲染失败：%(error)s"
+
 msgid "The memory-shell probe service is not available."
 msgstr "内存马探测服务不可用。"
 
@@ -512,6 +530,168 @@ msgstr "未知站点: %(site_id)s"
 
 msgid "The probe could not be started: %(error)s"
 msgstr "探测无法启动: %(error)s"
+
+msgid "The manifest could not be rendered: %(error)s"
+msgstr "清单渲染失败：%(error)s"
+
+msgid "No such forensics artifact file."
+msgstr "不存在该取证制品文件。"
+
+msgid "No site was selected for forensics."
+msgstr "未选择要取证的站点。"
+
+msgid "Select a component in the detection tab (or open forensics from a finding) before running forensics."
+msgstr "请先在检测页选择组件（或从检出结果点进取证页），再运行取证。"
+
+msgid "Forensics could not be started: %(error)s"
+msgstr "取证无法启动：%(error)s"
+
+msgid "No site was selected for remediation."
+msgstr "未选择要处置的站点。"
+
+msgid "No component kind was selected for remediation."
+msgstr "未选择要处置的组件类型。"
+
+msgid "No component was selected for remediation."
+msgstr "未选择要处置的组件。"
+
+msgid "The remediation request failed: %(error)s"
+msgstr "处置请求失败：%(error)s"
+
+msgid "The component is still registered: %(class_name)s"
+msgstr "该组件仍然处于注册状态：%(class_name)s"
+
+msgid "%(count)s credentials set"
+msgstr "已设置 %(count)s 项凭据"
+
+msgid "mail configured"
+msgstr "邮件已配置"
+
+msgid "mail not configured"
+msgstr "邮件未配置"
+
+msgid "signed in as %(user)s"
+msgstr "当前登录：%(user)s"
+
+msgid "%(count)s site(s) enabled"
+msgstr "%(count)s 个站点已启用"
+
+msgid "%(count)s watched path(s)"
+msgstr "监控 %(count)s 个路径"
+
+msgid "access log on"
+msgstr "访问日志已开启"
+
+msgid "access log off"
+msgstr "访问日志未开启"
+
+msgid "%(count)s channel(s) enabled"
+msgstr "已启用 %(count)s 个通知通道"
+
+msgid "notifications off"
+msgstr "通知未开启"
+
+msgid "backend %(backend)s"
+msgstr "存储后端 %(backend)s"
+
+msgid "plugin system not attached"
+msgstr "插件系统未接入"
+
+msgid "%(loaded)s loaded / %(total)s available"
+msgstr "已加载 %(loaded)s / 共 %(total)s 个"
+
+msgid "config file %(name)s"
+msgstr "配置文件 %(name)s"
+
+msgid "not configured"
+msgstr "未配置"
+
+msgid "%(count)s value(s) written to .env"
+msgstr "已写入 .env：%(count)s 项"
+
+msgid "Nothing to save: every field was left empty."
+msgstr "没有可保存的内容：所有字段都留空了。"
+
+msgid "Environment save failed: %(detail)s"
+msgstr "环境变量保存失败：%(detail)s"
+
+msgid "Runtime alerting is delivered by this plugin; switching it off would silently drop every alert."
+msgstr "运行时的告警投递依赖该插件；关闭它会静默丢弃所有告警。"
+
+msgid "Switched off %(name)s: config.toml written and the plugin was unloaded from the running runtime."
+msgstr "已关闭 %(name)s：配置已写入 config.toml，并已从运行中的运行时卸载。"
+
+msgid "Switched on %(name)s: config.toml written and the plugin was registered in the running runtime."
+msgstr "已开启 %(name)s：配置已写入 config.toml，并已在运行中的运行时注册。"
+
+msgid "Added %(name)s to [plugins] builtin and loaded it in the running runtime."
+msgstr "已将 %(name)s 加入 [plugins] builtin，并在运行中的运行时加载。"
+
+msgid "Removed %(name)s from [plugins] builtin and unloaded it from the running runtime."
+msgstr "已将 %(name)s 移出 [plugins] builtin，并从运行中的运行时卸载。"
+
+msgid "the plugin system is switched off in this process"
+msgstr "本进程的插件系统处于关闭状态"
+
+msgid "no plugin manager is attached to this runtime"
+msgstr "该运行时没有挂载插件管理器"
+
+msgid "Config written, but %(name)s could not be applied to the running runtime (%(reason)s). A restart is required."
+msgstr "配置已写入，但 %(name)s 无法在运行中的运行时生效（%(reason)s）。需要重启生效。"
+
+msgid "Config written, but applying %(name)s to the running runtime failed: %(detail)s A restart is required to pick the configuration up."
+msgstr "配置已写入，但在运行中的运行时应用 %(name)s 失败：%(detail)s 需要重启才能生效。"
+
+msgid "the plugin did not activate"
+msgstr "插件未成功激活"
+
+msgid "Note: %(name)s is still listed in [plugins] builtin, so a restart loads it again from there."
+msgstr "注意：%(name)s 仍在 [plugins] builtin 中，重启后会再次从那里加载。"
+
+msgid "Note: %(name)s is not listed in [plugins] builtin, so a restart will not load it."
+msgstr "注意：%(name)s 不在 [plugins] builtin 中，重启后不会加载它。"
+
+msgid "Note: %(name)s is no longer listed in [plugins] builtin, so a restart will not load it."
+msgstr "注意：%(name)s 已不在 [plugins] builtin 中，重启后不会再加载它。"
+
+msgid "Backup kept: %(file)s"
+msgstr "已保留备份：%(file)s"
+
+msgid "Unsupported plugin action: %(action)s"
+msgstr "不支持的插件操作：%(action)s"
+
+msgid "%(name)s is listed in config.toml, but this build has no implementation for it."
+msgstr "config.toml 中列出了 %(name)s，但本构建没有它的实现。"
+
+msgid "Refused: %(name)s must stay switched on and listed in builtin. %(reason)s"
+msgstr "已拒绝：%(name)s 必须保持开启并列在 builtin 中。%(reason)s"
+
+msgid "%(name)s is already listed in [plugins] builtin."
+msgstr "%(name)s 已经列在 [plugins] builtin 中。"
+
+msgid "%(name)s is not listed in [plugins] builtin."
+msgstr "%(name)s 不在 [plugins] builtin 中。"
+
+msgid "Configuration path is unavailable; nothing was written."
+msgstr "配置文件路径不可用；未写入任何内容。"
+
+msgid "Config write failed for %(name)s: %(detail)s"
+msgstr "写入 %(name)s 的配置失败：%(detail)s"
+
+msgid "Config write refused for %(name)s: %(detail)s"
+msgstr "拒绝写入 %(name)s 的配置：%(detail)s"
+
+msgid "validation failed"
+msgstr "校验未通过"
+
+msgid "Config written and the runtime reload failed (%(detail)s); the running plugin state was left untouched. A restart is required."
+msgstr "配置已写入，但运行时重新加载失败（%(detail)s）；运行中的插件状态未改动。需要重启生效。"
+
+msgid "Unknown plugin: %(name)s"
+msgstr "未知插件：%(name)s"
+
+msgid "Plugin control failed: %(detail)s"
+msgstr "插件控制失败：%(detail)s"
 
 msgid "🔐 Change Admin Password"
 msgstr "🔐 修改管理员密码"
@@ -618,6 +798,12 @@ msgstr "配置加载历史"
 msgid "Current Config Signature"
 msgstr "当前配置签名"
 
+msgid "Every figure on this page is filtered by this site scope"
+msgstr "本页所有数字均已按该站点范围过滤"
+
+msgid "All sites"
+msgstr "全部站点"
+
 msgid "Reload the current view"
 msgstr "重新加载当前视图"
 
@@ -632,6 +818,9 @@ msgstr "登出"
 
 msgid "Navigation"
 msgstr "导航"
+
+msgid "Site scope"
+msgstr "站点范围"
 
 msgid "Primary navigation"
 msgstr "主导航"
@@ -655,7 +844,13 @@ msgid "Blocklist"
 msgstr "封禁"
 
 msgid "Memory Shell"
-msgstr "内存马检测"
+msgstr "内存马"
+
+msgid "Detection"
+msgstr "检测"
+
+msgid "Forensics"
+msgstr "取证"
 
 msgid "Log Analyzer"
 msgstr "日志分析"
@@ -668,6 +863,15 @@ msgstr "取消"
 
 msgid "Upload"
 msgstr "上传"
+
+msgid "All sites (aggregate)"
+msgstr "全部站点（汇总）"
+
+msgid "These totals cover this site only"
+msgstr "以上合计仅覆盖当前站点"
+
+msgid "These totals cover every site"
+msgstr "以上合计覆盖全部站点"
 
 msgid "Total Detections"
 msgstr "检测总数"
@@ -689,6 +893,33 @@ msgstr "防护率"
 
 msgid "Quarantined / Total"
 msgstr "已隔离 / 总数"
+
+msgid "Per-site breakdown"
+msgstr "站点明细"
+
+msgid "Site"
+msgstr "站点"
+
+msgid "Detections"
+msgstr "检测数"
+
+msgid "Open"
+msgstr "未处理"
+
+msgid "Last detection"
+msgstr "最近检测"
+
+msgid "Top profile"
+msgstr "主要画像"
+
+msgid "Memory shell suspects"
+msgstr "内存马可疑项"
+
+msgid "Unassigned"
+msgstr "未分配"
+
+msgid "No site data is available"
+msgstr "暂无站点数据"
 
 msgid "错误 - Anteumbra Admin"
 msgstr "错误 - Anteumbra Admin"
@@ -728,6 +959,18 @@ msgstr "个文件"
 
 msgid "MULTI-FILE"
 msgstr "多文件"
+
+msgid "Sites whose detections belong to this cluster"
+msgstr "该簇成员记录所属站点"
+
+msgid "attributed from the cluster samples"
+msgstr "按簇样本推断"
+
+msgid "by sample"
+msgstr "按样本推断"
+
+msgid "No recorded detection belongs to this cluster"
+msgstr "该簇暂无对应检测记录"
 
 msgid "threshold"
 msgstr "阈值"
@@ -807,6 +1050,249 @@ msgstr "Anteumbra 会向受监控的网站根目录投放一个短生命周期�
 msgid "Loading panel..."
 msgstr "正在加载面板..."
 
+msgid "Memory Shell Forensics"
+msgstr "内存马取证"
+
+msgid "Forensics stores what the JVM could still be asked about one component: its manifest, the class bytes when they really exist, and an optional heap dump. Artifacts live on disk under the data directory and survive a restart."
+msgstr "取证保存的是「JVM 还能被问到的、关于某个组件的全部信息」：清单、真实存在时的类字节码，以及可选的堆转储。制品以文件形式存放在数据目录下，进程重启后依然保留。"
+
+msgid "No forensics artifact"
+msgstr "没有取证文件"
+
+msgid "Remediation result"
+msgstr "处置结果"
+
+msgid "Remediation unavailable"
+msgstr "处置不可用"
+
+msgid "Confirm remediation"
+msgstr "确认处置"
+
+msgid "Component:"
+msgstr "组件："
+
+msgid "Site:"
+msgstr "站点："
+
+msgid "Class:"
+msgstr "类："
+
+msgid "This removes the component from the container memory and cannot be undone."
+msgstr "处置会移除容器内存中的该组件，且不可恢复。"
+
+msgid "A forensics artifact exists for this component, so the evidence is already stored. No file is deleted and no other component is touched."
+msgstr "该组件已有取证文件，证据已经落盘。处置不会删除任何文件，也不会触碰其他组件。"
+
+msgid "There is no forensics artifact for this component. Remediate the memory shell without taking forensics first?"
+msgstr "没有对应的取证文件。确认要在不取证的情况下处置内存马吗？"
+
+msgid "Removing it destroys the only copy of what was registered in memory: the class bytes, the manifest and any heap dump are gone for good."
+msgstr "直接移除会销毁「内存中注册内容」的唯一副本：类字节码、清单与堆转储将永久丢失。"
+
+msgid "The server refused the removal for that reason and changed nothing."
+msgstr "服务端因此拒绝移除，未做任何改动。"
+
+msgid "Removed from the container memory."
+msgstr "已从容器内存中移除。"
+
+msgid "Refused; nothing was changed."
+msgstr "已拒绝，未做任何改动。"
+
+msgid "The request failed."
+msgstr "请求失败。"
+
+msgid "The component is still registered."
+msgstr "该组件仍然处于注册状态。"
+
+msgid "The post-action component list is on the detection tab."
+msgstr "处置后的组件列表见「检测」页。"
+
+msgid "Go to forensics"
+msgstr "前往取证"
+
+msgid "Remediate now"
+msgstr "立即处置"
+
+msgid "Manifest"
+msgstr "清单"
+
+msgid "No stored manifest exists for this artifact: the index has no entry, or the manifest file is unreadable. The artifact directory may have been moved or deleted outside Anteumbra."
+msgstr "该制品没有已保存的清单：索引中没有对应条目，或清单文件无法读取。制品目录可能已被 Anteumbra 之外的操作移动或删除。"
+
+msgid "Kind"
+msgstr "类型"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Class name"
+msgstr "类名"
+
+msgid "Class loader"
+msgstr "类加载器"
+
+msgid "Loader identity"
+msgstr "类加载器标识"
+
+msgid "URL patterns"
+msgstr "URL 匹配"
+
+msgid "None"
+msgstr "无"
+
+msgid "Code source"
+msgstr "代码来源"
+
+msgid "On disk"
+msgstr "磁盘存在"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "No"
+msgstr "否"
+
+msgid "Protection domain"
+msgstr "保护域"
+
+msgid "Context path"
+msgstr "上下文路径"
+
+msgid "Probe URL"
+msgstr "探针 URL"
+
+msgid "JVM self-attach"
+msgstr "JVM 自附着"
+
+msgid "Container"
+msgstr "容器"
+
+msgid "JVM input arguments"
+msgstr "JVM 启动参数"
+
+msgid "Class bytes"
+msgstr "类字节码"
+
+msgid "Stored"
+msgstr "已保存"
+
+msgid "source unknown"
+msgstr "来源未知"
+
+msgid "Not available"
+msgstr "不可用"
+
+msgid "Reason not reported."
+msgstr "未报告原因。"
+
+msgid "Heap dump"
+msgstr "堆转储"
+
+msgid "bytes"
+msgstr "字节"
+
+msgid "unknown"
+msgstr "未知"
+
+msgid "Heap dump:"
+msgstr "堆转储："
+
+msgid "Declared methods"
+msgstr "声明的方法"
+
+msgid "Declared fields"
+msgstr "声明的字段"
+
+msgid "Raw manifest.json"
+msgstr "原始 manifest.json"
+
+msgid "Forensics unavailable"
+msgstr "取证不可用"
+
+msgid "Forensics:"
+msgstr "取证："
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Index keeps:"
+msgstr "索引保留："
+
+msgid "Dump bound:"
+msgstr "转储上限："
+
+msgid "Artifacts:"
+msgstr "制品："
+
+msgid "Forensics running for"
+msgstr "正在取证："
+
+msgid "Store:"
+msgstr "存储目录："
+
+msgid "Run forensics"
+msgstr "运行取证"
+
+msgid "Dump live objects only (smaller, pauses the JVM)"
+msgstr "仅转储存活对象（文件更小，会暂停 JVM）"
+
+msgid "Run forensics for this component"
+msgstr "对该组件运行取证"
+
+msgid "The heap dump is written by the target JVM into the artifact directory; it can take minutes."
+msgstr "堆转储由目标 JVM 直接写入制品目录，可能耗时数分钟。"
+
+msgid "Open forensics from a finding on the detection tab (取证) to choose the component to dump. Each run stores a manifest, the class bytes when they exist, and optionally a heap dump."
+msgstr "请先在「检测」页的检出结果上点击「取证」，选择要转储的组件。每次取证都会保存清单、真实存在时的类字节码，以及可选的堆转储。"
+
+msgid "Forensics artifacts"
+msgstr "取证制品"
+
+msgid "Artifact"
+msgstr "制品"
+
+msgid "Component"
+msgstr "组件"
+
+msgid "Class"
+msgstr "类"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Files"
+msgstr "文件"
+
+msgid "Remediated"
+msgstr "已处置"
+
+msgid "No class bytes"
+msgstr "无类字节码"
+
+msgid "Heap"
+msgstr "堆"
+
+msgid "Heap failed"
+msgstr "堆转储失败"
+
+msgid "file(s)"
+msgstr "个文件"
+
+msgid "Removed"
+msgstr "已移除"
+
+msgid "attempts"
+msgstr "次尝试"
+
+msgid "Remediate"
+msgstr "处置"
+
+msgid "No forensics artifact has been stored yet."
+msgstr "尚未保存任何取证制品。"
+
 msgid "METRICS"
 msgstr "指标"
 
@@ -848,9 +1334,6 @@ msgstr "降级"
 
 msgid "Healthy"
 msgstr "正常"
-
-msgid "Detection"
-msgstr "检测"
 
 msgid "YARA + Emergency"
 msgstr "YARA + 应急特征"
@@ -1095,9 +1578,6 @@ msgstr "已封禁: -"
 msgid "UA:"
 msgstr "UA："
 
-msgid "unknown"
-msgstr "未知"
-
 msgid "IPs:"
 msgstr "IP 数："
 
@@ -1179,6 +1659,9 @@ msgstr "搜索..."
 msgid "Select quarantine record"
 msgstr "选择隔离记录"
 
+msgid "Site this record belongs to"
+msgstr "该记录所属站点"
+
 msgid "No quarantine records found"
 msgstr "未找到隔离记录"
 
@@ -1233,14 +1716,8 @@ msgstr "告警状态"
 msgid "Alerted"
 msgstr "已告警"
 
-msgid "Yes"
-msgstr "是"
-
 msgid "Alert me again"
 msgstr "重新告警"
-
-msgid "No"
-msgstr "否"
 
 msgid "False positive"
 msgstr "误报"
@@ -1298,9 +1775,6 @@ msgstr "通信："
 
 msgid "Q:"
 msgstr "队列:"
-
-msgid "None"
-msgstr "无"
 
 msgid "No detection records match this filter"
 msgstr "没有符合该过滤条件的检测记录"
@@ -1437,11 +1911,71 @@ msgstr "清理"
 msgid "Loading sessions..."
 msgstr "正在加载会话..."
 
+msgid "ENVIRONMENT & SECRETS"
+msgstr "环境与密钥"
+
+msgid "Mail credentials, tokens and keys are stored in .env next to config.toml. Empty fields are left untouched; values are never committed to git."
+msgstr "邮件凭据、令牌与密钥保存在 config.toml 同目录的 .env 中。留空的字段不会被改写；这些值不会进入 git。"
+
+msgid "Admin password hash"
+msgstr "管理员密码哈希"
+
+msgid "Not set"
+msgstr "未设置"
+
+msgid "Save environment"
+msgstr "保存环境变量"
+
+msgid "Written to .env and reloaded."
+msgstr "已写入 .env 并重新加载。"
+
 msgid "ACCOUNT"
 msgstr "账户"
 
-msgid "SYSTEM"
-msgstr "系统"
+msgid "SITE CONFIGURATION"
+msgstr "站点配置"
+
+msgid "Access log:"
+msgstr "访问日志："
+
+msgid "not enabled"
+msgstr "未启用"
+
+msgid "No website is configured."
+msgstr "尚未配置任何站点。"
+
+msgid "MONITORING & DETECTION"
+msgstr "监控与检测"
+
+msgid "Watched paths"
+msgstr "监控路径"
+
+msgid "none configured"
+msgstr "未配置"
+
+msgid "Monitored extensions"
+msgstr "监控扩展名"
+
+msgid "Auto quarantine"
+msgstr "自动隔离"
+
+msgid "Auto IP block"
+msgstr "自动封禁 IP"
+
+msgid "WAF source"
+msgstr "WAF 事件源"
+
+msgid "NOTIFICATIONS"
+msgstr "通知设置"
+
+msgid "STORAGE & PATHS"
+msgstr "存储与路径"
+
+msgid "PLUGINS"
+msgstr "插件"
+
+msgid "ADVANCED"
+msgstr "高级"
 
 msgid "Registry Status"
 msgstr "注册表状态"
@@ -1454,21 +1988,6 @@ msgstr "会话管理"
 
 msgid "Config Reload"
 msgstr "配置重载"
-
-msgid "EXPORT & SIEM"
-msgstr "导出与 SIEM"
-
-msgid "STORAGE"
-msgstr "存储"
-
-msgid "PLUGINS"
-msgstr "插件"
-
-msgid "NOTIFICATIONS"
-msgstr "通知设置"
-
-msgid "CONFIG EDITOR"
-msgstr "配置编辑器"
 
 msgid "Loading config editor..."
 msgstr "正在加载配置编辑器..."
@@ -1581,12 +2100,6 @@ msgstr "内存马探测不可用"
 msgid "Probe:"
 msgstr "探测："
 
-msgid "Enabled"
-msgstr "已启用"
-
-msgid "Disabled"
-msgstr "已禁用"
-
 msgid "Auto probe:"
 msgstr "自动探测："
 
@@ -1613,9 +2126,6 @@ msgstr "配置中已关闭内存马探测；手动探测只会被记录为失败
 
 msgid "Monitored sites"
 msgstr "受监控站点"
-
-msgid "Site"
-msgstr "站点"
 
 msgid "Root"
 msgstr "根目录"
@@ -1653,23 +2163,8 @@ msgstr "发现"
 msgid "Container:"
 msgstr "容器："
 
-msgid "Kind"
-msgstr "类型"
-
-msgid "Name"
-msgstr "名称"
-
 msgid "URLs"
 msgstr "URL"
-
-msgid "Class name"
-msgstr "类名"
-
-msgid "Class loader"
-msgstr "类加载器"
-
-msgid "On disk"
-msgstr "磁盘存在"
 
 msgid "Reasons"
 msgstr "判定依据"
@@ -1761,6 +2256,9 @@ msgstr "已禁用"
 msgid "Loaded:"
 msgstr "已加载："
 
+msgid "Active:"
+msgstr "活跃："
+
 msgid "Detectors:"
 msgstr "检测器："
 
@@ -1785,6 +2283,15 @@ msgstr "检测器"
 msgid "Notifier"
 msgstr "通知器"
 
+msgid "Loaded"
+msgstr "已加载"
+
+msgid "Not running"
+msgstr "未运行"
+
+msgid "Run state unknown"
+msgstr "运行状态未知"
+
 msgid "Plugin system off"
 msgstr "插件系统已关闭"
 
@@ -1803,6 +2310,15 @@ msgstr "未注册"
 msgid "Not loaded"
 msgstr "未加载"
 
+msgid "Config section:"
+msgstr "配置段："
+
+msgid "not set explicitly"
+msgstr "未显式配置"
+
+msgid "enabled is not reported for a plugin that is not loaded"
+msgstr "插件未加载时不显示 enabled 状态"
+
 msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
 msgstr "[plugins] 段已关闭，因此不会加载 builtin 中的任何插件。"
 
@@ -1820,6 +2336,21 @@ msgstr "已启用且已列出，但插件未注册——请检查启动日志。
 
 msgid "Add to config.toml:"
 msgstr "在 config.toml 中添加："
+
+msgid "Disable"
+msgstr "关闭"
+
+msgid "Enable"
+msgstr "开启"
+
+msgid "Remove from builtin"
+msgstr "移出 builtin"
+
+msgid "Add to builtin"
+msgstr "加入 builtin"
+
+msgid "Protected:"
+msgstr "受保护："
 
 msgid "No plugin is available in this build."
 msgstr "本构建没有可用的插件。"

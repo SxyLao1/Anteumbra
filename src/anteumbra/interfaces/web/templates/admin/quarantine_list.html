@@ -11,7 +11,7 @@
     <button class="btn btn-danger btn-sm q-batch-btn" type="button" disabled data-action="quarantine.batch" data-batch-action="delete">{{ _('Delete Sel') }}</button>
     <span class="toolbar-spacer"></span>
     {% for status, label in [('all', _('All')), ('quarantined', _('Active')), ('restored', _('Restored')), ('deleted', _('Deleted'))] %}
-    <button class="btn btn-sm {% if current_status == status %}btn-primary{% else %}btn-ghost{% endif %}" hx-get="/admin/quarantine?status={{ status }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ label }}</button>
+    <button class="btn btn-sm {% if current_status == status %}btn-primary{% else %}btn-ghost{% endif %}" hx-get="{{ with_site('/admin/quarantine?status=' ~ status ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ label }}</button>
     {% endfor %}
     <input type="search" class="form-input" placeholder="{{ _('Search...') }}" data-action="quarantine.filter" data-container="quarantine-list-container">
   </div>
@@ -25,23 +25,23 @@
 
   <div class="record-list">
     {% for record in records %}
-    <article class="record-item record-item--{{ record.status }}">
+    <article class="record-item record-item--{{ record.status }}" data-site-id="{{ record.site_id }}">
       <input type="checkbox" class="q-checkbox" value="{{ record.quarantine_id }}" data-action="quarantine.selection-change" aria-label="{{ _('Select quarantine record') }}">
-      <div class="record-info"><div class="record-title">{{ record.quarantine_id }}</div><div class="record-meta"><span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'success' if record.status == 'restored' else 'muted' }}">{{ record.status.upper() }}</span><span>{{ (record.get('quarantine_time') or record.get('created_at', ''))[:16] }}</span><span>{{ record.original_path.split('\\')[-1].split('/')[-1] }}</span><span>{{ (record.file_size / 1024)|round(2) }} KB</span></div></div>
+      <div class="record-info"><div class="record-title">{{ record.quarantine_id }}</div><div class="record-meta">{% if aggregate_scope %}<span class="badge badge-gray record-site" title="{{ _('Site this record belongs to') }}">{% if record.site_unassigned %}{{ _('Unassigned') }}{% else %}{{ record.site_name }}{% endif %}</span>{% endif %}<span class="badge badge-{{ 'danger' if record.status == 'quarantined' else 'success' if record.status == 'restored' else 'muted' }}">{{ record.status.upper() }}</span><span>{{ (record.get('quarantine_time') or record.get('created_at', ''))[:16] }}</span><span>{{ record.original_path.split('\\')[-1].split('/')[-1] }}</span><span>{{ (record.file_size / 1024)|round(2) }} KB</span></div></div>
       <div class="record-actions">
         <button class="btn btn-sm btn-ghost" type="button" data-action="records.view-quarantine" data-quarantine-id="{{ record.quarantine_id }}">{{ _('Source') }}</button>
-        <button class="btn btn-sm btn-info" type="button" data-action="quarantine.detail-open" hx-get="/admin/quarantine/detail?qid={{ record.quarantine_id }}" hx-target="#quarantine-detail-content" hx-swap="innerHTML">{{ _('Detail') }}</button>
+        <button class="btn btn-sm btn-info" type="button" data-action="quarantine.detail-open" hx-get="{{ with_site('/admin/quarantine/detail?qid=' ~ record.quarantine_id) }}" hx-target="#quarantine-detail-content" hx-swap="innerHTML">{{ _('Detail') }}</button>
         {% if record.status == 'quarantined' %}
-        <button class="btn btn-sm btn-success" hx-post="/admin/quarantine/restore?qid={{ record.quarantine_id }}" hx-confirm="Restore {{ record.quarantine_id }}?" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Restore') }}</button>
-        <button class="btn btn-sm btn-danger" hx-post="/admin/quarantine/delete?qid={{ record.quarantine_id }}" hx-confirm="PERMANENTLY delete {{ record.quarantine_id }}?" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Delete') }}</button>
+        <button class="btn btn-sm btn-success" hx-post="{{ with_site('/admin/quarantine/restore?qid=' ~ record.quarantine_id) }}" hx-confirm="Restore {{ record.quarantine_id }}?" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Restore') }}</button>
+        <button class="btn btn-sm btn-danger" hx-post="{{ with_site('/admin/quarantine/delete?qid=' ~ record.quarantine_id) }}" hx-confirm="PERMANENTLY delete {{ record.quarantine_id }}?" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Delete') }}</button>
         {% endif %}
       </div>
     </article>
     {% else %}<div class="empty-state"><p>{{ _('No quarantine records found') }}</p></div>{% endfor %}
   </div>
   {% if total_pages > 1 %}<div class="pagination-bar">
-    {% if page > 1 %}<button class="btn btn-ghost btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page - 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Prev') }}</button>{% endif %}
+    {% if page > 1 %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page - 1) ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Prev') }}</button>{% endif %}
     <span class="page-info">{{ _('Page') }} {{ page }} / {{ total_pages }} ({{ total }} {{ _('total') }})</span>
-    {% if page < total_pages %}<button class="btn btn-ghost btn-sm" hx-get="/admin/quarantine?status={{ current_status }}&page={{ page + 1 }}{% if compact %}&compact=1{% endif %}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Next') }}</button>{% endif %}
+    {% if page < total_pages %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page + 1) ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Next') }}</button>{% endif %}
   </div>{% endif %}
 </div>

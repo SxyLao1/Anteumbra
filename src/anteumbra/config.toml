@@ -610,6 +610,11 @@ directory_prefix = "mb-"
 history_size = 50
 # 内存中发现可疑组件时是否告警
 alert_on_suspects = true
+# 取证与处置（v1.0.38）
+forensics_enabled = true
+heap_dump_enabled = true
+forensics_history = 200
+forensics_max_dump_mb = 2048
 # 探针请求使用的主机与协议
 host = "127.0.0.1"
 scheme = "http"

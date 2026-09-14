@@ -9,6 +9,14 @@
      data-memory-shell-panel
      data-memory-shell-state="{{ state }}"
      {% if polling %}hx-get="/admin/memory-shell/panel" hx-trigger="every 2s" hx-target="#memory-shell-panel" hx-swap="innerHTML"{% endif %}>
+  {# A completed 处置 (or a finished forensics run) tells both panels to re-read
+     their state through this listener, so the post-action component list is
+     visible without a reload. #}
+  <span hidden
+        hx-get="/admin/memory-shell/panel"
+        hx-trigger="memory-shell-refresh from:body"
+        hx-target="#memory-shell-panel"
+        hx-swap="innerHTML"></span>
 
   {% if error %}
   <div role="alert" style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:10px;margin-bottom:12px;color:#ff4444;font-size:11px;">{{ error }}</div>
@@ -123,6 +131,7 @@
           <th>{{ _('Class loader') }}</th>
           <th>{{ _('On disk') }}</th>
           <th>{{ _('Reasons') }}</th>
+          <th>{{ _('Actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -140,6 +149,17 @@
           <td>
             {% for reason in entry.reasons %}<span class="badge badge-warning">{{ reason }}</span>{% if not loop.last %} {% endif %}{% endfor %}
             {% if not entry.reasons %}{{ _('None') }}{% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            {# 取证 first: an operator who takes evidence before removing the
+               component never has to answer the "remove without evidence"
+               warning at all.  The query separators are written as entities
+               because only {{ }} output is escaped by Jinja here. #}
+            <a class="btn btn-ghost btn-sm"
+               href="/admin/memory-shell/forensics?site_id={{ finding.site_id|urlencode }}&amp;kind={{ entry.kind|urlencode }}&amp;name={{ entry.name|urlencode }}">{{ _('Forensics') }}</a>
+            <button class="btn btn-danger btn-sm" type="button"
+                    hx-get="/admin/memory-shell/remediate/confirm?site_id={{ finding.site_id|urlencode }}&amp;kind={{ entry.kind|urlencode }}&amp;name={{ entry.name|urlencode }}&amp;expect_class={{ entry.class_name|urlencode }}"
+                    hx-target="#memory-shell-dialog" hx-swap="innerHTML">{{ _('Remediate') }}</button>
           </td>
         </tr>
         {% endfor %}

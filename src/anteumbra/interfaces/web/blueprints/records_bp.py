@@ -16,13 +16,14 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from markupsafe import escape as html_escape
 
 from anteumbra.application.path_service import normalize_path, path_to_key
+from anteumbra.application.site_read_model import site_fields, site_names
 from anteumbra.application.text_encoding import decode_source_bytes
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_quarantine,
     verify_file_in_registry,
 )
-from anteumbra.interfaces.web.pages import render_page
+from anteumbra.interfaces.web.pages import active_site_id, render_page, site_context
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -59,38 +60,58 @@ def _deserialize_list(value):
     return [str(value)] if value else []
 
 
+def _configured_site_names() -> dict:
+    """Return ``site_id -> name`` for records whose stored name is missing."""
+    try:
+        return site_names(get_runtime().config.get_enabled_websites())
+    except Exception:
+        logger.debug("configured site names are unavailable", exc_info=True)
+        return {}
+
+
 def _enhance_records(raw_records):
-    """将 Registry 原始记录增强为前端可用的字典列表"""
+    """将 Registry 原始记录增强为前端可用的字典列表
+
+    Each row keeps its **own** site identity: the list may be showing every
+    site, and a record's site is what identifies it — never the active filter.
+    """
+    names_by_id = _configured_site_names()
     enhanced = []
     for r in raw_records:
         try:
             display_name = normalize_path(r.get("file_path", "")).name
         except Exception:
             display_name = Path(r.get("file_path", "")).name
-        enhanced.append(
-            {
-                "file_exists": r.get("file_exists", False),
-                "alerted": r.get("alerted", False),
-                "marked_false_positive": r.get("marked_false_positive", False),
-                "display_name": display_name,
-                "detected_at": r.get("detected_at", "")[:16] if r.get("detected_at") else "N/A",
-                "features": _deserialize_list(r.get("features")),
-                "communication_count": r.get("communication_count", 0),
-                "file_path": r.get("file_path", ""),
-                "site_id": r.get("site_id", "legacy"),
-                "site_name": r.get("site_name", "Legacy / unassigned"),
-                "deleted_at": r.get("deleted_at", ""),
-                "missing_reason": r.get("missing_reason", ""),
-                "content_hash": r.get("content_hash", ""),
-                "quarantine_id": r.get("quarantine_id", ""),
-            }
-        )
+        entry = {
+            "file_exists": r.get("file_exists", False),
+            "alerted": r.get("alerted", False),
+            "marked_false_positive": r.get("marked_false_positive", False),
+            "display_name": display_name,
+            "detected_at": r.get("detected_at", "")[:16] if r.get("detected_at") else "N/A",
+            "features": _deserialize_list(r.get("features")),
+            "communication_count": r.get("communication_count", 0),
+            "file_path": r.get("file_path", ""),
+            "deleted_at": r.get("deleted_at", ""),
+            "missing_reason": r.get("missing_reason", ""),
+            "content_hash": r.get("content_hash", ""),
+            "quarantine_id": r.get("quarantine_id", ""),
+        }
+        entry.update(site_fields(r, names_by_id=names_by_id))
+        enhanced.append(entry)
     return enhanced
 
 
 def _requested_site_id():
-    """Return an optional site filter supplied by a form or query string."""
-    return request.values.get("site_id") or None
+    """Return the site this request acts within, or ``None`` for every site.
+
+    The URL wins (``?site=`` and the legacy ``?site_id=``), then the scope the
+    operator chose earlier.  Mutations post the same parameter, so an action
+    taken from an aggregate list still resolves the record it belongs to.
+    """
+    value = request.values.get("site") or request.values.get("site_id")
+    if value:
+        return str(value).strip().lower()
+    return active_site_id()
 
 
 def _find_record(file_path, *, site_id=None):
@@ -135,7 +156,7 @@ def get_records():
             status_filter = "all"
         include_reviewed = status_filter in ("all", "false_positive", "deleted")
         audit_mode = status_filter in ("all", "deleted")
-        site_id = request.args.get("site_id") or None
+        site_id = _requested_site_id()
 
         page_str = request.args.get("page", "1")
         try:
@@ -431,6 +452,7 @@ def get_record_detail():
         except Exception:
             logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 
+        site = site_fields(record, names_by_id=_configured_site_names())
         detail = {
             "file_path": file_path,
             "display_name": display_name,
@@ -445,6 +467,8 @@ def get_record_detail():
             "marked_false_positive": record.get("marked_false_positive", False),
             "site_id": record.get("site_id", "legacy"),
             "site_name": record.get("site_name", "Legacy / unassigned"),
+            "site_unassigned": site["site_unassigned"],
+            "site_label": "" if site["site_unassigned"] else site["site_name"],
             "deleted_at": record.get("deleted_at", "N/A"),
             "missing_reason": record.get("missing_reason", ""),
             "missing_at": record.get("missing_at", ""),
@@ -454,7 +478,7 @@ def get_record_detail():
         }
 
         if request.headers.get("HX-Request"):
-            return render_template("admin/record_detail.html", record=detail)
+            return render_template("admin/record_detail.html", record=detail, **site_context())
         else:
             return jsonify(detail)
     except Exception as e:
@@ -487,6 +511,7 @@ def search():
         total=len(enhanced),
         per_page=len(enhanced),
         compact=compact,
+        **site_context(),
     )
 
 
@@ -538,6 +563,7 @@ def remove_file(file_path):
             total=total,
             per_page=per_page,
             compact=compact,
+            **site_context(),
         )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 物理删除失败: {e}", exc_info=True)
@@ -583,6 +609,7 @@ def _records_table_response(status_filter: str = "all"):
         status_filter=status_filter,
         compact=request.args.get("compact") == "1",
         all_paths=[r.get("file_path", "") for r in enhanced if r.get("file_path")],
+        **site_context(),
     )
 
 
@@ -683,6 +710,8 @@ def audit_records():
             total=total,
             per_page=per_page,
             audit_mode=True,
+            all_paths=[r.get("file_path", "") for r in all_records if r.get("file_path")],
+            **site_context(),
         )
     except Exception as e:
         current_app.logger.error(f"[RECORDS] audit error: {e}", exc_info=True)

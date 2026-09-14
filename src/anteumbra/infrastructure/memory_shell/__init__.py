@@ -1,6 +1,9 @@
 """Memory-shell detection infrastructure (probe template, deployment, parsing)."""
 
 from anteumbra.domain.memory_shell import ProbeError
+from anteumbra.infrastructure.memory_shell.forensics_store import (
+    MemoryShellForensicsStore,
+)
 from anteumbra.infrastructure.memory_shell.probe_deployer import (
     MemoryShellProbeDeployer,
     default_template_path,
@@ -9,6 +12,7 @@ from anteumbra.infrastructure.memory_shell.probe_deployer import (
 )
 
 __all__ = [
+    "MemoryShellForensicsStore",
     "MemoryShellProbeDeployer",
     "ProbeError",
     "default_template_path",
