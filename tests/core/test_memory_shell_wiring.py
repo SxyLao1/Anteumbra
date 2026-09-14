@@ -341,7 +341,11 @@ def test_run_probe_records_an_outcome_with_suspects(tmp_path):
     assert outcome.report.suspects[0].name == "evilFilter"
     assert outcome.cleanup_ok is True and outcome.cleanup_error is None
     assert not list(tmp_path.glob("mb-*")), "the probe directory must be gone"
-    assert artifacts.snapshot() == [], "and its registration released with it"
+    # The registration outlives the deletion by a grace period on purpose: the
+    # create/modify events for this file may still be queued in the monitor.
+    assert artifacts.snapshot(), "the registration must survive cleanup briefly"
+    assert artifacts.is_internal_path(tmp_path / "mb-gone" / "p.jsp") is False
+    assert service is not None
 
 
 def test_run_probe_still_cleans_up_when_the_reader_fails(tmp_path):
@@ -359,7 +363,9 @@ def test_run_probe_still_cleans_up_when_the_reader_fails(tmp_path):
     assert "connection refused" in (outcome.failure or "")
     assert outcome.cleanup_ok is True
     assert not list(tmp_path.glob("mb-*")), "a failed probe must not leave its file behind"
-    assert artifacts.snapshot() == []
+    # The registration outlives the deletion by a grace period on purpose: the
+    # monitor may still hold create/modify events for this exact path.
+    assert artifacts.snapshot(), "in-flight events for the deleted probe stay internal"
 
 
 def test_run_probe_reports_a_cleanup_failure_instead_of_hiding_it(tmp_path, monkeypatch):

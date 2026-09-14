@@ -344,6 +344,12 @@ class FileMonitorHandler(FileSystemEventHandler):
             if event_path.stat().st_size > self.scan_options.max_size_bytes:
                 log_with_symbol("skip_size", "info", f"大小超限: {event_path.name}", self.logger)
                 return False
+        except FileNotFoundError:
+            # Files are allowed to disappear between the event and this check
+            # (an attacker who deletes a shell after use does exactly this); it
+            # is a normal condition, not an incident, so it stays a one-liner.
+            self.logger.debug("[MONITOR][GONE] 文件已不存在，跳过: %s", event_path)
+            return False
         except Exception:
             self.logger.debug("Failed to check file size for monitoring decision", exc_info=True)
 
@@ -510,13 +516,21 @@ class FileMonitorHandler(FileSystemEventHandler):
                 f"{event_path.name} | 引擎: {result.engine}",
                 self.logger,
             ),
-            report_scan_error=lambda path, error: log_with_symbol(
-                "error_scan",
-                "error",
-                f"{path}: {error}",
-                self.logger,
-            ),
+            report_scan_error=self._report_scan_error,
         )
+
+    def _report_scan_error(self, path, error) -> None:
+        """Surface scan failures, except a file that simply vanished.
+
+        Create-then-delete is a normal pattern (attackers clean up, and
+        Anteumbra's own probe removes itself), so a disappearance must never be
+        logged as an operator-facing error no matter which internal layer
+        noticed it.
+        """
+        if isinstance(error, FileNotFoundError):
+            self.logger.debug("[SCAN][GONE] 文件已不存在: %s", path)
+            return
+        log_with_symbol("error_scan", "error", f"{path}: {error}", self.logger)
 
     def _scan_event_path(self, event_path: Path):
         if isinstance(self.scan_callback, str):
@@ -653,6 +667,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         try:
             path = normalize_path(event.src_path).resolve()
 
+            if self._is_internal_artifact(path):
+                return
+
             if not path.exists():
                 log_with_symbol(
                     "create_skip", "debug", f"路径不存在: {event.src_path}", self.logger
@@ -661,6 +678,8 @@ class FileMonitorHandler(FileSystemEventHandler):
 
             # ===== 目录处理: 使用 _verify_directory 验证 =====
             if path.is_dir():
+                if self._is_internal_artifact(path):
+                    return
                 log_with_symbol("create_dir", "info", f"{path.name}", self.logger)
                 self._record_directory(path)
                 return
@@ -700,6 +719,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         try:
             path = normalize_path(event.src_path).resolve()
 
+            if self._is_internal_artifact(path):
+                return
+
             # 使用 _verify_directory 检查是否为目录
             if self._verify_directory(path):
                 log_with_symbol(
@@ -729,6 +751,9 @@ class FileMonitorHandler(FileSystemEventHandler):
         try:
             src_path = normalize_path(event.src_path).resolve()
             dest_path = normalize_path(event.dest_path).resolve()
+
+            if self._is_internal_artifact(src_path) or self._is_internal_artifact(dest_path):
+                return
 
             # ===== 使用 _verify_directory 检测源是否为目录 =====
             src_key = self._normalize_path(src_path)
@@ -800,6 +825,10 @@ class FileMonitorHandler(FileSystemEventHandler):
         v1.8.1: 删除事件处理 (基于 _verify_directory 的真实修复)
         """
         event_path = normalize_path(event.src_path)
+
+        if self._is_internal_artifact(event_path):
+            return
+
         path_key = self._normalize_path(event_path)
 
         # 正确判断: 检查缓存中是否存在该路径键
@@ -817,6 +846,8 @@ class FileMonitorHandler(FileSystemEventHandler):
             return
 
         if is_directory:
+            if self._is_internal_artifact(event_path):
+                return
             log_with_symbol("delete_dir", "info", f"{event_path.name}", self.logger)
 
             # 激进清理: 删除该目录及其所有子孙路径
