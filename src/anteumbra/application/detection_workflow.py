@@ -75,6 +75,13 @@ class DetectionWorkflow:
                 emit_alert=emit_alert,
                 emit_file_quarantined=emit_file_quarantined,
             )
+        except FileNotFoundError as exc:
+            # The file was removed between the event and the scan. That happens
+            # for attackers who delete a shell right after using it, and for
+            # Anteumbra's own short-lived probe; it is not a failure, so it must
+            # not reach the operator as an error.
+            self._metrics.increment_site("scan_file_vanished", self._site.site_id)
+            self._logger.debug("[SCAN][GONE] 文件已不存在，跳过: %s (%s)", event_path, exc)
         except Exception as exc:
             if report_scan_error is not None:
                 report_scan_error(event_path, exc)

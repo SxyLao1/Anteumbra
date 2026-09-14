@@ -43,6 +43,14 @@ PROBE_FILENAME_SUFFIX = ".jsp"
 DEFAULT_DIRECTORY_PREFIX = "mb-"
 PROBE_USER_AGENT = f"Anteumbra-MemoryShellProbe/{PROBE_VERSION}"
 
+# A probe lives for a couple of seconds, but the file monitor and the scan
+# queue process its create/modify events a moment later. Dropping the internal
+# registration at cleanup therefore made Anteumbra treat its own (already
+# deleted) probe as an unknown file, which surfaced as FileNotFoundError noise
+# in the live log. The registration now outlives the deletion by this grace
+# period; the path is random per run, so nothing else can inherit it.
+DEFAULT_CLEANUP_GRACE_SECONDS = 60.0
+
 
 def default_template_path() -> Path:
     return Path(__file__).resolve().parent / "assets" / "probe.jsp"
@@ -83,6 +91,7 @@ class MemoryShellProbeDeployer:
         template_loader: Callable[[], str] | None = None,
         directory_prefix: str = DEFAULT_DIRECTORY_PREFIX,
         token_bytes: int = 16,
+        cleanup_grace_seconds: float = DEFAULT_CLEANUP_GRACE_SECONDS,
         log: logging.Logger | None = None,
     ) -> None:
         self._artifacts = artifacts
@@ -90,6 +99,7 @@ class MemoryShellProbeDeployer:
         self._template_loader = template_loader or load_probe_template
         self._directory_prefix = directory_prefix
         self._token_bytes = max(int(token_bytes), 8)
+        self._cleanup_grace_seconds = max(float(cleanup_grace_seconds), 0.0)
         self._logger = log or logger
         self._template: str | None = None
 
@@ -214,8 +224,20 @@ class MemoryShellProbeDeployer:
             except OSError as exc:
                 raise ProbeError(f"cannot remove probe directory {directory}: {exc}") from exc
 
-        self._artifacts.release(file_path)
-        self._artifacts.release(directory)
+        # Keep the registration alive for a grace period instead of releasing it
+        # immediately: the create/modify events for this very file may still be
+        # sitting in the monitor queue, and by the time they are processed the
+        # file is gone. Releasing here turned Anteumbra's own probe into an
+        # unknown, vanished file and produced FileNotFoundError noise.
+        for path in (file_path, directory):
+            if self._cleanup_grace_seconds > 0:
+                self._artifacts.register(
+                    path=path,
+                    url_fragment=artifact.relative_url_path,
+                    ttl=self._cleanup_grace_seconds,
+                )
+            else:
+                self._artifacts.release(path)
         self._logger.debug("memory-shell probe removed from %s", directory)
 
     # ── internals ───────────────────────────────────────────────────

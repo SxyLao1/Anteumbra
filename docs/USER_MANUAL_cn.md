@@ -1,4 +1,4 @@
-# Anteumbra 用户手册 v1.0.36
+# Anteumbra 用户手册 v1.0.37
 
 > **轻量级 Web 边界威胁情报** — 被动检测 · 半主动响应 · 文件级取证
 
@@ -1013,5 +1013,5 @@ GET /admin/health           # 需认证的完整诊断
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.36 — MIT License</sub>
+  <sub>Anteumbra v1.0.37 — MIT License</sub>
 </div>
