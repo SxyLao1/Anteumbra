@@ -21,11 +21,69 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 
+  {# Site scope: with several watched sites an operator must never mistake one
+     site's figures for the whole deployment's, so the active scope carries a
+     badge, a coloured accent and a scoped switcher. #}
+  <style>
+    .site-badge {
+      display: inline-flex; align-items: center; gap: 6px; margin-left: 12px;
+      padding: 3px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.4px;
+      color: var(--color-text-secondary); background: var(--color-bg-secondary);
+      white-space: nowrap;
+    }
+    .site-badge--scoped {
+      color: var(--color-warning); border-color: rgba(255,170,0,0.4);
+      background: rgba(255,170,0,0.08);
+    }
+    .site-badge::before { content: '◈'; font-size: 10px; }
+    body[data-site-scope='site'] .app-header {
+      box-shadow: inset 0 -2px 0 var(--color-warning);
+    }
+    body[data-site-scope='site'] .site-switch {
+      border-left: 2px solid var(--color-warning);
+    }
+    .site-switch {
+      padding: 10px 12px; border-bottom: 1px solid var(--color-border);
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .site-switch__label {
+      font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+    .site-switch__select {
+      width: 100%; padding: 6px 8px; font-family: var(--font-mono); font-size: 12px;
+      color: var(--color-text-primary); background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+    }
+    .site-switch__select:focus { outline: none; border-color: var(--color-border-hover); }
+    .nav-group {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      color: var(--color-text-secondary); font-size: 12px; letter-spacing: 0.5px;
+    }
+    .nav-submenu { list-style: none; margin: 0; padding: 0 0 0 14px; }
+    .nav-link--sub { font-size: 12px; }
+    .report-scope { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .report-scope__title {
+      font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--color-text-secondary);
+    }
+    .report-scope__hint { font-size: 11px; color: var(--color-text-muted); }
+    .report-sites { display: flex; flex-direction: column; gap: 8px; }
+    .site-breakdown { font-size: 12px; }
+    .site-link { color: var(--color-accent); text-decoration: none; }
+    .site-link:hover { text-decoration: underline; }
+    .site-link__id { margin-left: 6px; color: var(--color-text-muted); font-size: 10px; }
+    .site-cell__hint { margin-left: 6px; color: var(--color-text-muted); font-size: 10px; }
+    .record-site, .cluster-sites { font-family: var(--font-mono); }
+  </style>
+
   <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/htmx-sse.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/sse-manager.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/cyber-effects.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/site.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/scanner.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/blocklist.js') }}" defer></script>
@@ -37,7 +95,9 @@
   <script src="{{ url_for('static', filename='js/modules/selection-controller.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/records.js') }}" defer></script>
 </head>
-<body>
+{# With a single watched site nothing changes visually: the switcher, the badge
+   and the accent only exist when there is a scope an operator could confuse. #}
+<body data-site-scope="{{ 'site' if active_site and site_switcher_visible else 'all' }}" data-active-site="{{ active_site or '' }}">
   <div class="app-shell">
     <header class="app-header">
       <div class="brand">
@@ -45,6 +105,14 @@
         <span>ANTEUMBRA</span>
         <span class="brand-sub">v{{ anteumbra_version }}</span>
       </div>
+      {# The active site sits next to the brand so no page can be read without
+         knowing which scope its figures belong to. #}
+      {% if site_switcher_visible %}
+      <span class="site-badge{{ ' site-badge--scoped' if active_site else '' }}" data-site-badge
+            title="{{ _('Every figure on this page is filtered by this site scope') }}">
+        {% if active_site %}{{ active_site_name or active_site }} · {{ active_site }}{% else %}{{ _('All sites') }}{% endif %}
+      </span>
+      {% endif %}
       <div class="header-actions">
         <button class="btn btn-ghost btn-sm header-refresh" type="button" data-action="dashboard.refresh"
                 title="{{ _('Reload the current view') }}"><span aria-hidden="true">↻</span> {{ _('Refresh') }}</button>
@@ -74,6 +142,21 @@
     <div class="app-body">
       <aside class="app-sidebar">
         <div class="sidebar-header">{{ _('Navigation') }}</div>
+        {% if site_switcher_visible %}
+        {# The scope travels in the URL (?site=<site_id>) so it survives a
+           refresh, a bookmark and every fragment reload; the server also
+           remembers the last explicit choice, and the URL always wins. #}
+        <div class="site-switch" data-site-switch>
+          <label class="site-switch__label" for="site-switcher">{{ _('Site scope') }}</label>
+          <select id="site-switcher" class="site-switch__select" data-action="site.select"
+                  aria-label="{{ _('Site scope') }}">
+            <option value=""{% if not active_site %} selected{% endif %}>{{ _('All sites') }}</option>
+            {% for site in sites %}
+            <option value="{{ site.site_id }}"{% if site.site_id == active_site %} selected{% endif %}>{{ site.name }} · {{ site.site_id }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <nav aria-label="{{ _('Primary navigation') }}">
           <ul class="nav-menu">
             <li class="nav-item"><a class="nav-link active" href="/admin/overview" data-action="dashboard.navigate" data-path="overview" data-title="{{ _('Overview') }}"><span class="nav-icon">◆</span><span>{{ _('Overview') }}</span></a></li>
@@ -82,7 +165,14 @@
             <li class="nav-item"><a class="nav-link" href="/admin/scanner" data-action="dashboard.navigate" data-path="scanner" data-title="{{ _('Scanner') }}"><span class="nav-icon">◎</span><span>{{ _('Scanner') }}</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/profiles" data-action="dashboard.navigate" data-path="profiles" data-title="{{ _('Profiles') }}"><span class="nav-icon">◉</span><span>{{ _('Profiles') }}</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/blocklist" data-action="dashboard.navigate" data-path="blocklist" data-title="{{ _('Blocklist') }}"><span class="nav-icon">◉</span><span>{{ _('Blocklist') }}</span></a></li>
-            <li class="nav-item"><a class="nav-link" href="/admin/memory-shell" data-action="dashboard.navigate" data-path="memory-shell" data-title="{{ _('Memory Shell') }}"><span class="nav-icon">◈</span><span>{{ _('Memory Shell') }}</span></a></li>
+            {# 内存马: detection on the watched sites, forensics on what was found. #}
+            <li class="nav-item nav-item--group">
+              <span class="nav-group"><span class="nav-icon">◈</span><span>{{ _('Memory Shell') }}</span></span>
+              <ul class="nav-submenu">
+                <li><a class="nav-link nav-link--sub" href="/admin/memory-shell" data-action="dashboard.navigate" data-path="memory-shell" data-title="{{ _('Memory Shell') }}"><span>{{ _('Detection') }}</span></a></li>
+                <li><a class="nav-link nav-link--sub" href="/admin/memory-shell/forensics" data-action="dashboard.navigate" data-path="memory-shell/forensics" data-title="{{ _('Forensics') }}"><span>{{ _('Forensics') }}</span></a></li>
+              </ul>
+            </li>
             <li class="nav-item"><a class="nav-link" href="/admin/logs/analyzer" data-action="dashboard.navigate" data-path="logs/analyzer" data-title="{{ _('Log Analyzer') }}"><span class="nav-icon">≡</span><span>{{ _('Log Analyzer') }}</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/settings" data-action="dashboard.navigate" data-path="settings" data-title="{{ _('Settings') }}"><span class="nav-icon">⚙</span><span>{{ _('Settings') }}</span></a></li>
           </ul>
@@ -90,7 +180,7 @@
       </aside>
 
       <main class="app-main">
-        <div class="content-scroll" id="main-content" aria-live="polite"{% block main_attrs %}{% if initial_path %} data-initial-path="{{ initial_path }}" data-initial-title="{{ initial_title }}"{% endif %}{% endblock %}>
+        <div class="content-scroll" id="main-content" aria-live="polite" data-site="{{ active_site or '' }}"{% block main_attrs %}{% if initial_path %} data-initial-path="{{ initial_path }}" data-initial-title="{{ initial_title }}"{% endif %}{% endblock %}>
           {% block main_content %}
           {% if initial_fragment %}{% include initial_fragment ignore missing %}
           {% else %}<div class="empty-state"><div class="spinner"></div><p>Initializing dashboard...</p></div>{% endif %}

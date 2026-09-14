@@ -11,16 +11,35 @@ v1.7.9 新增：隔离管理后台蓝图
 
 from flask import Blueprint, current_app, jsonify, render_template, request
 
+from anteumbra.application.site_read_model import annotate_site
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.interfaces.web.pages import shell_context
+from anteumbra.interfaces.web.pages import active_site_id, shell_context, site_context
 from anteumbra.interfaces.web.runtime import get_runtime
 
 quarantine_bp = Blueprint("quarantine", __name__, url_prefix="/admin")
 
 
 def _requested_site_id():
-    """Read an optional site boundary from either query or form input."""
-    return request.values.get("site_id") or None
+    """Read the site boundary from the URL, a form field, or the remembered scope.
+
+    ``?site=`` is the admin-wide parameter; ``?site_id=`` stays supported for
+    links and forms written before the switcher existed, and for the probe and
+    record routes that already speak it.
+    """
+    value = request.values.get("site") or request.values.get("site_id")
+    if value:
+        return str(value).strip().lower()
+    return active_site_id()
+
+
+def _with_site_rows(records):
+    """Label every quarantine row with its own site, never with the filter."""
+    try:
+        websites = get_runtime().config.get_enabled_websites()
+    except Exception:
+        current_app.logger.debug("configured sites are unavailable", exc_info=True)
+        websites = None
+    return annotate_site(records, websites=websites)
 
 
 def _record_matches_site(record, site_id):
@@ -38,7 +57,7 @@ def quarantine_list():
     """隔离文件列表"""
     try:
         status = request.args.get("status", "quarantined")
-        site_id = request.args.get("site_id") or None
+        site_id = _requested_site_id()
         page_str = request.args.get("page", "1")
         try:
             page = max(1, int(page_str))
@@ -72,7 +91,7 @@ def quarantine_list():
 
         start = (page - 1) * per_page
         end = start + per_page
-        paginated = all_records[start:end]
+        paginated = _with_site_rows(all_records[start:end])
 
         stats = service.get_stats(site_id=site_id)
 
@@ -91,6 +110,7 @@ def quarantine_list():
                 current_status=status,
                 compact=compact,
                 all_qids=all_qids,
+                **site_context(),
             )
         else:
             return render_template(
@@ -123,8 +143,9 @@ def quarantine_detail():
         if not record or not _record_matches_site(record, _requested_site_id()):
             return jsonify({"error": "记录不存在"}), 404
 
+        record = _with_site_rows([record])[0]
         if request.headers.get("HX-Request"):
-            return render_template("admin/quarantine_detail.html", record=record)
+            return render_template("admin/quarantine_detail.html", record=record, **site_context())
         else:
             return jsonify(record)
 
@@ -141,7 +162,7 @@ def _render_quarantine_list(status=None, site_id=None):
     all_records = runtime.quarantine.list_records(status=status, site_id=site_id)
     total = len(all_records)
     total_pages = max(1, (total + per_page - 1) // per_page)
-    paginated = all_records[:per_page]
+    paginated = _with_site_rows(all_records[:per_page])
     stats = runtime.quarantine.get_stats(site_id=site_id)
     return render_template(
         "admin/quarantine_list.html",
@@ -152,6 +173,7 @@ def _render_quarantine_list(status=None, site_id=None):
         total=total,
         per_page=per_page,
         current_status=status or "all",
+        **site_context(),
     )
 
 

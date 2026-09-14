@@ -1,0 +1,154 @@
+{# Memory-shell forensics panel (取证 tab).
+
+   Loaded into #memory-shell-forensics-panel by the page shell, and by itself
+   while a forensics run is in flight: an htmx poll chain stops as soon as the
+   element is replaced by a panel whose `running` set is empty.  The refresh
+   listener at the top is what makes a completed 处置 (or forensics run) update
+   this table without a reload.
+#}
+<div class="memory-shell-forensics-panel"
+     data-forensics-panel
+     data-forensics-state="{{ state }}"
+     {% if polling %}hx-get="/admin/memory-shell/forensics/panel" hx-trigger="every 3s" hx-target="#memory-shell-forensics-panel" hx-swap="innerHTML"{% endif %}>
+  <span hidden
+        hx-get="/admin/memory-shell/forensics/panel"
+        hx-trigger="memory-shell-refresh from:body"
+        hx-target="#memory-shell-forensics-panel"
+        hx-swap="innerHTML"></span>
+
+  {% if error %}
+  <div role="alert" style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:10px;margin-bottom:12px;color:#ff4444;font-size:11px;">{{ error }}</div>
+  {% endif %}
+
+  {% if not available %}
+  <div style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:12px;">
+    <div style="color:#ff4444;font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Forensics unavailable') }}</div>
+    <div style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;">{{ unavailable_reason or store_error }}</div>
+  </div>
+  {% else %}
+
+  {# ── status row ─────────────────────────────────────── #}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Forensics:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Heap dump:') }} <strong style="color:{{ '#00ff41' if heap_dump_enabled else '#888888' }};">{{ _('Enabled') if heap_dump_enabled else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Index keeps:') }} <strong style="color:#00ff41;">{{ history }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Dump bound:') }} <strong style="color:#00ff41;">{{ max_dump_mb }}</strong> MB</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Artifacts:') }} <strong style="color:#00ff41;">{{ runs|length }}</strong> · {{ total_bytes }}</span>
+    {% if running %}
+    <span style="color:#ffaa00;font-size:11px;">{{ _('Forensics running for') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
+    {% endif %}
+  </div>
+  <div style="color:var(--color-text-muted);font-size:10px;margin-bottom:14px;word-break:break-all;">
+    {{ _('Store:') }} <code style="color:#00ff41;">{{ root }}</code>
+  </div>
+
+  {# ── run forensics for one component ────────────────── #}
+  {% if component and component.kind and component.name %}
+  <div style="border:1px solid #334455;background:#0a1018;border-radius:4px;padding:10px;margin-bottom:16px;">
+    <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:8px;">{{ _('Run forensics') }}</div>
+    <div style="font-family:var(--font-mono);font-size:11px;color:#e0e0e0;margin-bottom:8px;word-break:break-all;">
+      {{ component.kind }}:{{ component.name }}
+      <span style="color:var(--color-text-muted);">@ {{ component.site_id }}</span>
+    </div>
+    <form hx-post="/admin/memory-shell/forensics/run"
+          hx-target="#memory-shell-forensics-panel" hx-swap="innerHTML"
+          hx-disabled-elt="find button"
+          style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0;">
+      <input type="hidden" name="site_id" value="{{ component.site_id }}">
+      <input type="hidden" name="kind" value="{{ component.kind }}">
+      <input type="hidden" name="name" value="{{ component.name }}">
+      <label style="display:inline-flex;align-items:center;gap:6px;color:var(--color-text-secondary);font-size:11px;">
+        <input type="checkbox" name="heap_live" value="1">{{ _('Dump live objects only (smaller, pauses the JVM)') }}
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit"
+              {% if not enabled %}disabled{% endif %}>{{ _('Run forensics for this component') }}</button>
+      <span style="color:var(--color-text-muted);font-size:10px;">
+        {{ _('The heap dump is written by the target JVM into the artifact directory; it can take minutes.') }}
+      </span>
+    </form>
+  </div>
+  {% else %}
+  <div style="border:1px solid #334455;background:#0a1018;border-radius:4px;padding:10px;margin-bottom:16px;color:var(--color-text-secondary);font-size:11px;line-height:1.6;">
+    {{ _('Open forensics from a finding on the detection tab (取证) to choose the component to dump. Each run stores a manifest, the class bytes when they exist, and optionally a heap dump.') }}
+  </div>
+  {% endif %}
+
+  {# ── artifacts ──────────────────────────────────────── #}
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:6px;">{{ _('Forensics artifacts') }}</div>
+  <table class="data-table" style="width:100%;">
+    <thead>
+      <tr>
+        <th>{{ _('Artifact') }}</th>
+        <th>{{ _('Time') }}</th>
+        <th>{{ _('Component') }}</th>
+        <th>{{ _('Class') }}</th>
+        <th>{{ _('Size') }}</th>
+        <th>{{ _('Files') }}</th>
+        <th>{{ _('Remediated') }}</th>
+        <th>{{ _('Actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td>
+          <div style="font-family:var(--font-mono);font-size:10px;color:#e0e0e0;word-break:break-all;">{{ run.artifact_id }}</div>
+          <div style="color:var(--color-text-muted);font-size:9px;">
+            {{ _('Manual') if run.trigger == 'manual' else _('Auto') }}
+            {% if run.site_name %}<span> · {{ run.site_name }}</span>{% endif %}
+          </div>
+        </td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.created_at }}</td>
+        <td style="font-size:10px;">
+          <span class="badge badge-info">{{ run.kind }}</span>
+          <span style="color:#e0e0e0;word-break:break-all;">{{ run.name }}</span>
+        </td>
+        <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;color:var(--color-text-secondary);">
+          {{ run.class_name or _('Unknown') }}
+          {% if run.on_disk %}<div><span class="badge badge-success">{{ _('On disk') }}</span></div>{% endif %}
+        </td>
+        <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.size }}</td>
+        <td style="font-size:10px;">
+          {% if run.class_bytes_available %}
+          <span class="badge badge-success">{{ _('Class bytes') }}</span>
+          {% elif run.class_bytes_unavailable_reason %}
+          <span class="badge badge-warning" title="{{ run.class_bytes_unavailable_reason }}">{{ _('No class bytes') }}</span>
+          {% endif %}
+          {% if run.heap_ok %}
+          <span class="badge badge-success">{{ _('Heap') }} {{ run.heap_size }}</span>
+          {% elif run.heap_error %}
+          <span class="badge badge-danger" title="{{ run.heap_error }}">{{ _('Heap failed') }}</span>
+          {% endif %}
+          <div style="color:var(--color-text-muted);font-size:9px;">{{ run.file_count }} {{ _('file(s)') }}</div>
+        </td>
+        <td style="font-size:10px;">
+          {% if run.remediated %}
+          <span class="badge badge-danger">{{ _('Removed') }}</span>
+          {% if run.remediation.at %}<div style="color:var(--color-text-muted);font-size:9px;">{{ run.remediation.at }}</div>{% endif %}
+          {% elif run.remediation %}
+          <span class="badge badge-warning">{{ run.remediation.result }}</span>
+          {% if run.remediation.count > 1 %}<div style="color:var(--color-text-muted);font-size:9px;">{{ run.remediation.count }} {{ _('attempts') }}</div>{% endif %}
+          {% else %}
+          <span style="color:var(--color-text-muted);">{{ _('No') }}</span>
+          {% endif %}
+        </td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-ghost btn-sm" type="button"
+                  hx-get="{{ run.manifest_url }}"
+                  hx-target="#memory-shell-forensics-detail" hx-swap="innerHTML">{{ _('Manifest') }}</button>
+          {% for file in run.files %}
+          <a class="btn btn-ghost btn-sm" href="{{ file.download_url }}" title="{{ file.sha256 }}">{{ file.name }}</a>
+          {% endfor %}
+          <button class="btn btn-danger btn-sm" type="button"
+                  hx-get="{{ run.remediate_confirm_url }}"
+                  hx-target="#memory-shell-dialog" hx-swap="innerHTML">{{ _('Remediate') }}</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8"><div class="empty-state" style="padding:12px;"><p>{{ _('No forensics artifact has been stored yet.') }}</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% endif %}
+</div>

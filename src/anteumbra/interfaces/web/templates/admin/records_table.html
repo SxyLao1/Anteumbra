@@ -1,6 +1,7 @@
 {% set container_id = 'records-table-container' %}
 {% set active_status = status_filter | default('all') %}
 {% set status_url = '/admin/records?compact=1&status=' %}
+{% set page_common = '&status=' ~ active_status ~ ('&q=' ~ request.args.get('q')|urlencode if request.args.get('q') else '') ~ ('&compact=1' if compact else '') %}
 <div id="{{ container_id }}" class="records-panel" data-record-list data-status="{{ active_status }}"
      data-all-paths='{{ all_paths|default([])|tojson }}' data-audit-mode="{{ 'true' if audit_mode else 'false' }}">
   <div class="records-status-filter" role="group" aria-label="{{ _('Status filter') }}">
@@ -31,11 +32,17 @@
 
   <div class="record-list">
     {% for record in records %}
-    <article class="record-item {% if record.marked_false_positive %}record-false-positive{% endif %}" data-path="{{ record.file_path|e }}">
+    {# data-site-id carries the row's own site, so an action taken from the
+       aggregate list still resolves the record it belongs to. #}
+    <article class="record-item {% if record.marked_false_positive %}record-false-positive{% endif %}"
+             data-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}">
       <input type="checkbox" class="rec-checkbox" value="{{ record.file_path|e }}" data-action="records.selection-change" aria-label="{{ _('Select record') }}">
       <div class="record-info">
         <div class="record-title">{{ record.display_name }}</div>
         <div class="record-meta">
+          {% if aggregate_scope %}
+          <span class="badge badge-gray record-site" title="{{ _('Site this record belongs to') }}">{% if record.site_unassigned %}{{ _('Unassigned') }}{% else %}{{ record.site_name }}{% endif %}</span>
+          {% endif %}
           {% if record.marked_false_positive %}<span class="badge badge-info">{{ _('FALSE POSITIVE') }}</span>
           {% elif record.deleted_at and not record.file_exists %}<span class="badge badge-muted">{{ _('DELETED') }}</span>
           {% elif record.alerted %}<span class="badge badge-danger">{{ _('ALERT') }}</span>
@@ -64,10 +71,10 @@
 
   {% if total_pages > 1 %}
   <div class="pagination-bar">
-    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %} hx-get="/admin/records?page={{ page - 1 }}&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('← Prev') }}</button>
+    <button class="btn btn-ghost btn-sm" {% if page <= 1 %}disabled{% endif %} hx-get="{{ with_site('/admin/records?page=' ~ (page - 1) ~ page_common) }}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('← Prev') }}</button>
     <span class="page-info">{{ _('Page') }} {{ page }} / {{ total_pages }} ({{ total }} {{ _('total') }})</span>
-    <input type="number" class="form-input page-jump" min="1" max="{{ total_pages }}" value="{{ page }}" data-action="core.page-jump" data-page-url="/admin/records?page=__PAGE__&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" data-target="#{{ container_id }}">
-    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %} hx-get="/admin/records?page={{ page + 1 }}&status={{ active_status }}{% if request.args.get('q') %}&q={{ request.args.get('q')|urlencode }}{% endif %}{% if compact %}&compact=1{% endif %}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('Next →') }}</button>
+    <input type="number" class="form-input page-jump" min="1" max="{{ total_pages }}" value="{{ page }}" data-action="core.page-jump" data-page-url="{{ with_site('/admin/records?page=__PAGE__' ~ page_common) }}" data-target="#{{ container_id }}">
+    <button class="btn btn-ghost btn-sm" {% if page >= total_pages %}disabled{% endif %} hx-get="{{ with_site('/admin/records?page=' ~ (page + 1) ~ page_common) }}" hx-target="#{{ container_id }}" hx-swap="outerHTML">{{ _('Next →') }}</button>
   </div>
   {% endif %}
 </div>

@@ -1,6 +1,16 @@
 <!-- v1.0.36: four stat cards only — sizing is owned by the stylesheet so the
-     quadrant fits without clipping; the body scrolls if more cards appear. -->
+     quadrant fits without clipping; the body scrolls if more cards appear.
+     v2.0: the cards are the totals of one scope (every site, or the selected
+     one), followed by the per-site breakdown that says where they come from. -->
+{% set scope_label = (active_site_name or active_site) ~ ' · ' ~ active_site if active_site else _('All sites (aggregate)') %}
 <div class="dashboard-report">
+  <div class="report-scope" data-site-scope="{{ active_site or 'all' }}">
+    <span class="badge {{ 'badge-warning' if active_site else 'badge-gray' }}">{{ scope_label }}</span>
+    <span class="report-scope__hint">
+      {% if active_site %}{{ _('These totals cover this site only') }}{% else %}{{ _('These totals cover every site') }}{% endif %}
+    </span>
+  </div>
+
   <div class="report-grid">
 
     <div class="stat-card stat-card--accent">
@@ -28,4 +38,63 @@
     </div>
 
   </div>
+
+  {# Per-site breakdown.  Every figure comes from the read model; a figure that
+     is unknown renders as "-" and never as a zero the deployment did not
+     actually measure. #}
+  <section class="report-sites" data-testid="site-breakdown">
+    <div class="report-scope">
+      <span class="report-scope__title">{{ _('Per-site breakdown') }}</span>
+      <span class="badge {{ 'badge-warning' if active_site else 'badge-gray' }}">
+        {{ (active_site_name or active_site) if active_site else _('All sites (aggregate)') }}
+      </span>
+    </div>
+    {% if site_summaries %}
+    <div class="table-scroll">
+      <table class="data-table site-breakdown">
+        <thead>
+          <tr>
+            <th>{{ _('Site') }}</th>
+            <th>{{ _('Detections') }}</th>
+            <th>{{ _('Quarantined') }}</th>
+            <th>{{ _('Open') }}</th>
+            <th>{{ _('Last detection') }}</th>
+            <th>{{ _('Top profile') }}</th>
+            <th>{{ _('Memory shell suspects') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for site in site_summaries %}
+          <tr data-site-id="{{ site.site_id }}">
+            <td>
+              {% if site.site_id == 'legacy' %}
+              <span class="badge badge-gray">{{ _('Unassigned') }}</span>
+              {% else %}
+              <a class="site-link" href="{{ request.path }}?site={{ site.site_id|urlencode }}"
+                 data-action="core.navigate-location" data-url="{{ request.path }}?site={{ site.site_id|urlencode }}">{{ site.site_name }}</a>
+              <code class="site-link__id">{{ site.site_id }}</code>
+              {% endif %}
+            </td>
+            <td>{{ site.total_detections }}</td>
+            <td>{{ site.quarantined }}</td>
+            <td>{{ site.open_suspicious }}</td>
+            <td>{{ site.last_detection or '-' }}</td>
+            <td>
+              {% if site.top_profile %}
+              <span class="badge badge-warning">{{ site.top_profile.tool_signature or site.top_profile.profile_id }}</span>
+              <span class="site-cell__hint">{{ site.top_profile.risk_score }}%</span>
+              {% else %}-{% endif %}
+            </td>
+            <td>
+              {% if site.memory_shell_suspects is none %}-{% else %}{{ site.memory_shell_suspects }}{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>{{ _('No site data is available') }}</p></div>
+    {% endif %}
+  </section>
 </div>

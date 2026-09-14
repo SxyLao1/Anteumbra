@@ -9,6 +9,8 @@ Usage:
   anteumbra stop             Stop via PID file
   anteumbra status           Check if running
   anteumbra config           Manage configuration files
+  anteumbra mcp              Serve the tool surface to a local AI agent
+  anteumbra skill            Export the bundled agent skill
   anteumbra --version        Show version
 """
 
@@ -28,7 +30,9 @@ from anteumbra.cli import (
     config_support,
     install_commands,
     lifecycle_commands,
+    mcp_commands,
     runtime_support,
+    skill_commands,
 )
 from anteumbra.infrastructure.process_identity import (
     ProcessIdentity,
@@ -258,6 +262,16 @@ install = install_commands.register_install_command(
     write_generated_env=lambda env_file: _write_generated_env(env_file),
     resolve_bind_options=lambda root, host, port: _resolve_bind_options(root, host, port),
     load_toml_file=lambda path: _load_toml_file(path),
+)
+
+mcp = mcp_commands.register_mcp_commands(
+    cli,
+    find_project_root=lambda: _find_project_root(),
+)
+
+skill = skill_commands.register_skill_commands(
+    cli,
+    skill_source_dir=lambda: _package_dir() / "skills",
 )
 
 

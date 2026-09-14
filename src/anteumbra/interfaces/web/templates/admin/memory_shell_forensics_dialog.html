@@ -1,0 +1,117 @@
+{# 处置 (remediation) dialog.
+
+   The server decides which dialog this is: `mode` is `confirm` when a forensics
+   artifact exists for the component, `no-forensics` when it does not (the three
+   button warning), `result` after a POST, and `error` when the request itself
+   could not be served.  The container is swapped into #memory-shell-dialog.
+
+   All three actions of the warning dialog are part of the contract:
+     立即处置 -> POST /admin/memory-shell/remediate with acknowledge_no_forensics=1
+     前往取证 -> the forensics tab with this component prefilled
+     取消     -> closes the overlay (core.modal-hide, registered in app.js)
+#}
+<div id="memory-shell-remediate-dialog"
+     class="modal-overlay active"
+     data-remediate-dialog="{{ mode }}"
+     data-remediate-result="{{ result or '' }}"
+     aria-hidden="false">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="memory-shell-remediate-title">
+    <div class="modal-header">
+      <span id="memory-shell-remediate-title">
+        {% if mode == 'no-forensics' %}{{ _('No forensics artifact') }}
+        {% elif mode == 'result' %}{{ _('Remediation result') }}
+        {% elif mode == 'error' %}{{ _('Remediation unavailable') }}
+        {% else %}{{ _('Confirm remediation') }}{% endif %}
+      </span>
+      <button class="modal-close" type="button" data-action="core.modal-hide"
+              data-modal="memory-shell-remediate-dialog" aria-label="{{ _('Close') }}">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);margin-bottom:10px;">
+        <div>{{ _('Component:') }} <strong style="color:#e0e0e0;">{{ component.kind }}:{{ component.name }}</strong></div>
+        <div>{{ _('Site:') }} {{ component.site_id }}</div>
+        <div>{{ _('Class:') }} <span style="word-break:break-all;">{{ component.expect_class or _('Unknown') }}</span></div>
+      </div>
+
+      {% if mode == 'confirm' %}
+      <p style="color:#ffaa00;font-size:12px;line-height:1.7;margin:0 0 10px 0;">
+        {{ _('This removes the component from the container memory and cannot be undone.') }}
+      </p>
+      <p style="color:var(--color-text-secondary);font-size:11px;line-height:1.7;margin:0;">
+        {{ _('A forensics artifact exists for this component, so the evidence is already stored. No file is deleted and no other component is touched.') }}
+      </p>
+      {% elif mode == 'no-forensics' %}
+      <p style="color:#ff4444;font-size:12px;font-weight:bold;line-height:1.7;margin:0 0 10px 0;">
+        {{ _('There is no forensics artifact for this component. Remediate the memory shell without taking forensics first?') }}
+      </p>
+      <p style="color:var(--color-text-secondary);font-size:11px;line-height:1.7;margin:0;">
+        {{ _('Removing it destroys the only copy of what was registered in memory: the class bytes, the manifest and any heap dump are gone for good.') }}
+      </p>
+      {% if result == 'refused' %}
+      <p style="color:#ffaa00;font-size:11px;margin:10px 0 0 0;">
+        {{ _('The server refused the removal for that reason and changed nothing.') }}
+      </p>
+      {% endif %}
+      {% elif mode == 'result' %}
+        {% if result == 'removed' %}
+        <p style="color:#00ff41;font-size:12px;font-weight:bold;margin:0 0 8px 0;">{{ _('Removed from the container memory.') }}</p>
+        {% elif result == 'refused' %}
+        <p style="color:#ffaa00;font-size:12px;font-weight:bold;margin:0 0 8px 0;">{{ _('Refused; nothing was changed.') }}</p>
+        {% elif result == 'failed' %}
+        <p style="color:#ff4444;font-size:12px;font-weight:bold;margin:0 0 8px 0;">{{ _('The request failed.') }}</p>
+        {% else %}
+        <p style="color:#ffaa00;font-size:12px;font-weight:bold;margin:0 0 8px 0;">{{ _('The component is still registered.') }}</p>
+        {% endif %}
+        {% if reason %}
+        <div style="color:#ffaa00;font-size:11px;word-break:break-all;line-height:1.7;">{{ reason }}</div>
+        {% endif %}
+        {% if detail %}
+        <div style="color:var(--color-text-secondary);font-size:11px;word-break:break-all;line-height:1.7;">{{ detail }}</div>
+        {% endif %}
+        {% if result == 'removed' %}
+        <div style="color:var(--color-text-muted);font-size:10px;margin-top:8px;">
+          {{ _('The post-action component list is on the detection tab.') }}
+        </div>
+        {% endif %}
+      {% else %}
+      <p style="color:#ff4444;font-size:11px;line-height:1.7;margin:0;">{{ reason }}</p>
+      {% endif %}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;">
+      {% if mode == 'confirm' %}
+      <form hx-post="/admin/memory-shell/remediate"
+            hx-target="#memory-shell-dialog" hx-swap="innerHTML"
+            hx-disabled-elt="find button" style="margin:0;">
+        <input type="hidden" name="site_id" value="{{ component.site_id }}">
+        <input type="hidden" name="kind" value="{{ component.kind }}">
+        <input type="hidden" name="name" value="{{ component.name }}">
+        <input type="hidden" name="expect_class" value="{{ component.expect_class }}">
+        <input type="hidden" name="acknowledge_no_forensics" value="0">
+        {% if component.force %}<input type="hidden" name="force" value="1">{% endif %}
+        <button class="btn btn-ghost" type="button" data-action="core.modal-hide"
+                data-modal="memory-shell-remediate-dialog">{{ _('Cancel') }}</button>
+        <button class="btn btn-danger" type="submit">{{ _('Confirm remediation') }}</button>
+      </form>
+      {% elif mode == 'no-forensics' %}
+      <button class="btn btn-ghost" type="button" data-action="core.modal-hide"
+              data-modal="memory-shell-remediate-dialog">{{ _('Cancel') }}</button>
+      <a class="btn btn-primary" href="{{ forensics_tab }}">{{ _('Go to forensics') }}</a>
+      <form hx-post="/admin/memory-shell/remediate"
+            hx-target="#memory-shell-dialog" hx-swap="innerHTML"
+            hx-disabled-elt="find button" style="margin:0;">
+        <input type="hidden" name="site_id" value="{{ component.site_id }}">
+        <input type="hidden" name="kind" value="{{ component.kind }}">
+        <input type="hidden" name="name" value="{{ component.name }}">
+        <input type="hidden" name="expect_class" value="{{ component.expect_class }}">
+        <input type="hidden" name="acknowledge_no_forensics" value="1">
+        {% if component.force %}<input type="hidden" name="force" value="1">{% endif %}
+        <button class="btn btn-danger" type="submit">{{ _('Remediate now') }}</button>
+      </form>
+      {% else %}
+      <a class="btn btn-primary" href="{{ forensics_tab }}">{{ _('Go to forensics') }}</a>
+      <button class="btn btn-ghost" type="button" data-action="core.modal-hide"
+              data-modal="memory-shell-remediate-dialog">{{ _('Close') }}</button>
+      {% endif %}
+    </div>
+  </div>
+</div>

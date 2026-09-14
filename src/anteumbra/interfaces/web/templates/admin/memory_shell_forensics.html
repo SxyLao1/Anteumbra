@@ -1,0 +1,25 @@
+<section id="memory-shell-forensics-view" class="memory-shell-forensics-view">
+  <section class="card">
+    <div class="card-header">
+      <span><span class="card-header-icon">◈</span> {{ _('Memory Shell Forensics') }}</span>
+    </div>
+    <div class="card-body">
+      <p style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;margin:0 0 12px 0;">
+        {{ _('Forensics stores what the JVM could still be asked about one component: its manifest, the class bytes when they really exist, and an optional heap dump. Artifacts live on disk under the data directory and survive a restart.') }}
+      </p>
+      {# The panel is fetched so the page shell renders even when the probe
+         plugin is not enabled; the panel itself reports that state. #}
+      <div id="memory-shell-forensics-panel"
+           hx-get="/admin/memory-shell/forensics/panel"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+        <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div>
+      </div>
+    </div>
+  </section>
+
+  {# The manifest detail is loaded here; the 处置 dialog is swapped into
+     #memory-shell-dialog so a panel refresh never closes it by accident. #}
+  <div id="memory-shell-forensics-detail"></div>
+  <div id="memory-shell-dialog"></div>
+</section>

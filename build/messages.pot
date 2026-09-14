@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Anteumbra VERSION\n"
 "Report-Msgid-Bugs-To: noreply@example.com\n"
-"POT-Creation-Date: 2026-09-14 00:05+0800\n"
+"POT-Creation-Date: 2026-09-14 12:50+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -46,7 +46,7 @@ msgid "Known"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:89
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:182
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:202
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:15
 msgid "Clean"
 msgstr ""
@@ -72,21 +72,21 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:89
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:6
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:63
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:75
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:32
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:22
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:53
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:25
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:60
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:114
 msgid "Source"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:90
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:65
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:77
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:18
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:33
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:24
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:54
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:27
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:61
 msgid "Detail"
 msgstr ""
 
@@ -99,7 +99,7 @@ msgstr ""
 #: src/anteumbra/interfaces/web/js_strings.py:90
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:63
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:8
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:22
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:23
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:18
 msgid "Clear"
 msgstr ""
@@ -138,6 +138,7 @@ msgid "Completed"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:93
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:55
 msgid "Running"
 msgstr ""
 
@@ -147,8 +148,8 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/blueprints/admin_diagnostic_routes.py:134
 #: src/anteumbra/interfaces/web/js_strings.py:93
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:76
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:180
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:84
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:200
 msgid "Failed"
 msgstr ""
 
@@ -240,6 +241,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:99
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:93
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:90
 msgid "Access log analysis"
 msgstr ""
 
@@ -285,8 +287,8 @@ msgstr ""
 #: src/anteumbra/interfaces/web/js_strings.py:100
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:3
 #: src/anteumbra/interfaces/web/templates/admin/overview.html:28
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:2
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:10
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:56
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:23
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:48
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:76
@@ -383,23 +385,26 @@ msgid "Exported %(count)s lines as %(format)s"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:148
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:10
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:69
 msgid "Copy"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:148
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:14
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:169
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:27
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:113
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:17
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:43
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:10
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
 msgid "Close"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:110
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:148
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:238
 #: src/anteumbra/interfaces/web/templates/admin/file_viewer_modal.html:12
 msgid "Wrap"
 msgstr ""
@@ -417,14 +422,14 @@ msgid "Source copied."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:111
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:25
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:58
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:26
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:65
 msgid "Mark FP"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:111
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:26
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:56
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:27
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:63
 msgid "Clear FP"
 msgstr ""
 
@@ -439,16 +444,17 @@ msgstr ""
 #: src/anteumbra/interfaces/web/js_strings.py:112
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:41
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:13
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:14
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:10
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:17
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:11
 msgid "Active"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:112
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:13
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:23
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:59
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:41
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:21
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:10
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:13
 msgid "Quarantined"
 msgstr ""
 
@@ -456,13 +462,13 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:13
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:23
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:17
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:14
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:15
 msgid "Deleted"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:113
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:36
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:27
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:28
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:3
 msgid "Delete"
 msgstr ""
@@ -473,7 +479,7 @@ msgid "Restore"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:113
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:24
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:25
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 #: src/anteumbra/interfaces/web/templates/admin/threats.html:5
 msgid "Quarantine"
@@ -674,7 +680,7 @@ msgid "Connected"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:137
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:56
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:124
 msgid "Disconnected"
 msgstr ""
 
@@ -719,7 +725,7 @@ msgid "Filter by cluster id, file name or path..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:141
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:76
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:88
 msgid "No cluster matches the filter"
 msgstr ""
 
@@ -729,32 +735,32 @@ msgid "%(size)s | %(lines)s lines"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:145
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:135
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:225
 msgid "Session expired"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:145
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:137
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:227
 msgid "Your session has expired. Please sign in again."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:146
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:141
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:231
 msgid "Sign in again"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:148
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:62
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:130
 msgid "Chinese"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:148
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:65
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:133
 msgid "English"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/js_strings.py:148
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:59
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:127
 msgid "Language"
 msgstr ""
 
@@ -783,9 +789,18 @@ msgid "Uptime"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/blueprints/admin_diagnostic_routes.py:43
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:131
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:183
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:194
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:33
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:27
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:28
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:29
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:30
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:31
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:38
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:41
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:107
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:140
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:203
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:214
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:12
 #: src/anteumbra/interfaces/web/templates/admin/profile_report.html:53
 msgid "Unknown"
@@ -825,8 +840,8 @@ msgid "Success"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/blueprints/admin_diagnostic_routes.py:131
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:75
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:176
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:83
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:196
 msgid "Never"
 msgstr ""
 
@@ -847,42 +862,348 @@ msgstr ""
 msgid "ok %(ok)s / failed %(failed)s / skipped %(skipped)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:186
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:211
 #, python-format
 msgid "The memory-shell probe service did not answer: %(error)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:188
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:213
 msgid "The memory-shell probe service returned no usable state."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:214
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:239
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:421
 msgid ""
 "The memory-shell probe service is not attached to this runtime. Enable "
 "the memory_shell_probe plugin in config.toml and restart Anteumbra."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:263
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:288
 #, python-format
 msgid "The memory-shell panel failed to render: %(error)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:302
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:432
+#, python-format
+msgid "The forensics store did not answer: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:437
+msgid "The forensics store returned no usable state."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:472
+#, python-format
+msgid "The forensics store is not available: %(reason)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:473
+msgid "unknown reason"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:483
+#, python-format
+msgid "The forensics panel failed to render: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:496
+#, python-format
+msgid "The remediation dialog failed to render: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:554
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:684
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:817
 msgid "The memory-shell probe service is not available."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:306
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:558
 msgid "No site was selected for the probe."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:321
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:573
 #, python-format
 msgid "Unknown site: %(site_id)s"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:331
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:583
 #, python-format
 msgid "The probe could not be started: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:643
+#, python-format
+msgid "The manifest could not be rendered: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:666
+msgid "No such forensics artifact file."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:689
+msgid "No site was selected for forensics."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:696
+msgid ""
+"Select a component in the detection tab (or open forensics from a "
+"finding) before running forensics."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:718
+#, python-format
+msgid "Forensics could not be started: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:825
+msgid "No site was selected for remediation."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:826
+msgid "No component kind was selected for remediation."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:827
+msgid "No component was selected for remediation."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:869
+#, python-format
+msgid "The remediation request failed: %(error)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/memory_shell_bp.py:915
+#, python-format
+msgid "The component is still registered: %(class_name)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:374
+#, python-format
+msgid "%(count)s credentials set"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:375
+msgid "mail configured"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:375
+msgid "mail not configured"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:388
+#, python-format
+msgid "signed in as %(user)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:391
+#, python-format
+msgid "%(count)s site(s) enabled"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:401
+#, python-format
+msgid "%(count)s watched path(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:403
+msgid "access log on"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:403
+msgid "access log off"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:414
+#, python-format
+msgid "%(count)s channel(s) enabled"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:416
+msgid "notifications off"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:422
+#, python-format
+msgid "backend %(backend)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:428
+msgid "plugin system not attached"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:432
+#, python-format
+msgid "%(loaded)s loaded / %(total)s available"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:440
+#, python-format
+msgid "config file %(name)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:512
+msgid "not configured"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:565
+#, python-format
+msgid "%(count)s value(s) written to .env"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:567
+msgid "Nothing to save: every field was left empty."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:573
+#, python-format
+msgid "Environment save failed: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1190
+msgid ""
+"Runtime alerting is delivered by this plugin; switching it off would "
+"silently drop every alert."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1298
+#, python-format
+msgid ""
+"Switched off %(name)s: config.toml written and the plugin was unloaded "
+"from the running runtime."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1303
+#, python-format
+msgid ""
+"Switched on %(name)s: config.toml written and the plugin was registered "
+"in the running runtime."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1308
+#, python-format
+msgid "Added %(name)s to [plugins] builtin and loaded it in the running runtime."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1312
+#, python-format
+msgid ""
+"Removed %(name)s from [plugins] builtin and unloaded it from the running "
+"runtime."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1320
+msgid "the plugin system is switched off in this process"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1322
+msgid "no plugin manager is attached to this runtime"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1327
+#, python-format
+msgid ""
+"Config written, but %(name)s could not be applied to the running runtime "
+"(%(reason)s). A restart is required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1339
+#, python-format
+msgid ""
+"Config written, but applying %(name)s to the running runtime failed: "
+"%(detail)s A restart is required to pick the configuration up."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1342
+msgid "the plugin did not activate"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1353
+#, python-format
+msgid ""
+"Note: %(name)s is still listed in [plugins] builtin, so a restart loads "
+"it again from there."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1364
+#, python-format
+msgid ""
+"Note: %(name)s is not listed in [plugins] builtin, so a restart will not "
+"load it."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1375
+#, python-format
+msgid ""
+"Note: %(name)s is no longer listed in [plugins] builtin, so a restart "
+"will not load it."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1385
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1491
+#, python-format
+msgid "Backup kept: %(file)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1396
+#, python-format
+msgid "Unsupported plugin action: %(action)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1402
+#, python-format
+msgid ""
+"%(name)s is listed in config.toml, but this build has no implementation "
+"for it."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1414
+#, python-format
+msgid "Refused: %(name)s must stay switched on and listed in builtin. %(reason)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1431
+#, python-format
+msgid "%(name)s is already listed in [plugins] builtin."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1441
+#, python-format
+msgid "%(name)s is not listed in [plugins] builtin."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1450
+msgid "Configuration path is unavailable; nothing was written."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1460
+#, python-format
+msgid "Config write failed for %(name)s: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1471
+#, python-format
+msgid "Config write refused for %(name)s: %(detail)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1473
+msgid "validation failed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1486
+#, python-format
+msgid ""
+"Config written and the runtime reload failed (%(detail)s); the running "
+"plugin state was left untouched. A restart is required."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1537
+#, python-format
+msgid "Unknown plugin: %(name)s"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/blueprints/settings_bp.py:1548
+#, python-format
+msgid "Plugin control failed: %(detail)s"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/account.html:4
@@ -973,13 +1294,15 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:4
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:5
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:177
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:97
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:197
 msgid "Auto"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:4
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:5
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:177
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:97
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:197
 msgid "Manual"
 msgstr ""
 
@@ -991,7 +1314,7 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:36
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:7
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:13
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:8
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:9
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:18
 msgid "All"
 msgstr ""
@@ -1021,9 +1344,9 @@ msgid "Blocked At"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/blocklist.html:6
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:165
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:185
 #: src/anteumbra/interfaces/web/templates/admin/profile_report.html:56
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:11
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:12
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:84
 msgid "Status"
 msgstr ""
@@ -1040,11 +1363,20 @@ msgstr ""
 msgid "Current Config Signature"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:50
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:112
+msgid "Every figure on this page is filtered by this site scope"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:113
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:153
+msgid "All sites"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:118
 msgid "Reload the current view"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:50
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:118
 #: src/anteumbra/interfaces/web/templates/admin/session_manager.html:25
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:15
 #: src/anteumbra/interfaces/web/templates/admin/system_management.html:40
@@ -1053,95 +1385,171 @@ msgstr ""
 msgid "Refresh"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:55
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:123
 msgid "Live log stream connection"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:68
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:136
 msgid "Logout"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:76
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:144
 msgid "Navigation"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:77
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:150
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:152
+msgid "Site scope"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:160
 msgid "Primary navigation"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:79
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:162
 msgid "Overview"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:80
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:163
 msgid "Threats"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:81
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:164
 msgid "Rules"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:82
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:165
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:2
 msgid "Scanner"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:83
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:166
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:3
 msgid "Profiles"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:84
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:167
 msgid "Blocklist"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:85
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:170
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:172
 msgid "Memory Shell"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:86
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:172
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:12
+#: src/anteumbra/interfaces/web/templates/admin/profile_report.html:76
+msgid "Detection"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:173
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:159
+msgid "Forensics"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:176
 msgid "Log Analyzer"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:87
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:177
 msgid "Settings"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:124
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:214
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:92
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:97
 msgid "Cancel"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:124
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html:214
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:46
 msgid "Upload"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:7
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:5
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:49
+msgid "All sites (aggregate)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:10
+msgid "These totals cover this site only"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:10
+msgid "These totals cover every site"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:17
 msgid "Total Detections"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:9
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:19
 msgid "All time"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:15
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:25
 msgid "Active in quarantine"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:19
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:29
 msgid "False Positives"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:21
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:31
 msgid "Marked by admin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:25
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:35
 msgid "Protection Rate"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:27
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:37
 msgid "Quarantined / Total"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:47
+msgid "Per-site breakdown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:57
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:63
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:181
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:11
+msgid "Site"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:58
+msgid "Detections"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:60
+msgid "Open"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:61
+msgid "Last detection"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:62
+msgid "Top profile"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:63
+msgid "Memory shell suspects"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:71
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:57
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:11
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:30
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:10
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:44
+msgid "Unassigned"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard_content.html:97
+msgid "No site data is available"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/error.html:4
@@ -1191,28 +1599,44 @@ msgstr ""
 msgid "Avg Files/Cluster"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:49
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:50
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:41
 msgid "files"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:50
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:51
 msgid "MULTI-FILE"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:51
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:56
+msgid "Sites whose detections belong to this cluster"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:56
+msgid "attributed from the cluster samples"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:59
+msgid "by sample"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:61
+msgid "No recorded detection belongs to this cluster"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:63
 msgid "threshold"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:71
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:83
 msgid "... and "
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:71
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:83
 msgid " more file(s) in this cluster"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:78
+#: src/anteumbra/interfaces/web/templates/admin/file_clusters.html:90
 msgid "No file clusters recorded yet"
 msgstr ""
 
@@ -1279,7 +1703,8 @@ msgid "LOG LINES"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:151
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:162
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:82
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:182
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:7
 msgid "Time"
 msgstr ""
@@ -1289,7 +1714,9 @@ msgid "Message"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/logs_analyzer.html:155
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:62
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:88
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:70
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:134
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:20
 msgid "Actions"
 msgstr ""
@@ -1314,11 +1741,399 @@ msgid ""
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/memory_shell.html:16
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:4
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:5
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:6
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:7
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics.html:16
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:101
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:107
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:113
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:121
 msgid "Loading panel..."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics.html:4
+msgid "Memory Shell Forensics"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics.html:8
+msgid ""
+"Forensics stores what the JVM could still be asked about one component: "
+"its manifest, the class bytes when they really exist, and an optional "
+"heap dump. Artifacts live on disk under the data directory and survive a "
+"restart."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:21
+msgid "No forensics artifact"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:22
+msgid "Remediation result"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:23
+msgid "Remediation unavailable"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:24
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:93
+msgid "Confirm remediation"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:31
+msgid "Component:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:32
+msgid "Site:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:33
+msgid "Class:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:38
+msgid "This removes the component from the container memory and cannot be undone."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:41
+msgid ""
+"A forensics artifact exists for this component, so the evidence is "
+"already stored. No file is deleted and no other component is touched."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:45
+msgid ""
+"There is no forensics artifact for this component. Remediate the memory "
+"shell without taking forensics first?"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:48
+msgid ""
+"Removing it destroys the only copy of what was registered in memory: the "
+"class bytes, the manifest and any heap dump are gone for good."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:52
+msgid "The server refused the removal for that reason and changed nothing."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:57
+msgid "Removed from the container memory."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:59
+msgid "Refused; nothing was changed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:61
+msgid "The request failed."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:63
+msgid "The component is still registered."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:73
+msgid "The post-action component list is on the detection tab."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:98
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:111
+msgid "Go to forensics"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_dialog.html:108
+msgid "Remediate now"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:12
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:138
+msgid "Manifest"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:22
+msgid ""
+"No stored manifest exists for this artifact: the index has no entry, or "
+"the manifest file is unreadable. The artifact directory may have been "
+"moved or deleted outside Anteumbra."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:27
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:127
+msgid "Kind"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:28
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:128
+msgid "Name"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:29
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:130
+msgid "Class name"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:30
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:131
+msgid "Class loader"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:31
+msgid "Loader identity"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:32
+msgid "URL patterns"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:32
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:33
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:39
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:40
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:80
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:81
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:87
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:141
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:142
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:143
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:144
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:151
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:206
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:56
+msgid "None"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:33
+msgid "Code source"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:34
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:108
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:132
+msgid "On disk"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:35
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:146
+#: src/anteumbra/interfaces/web/templates/admin/record_detail.html:61
+msgid "Yes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:35
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:132
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:147
+#: src/anteumbra/interfaces/web/templates/admin/record_detail.html:65
+msgid "No"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:38
+msgid "Protection domain"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:39
+msgid "Context path"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:40
+msgid "Probe URL"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:41
+msgid "JVM self-attach"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:46
+msgid "Container"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:53
+msgid "JVM input arguments"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:60
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:113
+msgid "Class bytes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:64
+msgid "Stored"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:66
+msgid "source unknown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:68
+msgid "Not available"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:69
+msgid "Reason not reported."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:74
+msgid "Heap dump"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:77
+msgid "bytes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:77
+#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
+msgid "unknown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:81
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:33
+msgid "Heap dump:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:86
+msgid "Declared methods"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:93
+msgid "Declared fields"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_manifest.html:100
+msgid "Raw manifest.json"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:25
+msgid "Forensics unavailable"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:32
+msgid "Forensics:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:32
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:33
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:38
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:69
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
+msgid "Enabled"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:32
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:33
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:38
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:69
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:90
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+msgid "Disabled"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:34
+msgid "Index keeps:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:35
+msgid "Dump bound:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:36
+msgid "Artifacts:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:38
+msgid "Forensics running for"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:42
+msgid "Store:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:48
+msgid "Run forensics"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:61
+msgid "Dump live objects only (smaller, pauses the JVM)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:64
+msgid "Run forensics for this component"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:66
+msgid ""
+"The heap dump is written by the target JVM into the artifact directory; "
+"it can take minutes."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:72
+msgid ""
+"Open forensics from a finding on the detection tab (取证) to choose the "
+"component to dump. Each run stores a manifest, the class bytes when they "
+"exist, and optionally a heap dump."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:77
+msgid "Forensics artifacts"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:81
+msgid "Artifact"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:83
+msgid "Component"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:84
+msgid "Class"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:85
+msgid "Size"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:86
+msgid "Files"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:87
+msgid "Remediated"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:115
+msgid "No class bytes"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:118
+msgid "Heap"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:120
+msgid "Heap failed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:122
+msgid "file(s)"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:126
+msgid "Removed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:130
+msgid "attempts"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:144
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:162
+msgid "Remediate"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/memory_shell_forensics_panel.html:148
+msgid "No forensics artifact has been stored yet."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:5
@@ -1336,7 +2151,7 @@ msgid "Loading metrics..."
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:22
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:65
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:66
 msgid "LIVE LOG STREAM"
 msgstr ""
 
@@ -1370,7 +2185,7 @@ msgid "Audit"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/monitor_content.html:79
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:58
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:59
 #: src/anteumbra/interfaces/web/templates/admin/threats.html:8
 msgid "Loading records..."
 msgstr ""
@@ -1381,11 +2196,6 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/overview.html:11
 msgid "Healthy"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:12
-#: src/anteumbra/interfaces/web/templates/admin/profile_report.html:76
-msgid "Detection"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/overview.html:12
@@ -1421,23 +2231,23 @@ msgstr ""
 msgid "Recent Detections"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:52
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:53
 msgid "View all"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:67
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:68
 msgid "Quick filter..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:68
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:69
 msgid "SSE"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:70
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:71
 msgid "Analyze"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/overview.html:74
+#: src/anteumbra/interfaces/web/templates/admin/overview.html:75
 msgid "Connecting to log stream..."
 msgstr ""
 
@@ -1542,7 +2352,7 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:60
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:9
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:23
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:24
 #: src/anteumbra/interfaces/web/templates/admin/scanner.html:18
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:2
 msgid "0 selected"
@@ -1595,7 +2405,7 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/profile_detail.html:72
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:45
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:44
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:68
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:75
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
 msgid "Page"
 msgstr ""
@@ -1708,7 +2518,7 @@ msgstr ""
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:5
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:45
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:44
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:68
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:75
 #: src/anteumbra/interfaces/web/templates/admin/yara_rules.html:4
 msgid "total"
 msgstr ""
@@ -1739,10 +2549,6 @@ msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
 msgid "UA:"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
-msgid "unknown"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/profiles.html:29
@@ -1790,54 +2596,54 @@ msgstr ""
 msgid "Quarantine ID"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:12
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:13
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:84
 msgid "Quarantined at"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:14
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:15
 msgid "Restored at"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:17
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:18
 msgid "Deleted at"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:23
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:24
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:8
 msgid "File Info"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:25
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:26
 msgid "Original path"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:26
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:27
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:83
 msgid "Quarantine path"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:27
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:28
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:12
 msgid "File size"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:27
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:28
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:12
 msgid "KB"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:32
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:33
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:35
 msgid "Detection Info"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:34
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:35
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:38
 msgid "Matched rule"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:35
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_detail.html:36
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:39
 msgid "Feature list"
 msgstr ""
@@ -1860,7 +2666,7 @@ msgid "Restored"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:16
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:29
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:30
 msgid "Search..."
 msgstr ""
 
@@ -1868,15 +2674,21 @@ msgstr ""
 msgid "Select quarantine record"
 msgstr ""
 
+#: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:30
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:10
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:44
+msgid "Site this record belongs to"
+msgstr ""
+
 #: src/anteumbra/interfaces/web/templates/admin/quarantine_list.html:40
 msgid "No quarantine records found"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:12
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:15
 msgid "FP"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:31
+#: src/anteumbra/interfaces/web/templates/admin/recent_detections.html:34
 msgid "No detections recorded yet"
 msgstr ""
 
@@ -1940,18 +2752,8 @@ msgstr ""
 msgid "Alerted"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:137
-#: src/anteumbra/interfaces/web/templates/admin/record_detail.html:61
-msgid "Yes"
-msgstr ""
-
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:63
 msgid "Alert me again"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:138
-#: src/anteumbra/interfaces/web/templates/admin/record_detail.html:65
-msgid "No"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/record_detail.html:68
@@ -1983,83 +2785,70 @@ msgstr ""
 msgid "✓ 文件已移除"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:6
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:7
 msgid "Status filter"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:12
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:13
 msgid "False positives"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:16
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:17
 msgid ""
 "False positives stay listed here — clear the mark to return a file to the"
 " active set."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:20
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:21
 msgid "Select page"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:21
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:22
 msgid "Select all"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:35
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:39
 msgid "Select record"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:39
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:46
 msgid "FALSE POSITIVE"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:40
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:47
 msgid "DELETED"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:41
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:48
 msgid "ALERT"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/panels/siem_status.html:6
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:42
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:49
 msgid "ACTIVE"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:44
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:51
 msgid "Comm:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:45
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:52
 msgid "Q:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:72
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:73
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:79
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:132
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:133
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:134
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:135
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:142
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:186
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:49
-msgid "None"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:62
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:69
 msgid "No detection records match this filter"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:71
 #: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:46
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:67
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:74
 msgid "← Prev"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/panels/config_panel.html:80
 #: src/anteumbra/interfaces/web/templates/admin/panels/session_panel.html:55
-#: src/anteumbra/interfaces/web/templates/admin/records_table.html:70
+#: src/anteumbra/interfaces/web/templates/admin/records_table.html:77
 msgid "Next →"
 msgstr ""
 
@@ -2173,7 +2962,7 @@ msgstr ""
 msgid "Scan ID:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:164
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:184
 #: src/anteumbra/interfaces/web/templates/admin/scanner_report.html:49
 msgid "Duration:"
 msgstr ""
@@ -2245,55 +3034,118 @@ msgstr ""
 msgid "Loading sessions..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:2
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:34
+msgid "ENVIRONMENT & SECRETS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:36
+msgid ""
+"Mail credentials, tokens and keys are stored in .env next to config.toml."
+" Empty fields are left untouched; values are never committed to git."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:47
+msgid "Admin password hash"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:47
+msgid "Not set"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:48
+msgid "Save environment"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:48
+msgid "Written to .env and reloaded."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:55
 msgid "ACCOUNT"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:3
-msgid "SYSTEM"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:61
+msgid "SITE CONFIGURATION"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:3
-msgid "Registry Status"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:73
+msgid "Access log:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:3
-msgid "WAL Management"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:73
+msgid "not enabled"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:3
-msgid "Session Management"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:78
+msgid "No website is configured."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:3
-msgid "Config Reload"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:85
+msgid "MONITORING & DETECTION"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:4
-msgid "EXPORT & SIEM"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:88
+msgid "Watched paths"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:5
-msgid "STORAGE"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:88
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:89
+msgid "none configured"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:6
-msgid "PLUGINS"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:89
+msgid "Monitored extensions"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:7
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:91
+msgid "Auto quarantine"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:92
+msgid "Auto IP block"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:93
+msgid "WAF source"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:100
 msgid "NOTIFICATIONS"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:8
-msgid "CONFIG EDITOR"
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:106
+msgid "STORAGE & PATHS"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:8
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:112
+msgid "PLUGINS"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:118
+msgid "ADVANCED"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+msgid "Registry Status"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+msgid "WAL Management"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+msgid "Session Management"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:120
+msgid "Config Reload"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:122
 msgid "Loading config editor..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/settings.html:10
+#: src/anteumbra/interfaces/web/templates/admin/settings.html:126
 msgid "System"
 msgstr ""
 
@@ -2431,186 +3283,151 @@ msgstr ""
 msgid "Every config.toml reload is logged here with the keys that changed."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:19
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:27
 msgid "Memory-shell probe unavailable"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:28
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
 msgid "Probe:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:28
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:30
-msgid "Enabled"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:28
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:30
-msgid "Disabled"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:30
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:38
 msgid "Auto probe:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:31
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:39
 msgid "Cooldown:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:32
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:40
 msgid "HTTP timeout:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:33
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:41
 msgid "Runs:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:34
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:42
 msgid "Failures:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:36
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:88
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:44
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:96
 msgid "Probing..."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:40
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:48
 msgid "Trigger extensions:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:46
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:54
 msgid ""
 "The memory-shell probe is disabled in config.toml; manual probes would "
 "only be recorded as failures."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:51
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:59
 msgid "Monitored sites"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:55
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:161
-msgid "Site"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:56
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:64
 msgid "Root"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:57
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:65
 msgid "Base URL"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:58
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:66
 msgid "Last run"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:59
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:166
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:67
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:186
 msgid "Entries"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:60
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:110
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:68
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:118
 msgid "Suspicious"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:61
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:69
 msgid "Cooldown"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:77
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:181
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:85
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:201
 msgid "Cleanup failed"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:95
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:103
 msgid "Run a memory-shell probe on this site now?"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:95
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:103
 msgid "Probe Memory Shell"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:100
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:108
 msgid "No watched site is configured for probing."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:106
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:114
 msgid "Findings"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:114
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:122
 msgid "Container:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:119
-msgid "Kind"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:120
-msgid "Name"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:121
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:129
 msgid "URLs"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:122
-msgid "Class name"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:123
-msgid "Class loader"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:124
-msgid "On disk"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:125
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:133
 msgid "Reasons"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:149
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:188
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:169
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:208
 #, python-format
 msgid "%(count)s non-suspicious entries collapsed"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:153
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:173
 msgid "No suspicious entry has been reported yet."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:157
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:177
 msgid "Recent runs"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:163
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:183
 msgid "Trigger:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:174
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:194
 msgid "Triggered by:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:191
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:211
 msgid "Probe failed:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:194
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:214
 msgid "Probe cleanup failed:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:195
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:215
 msgid "A probe file may still exist in the web root. Remove it manually."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:198
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:218
 msgid "Report error:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:203
+#: src/anteumbra/interfaces/web/templates/admin/panels/memory_shell_panel.html:223
 msgid "No probe has run yet."
 msgstr ""
 
@@ -2674,107 +3491,155 @@ msgstr ""
 msgid "Toggle switches above enable/disable each notification channel in"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:11
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
 msgid "System:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:11
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
 msgid "ENABLED"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:11
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
 #: src/anteumbra/interfaces/web/templates/admin/panels/siem_status.html:6
 msgid "DISABLED"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:12
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:27
 msgid "Loaded:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:13
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:28
+msgid "Active:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:29
 msgid "Detectors:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:14
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:30
 msgid "Notifiers:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:15
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:31
 msgid "Sources:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:20
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:36
 msgid "The plugin system is switched off; no plugin is loaded."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:21
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:37
 #: src/anteumbra/interfaces/web/templates/admin/panels/siem_status.html:28
 msgid "Enable in config.toml:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
 msgid "Plugin"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
 msgid "Detector"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:26
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:42
 msgid "Notifier"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:37
-msgid "Plugin system off"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:38
-msgid "Not installed"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:39
-msgid "Not in builtin"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:40
-msgid "Disabled in config"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:41
-msgid "Not registered"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:48
-msgid "Not loaded"
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:54
-msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:55
-msgid "Listed in config.toml, but this build has no implementation for it."
-msgstr ""
-
 #: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:56
-msgid "This build can load it, but [plugins] builtin does not list it."
-msgstr ""
-
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:57
-msgid "Installed but switched off in config.toml."
+msgid "Loaded"
 msgstr ""
 
 #: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:58
+msgid "Not running"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:60
+msgid "Run state unknown"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:65
+msgid "Plugin system off"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:66
+msgid "Not installed"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:67
+msgid "Not in builtin"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:68
+msgid "Disabled in config"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:69
+msgid "Not registered"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:76
+msgid "Not loaded"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:84
+msgid "Config section:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:85
+msgid "not set explicitly"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:86
+msgid "enabled is not reported for a plugin that is not loaded"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:92
+msgid "The [plugins] section is disabled, so nothing is loaded from builtin."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:93
+msgid "Listed in config.toml, but this build has no implementation for it."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:94
+msgid "This build can load it, but [plugins] builtin does not list it."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:95
+msgid "Installed but switched off in config.toml."
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:96
 msgid ""
 "Enabled and listed, but the plugin is not registered — check the startup "
 "log."
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:62
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:100
 msgid "Add to config.toml:"
 msgstr ""
 
-#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:72
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:112
+msgid "Disable"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:116
+msgid "Enable"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:122
+msgid "Remove from builtin"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:126
+msgid "Add to builtin"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:129
+msgid "Protected:"
+msgstr ""
+
+#: src/anteumbra/interfaces/web/templates/admin/panels/plugin_status.html:138
 msgid "No plugin is available in this build."
 msgstr ""
 
