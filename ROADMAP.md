@@ -2,9 +2,9 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.35 (released, 2026-08-02)
+> **Latest Release**: v1.0.40 (released, 2026-09-14)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: `main` matches the released v1.0.35 tag: 544 non-browser tests, 43 browser tests, expanded Ruff and formatter checks, 142/233-file Wheel parity, Windows runtime, Docker health/login/non-root/functional smoke, and the official PyPI Wheel's 141 installed submodules passed validation.
+> **Source Status**: the released v1.0.40 tag contains 1210 non-browser tests and 49 browser tests, expanded Ruff checks, Wheel/source parity, Windows runtime and Docker health/login/functional smoke.
 
 ---
 
@@ -40,7 +40,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 ---
 
-## v1.0.20 - v1.0.35 Cleanup Line
+## v1.0.20 - v1.0.40 Release Line
 
 | Version | Theme | Status |
 |---------|-------|--------|
