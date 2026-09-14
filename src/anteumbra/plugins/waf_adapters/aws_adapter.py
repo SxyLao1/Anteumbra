@@ -51,6 +51,57 @@ class AWSWAFAdapter(Plugin, PollableEventSource):
     def supported_events(self) -> List[str]:
         return ["waf.event"]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.aws_waf]``: the keys ``activate()`` reads and their defaults."""
+        return [
+            {
+                "name": "region",
+                "type": "text",
+                "default": "us-east-1",
+                "required": True,
+                "allow_empty": False,
+                "label": "AWS region",
+                "description": "Region the WAFv2 logs live in.",
+            },
+            {
+                "name": "web_acl_arn",
+                "type": "text",
+                "default": "",
+                "label": "Web ACL ARN",
+                "description": (
+                    "Recorded for reference; the adapter reads logs through "
+                    "CloudWatch, so it may stay empty."
+                ),
+            },
+            {
+                "name": "log_source",
+                "type": "select",
+                "default": "cloudwatch",
+                "choices": ("cloudwatch", "s3"),
+                "label": "Log source",
+                "description": "Where the WAFv2 log records are read from.",
+            },
+            {
+                "name": "log_group",
+                "type": "text",
+                "default": "/aws/waf/logs",
+                "required": True,
+                "allow_empty": False,
+                "label": "CloudWatch log group",
+                "description": "Log group polled with filter_log_events.",
+            },
+            {
+                "name": "poll_interval",
+                "type": "number",
+                "default": 300,
+                "min": 30,
+                "max": 86400,
+                "label": "Poll interval (seconds)",
+                "description": "AWS API calls are billed, so the default is 5 minutes.",
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         self._config = config
         self._region = config.get("region", "us-east-1")

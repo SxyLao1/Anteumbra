@@ -12,7 +12,15 @@
    ``?open=<sections>`` into the address bar via HTMX and the server re-renders
    the sections from it (see settings_bp._open_sections).  That keeps the state
    in the URL, in the session, and in the HTML itself, so it works with the
-   router's innerHTML swaps - where an inline <script> would never run. #}
+   router's innerHTML swaps - where an inline <script> would never run.
+
+   v2.3 readability pass: the page was still long, and its values never said
+   which of the three possible sources was actually in force.  Two server-side
+   filters (``?only=changed`` / ``?only=shipped``), a jump-to-section control, a
+   per-section count of values that differ from the shipped defaults, and an
+   explicit warning affordance for the keys that remove a protection rather than
+   add a feature.  The filters live in the URL for the same reason the expansion
+   state does. #}
 {% macro section_header(sid, title) %}
 <button type="button" class="card-header" data-settings-section="{{ sid }}"
         aria-expanded="{{ 'true' if sid in open_sections else 'false' }}"
@@ -21,6 +29,11 @@
         style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-bottom:1px solid var(--color-border);color:inherit;cursor:pointer;text-align:left;font:inherit;">
   <span class="cfg-arrow" style="display:inline-block;transform:rotate({{ '0deg' if sid in open_sections else '-90deg' }});transition:transform .15s;">▼</span>
   <strong>{{ title }}</strong>
+  {% if section_change_counts.get(sid) %}
+  <span class="badge badge-warning" style="font-size:8px;" data-settings-changed="{{ section_change_counts.get(sid) }}">{{ section_change_labels.get(sid, '') }}</span>
+  {% else %}
+  <span class="badge badge-blue" style="font-size:8px;opacity:.7;" data-settings-changed="0">{{ section_change_labels.get(sid, '') }}</span>
+  {% endif %}
   <span style="margin-left:auto;color:var(--color-text-secondary);font-size:11px;font-weight:normal;">{{ section_summaries.get(sid, '') }}</span>
 </button>
 {% endmacro %}
@@ -29,11 +42,40 @@
 {% endmacro %}
 <section class="settings-grid" style="column-count:1;">
 
-  {# 1. Environment and secrets - the part an operator cannot finish without. #}
+  {# 0. Page controls: same values, but the reader decides which ones matter.
+     Deliberately not a ``data-settings-panel``: it is not a config section, and
+     the section ids are a URL contract the filters must not disturb. #}
+  <div class="card" data-settings-controls="1" style="margin-bottom:10px;">
+    <div class="card-body" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;">
+      <span style="font-size:11px;color:var(--color-text-secondary);">{{ _('Show:') }}</span>
+      {% for name, label in filter_labels.items() %}
+      <a href="{{ filter_urls.get(name, '/admin/settings') }}" hx-get="{{ filter_urls.get(name, '/admin/settings') }}"
+         hx-target="#main-content" hx-swap="innerHTML" hx-push-url="true"
+         data-settings-filter="{{ name }}" data-settings-filter-active="{{ 'true' if active_filter == name else 'false' }}"
+         style="font-size:10px;padding:3px 8px;border-radius:3px;text-decoration:none;border:1px solid {{ '#00ff41' if active_filter == name else 'var(--color-border)' }};color:{{ '#00ff41' if active_filter == name else 'var(--color-text-secondary)' }};">{{ _(label) }}</a>
+      {% endfor %}
+      <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label for="settings-jump" style="font-size:11px;color:var(--color-text-secondary);">{{ _('Jump to:') }}</label>
+        <select id="settings-jump" data-settings-jump="1" style="font-size:10px;"
+                onchange="if(this.value){window.location.href=this.value;}">
+          <option value="">{{ _('choose a section...') }}</option>
+          {% for sid, title in section_titles.items() %}
+          <option value="{{ jump_urls.get(sid, '/admin/settings') }}">{{ _(title) }}</option>
+          {% endfor %}
+        </select>
+        <a href="{{ advanced_editor_url }}" data-settings-advanced-editor-link="1"
+           style="font-size:10px;color:#4a9eff;text-decoration:none;border:1px solid var(--color-border);border-radius:3px;padding:3px 8px;">{{ _('Advanced config editor') }} →</a>
+      </span>
+    </div>
+  </div>
+
+  {# 1. Environment and secrets - the part an operator cannot finish without.
+     This is the single authoritative place for .env on this page. #}
   <section class="card" data-settings-panel="environment">
     {{ section_header('environment', _('ENVIRONMENT & SECRETS')) }}
     <div class="card-body" id="settings-environment" {% if 'environment' not in open_sections %}style="display:none;"{% endif %}>
       <p class="muted-copy" style="font-size:11px;margin:0 0 8px 0;">{{ _('Mail credentials, tokens and keys are stored in .env next to config.toml. Empty fields are left untouched; values are never committed to git.') }}</p>
+      <p style="font-size:10px;margin:0 0 8px 0;color:#ffaa00;line-height:1.6;">{{ _('This section is the only place on this page that writes .env. The config editor below is a legacy copy of the same fields; it is kept for compatibility and is not needed for a normal change.') }}</p>
       {% if env_notice %}
       <div class="form-result" data-env-notice="{{ env_notice.level }}" style="color:{{ '#ff4444' if env_notice.level == 'error' else '#00ff41' }};font-size:11px;margin-bottom:8px;">{{ env_notice.text }}</div>
       {% endif %}
@@ -92,6 +134,23 @@
         {{ row(_('Auto IP block'), _('Enabled') if auto_block else _('Disabled')) }}
         {{ row(_('WAF source'), (waf_type ~ ' · ' ~ waf_url) if waf_enabled else _('Disabled')) }}
       </div>
+
+      {% if dangerous_keys %}
+      <div data-settings-dangerous-keys="1" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--color-border);">
+        <div style="font-size:11px;color:#ffaa00;margin-bottom:6px;">{{ _('Keys that remove a protection') }}</div>
+        {% for d in dangerous_keys %}
+        <div data-settings-dangerous="{{ d.key }}" style="padding:6px 8px;margin-bottom:4px;background:#0a0a0a;border-radius:3px;border-left:3px solid #ffaa00;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;">
+            <code style="color:#ffcc66;">{{ d.key }}</code>
+            <span class="badge badge-warning" style="font-size:8px;">{{ _('caution') }}</span>
+            <span style="margin-left:auto;color:var(--color-text-muted);font-size:9px;">{{ _('current:') }} <code>{{ d.value }}</code> · {{ _('from') }} {{ d.source }}</span>
+          </div>
+          <div style="color:var(--color-text-secondary);font-size:10px;line-height:1.6;margin-top:2px;">{{ _(d.reason) }}</div>
+        </div>
+        {% endfor %}
+        <p class="muted-copy" style="font-size:9px;margin:4px 0 0 0;">{{ _('These keys are edited in the advanced config editor, which validates them before writing.') }}</p>
+      </div>
+      {% endif %}
     </div>
   </section>
 
@@ -107,10 +166,17 @@
     <div class="card-body" id="settings-storage" {% if 'storage' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/settings/storage-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
   </section>
 
-  {# 7. Plugins - an operational control surface, so it precedes raw editing. #}
+  {# 7. Plugins - an operational control surface, so it precedes raw editing.
+     Each row opens a typed form for its own [plugins.<name>] section; the panel
+     is handed the page's readability filter so a re-render cannot drop it. #}
   <section class="card" data-settings-panel="plugins">
     {{ section_header('plugins', _('PLUGINS')) }}
-    <div class="card-body" id="settings-plugins" {% if 'plugins' not in open_sections %}style="display:none;"{% endif %} hx-get="/admin/settings/plugin-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+    <div class="card-body" id="settings-plugins" {% if 'plugins' not in open_sections %}style="display:none;"{% endif %} hx-get="{{ plugin_panel_url }}" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
+    {% if active_filter != 'all' %}
+    <div class="card-body" style="padding-top:0;">
+      <p class="muted-copy" style="font-size:9px;margin:0;">{{ _('The readability filter is active; plugin rows and settings are shown accordingly.') }}</p>
+    </div>
+    {% endif %}
   </section>
 
   {# 8. Advanced / rarely touched. #}
@@ -118,6 +184,26 @@
     {{ section_header('advanced', _('ADVANCED')) }}
     <div class="card-body" {% if 'advanced' not in open_sections %}style="display:none;"{% endif %}>
       <div class="settings-actions" style="margin-bottom:12px;"><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="registry">{{ _('Registry Status') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="wal">{{ _('WAL Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="session">{{ _('Session Management') }}</button><button class="btn btn-ghost btn-sm" type="button" data-action="settings.system-open" data-system-type="config">{{ _('Config Reload') }}</button></div>
+
+      {# Password: the hash is never edited as text.  A new password is hashed
+         with werkzeug exactly as `anteumbra config password` does, and only the
+         hash reaches .env. #}
+      <div data-settings-password="1" style="margin-bottom:12px;padding:8px;background:#0a0a0a;border-radius:3px;border-left:3px solid #4a9eff;">
+        <div style="font-size:11px;color:var(--color-text-primary);margin-bottom:4px;">{{ _('Admin password') }}</div>
+        <p class="muted-copy" style="font-size:10px;margin:0 0 6px 0;">{{ _('config.toml stores only a hash (web_admin.password_hash). Set a new password here; it is hashed before it is written, so no plaintext ever reaches disk.') }}</p>
+        {% if password_notice %}
+        <div data-settings-password-notice="{{ password_notice.level }}" style="color:{{ '#ff4444' if password_notice.level == 'error' else '#00ff41' }};font-size:10px;margin-bottom:6px;">{{ password_notice.text }}</div>
+        {% endif %}
+        <form hx-post="/admin/settings/password/save" hx-target="#main-content" hx-swap="innerHTML" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="password" name="new_password" id="settings-new-password" autocomplete="new-password" placeholder="{{ _('New password (min 6 characters)') }}" style="min-width:220px;">
+          <input type="password" name="confirm_password" id="settings-confirm-password" autocomplete="new-password" placeholder="{{ _('Repeat the new password') }}" style="min-width:180px;">
+          <button class="btn btn-primary btn-sm" type="submit">{{ _('Set a new password') }}</button>
+          <span class="muted-copy" style="font-size:9px;">{{ _('Hash: scrypt via werkzeug') }}</span>
+        </form>
+      </div>
+
+      <p style="font-size:10px;margin:0 0 8px 0;"><a href="{{ advanced_editor_url }}" data-settings-advanced-editor-link="1" style="color:#4a9eff;">{{ _('Raw config.toml editing (advanced)') }} →</a> <span class="muted-copy" style="font-size:9px;">{{ _('Every key in the file, full validation, and a backup on every save.') }}</span></p>
+
       <div id="settings-siem" hx-get="/admin/settings/siem-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
       <div id="settings-config" style="margin-top:12px;" hx-get="/admin/settings/config/editor" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading config editor...') }}</p></div></div>
     </div>

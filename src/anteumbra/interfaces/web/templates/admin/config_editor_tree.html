@@ -1,0 +1,118 @@
+{# The tree view: the real TOML structure (tables, arrays of tables) with line
+   numbers, plus the structural operations that have to re-serialize the file.
+   Every structural control says so before it runs. #}
+{% from 'admin/config_editor_rows.html' import key_row %}
+{% macro table_node(node, depth) %}
+<details class="ce-table" {% if depth < 2 %}open{% endif %}
+         style="border-left:2px solid var(--color-border);padding-left:10px;margin:6px 0 6px {{ depth * 6 }}px;">
+  <summary style="cursor:pointer;">
+    <code style="font-size:12px;">{{ node.label }}</code>
+    <span class="muted-copy" style="font-size:11px;">L{{ node.line }}</span>
+    <span class="badge badge-gray">{{ _('%(count)s key(s)', count=node.keys|length) }}</span>
+  </summary>
+  <div style="margin-top:6px;">
+    {% for row in node.keys %}{{ key_row(row) }}{% endfor %}
+
+    <form hx-post="/admin/config/editor/key/add" hx-target="#ce-result" hx-swap="innerHTML"
+          style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <input type="hidden" name="table" value="{{ node.path }}">
+      <input class="form-input" type="text" name="key" placeholder="{{ _('new_key') }}"
+             style="max-width:180px;font-family:var(--font-mono);font-size:12px;">
+      <input class="form-input" type="text" name="value" placeholder="{{ _('value') }}"
+             style="max-width:220px;font-family:var(--font-mono);font-size:12px;">
+      <button class="btn btn-ghost btn-sm" type="submit" title="{{ _('Adds one line at the end of this table; nothing else moves.') }}">
+        {{ _('Add key') }}
+      </button>
+    </form>
+
+    {% if node.kind == 'array_table' %}
+    <form hx-post="/admin/config/editor/array/add" hx-target="#ce-result" hx-swap="innerHTML"
+          style="display:inline-flex;gap:6px;align-items:center;margin:6px 0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <input type="hidden" name="key" value="{{ node.path }}">
+      <input type="hidden" name="kind" value="table">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ _('Add another block like this') }}</button>
+    </form>
+    <form hx-post="/admin/config/editor/table/remove" hx-target="#ce-result" hx-swap="innerHTML"
+          style="display:inline-flex;gap:6px;align-items:center;margin:6px 0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <input type="hidden" name="table" value="{{ node.path }}">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ _('Remove this block') }}</button>
+    </form>
+    {% elif node.path %}
+    <form hx-post="/admin/config/editor/table/remove" hx-target="#ce-result" hx-swap="innerHTML"
+          style="display:inline-flex;gap:6px;align-items:center;margin:6px 0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <input type="hidden" name="table" value="{{ node.path }}">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ _('Remove this table') }}</button>
+    </form>
+    {% endif %}
+
+    {% for child in node.children %}{{ table_node(child, depth + 1) }}{% endfor %}
+  </div>
+</details>
+{% endmacro %}
+
+<div class="card">
+  <div class="card-header">
+    <span><span class="card-header-icon">⚙</span> {{ _('Tree view') }}</span>
+    <span class="toolbar-spacer"></span>
+    <span class="muted-copy">{{ _('Structural changes re-serialize the file: comments may be reformatted.') }}</span>
+  </div>
+  <div class="card-body">
+    <form hx-post="/admin/config/editor/table/add" hx-target="#ce-result" hx-swap="innerHTML"
+          style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="0">
+      <input class="form-input" type="text" name="table" placeholder="{{ _('new.table') }}"
+             style="max-width:220px;font-family:var(--font-mono);font-size:12px;">
+      <button class="btn btn-ghost btn-sm" type="submit"
+              title="{{ _('A new table, or one more [[array.of.tables]] block. Re-serializes the file.') }}">
+        {{ _('Add table or block') }}
+      </button>
+    </form>
+
+    {% if arrays %}
+    <details style="margin-bottom:10px;">
+      <summary style="cursor:pointer;"><strong>{{ _('Arrays') }}</strong></summary>
+      {% for item in arrays %}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;">
+        <code style="font-size:12px;">{{ item.path }}</code>
+        <span class="badge badge-gray">{{ _('%(count)s item(s)', count=item.count) }}</span>
+        <form hx-post="/admin/config/editor/array/add" hx-target="#ce-result" hx-swap="innerHTML"
+              style="display:flex;gap:6px;align-items:center;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirm" value="0">
+          <input type="hidden" name="key" value="{{ item.path }}">
+          {% if not item.tables %}
+          <input class="form-input" type="text" name="value" placeholder="{{ _('value') }}"
+                 style="max-width:200px;font-family:var(--font-mono);font-size:12px;">
+          {% else %}
+          <input type="hidden" name="kind" value="table">
+          {% endif %}
+          <button class="btn btn-ghost btn-sm" type="submit">{{ _('Add item') }}</button>
+        </form>
+        <form hx-post="/admin/config/editor/array/remove" hx-target="#ce-result" hx-swap="innerHTML"
+              style="display:flex;gap:6px;align-items:center;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirm" value="0">
+          <input type="hidden" name="key" value="{{ item.path }}">
+          <input class="form-input" type="number" name="index" min="0" value="0" style="width:70px;">
+          <button class="btn btn-ghost btn-sm" type="submit">{{ _('Remove item') }}</button>
+        </form>
+      </div>
+      {% endfor %}
+    </details>
+    {% endif %}
+
+    {% if not tree and not rows %}
+      <div class="empty-state"><p>{{ _('No key matches the current filters.') }}</p></div>
+    {% endif %}
+    {% for node in tree %}{{ table_node(node, 0) }}{% endfor %}
+  </div>
+</div>

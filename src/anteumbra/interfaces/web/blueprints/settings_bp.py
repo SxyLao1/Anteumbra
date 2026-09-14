@@ -12,6 +12,7 @@ import shutil
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import tomli_w
 from flask import Blueprint, current_app, jsonify, render_template, request, session
@@ -28,6 +29,12 @@ from anteumbra.cli.config_support import (
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
+from anteumbra.plugins.config_schema import (
+    ConfigField,
+    field_values_equal,
+    has_builtin_schema,
+    normalize_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +281,102 @@ ENVIRONMENT_KEYS: tuple[str, ...] = (
     "ANTEUMBRA_WEBHOOK_SECRET",
 )
 
+# -- Readability filters ------------------------------------------------------
+#
+# The page is long and its values gave no clue which of the three possible
+# sources was actually in effect.  Two server-side filters answer the question an
+# operator actually asks ("what did I change here?"), and the jump-to-section
+# control is a plain link list, so all of it works without a script and lands in
+# the address bar like the expansion state already does.
+
+#: ``?only=`` values the page understands.  ``changed`` compares every value
+#: against the built-in default the plugin or runtime falls back to; ``shipped``
+#: compares against the value in the config.toml template this deployment was
+#: created from, which is the stricter question.
+SETTINGS_FILTERS: tuple[str, ...] = ("all", "changed", "shipped")
+
+DEFAULT_SETTINGS_FILTER = "all"
+
+#: Filter labels, keyed for the picker's own links.
+SETTINGS_FILTER_LABELS: dict[str, str] = {
+    "all": "All values",
+    "changed": "Only non-default values",
+    "shipped": "Only changed from shipped defaults",
+}
+
+#: Which config.toml keys belong to which page section, so a section header can
+#: report how many of its values differ from the shipped defaults.  Keys are
+#: dotted and absolute; a key absent from both the live config and the template
+#: does not count.
+SECTION_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
+    "environment": (),
+    "account": ("web_admin.username", "web_admin.password_hash"),
+    "sites": (
+        "website.name",
+        "website.id",
+        "website.path",
+        "website.port",
+        "website.enabled",
+        "website.log_config.log_monitor_enabled",
+        "website.log_config.access_log_path",
+    ),
+    "detection": (
+        "paths.monitor_paths",
+        "paths.monitor_extensions",
+        "quarantine.auto_quarantine_enabled",
+        "quarantine.quarantine_dir",
+        "quarantine.retention_days",
+        "ip_blocker.auto_block_enabled",
+        "ip_blocker.block_threshold",
+        "ip_blocker.block_duration_minutes",
+        "ip_blocker.devices",
+        "waf_source.enabled",
+        "waf_source.type",
+        "waf_source.url",
+    ),
+    "notifications": (
+        "notifier.enabled",
+        "notifier.email.enabled",
+        "notifier.wechat.enabled",
+        "notifier.webhook.enabled",
+    ),
+    "storage": ("storage.backend", "storage.db_path", "paths.data_dir", "paths.log_dir"),
+    "advanced": ("siem.enabled", "siem.format", "logging.level"),
+}
+
+
+# -- Dangerous keys -----------------------------------------------------------
+#
+# These four keys are the ones where a plausible-looking edit removes a
+# protection instead of adding a feature: an admin can lock themselves out, stop
+# containment, or downgrade session cookies on a proxied deployment.  They carry
+# a one-line explanation wherever the settings page shows them, and the plugin
+# form refuses to apply ``allowed_ips`` without an explicit acknowledgement.
+
+DANGEROUS_KEYS: dict[str, str] = {
+    "quarantine.auto_quarantine_enabled": (
+        "Switching this off stops every automatic quarantine: detections are still "
+        "recorded and alerted, but no file is moved again."
+    ),
+    "ip_blocker.auto_block_enabled": (
+        "Switching this off stops automatic IP blocking. Records and alerts continue; "
+        "repeat offenders are no longer contained."
+    ),
+    "ip_blocker.devices": (
+        "Each entry defines a device the blocker writes to. A wrong or missing device "
+        "means the block is recorded but never enforced."
+    ),
+    "web_admin.allowed_ips": (
+        "Only addresses in this list may open the admin UI. Removing the address you "
+        "are connected from locks you out of the web interface."
+    ),
+    "web_admin.session_cookie_secure": (
+        "Setting this to false sends the admin session cookie over plain HTTP; only do "
+        "it for a deployment that is never reachable over the network."
+    ),
+}
+
+
 
 def _read_env_values(config_path: Path) -> dict[str, str]:
     """Configured ``.env`` values, keyed by variable name."""
@@ -314,19 +417,54 @@ def _open_sections() -> list[str]:
     return list(DEFAULT_OPEN_SECTIONS)
 
 
-def _section_toggle_url(open_sections: list[str], section_id: str) -> str:
+def _settings_filter() -> str:
+    """Which readability filter is active: the query string, then the session.
+
+    The plugin panel's own HTMX requests (configure, save) read the same value,
+    so a form refresh cannot silently drop the filter the operator chose.
+    """
+    requested = request.args.get("only")
+    if requested is not None:
+        value = str(requested).strip().lower()
+        if value in SETTINGS_FILTERS:
+            session["settings_filter"] = value
+            return value
+        return DEFAULT_SETTINGS_FILTER
+    stored = session.get("settings_filter")
+    return stored if stored in SETTINGS_FILTERS else DEFAULT_SETTINGS_FILTER
+
+
+def _settings_page_url(*, open_sections: list[str] | None = None, only: str | None = None) -> str:
+    """A settings URL carrying an explicit pointer state.
+
+    The default filter is left out of the URL rather than written as
+    ``only=all``: the address bar stays short, and every existing bookmark or
+    header link keeps the shape it had before the filters existed.
+    """
+    params = []
+    if open_sections is not None:
+        params.append("open=" + ",".join(open_sections))
+    if only and only != DEFAULT_SETTINGS_FILTER:
+        params.append("only=" + str(only))
+    return "/admin/settings" + ("?" + "&".join(params) if params else "")
+
+
+def _section_toggle_url(open_sections: list[str], section_id: str, only: str = "") -> str:
     """URL that re-renders the page with ``section_id`` flipped.
 
-    Built by hand rather than through ``urlencode`` so the address bar keeps a
-    readable ``?open=environment,plugins``; the section ids are fixed ASCII
-    identifiers, so there is nothing to escape.
+    The active filter rides along, because toggling a section must not silently
+    reset which values the operator asked to see.
     """
     if section_id in open_sections:
         toggled = [name for name in open_sections if name != section_id]
     else:
         toggled = [*open_sections, section_id]
     ordered = [name for name in SETTINGS_SECTIONS if name in toggled]
-    return "/admin/settings?open=" + ",".join(ordered)
+    return _settings_page_url(
+        open_sections=ordered,
+        only=only if only in SETTINGS_FILTERS else None,
+    )
+
 
 
 def _enabled_website_count(config: Mapping) -> int:
@@ -473,7 +611,16 @@ def _render_settings_page(**extra):
     except Exception:
         config = {}
     config = config if isinstance(config, Mapping) else {}
-    open_sections = _open_sections()
+    # A POST that re-renders the page may name the section the operator was
+    # working in; the session remembers it, so the state survives the next load.
+    override = extra.get("open_sections_override")
+    if override:
+        requested = [name for name in SETTINGS_SECTIONS if name in set(override)]
+        session["settings_open_sections"] = requested
+        open_sections = requested
+    else:
+        open_sections = _open_sections()
+    active_filter = _settings_filter()
 
     paths = config.get("paths", {})
     paths = paths if isinstance(paths, Mapping) else {}
@@ -487,12 +634,49 @@ def _render_settings_page(**extra):
     ip_blocker = config.get("ip_blocker", {})
     ip_blocker = ip_blocker if isinstance(ip_blocker, Mapping) else {}
 
+    section_changes = _section_change_counts(config, config_path)
+    plugin_config = _plugin_config_table(get_runtime())
+    manager = _plugin_panel_manager()
+
     context = {
         "open_sections": open_sections,
         "section_toggle_urls": {
-            name: _section_toggle_url(open_sections, name) for name in SETTINGS_SECTIONS
+            name: _section_toggle_url(open_sections, name, active_filter)
+            for name in SETTINGS_SECTIONS
         },
         "section_summaries": _settings_summaries(config_path),
+        "section_change_counts": section_changes,
+        "section_change_labels": {
+            name: gettext("%(count)s changed") % {"count": count}
+            if count
+            else gettext("all defaults")
+            for name, count in section_changes.items()
+        },
+        "active_filter": active_filter,
+        "filter_labels": SETTINGS_FILTER_LABELS,
+        "filter_urls": {
+            name: _settings_page_url(open_sections=open_sections, only=name)
+            for name in SETTINGS_FILTERS
+        },
+        "jump_urls": {
+            name: _settings_page_url(
+                open_sections=[*open_sections, name] if name not in open_sections else open_sections,
+                only=active_filter,
+            )
+            + f"#settings-{name}"
+            for name in SETTINGS_SECTIONS
+        },
+        "section_titles": {
+            "environment": gettext("ENVIRONMENT & SECRETS"),
+            "account": gettext("ACCOUNT"),
+            "sites": gettext("SITE CONFIGURATION"),
+            "detection": gettext("MONITORING & DETECTION"),
+            "notifications": gettext("NOTIFICATIONS"),
+            "storage": gettext("STORAGE & PATHS"),
+            "plugins": gettext("PLUGINS"),
+            "advanced": gettext("ADVANCED"),
+        },
+        "dangerous_keys": _dangerous_key_rows(config, _read_shipped_defaults(config_path)[0]),
         "env_vars": _read_env_values(config_path),
         "env_keys": ENVIRONMENT_KEYS,
         "env_notice": None,
@@ -511,9 +695,119 @@ def _render_settings_page(**extra):
         "waf_enabled": bool(waf_source.get("enabled")),
         "waf_type": str(waf_source.get("type", "")) or gettext("not configured"),
         "waf_url": str(waf_source.get("url", "")),
+        # The plugin panel is an HTMX fragment, so it must be handed the same
+        # filter and the same page state the page was rendered with.
+        "plugin_panel_url": "/admin/settings/plugin-status"
+        + (f"?only={active_filter}" if active_filter != DEFAULT_SETTINGS_FILTER else ""),
+        "plugin_manager_present": manager is not None,
+        "plugin_available_count": len(_plugin_rows(manager, plugin_config)) if manager else 0,
+        "password_notice": None,
+        # The advanced section owns the link to the full config editor page; the
+        # environment section is the single place that edits .env.
+        "advanced_editor_url": "/admin/config",
     }
     context.update(extra)
     return render_page("admin/settings.html", **context)
+
+
+# -- Dangerous keys and section diffs -----------------------------------------
+
+
+def _dangerous_key_rows(config: Mapping, shipped: Mapping) -> list[dict]:
+    """The guarded keys with their current value, source and risk explanation.
+
+    Deliberately read-only.  ``web_admin.allowed_ips`` and
+    ``web_admin.session_cookie_secure`` are edited on the config editor page,
+    which owns the full validation story for them; repeating that write path here
+    would mean two places where an admin can lock themselves out.
+    """
+    rows: list[dict] = []
+    for dotted, reason in DANGEROUS_KEYS.items():
+        current = _get_dotted(config, dotted)
+        source = gettext("config.toml")
+        if current is _MISSING:
+            current = _get_dotted(shipped, dotted)
+            source = gettext("shipped default")
+        if current is _MISSING:
+            continue
+        rows.append(
+            {
+                "key": dotted,
+                "value": _display_value(current),
+                "source": source,
+                "reason": reason,
+            }
+        )
+    return rows
+
+
+def _section_change_counts(config: Mapping, config_path: Path) -> dict[str, int]:
+    """How many values per section differ from the shipped defaults.
+
+    Counted over the keys declared in ``SECTION_CONFIG_KEYS`` plus every
+    ``[plugins.<name>]`` field that declares a schema, so the number in a section
+    header is about values a reader can actually see on the page.
+    """
+    shipped, _ = _read_shipped_defaults(config_path)
+    counts = {name: 0 for name in SETTINGS_SECTIONS}
+
+    for section, keys in SECTION_CONFIG_KEYS.items():
+        for dotted in keys:
+            current = _get_dotted(config, dotted)
+            baseline = _get_dotted(shipped, dotted)
+            if current is _MISSING or baseline is _MISSING:
+                continue
+            if not field_values_equal(current, baseline):
+                counts[section] += 1
+
+    counts["plugins"] = len(_plugin_change_entries(config, config_path))
+    return counts
+
+
+def _plugin_change_entries(config: Mapping, config_path: Path) -> list[dict]:
+    """Every plugin field whose effective value differs from its default.
+
+    Used for the plugins section header count and for the "only changed" view of
+    the panel, and computed from the same resolver the plugin forms use - a
+    second implementation would drift from what the forms show.
+    """
+    manager = _plugin_panel_manager()
+    plugin_config = _plugin_config_table(get_runtime())
+    template_defaults, _ = _read_shipped_defaults(config_path)
+    env_values = _read_env_values(config_path)
+    entries: list[dict] = []
+
+    builtin = _builtin_list(plugin_config)
+    sections = {
+        key
+        for key, value in plugin_config.items()
+        if isinstance(value, Mapping) and key != "builtin"
+    }
+    for name in sorted(set(builtin) | sections):
+        section = _plugin_section_name(name)
+        section_config = plugin_config.get(section)
+        section_config = section_config if isinstance(section_config, Mapping) else {}
+        template_section = {
+            key.split(".", 1)[1]: value
+            for key, value in template_defaults.items()
+            if key.startswith(f"plugins.{section}.")
+        }
+        fields = _plugin_config_fields(
+            manager, name, section, {**template_section, **section_config}
+        )
+        changed = []
+        for field in fields:
+            effective = _plugin_effective_value(
+                field,
+                live=section_config,
+                template=template_section,
+                env_values=env_values,
+            )
+            if effective["differs_from_default"]:
+                changed.append(field.name)
+        if changed:
+            entries.append({"name": name, "section": section, "changed": changed})
+    return entries
 
 
 @settings_bp.route("/settings")
@@ -776,6 +1070,64 @@ def settings_env_hash():
         return jsonify({"error": str(e)}), 500
 
 
+#: Minimum admin password length, matching ``anteumbra config password``.
+MIN_ADMIN_PASSWORD_LENGTH = 6
+
+
+@settings_bp.route("/settings/password/save", methods=["POST"])
+@require_auth
+def settings_password_save():
+    """Set a new admin password by hashing it, never by storing text.
+
+    ``web_admin.password_hash`` is a scrypt hash: it cannot be edited as text, and
+    a form that offered the hash for editing would invite someone to paste a
+    plaintext password into it.  This endpoint therefore takes a *new password*,
+    hashes it with werkzeug exactly as ``anteumbra config password`` does, and
+    writes only the hash to ``.env``.  The submitted plaintext is never echoed,
+    logged, or stored.
+
+    Re-renders the advanced section with an inline notice, so a failed write is
+    reported where the operator typed it instead of as a 500.
+    """
+    notice = None
+    try:
+        password = str(request.form.get("new_password") or "")
+        confirm = str(request.form.get("confirm_password") or "")
+        if len(password) < MIN_ADMIN_PASSWORD_LENGTH:
+            notice = _notice(
+                "error",
+                gettext(
+                    "Password too short: at least %(count)s characters are required.",
+                    count=MIN_ADMIN_PASSWORD_LENGTH,
+                ),
+            )
+        elif confirm and confirm != password:
+            notice = _notice("error", gettext("The two passwords do not match."))
+        else:
+            from werkzeug.security import generate_password_hash
+
+            env_path = Path(get_runtime().config.path).parent / ".env"
+            write_env_value(env_path, "ANTEUMBRA_PASSWORD_HASH", generate_password_hash(password))
+            notice = _notice(
+                "success",
+                gettext(
+                    "New password hash written to .env. Existing sessions stay signed in "
+                    "until they expire; the next sign-in uses the new password."
+                ),
+            )
+    except Exception as exc:  # noqa: BLE001 - inline error, never a 500
+        current_app.logger.error(f"[SETTINGS] password change failed: {exc}", exc_info=True)
+        notice = _notice(
+            "error",
+            gettext("Changing the password failed: %(detail)s", detail=str(exc)),
+        )
+    try:
+        return _render_settings_page(password_notice=notice, open_sections_override=("advanced",))
+    except Exception as exc:  # noqa: BLE001 - the page must still answer
+        current_app.logger.error(f"[SETTINGS] settings re-render failed: {exc}", exc_info=True)
+        return f'<div style="color:#ff4444;">Error: {exc}</div>'
+
+
 @settings_bp.route("/settings/notifications/save", methods=["POST"])
 @require_auth
 def settings_notifications_save():
@@ -944,6 +1296,573 @@ def _plugin_panel_manager():
     return current_app.extensions.get("anteumbra.plugin_manager")
 
 
+# -- Per-plugin configuration forms ------------------------------------------
+#
+# The panel could switch a plugin on and off and nothing else, so SMTP hosts,
+# webhook URLs, poll intervals, thresholds and cooldowns were reachable only by
+# editing config.toml by hand.  Every installed plugin now renders a typed form
+# for its own ``[plugins.<name>]`` section, and every field states its EFFECTIVE
+# value and the SOURCE it came from (config.toml, .env, or the built-in default)
+# - that single fact is what made the old page unreadable.
+#
+# The schema comes from the plugin itself where it can (``config_schema()``,
+# resolved by ``PluginManager.plugin_config_schema``) and falls back to the keys
+# present in the shipped config.toml and in the live section, so a plugin with no
+# schema still gets real controls rather than nothing.
+
+#: How many changed values a row may report before the header just says "many".
+_SOURCE_LABELS: dict[str, str] = {
+    "config": "config.toml",
+    "env": ".env",
+    "builtin": "built-in default",
+}
+
+#: Placeholder syntax ``infrastructure/config/loader.py`` resolves at load time.
+_ENV_PLACEHOLDER_RE = re.compile(
+    r"^\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([\-?])([^}]*))?\}$"
+)
+
+#: A dotted-config key: plugin sections and field names both live in this space.
+_PLUGIN_FIELD_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+#: Config sections whose form may be written.  Only ``[plugins.<name>]`` is
+#: editable here; see the endpoint docstrings for why the rest is not.
+_PLUGIN_SECTION_PREFIX = "plugins."
+
+
+def _shipped_config_path(config_path: Path, template: dict) -> Path:
+    """Where this deployment's config.toml template lives.
+
+    Three candidates, in order of how much they can be trusted:
+
+    * a template beside the live file (``config.toml.example``, or the package's
+      own ``config.toml`` when the live file sits one level deeper), which is what
+      "shipped defaults" means for a source checkout;
+    * the installed package's ``config.toml``, which is the template
+      ``anteumbra config init`` copies;
+    * nothing (``template`` stays empty), and the page then reports the built-in
+      defaults only.
+
+    A candidate is only accepted when it is a *different* file that actually
+    parses and carries a ``[plugins]`` table, so a broken symlink or the live file
+    itself can never be mistaken for the template.
+    """
+    candidates: list[Path] = []
+    parent = config_path.parent
+    candidates.extend([parent / "config.toml.example", parent / "config.example.toml"])
+    try:
+        import anteumbra
+
+        package_config = Path(anteumbra.__file__).resolve().parent / "config.toml"
+        candidates.append(package_config)
+    except Exception:  # pragma: no cover - an unimportable package keeps defaults
+        logger.debug("Package config.toml is unavailable for shipped defaults", exc_info=True)
+    try:
+        candidates.append(parent.parent / "config.toml")
+    except Exception:  # pragma: no cover - a path with no parent
+        pass
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+            if resolved == config_path.resolve() or not candidate.is_file():
+                continue
+            data = load_toml_file(candidate)
+        except Exception:
+            continue
+        if isinstance(data.get("plugins"), Mapping):
+            return candidate
+    return Path()
+
+
+def _read_shipped_defaults(config_path: Path) -> tuple[dict, Path]:
+    """``{dotted_key: value}`` for the shipped config.toml template.
+
+    Read from the template rather than from the live file on purpose: the whole
+    point of the "changed from shipped defaults" filter is to compare against the
+    values the deployment *started* with, and the live file is what someone has
+    been editing.
+    """
+    try:
+        config_path = Path(config_path).resolve()
+    except Exception:  # pragma: no cover - an unresolvable path has no template
+        return {}, Path()
+    try:
+        raw = load_toml_file(config_path)
+    except Exception:
+        logger.debug("Shipped defaults unavailable: the live config is unreadable", exc_info=True)
+        raw = {}
+    template_path = _shipped_config_path(config_path, raw if isinstance(raw, dict) else {})
+    if not template_path:
+        return {}, Path()
+    try:
+        template = load_toml_file(template_path)
+    except Exception:
+        logger.debug("Shipped config template is unreadable", exc_info=True)
+        return {}, Path()
+    defaults: dict[str, object] = {}
+
+    def walk(prefix: str, table: Mapping) -> None:
+        for key, value in table.items():
+            dotted = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(value, Mapping):
+                walk(dotted, value)
+            else:
+                defaults[dotted] = value
+
+    walk("", template if isinstance(template, Mapping) else {})
+    return defaults, template_path
+
+
+def _toml_inline(value) -> str:
+    """One-line TOML for a value: what ``config.toml`` would say on one line."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    try:
+        text = tomli_w.dumps({"v": value}).split("=", 1)[1].strip()
+    except Exception:  # pragma: no cover - unusual TOML types
+        return json.dumps(str(value), ensure_ascii=False)
+    return " ".join(text.split())
+
+
+def _env_placeholder(raw) -> tuple[str, bool, str]:
+    """``(VAR_NAME, HAS_FALLBACK, FALLBACK)`` for a ``${VAR...}`` string value."""
+    if not isinstance(raw, str):
+        return "", False, ""
+    match = _ENV_PLACEHOLDER_RE.match(raw.strip())
+    if not match:
+        return "", False, ""
+    return match.group(1), match.group(2) == "-", match.group(3) or ""
+
+
+def _display_value(value) -> str:
+    """The text a form field shows for a value (never for a secret)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _env_var_is_set(env_values: Mapping[str, str], var_name: str) -> bool:
+    """Whether ``.env`` or the process environment defines this variable."""
+    if not var_name:
+        return False
+    if str(env_values.get(var_name, "")).strip():
+        return True
+    return str(os.environ.get(var_name, "")).strip() != ""
+
+
+def _plugin_section(table: Mapping) -> Mapping:
+    """The ``[plugins]`` table of a parsed config, or an empty mapping."""
+    plugins = table.get("plugins") if isinstance(table, Mapping) else None
+    return plugins if isinstance(plugins, Mapping) else {}
+
+
+def _fallback_schema_fields(section: str, named: Mapping) -> list[ConfigField]:
+    """Typed fields inferred from the keys a plugin's config section actually has.
+
+    Used for a plugin that declares no ``config_schema()``: the keys in the
+    shipped template come first (they describe what the plugin expected), then any
+    extra key found in the live section, so an operator still gets real controls
+    instead of a read-only row.  Types are inferred from the value, which is
+    strictly better than text for the three cases that matter (boolean, number,
+    container).
+    """
+    fields: list[ConfigField] = []
+    seen: set[str] = set()
+    for key in ("enabled",):
+        if key in named and isinstance(named.get(key), bool):
+            fields.append(ConfigField(name=key, type="toggle", default=False))
+            seen.add(key)
+    for key, value in named.items():
+        key = str(key)
+        if key in seen or key in {"builtin"}:
+            continue
+        if isinstance(value, bool):
+            field = ConfigField(name=key, type="toggle", default=False)
+        elif isinstance(value, int):
+            field = ConfigField(name=key, type="number", default=value)
+        elif isinstance(value, float):
+            field = ConfigField(name=key, type="number", default=value)
+        elif isinstance(value, (list, tuple)):
+            field = ConfigField(name=key, type="list", default=list(value))
+        elif isinstance(value, Mapping):
+            continue  # nested tables are not rendered as one field
+        else:
+            field = ConfigField(name=key, type="text", default=str(value))
+        fields.append(field)
+        seen.add(key)
+    return fields
+
+
+def _plugin_config_fields(manager, name: str, section: str, named: Mapping) -> list[ConfigField]:
+    """The fields a plugin's form renders: declared schema first, keys second."""
+    declared = []
+    if manager is not None:
+        getter = getattr(manager, "plugin_config_schema", None)
+        if callable(getter):
+            try:
+                declared = normalize_fields(getter(name))
+            except Exception:  # noqa: BLE001 - the fallback below still renders a form
+                logger.error("Plugin schema lookup failed for %s", name, exc_info=True)
+    if not declared and has_builtin_schema(name):
+        # The manager has no implementation for it in this build (or no manager is
+        # attached), but the build still knows what the plugin's keys are.
+        from anteumbra.plugins.config_schema import schema_for_module
+
+        declared = normalize_fields(schema_for_module(name))
+    if declared:
+        return declared
+    return _fallback_schema_fields(section, named)
+
+
+def _plugin_effective_value(
+    field: ConfigField,
+    *,
+    live: Mapping,
+    template: Mapping,
+    env_values: Mapping[str, str],
+) -> dict:
+    """Resolve one field's effective value, its source, and its two baselines.
+
+    Precedence mirrors ``infrastructure/config/loader.py``: a ``${VAR}`` placeholder
+    with the variable present resolves from ``.env``/the environment, otherwise the
+    literal value in config.toml is used, and a key that is absent everywhere falls
+    back to the default declared by the plugin itself.
+
+    Two comparisons come out of it:
+
+    * ``differs_from_default`` - the effective value is not the plugin's own
+      built-in default.  This is what the "only non-default values" filter uses.
+    * ``differs_from_shipped`` - the effective value is not what the shipped
+      config.toml template says.  This is the stricter "did anybody change this"
+      question, and it is reported separately because a key can legitimately be at
+      its built-in default and still differ from the shipped file.
+    """
+    key = field.name
+    in_template = key in template
+    template_raw = template.get(key) if in_template else None
+    in_live = key in live
+    live_raw = live.get(key) if in_live else None
+
+    placeholder_var, _, _ = _env_placeholder(template_raw)
+    env_var = field.env_key or placeholder_var
+    env_set = _env_var_is_set(env_values, env_var)
+    # The runtime config has placeholders already resolved, so the effective value
+    # for a non-secret field is simply what the runtime sees.
+    effective = live_raw if in_live else (template_raw if in_template else field.default)
+
+    source = "builtin"
+    if field.type == "secret":
+        source = "env" if env_set else "config"
+    elif env_var:
+        source = "env" if env_set else "builtin"
+    elif in_live:
+        source = "config"
+
+    secret_set = False
+    if field.type == "secret":
+        secret_set = env_set or bool(str(effective or "").strip())
+        shown_value = ""
+    else:
+        shown_value = _display_value(effective)
+
+    return {
+        "key": key,
+        "type": field.type,
+        "label": field.label or key,
+        "description": field.description,
+        "default": field.default,
+        "default_text": _display_value(field.default),
+        "raw": shown_value,
+        "display": shown_value,
+        "source": source,
+        "source_label": gettext(_SOURCE_LABELS[source]),
+        "env_var": env_var,
+        "env_set": env_set,
+        "secret_set": secret_set,
+        "secret_original": bool(str(effective or "").strip()) if field.type == "secret" else False,
+        "writable": _field_is_writable(field, env_var),
+        "in_config": in_live,
+        "in_template": in_template,
+        "differs_from_default": not field_values_equal(effective, field.default),
+        "differs_from_shipped": in_template
+        and not field_values_equal(effective, template_raw),
+        "min": field.min,
+        "max": field.max,
+        "step": "any" if _is_float_default(field.default) else "1",
+        "choices": list(field.choices),
+        "pattern": field.pattern,
+        "pattern_hint": field.pattern_hint,
+        "item_pattern": field.item_pattern,
+        "item_pattern_hint": field.item_pattern_hint,
+        "required": field.required,
+        "restart_required": field.restart_required,
+        "set": _display_value(effective).strip() != "",
+    }
+
+
+def _is_float_default(value) -> bool:
+    return isinstance(value, float) and not float(value).is_integer()
+
+
+def _field_is_writable(field: ConfigField, env_var: str = "") -> bool:
+    """Whether a form may write this field.
+
+    Everything except a secret is written to ``config.toml``.  A secret is written
+    to ``.env`` only, and that needs a variable name: with neither ``env_key`` in
+    the schema nor a ``${VAR}`` placeholder in the template there is nowhere to put
+    it, and putting a credential into config.toml is exactly what this page must
+    not do.
+    """
+    if field.type != "secret":
+        return True
+    return bool(field.env_key or env_var)
+
+
+# -- Server-side field validation ---------------------------------------------
+#
+# The form marks problems before saving, but the endpoint is the authority: a
+# rejected value is never written.  These rules are the same ones the input
+# attributes express (min/max, choice list, pattern), which is why a field can
+# report its error next to itself instead of as a generic failure.
+
+
+def _coerce_plugin_field_value(field: ConfigField, raw) -> tuple[Any, str]:
+    """Validate and type one submitted value. Returns ``(value, error)``.
+
+    The error text is operator-facing and names the expected shape, so a rejected
+    save explains itself without the operator reading the schema.
+    """
+    if field.type == "secret":
+        value = "" if raw is None else str(raw).strip()
+        if value == "" and field.required:
+            return None, gettext("This value is required.")
+        return value, ""
+
+    if field.type == "toggle":
+        if isinstance(raw, bool):
+            return raw, ""
+        text = str(raw if raw is not None else "").strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True, ""
+        if text in {"0", "false", "no", "off", ""}:
+            return False, ""
+        return None, gettext("Expected a boolean (true or false).")
+
+    if field.type == "number":
+        text = str(raw if raw is not None else "").strip()
+        if text == "":
+            if field.required:
+                return None, gettext("This value is required.")
+            return None, gettext("Expected a number.")
+        try:
+            number: float = float(text)
+        except ValueError:
+            return None, gettext("Expected a number.")
+        if field.min is not None and number < float(field.min):
+            return None, gettext("Must be at least %(min)s.", min=field.min)
+        if field.max is not None and number > float(field.max):
+            return None, gettext("Must be at most %(max)s.", max=field.max)
+        if _is_float_default(field.default) or not float(number).is_integer():
+            return number, ""
+        return int(number), ""
+
+    # text, select and list share the same text handling below.
+    text = str(raw if raw is not None else "").strip()
+
+    if field.type == "select":
+        if text not in field.choices:
+            return None, gettext(
+                "Must be one of: %(choices)s.", choices=", ".join(field.choices)
+            )
+        return text, ""
+
+    if field.type == "list":
+        if text in ("", "[]"):
+            items: list[str] = []
+        elif text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except ValueError:
+                return None, gettext("Expected a list, for example a, b, c.")
+            if not isinstance(parsed, list):
+                return None, gettext("Expected a list, for example a, b, c.")
+            items = [str(item).strip() for item in parsed if str(item).strip()]
+        else:
+            items = [part.strip() for part in re.split(r"[,\n]", text) if part.strip()]
+        if not items and field.required:
+            return None, gettext("At least one value is required.")
+        if field.item_pattern:
+            for item in items:
+                if not re.fullmatch(field.item_pattern, item):
+                    return None, gettext(
+                        "Every entry must be %(hint)s: %(item)s",
+                        hint=field.item_pattern_hint or gettext("valid"),
+                        item=item,
+                    )
+        return items, ""
+
+    if text == "":
+        if field.required or not field.allow_empty:
+            return None, gettext("This value is required.")
+        return "", ""
+    if field.pattern and not re.fullmatch(field.pattern, text):
+        return None, gettext(
+            "Expected %(hint)s.", hint=field.pattern_hint or gettext("a different format")
+        )
+    return text, ""
+
+
+def _plugin_key(rows: Mapping, name: str) -> str:
+    """Resolve a submitted plugin name to the inventory key it belongs to.
+
+    The panel offers dotted names (``waf_adapters.syslog_waf``) while a form may
+    be posted with the config section name (``syslog_waf``) - both mean the same
+    row, and a save that could not find it would re-render the wrong panel and
+    hide the very error it was reporting.
+    """
+    if name in rows:
+        return name
+    for key, row in rows.items():
+        if row.get("section") == name or key.rsplit(".", 1)[-1] == name:
+            return key
+    return ""
+
+
+def _plugin_form_context(
+    name: str,
+    *,
+    manager,
+    plugin_config: Mapping,
+    notices: list[dict] | None = None,
+    errors: Mapping | None = None,
+    filter_name: str = DEFAULT_SETTINGS_FILTER,
+) -> dict:
+    """Everything ``admin/panels/plugin_config_form.html`` renders."""
+    section = _plugin_section_name(name)
+    runtime = get_runtime()
+    try:
+        config_path = Path(runtime.config.path)
+    except Exception:
+        config_path = Path("config.toml")
+        logger.debug("Plugin form without a resolvable config path", exc_info=True)
+
+    template_defaults, template_path = _read_shipped_defaults(config_path)
+    env_values = _read_env_values(config_path)
+    section_config = plugin_config.get(section) if isinstance(plugin_config, Mapping) else None
+    section_config = section_config if isinstance(section_config, Mapping) else {}
+    template_section = {
+        key.split(".", 1)[1]: value
+        for key, value in template_defaults.items()
+        if key.startswith(f"plugins.{section}.")
+    }
+
+    fields = _plugin_config_fields(manager, name, section, {**template_section, **section_config})
+    resolved = [
+        _plugin_effective_value(
+            field, live=section_config, template=template_section, env_values=env_values
+        )
+        for field in fields
+    ]
+
+    field_errors = dict(errors or {})
+    secret_fields = [entry for entry in resolved if entry["type"] == "secret"]
+    writable_secrets = [entry for entry in secret_fields if entry["writable"]]
+    blocked_secrets = [entry for entry in secret_fields if not entry["writable"]]
+    changed = [entry for entry in resolved if entry["differs_from_default"]]
+    shown = [
+        entry
+        for entry in resolved
+        if filter_name == "all"
+        or (filter_name == "changed" and entry["differs_from_default"])
+        or (filter_name == "shipped" and entry["differs_from_shipped"])
+    ]
+
+    form_notices = list(notices or [])
+    if blocked_secrets:
+        form_notices.append(
+            _notice(
+                "warning",
+                gettext(
+                    "%(fields)s has no .env variable name in this build, so it stays "
+                    "read-only here. Set it in .env and reference it from config.toml.",
+                    fields=", ".join(entry["label"] for entry in blocked_secrets),
+                ),
+            )
+        )
+    if any(entry["restart_required"] for entry in resolved):
+        form_notices.append(
+            _notice(
+                "info",
+                gettext(
+                    "The plugin reads this section once, at activation: a saved value "
+                    "takes effect after the plugin is reloaded or Anteumbra is restarted."
+                ),
+            )
+        )
+
+    return {
+        "plugin_name": name,
+        "plugin_section": section,
+        "plugin_loaded": name in _loaded_plugin_names(manager),
+        "plugin_installed": _plugin_is_installed(manager, name),
+        "fields": shown,
+        "field_count": len(resolved),
+        "shown_count": len(shown),
+        "changed_count": len(changed),
+        "changed_fields": changed,
+        "secret_count": len(writable_secrets),
+        "secret_fields": writable_secrets,
+        "has_schema": bool(fields),
+        "filter_name": filter_name,
+        "config_path": str(config_path),
+        "template_path": str(template_path) if template_path else "",
+        "errors": field_errors,
+        "notices": form_notices,
+        "form_url": "/admin/settings/plugins/config",
+        "save_url": "/admin/settings/plugins/config/save",
+        "panel_url": "/admin/settings/plugin-status",
+    }
+
+
+def _loaded_plugin_names(manager) -> set[str]:
+    """Names (and short names) the running manager has registered."""
+    if manager is None:
+        return set()
+    names: set[str] = set()
+    try:
+        entries = manager.list_all()
+    except Exception:  # noqa: BLE001 - a broken manager must not break the form
+        return names
+    for entry in entries if isinstance(entries, (list, tuple)) else []:
+        name = str((entry or {}).get("name") or "")
+        if name:
+            names.add(name)
+            names.add(name.rsplit(".", 1)[-1])
+    return names
+
+
+def _plugin_is_installed(manager, name: str) -> bool:
+    """Whether a fresh instance could be built in this process."""
+    if manager is None:
+        return False
+    try:
+        rows = manager.available_plugins()
+    except Exception:  # noqa: BLE001 - presence is best-effort here
+        return False
+    return any(str(row.get("name")) == name and row.get("installed") for row in rows or [])
+
+
+
+
 def _sync_plugin_config(manager, plugin_config: Mapping) -> None:
     """Let the manager see the ``[plugins]`` table that is on disk right now.
 
@@ -986,7 +1905,7 @@ def _event_source_state(manager, name: str) -> bool | None:
         return None
 
 
-def _plugin_rows(manager, plugin_config) -> list[dict]:
+def _plugin_rows(manager, plugin_config, *, filter_name: str = DEFAULT_SETTINGS_FILTER) -> list[dict]:
     """Build the plugin inventory: what is loaded plus what could be loaded.
 
     ``list_all()`` answers "what is running"; the inventory answers "what is
@@ -997,7 +1916,9 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
     panel can answer "is this plugin actually installed and working?" without
     the operator reading a log: loaded/active, whether an EventSource is really
     running, the config section the plugin reads, and - only for loaded rows -
-    the ``enabled`` value found there.
+    the ``enabled`` value found there.  A row also carries the plugin's declared
+    settings count and how many of them differ from their defaults, which is what
+    the ``?only=`` filter in the settings page narrows the panel down to.
     """
     loaded_by_name = {}
     try:
@@ -1032,6 +1953,54 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
 
     builtin_names = _builtin_list(plugin_config)
     system_enabled = bool(getattr(manager, "is_enabled", False))
+
+    # Schema and change counts are computed once per section, from the same
+    # resolver the configuration forms use, so a row's "N changed" and the form it
+    # opens can never disagree.  The shipped template is read once for the whole
+    # inventory: doing it per row would re-parse config.toml per plugin.
+    try:
+        config_path = Path(get_runtime().config.path)
+    except Exception:  # noqa: BLE001 - counts degrade to zero, the panel still renders
+        logger.debug("Plugin panel without a resolvable config path", exc_info=True)
+        config_path = Path("config.toml")
+    try:
+        shipped_defaults, _ = _read_shipped_defaults(config_path)
+        env_values = _read_env_values(config_path)
+    except Exception:  # noqa: BLE001 - see above
+        shipped_defaults, env_values = {}, {}
+    change_map: dict[str, list[str]] = {}
+    fields_by_section: dict[str, list] = {}
+    for item in inventory:
+        section = _plugin_section_name(str(item.get("name") or ""))
+        if section in fields_by_section:
+            continue
+        live_section = plugin_config.get(section) if isinstance(plugin_config, Mapping) else None
+        live_section = live_section if isinstance(live_section, Mapping) else {}
+        template_section = {
+            key.split(".", 1)[1]: value
+            for key, value in shipped_defaults.items()
+            if key.startswith(f"plugins.{section}.")
+        }
+        try:
+            fields = _plugin_config_fields(
+                manager, str(item.get("name") or ""), section, {**template_section, **live_section}
+            )
+        except Exception:  # noqa: BLE001 - one broken plugin must not blank the panel
+            logger.debug("Plugin fields unavailable for %s", section, exc_info=True)
+            fields = []
+        fields_by_section[section] = fields
+        changed = []
+        for field in fields:
+            effective = _plugin_effective_value(
+                field,
+                live=live_section,
+                template=template_section,
+                env_values=env_values,
+            )
+            if effective["differs_from_default"]:
+                changed.append(field.name)
+        if changed:
+            change_map[section] = changed
 
     rows = []
     for item in inventory:
@@ -1102,6 +2071,7 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
             snippet_lines += [f"[plugins.{section}]", "enabled = true"]
 
         guard_reason = _runtime_critical_reason(section) or _runtime_critical_reason(name)
+        changed = change_map.get(section) or change_map.get(name) or []
         rows.append(
             {
                 "name": name,
@@ -1124,6 +2094,13 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
                 "registered_name": registered_name,
                 "guard_reason": guard_reason,
                 "snippet": "\n".join(snippet_lines),
+                # Configuration: the plugin's own section is now editable from this
+                # row, so it carries the field and change counts the form is about.
+                "field_count": len(fields_by_section.get(section, [])),
+                "changed_count": len(changed),
+                "changed_fields": list(changed),
+                "configurable": bool(fields_by_section.get(section)),
+                "config_url": f"/admin/settings/plugins/config?plugin={name}&only={filter_name}",
             }
         )
     # Loaded plugins first: the interesting rows are the ones that are not.
@@ -1131,10 +2108,37 @@ def _plugin_rows(manager, plugin_config) -> list[dict]:
     return rows
 
 
-def _plugin_panel_context(manager, plugin_config, *, notices=None, focus_plugin="") -> dict:
+def _plugin_panel_context(
+    manager,
+    plugin_config,
+    *,
+    notices=None,
+    focus_plugin="",
+    filter_name: str = DEFAULT_SETTINGS_FILTER,
+) -> dict:
     """Everything ``admin/panels/plugin_status.html`` renders."""
     _sync_plugin_config(manager, plugin_config)
-    plugins = _plugin_rows(manager, plugin_config) if manager is not None else []
+    plugins = (
+        _plugin_rows(manager, plugin_config, filter_name=filter_name) if manager is not None else []
+    )
+    changed_rows = [row for row in plugins if row["changed_count"]]
+    # The "only changed from shipped defaults" filter on the settings page asks the
+    # panel to show just the plugins that have anything to show at all; with no
+    # such plugin the panel must say so rather than look empty.
+    filter_note = ""
+    if filter_name == "changed":
+        filter_note = gettext(
+            "%(changed)s of %(total)s plugins have values that differ from their defaults.",
+            changed=len(changed_rows),
+            total=len(plugins),
+        )
+    elif filter_name == "shipped":
+        filter_note = gettext(
+            "%(changed)s of %(total)s plugins have values that differ from the shipped "
+            "config.toml defaults.",
+            changed=len(changed_rows),
+            total=len(plugins),
+        )
     return {
         "enabled": bool(getattr(manager, "is_enabled", False)) if manager is not None else False,
         "manager_present": manager is not None,
@@ -1147,19 +2151,27 @@ def _plugin_panel_context(manager, plugin_config, *, notices=None, focus_plugin=
         "source_count": len(manager.event_sources) if manager is not None else 0,
         "notices": list(notices or []),
         "focus_plugin": focus_plugin,
+        "filter_name": filter_name,
+        "filter_note": filter_note,
+        "changed_plugin_count": len(changed_rows),
+        "configured_count": sum(1 for row in plugins if row["configurable"]),
     }
 
 
 @settings_bp.route("/settings/plugin-status")
 @require_auth
 def settings_plugin_status():
-    """Plugin inventory panel for Settings page."""
+    """Plugin inventory panel for Settings page.
+
+    ``?only=`` narrows the inventory the same way the settings page does, so the
+    panel keeps the readability filter when it is re-rendered on its own.
+    """
     try:
         pm = _plugin_panel_manager()
         plugin_config = _plugin_config_table(get_runtime())
         return render_page(
             "admin/panels/plugin_status.html",
-            **_plugin_panel_context(pm, plugin_config),
+            **_plugin_panel_context(pm, plugin_config, filter_name=_settings_filter()),
         )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] plugin status failed: {e}", exc_info=True)
@@ -1557,4 +2569,429 @@ def settings_plugin_control():
         )
     except Exception as exc:  # noqa: BLE001 - the panel itself must still answer
         current_app.logger.error(f"[SETTINGS] plugin panel render failed: {exc}", exc_info=True)
+        return f'<div style="color:#ff4444;">Error: {exc}</div>'
+
+
+# -- Plugin configuration: write the plugin's own section ---------------------
+#
+# Saving goes through the pipeline the plugin-control endpoint already uses:
+# timestamped backup -> load_toml_file -> mutate -> write_toml_file ->
+# validate_config_file with delta validation -> live apply.  Secrets never enter
+# that path: they go to .env through ``write_env_value`` and the plugin keeps
+# reading them through the ``${VAR}`` placeholder in config.toml, so the
+# credential is never written to a file that documents itself as safe to commit.
+
+
+def _write_env_values(env_path: Path, values: Mapping[str, str]) -> tuple[list[str], str]:
+    """Write ``.env`` values one by one; returns ``(written_keys, error)``.
+
+    ``write_env_value`` is the CLI's writer, so the file keeps its comments and
+    unrelated variables.  A failure part-way is reported rather than hidden: the
+    caller names the keys that did land.
+    """
+    written: list[str] = []
+    for key, value in values.items():
+        try:
+            write_env_value(env_path, key, value)
+            os.environ[key] = value
+        except Exception as exc:  # noqa: BLE001 - reported inline, never a 500
+            logger.error("Plugin secret write failed for %s", key, exc_info=True)
+            return written, str(exc) or exc.__class__.__name__
+        written.append(key)
+    return written, ""
+
+
+def _apply_plugin_section_live(manager, name: str) -> tuple[str, str]:
+    """Reload one plugin so it re-reads its section; returns ``(outcome, detail)``.
+
+    Only a plugin that is already registered is reloaded: unregistering and
+    re-registering a *running* one is how a settings save would otherwise stop a
+    working adapter to change an unrelated field.  A plugin that is not loaded
+    picks the new values up through the normal activation path, and one that
+    cannot be reloaded is reported as restart-required instead of as a success.
+    """
+    if manager is None:
+        return "restart", gettext("no plugin manager is attached to this runtime")
+    if not getattr(manager, "is_enabled", False):
+        return "restart", gettext("the plugin system is switched off in this process")
+    try:
+        target = manager.loaded_name(name) or manager.loaded_name(
+            _plugin_section_name(name)
+        )
+    except Exception:  # noqa: BLE001 - an older manager may not expose it
+        target = None
+    if not target:
+        return "inactive", ""
+    try:
+        if not manager.unregister(target):
+            return "inactive", ""
+        if not manager.load_plugin(name):
+            return "failed", gettext("the plugin did not activate")
+    except Exception as exc:  # noqa: BLE001 - reported inline, never a 500
+        logger.error("Plugin live reload failed for %s", name, exc_info=True)
+        return "failed", str(exc) or exc.__class__.__name__
+    return "live", ""
+
+
+def _plugin_config_notices(
+    name: str,
+    *,
+    changed_keys: list[str],
+    secret_keys: list[str],
+    backup_name: str,
+    outcome: str,
+    detail: str,
+) -> list[dict]:
+    """What an operator is told after saving one plugin's settings."""
+    notices: list[dict] = []
+    if changed_keys or secret_keys:
+        if outcome == "live":
+            notices.append(
+                _notice(
+                    "success",
+                    gettext(
+                        "Saved %(count)s value(s) for %(name)s and reloaded the plugin, so "
+                        "the running runtime uses them now.",
+                        count=len(changed_keys) + len(secret_keys),
+                        name=name,
+                    ),
+                )
+            )
+        elif outcome == "inactive":
+            notices.append(
+                _notice(
+                    "success",
+                    gettext(
+                        "Saved %(count)s value(s) for %(name)s. The plugin is not loaded right "
+                        "now, so they apply the next time it activates.",
+                        count=len(changed_keys) + len(secret_keys),
+                        name=name,
+                    ),
+                )
+            )
+        elif outcome == "failed":
+            notices.append(
+                _notice(
+                    "warning",
+                    gettext(
+                        "Saved %(count)s value(s) for %(name)s, but reloading the plugin "
+                        "failed (%(detail)s). A restart is required; the previous instance "
+                        "may have been unloaded.",
+                        count=len(changed_keys) + len(secret_keys),
+                        name=name,
+                        detail=detail or gettext("the plugin did not activate"),
+                    ),
+                )
+            )
+        else:
+            notices.append(
+                _notice(
+                    "warning",
+                    gettext(
+                        "Saved %(count)s value(s) for %(name)s to disk, but they could not be "
+                        "applied to the running runtime (%(detail)s). A restart is required.",
+                        count=len(changed_keys) + len(secret_keys),
+                        name=name,
+                        detail=detail,
+                    ),
+                )
+            )
+    if secret_keys:
+        notices.append(
+            _notice(
+                "info",
+                gettext(
+                    "%(count)s secret(s) written to .env. Their values are never shown or "
+                    "logged; the field only reports whether one is set.",
+                    count=len(secret_keys),
+                ),
+            )
+        )
+    if backup_name:
+        notices.append(_notice("info", gettext("Backup kept: %(file)s", file=backup_name)))
+    return notices
+
+
+def _plugin_config_save(runtime, manager, plugin_config: Mapping, name: str):
+    """Validate, write and apply one plugin's submitted settings."""
+    section = _plugin_section_name(name)
+    if not section or not _PLUGIN_FIELD_RE.fullmatch(section):
+        return [], {
+            "form": gettext("Unknown plugin: %(name)s", name=name or "?"),
+        }
+
+    config_path = Path(runtime.config.path)
+    template_defaults, _ = _read_shipped_defaults(config_path)
+    env_values = _read_env_values(config_path)
+    section_config = plugin_config.get(section) if isinstance(plugin_config, Mapping) else None
+    section_config = section_config if isinstance(section_config, Mapping) else {}
+    template_section = {
+        key.split(".", 1)[1]: value
+        for key, value in template_defaults.items()
+        if key.startswith(f"plugins.{section}.")
+    }
+    fields = _plugin_config_fields(
+        manager, name, section, {**template_section, **section_config}
+    )
+    if not fields:
+        return [], {
+            "form": gettext("%(name)s declares no settings this build can write.", name=name)
+        }
+
+    errors: dict[str, str] = {}
+    config_updates: dict[str, Any] = {}
+    secret_values: dict[str, str] = {}
+
+    for field in fields:
+        if field.type == "secret":
+            # A submitted secret is write-only: an empty field means "leave the
+            # stored value alone", which is also how the .env section behaves.
+            raw = request.form.get(f"secret__{field.name}")
+            if raw is None or str(raw).strip() == "":
+                continue
+            effective = _plugin_effective_value(
+                field, live=section_config, template=template_section, env_values=env_values
+            )
+            env_key = field.env_key or str(effective.get("env_var") or "")
+            if not env_key or not _PLUGIN_FIELD_RE.fullmatch(env_key):
+                errors[field.name] = gettext(
+                    "No .env variable is declared for this secret, so it cannot be "
+                    "written safely from here."
+                )
+                continue
+            value, error = _coerce_plugin_field_value(field, raw)
+            if error:
+                errors[field.name] = error
+                continue
+            secret_values[env_key] = str(value)
+            continue
+
+        form_key = f"field__{field.name}"
+        if field.type == "toggle":
+            raw = "true" if request.form.get(form_key) in ("1", "true", "on", "yes") else "false"
+        else:
+            if form_key not in request.form:
+                continue  # a field the form did not render is not a field to blank
+            raw = request.form.get(form_key)
+        value, error = _coerce_plugin_field_value(field, raw)
+        if error:
+            errors[field.name] = error
+            continue
+        if not field_values_equal(value, section_config.get(field.name, _MISSING)):
+            config_updates[f"plugins.{section}.{field.name}"] = value
+
+    if errors:
+        return [], errors
+
+    if not config_updates and not secret_values:
+        return [_notice("info", gettext("Nothing to save: every value is unchanged."))], {}
+
+    backup_name = ""
+    if config_updates:
+        try:
+            ok, error, backup_name = _write_config_values(config_path, config_updates)
+        except Exception as exc:  # noqa: BLE001 - a bad config must not become a 500
+            logger.error("Plugin config write failed for %s", name, exc_info=True)
+            return [
+                _notice(
+                    "error",
+                    gettext(
+                        "Config write failed for %(name)s: %(detail)s",
+                        name=name,
+                        detail=str(exc) or exc.__class__.__name__,
+                    ),
+                )
+            ], {}
+        if not ok:
+            return [
+                _notice(
+                    "error",
+                    gettext(
+                        "Config write refused for %(name)s: %(detail)s",
+                        name=name,
+                        detail=error or gettext("validation failed"),
+                    ),
+                )
+            ], {}
+
+    secret_keys: list[str] = []
+    if secret_values:
+        env_path = config_path.parent / ".env"
+        secret_keys, secret_error = _write_env_values(env_path, secret_values)
+        if secret_error:
+            # The config half may already be on disk; say exactly how far it got.
+            notices = [
+                _notice(
+                    "error",
+                    gettext(
+                        ".env write failed after %(written)s of %(total)s secret(s) were "
+                        "stored (%(detail)s). Nothing else was changed.",
+                        written=len(secret_keys),
+                        total=len(secret_values),
+                        detail=secret_error,
+                    ),
+                )
+            ]
+            return notices, {}
+
+    reload_error = _reload_runtime_config(runtime)
+    if reload_error:
+        return [
+            _notice(
+                "warning",
+                gettext(
+                    "Config written and the runtime reload failed (%(detail)s); the running "
+                    "plugin state was left untouched. A restart is required.",
+                    detail=reload_error,
+                ),
+            ),
+            _notice("info", gettext("Backup kept: %(file)s", file=backup_name)),
+        ], {}
+
+    plugin_config_after = _plugin_config_table(runtime)
+    if manager is not None:
+        try:
+            # A fresh instance must activate with what is on disk now.
+            manager.apply_plugin_config(plugin_config_after)
+        except Exception:  # noqa: BLE001 - older managers may not expose this
+            logger.debug("Plugin manager refused the refreshed plugin config", exc_info=True)
+    outcome, detail = _apply_plugin_section_live(manager, name)
+
+    notices = _plugin_config_notices(
+        name,
+        changed_keys=sorted(config_updates),
+        secret_keys=secret_keys,
+        backup_name=backup_name,
+        outcome=outcome,
+        detail=detail,
+    )
+    return notices, {}
+
+
+@settings_bp.route("/settings/plugins/config")
+@require_auth
+def settings_plugin_config_form():
+    """Render one plugin's typed configuration form.
+
+    The form is fetched per plugin rather than rendered with every row: the
+    memory-shell probe alone declares seventeen settings, and a page that renders
+    every plugin's form at once is the long, unreadable page this work exists to
+    fix.  An unknown plugin is still answered - with an inline error inside the
+    form target - so the panel never replaces itself with a 500.
+    """
+    name = str(request.args.get("plugin") or "").strip()
+    try:
+        manager = _plugin_panel_manager()
+        plugin_config = _plugin_config_table(get_runtime())
+        if not name:
+            notice = [_notice("error", gettext("No plugin was named."))]
+            return render_page(
+                "admin/panels/plugin_config_form.html",
+                plugin_name="",
+                plugin_section="",
+                fields=[],
+                notices=notice,
+                errors={},
+                filter_name=_settings_filter(),
+                form_url="/admin/settings/plugins/config",
+                save_url="/admin/settings/plugins/config/save",
+                panel_url="/admin/settings/plugin-status",
+                field_count=0,
+                changed_count=0,
+                secret_count=0,
+                has_schema=False,
+                config_path="",
+                template_path="",
+            )
+        return render_page(
+            "admin/panels/plugin_config_form.html",
+            **_plugin_form_context(
+                name,
+                manager=manager,
+                plugin_config=plugin_config,
+                filter_name=_settings_filter(),
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - the form must still answer
+        current_app.logger.error(f"[SETTINGS] plugin config form failed: {exc}", exc_info=True)
+        return f'<div style="color:#ff4444;">Error: {exc}</div>'
+
+
+@settings_bp.route("/settings/plugins/config/save", methods=["POST"])
+@require_auth
+def settings_plugin_config_save():
+    """Save one plugin's own ``[plugins.<name>]`` section.
+
+    Validation errors render back into the form next to the field that caused
+    them, and nothing is written when any field is rejected.  A successful save
+    reports whether the running runtime picked the values up or whether a restart
+    is required - never both, and never a bare "saved".
+    """
+    name = str(request.form.get("plugin") or "").strip()
+    errors: dict[str, str] = {}
+    notices: list[dict] = []
+    try:
+        manager = _plugin_panel_manager()
+        runtime = get_runtime()
+        plugin_config = _plugin_config_table(runtime)
+        rows = {row["name"]: row for row in _plugin_rows(manager, plugin_config)}
+        resolved = _plugin_key(rows, name)
+        if not resolved:
+            notices = [_notice("error", gettext("Unknown plugin: %(name)s", name=name or "?"))]
+        else:
+            name = resolved
+            notices, errors = _plugin_config_save(runtime, manager, plugin_config, name)
+    except Exception as exc:  # noqa: BLE001 - inline error, never a 500
+        current_app.logger.error(f"[SETTINGS] plugin config save failed: {exc}", exc_info=True)
+        notices = [
+            _notice("error", gettext("Plugin control failed: %(detail)s", detail=str(exc)))
+        ]
+    filter_name = _settings_filter()
+
+    # A field error keeps the operator in the form they were editing; a save that
+    # went through re-renders the whole inventory, so the row comes back with its
+    # resulting state (and the count of values that now differ from defaults).
+    if not errors and name:
+        try:
+            manager = _plugin_panel_manager()
+            plugin_config = _plugin_config_table(get_runtime())
+            return render_page(
+                "admin/panels/plugin_status.html",
+                **_plugin_panel_context(
+                    manager,
+                    plugin_config,
+                    notices=notices,
+                    focus_plugin=name,
+                    filter_name=filter_name,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - still answer the request
+            current_app.logger.error(
+                "[SETTINGS] plugin panel re-render failed: %s", exc, exc_info=True
+            )
+            return f'<div style="color:#ff4444;">Error: {exc}</div>'
+    try:
+        manager = _plugin_panel_manager()
+        plugin_config = _plugin_config_table(get_runtime())
+        rows = {row["name"]: row for row in _plugin_rows(manager, plugin_config)}
+        if _plugin_key(rows, name):
+            return render_page(
+                "admin/panels/plugin_config_form.html",
+                **_plugin_form_context(
+                    name,
+                    manager=manager,
+                    plugin_config=plugin_config,
+                    notices=notices,
+                    errors=errors,
+                    filter_name=filter_name,
+                ),
+            )
+        return render_page(
+            "admin/panels/plugin_status.html",
+            **_plugin_panel_context(
+                manager, plugin_config, notices=notices, focus_plugin=name, filter_name=filter_name
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - the page must still answer
+        current_app.logger.error(f"[SETTINGS] plugin form re-render failed: {exc}", exc_info=True)
         return f'<div style="color:#ff4444;">Error: {exc}</div>'

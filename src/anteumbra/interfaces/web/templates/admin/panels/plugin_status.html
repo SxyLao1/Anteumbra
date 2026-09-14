@@ -15,7 +15,12 @@
      The controls are HTMX-only on purpose: no data-action, therefore no new
      frontend strings, and the shell already adds X-CSRFToken to every htmx
      request, which is what makes these POSTs CSRF-protected like every other
-     settings write. -->
+     settings write.
+
+     v2.3: every row that declares settings now opens a typed configuration form
+     for its own [plugins.<name>] section, and carries how many of those settings
+     differ from their defaults, so the inventory answers "what is configured
+     here" and not only "what is running". #}
 <div style="display:flex;flex-direction:column;gap:8px;" data-plugin-panel="1">
   {% for n in notices %}
   <div data-plugin-notice="{{ n.level }}" style="padding:6px 8px;border-radius:3px;font-size:10px;line-height:1.6;background:#0a0a0a;border-left:3px solid {{ '#ff4444' if n.level == 'error' else ('#ffaa00' if n.level == 'warning' else ('#00ff41' if n.level == 'success' else '#4a9eff')) }};color:{{ '#ff8888' if n.level == 'error' else ('#ffcc66' if n.level == 'warning' else ('#8fe38f' if n.level == 'success' else 'var(--color-text-secondary)')) }};">{{ n.text }}</div>
@@ -29,7 +34,15 @@
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Detectors:') }} <strong style="color:#00ff41;">{{ detector_count }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Notifiers:') }} <strong style="color:#00ff41;">{{ notifier_count }}</strong></span>
     <span style="color:var(--color-text-muted);font-size:10px;">{{ _('Sources:') }} <strong style="color:#00ff41;">{{ source_count }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:10px;" data-plugin-configured="{{ configured_count }}">{{ _('Configured:') }} <strong style="color:{{ '#ffaa00' if changed_plugin_count else '#00ff41' }};">{{ configured_count }}</strong></span>
+    {% if changed_plugin_count %}
+    <span style="color:#ffaa00;font-size:10px;" data-plugin-changed-plugins="{{ changed_plugin_count }}">{{ _('%(count)s with changed values', count=changed_plugin_count) }}</span>
+    {% endif %}
   </div>
+
+  {% if filter_note %}
+  <p style="color:var(--color-text-muted);font-size:10px;margin:0;line-height:1.6;" data-plugin-filter-note="{{ filter_name }}">{{ filter_note }}</p>
+  {% endif %}
 
   {% if not enabled %}
   <p style="color:#ffaa00;font-size:10px;margin:0;line-height:1.6;">
@@ -86,6 +99,14 @@
         {%- else %} · {{ _('enabled is not reported for a plugin that is not loaded') }}{% endif %}
       </div>
 
+      {% if p.configurable %}
+      <div data-plugin-settings="1" style="color:var(--color-text-muted);font-size:9px;margin-top:2px;">
+        {{ _('Settings:') }} <strong style="color:#8fe38f;">{{ p.field_count }}</strong>
+        {%- if p.changed_count %} · <span style="color:#ffaa00;" data-plugin-changed="{{ p.changed_count }}">{{ _('%(count)s differ from defaults', count=p.changed_count) }}</span>
+        {%- else %} · {{ _('all at defaults') }}{% endif %}
+      </div>
+      {% endif %}
+
       {% if not p.loaded %}
       <div style="color:var(--color-text-secondary);font-size:9px;line-height:1.6;margin-top:4px;padding-left:16px;">
         {% for reason in p.reasons %}
@@ -105,6 +126,12 @@
 
       {% if p.installed %}
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;padding-left:16px;">
+        {% if p.configurable %}
+        <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
+                data-plugin-configure="{{ p.name }}"
+                hx-get="{{ p.config_url }}" hx-target="#settings-plugins" hx-swap="innerHTML"
+                hx-indicator="#settings-plugins">{{ _('Configure') }}</button>
+        {% endif %}
         {% if p.enabled %}
         <button class="btn btn-ghost btn-sm" type="button" style="font-size:9px;padding:2px 8px;"
                 hx-post="/admin/settings/plugins/control" hx-target="#settings-plugins" hx-swap="innerHTML"
@@ -138,4 +165,9 @@
     {{ _('No plugin is available in this build.') }}
   </p>
   {% endif %}
+
+  {# One shared target, not one per row: the form is fetched for the plugin the
+     operator clicked and replaces whatever was open, so a panel with ten plugins
+     still renders one form's worth of markup. #}
+  <div id="plugin-config-form" data-plugin-config-target="1"></div>
 </div>

@@ -51,6 +51,32 @@ class StdoutLoggerPlugin(Plugin, Notifier):
             "wal_replayed",
         ]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.stdout_logger]``: the two switches ``activate()`` reads.
+
+        Declared next to ``activate()`` so the settings page and the plugin can
+        never disagree about what the defaults are.
+        """
+        return [
+            {
+                "name": "color",
+                "type": "toggle",
+                "default": True,
+                "label": "ANSI color",
+                "description": "Colorize alert lines on the terminal.",
+            },
+            {
+                "name": "verbose",
+                "type": "toggle",
+                "default": False,
+                "label": "Verbose output",
+                "description": (
+                    "Also print clean-file scan results and every other event type."
+                ),
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         self._color = config.get("color", True)
         self._verbose = config.get("verbose", False)

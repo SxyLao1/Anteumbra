@@ -54,6 +54,30 @@ class QuarantineHandlerPlugin(Plugin):
     def supported_events(self) -> List[str]:
         return ["file_quarantined"]
 
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """``[plugins.quarantine_handler]``: what ``activate()`` reads.
+
+        The threshold is consumed at activation time (``self._batch_threshold``),
+        so the settings page reports this change as restart-required rather than
+        pretending a running plugin picked it up.
+        """
+        return [
+            {
+                "name": "batch_threshold",
+                "type": "number",
+                "default": 50,
+                "min": 1,
+                "max": 100000,
+                "label": "Batch notification threshold",
+                "description": (
+                    "Quarantine successes are aggregated per site and announced once "
+                    "this many files have been quarantined."
+                ),
+                "restart_required": True,
+            },
+        ]
+
     def activate(self, config: Dict[str, Any]) -> None:
         try:
             self._batch_threshold = max(1, int(config.get("batch_threshold", 50)))

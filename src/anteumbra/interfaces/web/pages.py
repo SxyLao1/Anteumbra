@@ -52,6 +52,9 @@ _NAV_TITLES = {
     "memory-shell/forensics": "Forensics",
     "logs/analyzer": "Log Analyzer",
     "settings": "Settings",
+    # The advanced config editor lives at its own URL so the settings page can
+    # link to it; the title is what the shell shows for that navigation.
+    "config": "Config Editor",
 }
 
 
