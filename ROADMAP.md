@@ -28,7 +28,10 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Architecture guardrails | Layer/import boundaries, source-only test imports, and Wheel/source parity are enforced; resolved debt stays out of builds. |
 | Runtime ownership | One `RuntimeLifecycle` owns startup, status, reverse-order shutdown, and per-app login throttling without mutable Web/launcher module state. |
 | Integration contracts | `RuntimeContainer` exposes required services through focused Domain Protocols; Web routes and plugins no longer reach Metrics, cluster, ThreatGraph, or Notifier private state. |
-| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. |
+| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. || Memory shell | Detection runs a token-guarded JSP probe that enumerates what the servlet container registered in memory, reports honest findings (including what cannot be dumped), keeps artifacts under `data/forensics`, and can remediate a component it identified - verified against a real Tomcat 7. |
+| Multi-site UI | A navigation site switcher scopes detection, quarantine and cluster views; the overview keeps global figures and adds a per-site table. |
+| Agent integration | `anteumbra mcp serve` exposes the instance over MCP (read-only tools by default, writes gated behind `--allow-write`) and `anteumbra skill export` ships an operator skill for a user's own agent. |
+| Configuration UX | `/admin/config` edits the real TOML with comment-preserving single-value writes, validation, timestamped backups and version rollback; every plugin is configurable from the settings page with its effective value and source. |
 
 ### Known Truths
 
@@ -60,6 +63,11 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | 1.0.33 | PID-reuse-safe runtime ownership and environment-neutral installation guidance | Released to PyPI |
 | 1.0.34 | Admin frontend modules, delegated actions, and symmetric HTMX lifecycle ownership | Included in v1.0.35 |
 | 1.0.35 | Dependency inversion, focused Web/CLI/Notifier/ThreatGraph/Registry/Monitor modules, expanded quality gates, and release validation | Released to PyPI |
+| 1.0.36 | Memory-shell detection (probe plugin, self-exclusion for Anteumbra's own artifacts) | Released to PyPI |
+| 1.0.37 | Vanished-file races: a deleted file is a DEBUG line plus a metric, never an error traceback | Released to PyPI |
+| 1.0.38 | Multi-site UI, memory-shell forensics and remediation, plugin control, MCP server and agent skill | Released to PyPI |
+| 1.0.39 | Advanced configuration editor with rollback; real per-plugin configuration | Released to PyPI |
+| 1.0.40 | Translation placeholder repair (the settings page crash) and an i18n placeholder guard test | Released to PyPI |
 
 ---
 
@@ -105,9 +113,9 @@ wheel/source/Docker/PyPI checklist.
 
 | Priority | Work Item |
 |----------|-----------|
-| P0 | Add a site selector and complete site-scoped dashboard/navigation state without changing the underlying isolation model. |
+| P0 | ~~Add a site selector and complete site-scoped dashboard/navigation state without changing the underlying isolation model.~~ Done in 1.0.38. |
 | P0 | Publish developer templates for plugins, log analyzers, scanners, and adapters against the existing Protocols. |
-| P1 | Add contract tests for third-party modules and validate plugin metadata/configuration before activation. |
+| P1 | Add contract tests for third-party modules and validate plugin metadata/configuration before activation. (Plugin configuration is now schema-driven and validated on save; contract tests for third-party modules are still open.) |
 | P1 | Add explicit operator-facing migration and backup flows for multi-site instances. |
 | P2 | Introduce typed event payload schemas while preserving the current in-process event bus. |
 
