@@ -20,7 +20,9 @@
     recordSelections: Object.create(null),
     quarantineSelections: Object.create(null),
     activeRecordScope: null,
-    activeQuarantineScope: null
+    activeQuarantineScope: null,
+    detailRequestId: 0,
+    activeDetail: null
   };
   var dangerousTokens = /(eval|assert|system|exec|passthru|shell_exec|popen|proc_open)\s*\(|\b(base64_decode|gzinflate|str_rot13|gzuncompress)\s*\(|\b(file_get_contents|file_put_contents|move_uploaded_file)\s*\(|\b\$_(?:GET|POST|REQUEST|SERVER|FILES|COOKIE)\b/gi;
 
@@ -294,6 +296,10 @@
   function showSource(label, query, trigger) {
     var modal = app.ui.showModal('file-viewer-modal');
     if (!modal) return;
+    var requestId = state.sourceRequestId = (state.sourceRequestId || 0) + 1;
+    function isCurrentSource() {
+      return requestId === state.sourceRequestId && modal.getAttribute('aria-hidden') === 'false';
+    }
     var path = document.getElementById('fv-file-path');
     var size = document.getElementById('fv-file-size');
     var content = document.getElementById('fv-content');
@@ -302,6 +308,8 @@
     if (content) content.replaceChildren();
     app.http.json(scopedUrl('/admin/file/content?' + query, trigger), { headers: { 'HX-Request': 'true' } })
       .then(function (result) {
+        // The shared viewer must not accept a late result from a prior sample.
+        if (!isCurrentSource()) return;
         if (path) path.textContent = result.path || label;
         if (size) {
           var displaySize = result.size > 1024 ? (result.size / 1024).toFixed(1) + ' KB' : result.size + ' B';
@@ -319,6 +327,7 @@
         }
       })
       .catch(function (error) {
+        if (!isCurrentSource()) return;
         if (size) size.textContent = 'ERROR';
         if (content) content.textContent = app.t('Source is no longer available: %(message)s', { message: error.message });
       });
@@ -346,7 +355,69 @@
     if (modal) app.ui.showModal(modal);
   }
 
-  function closeRecordDetail() { app.ui.hideModal('record-detail-modal-overlay'); }
+  function detailUrl(detail) {
+    return '/admin/records/detail?file_path=' + encodeURIComponent(detail.path) +
+      '&site=' + encodeURIComponent(detail.siteId || '');
+  }
+
+  function detailIsCurrent(detail, requestId) {
+    var overlay = document.getElementById('record-detail-modal-overlay');
+    return requestId === state.detailRequestId && state.activeDetail &&
+      state.activeDetail.path === detail.path && state.activeDetail.siteId === detail.siteId &&
+      overlay && overlay.getAttribute('aria-hidden') === 'false';
+  }
+
+  function paintDetailReceipt(receipt) {
+    var box = document.getElementById('record-detail-modal');
+    var target = box && box.querySelector('[data-detail-receipt]');
+    if (!target || !receipt) return;
+    target.hidden = false;
+    target.dataset.outcome = receipt.outcome;
+    target.textContent = receipt.message;
+  }
+
+  function showDetailRefresh() {
+    var button = document.querySelector('#record-detail-modal [data-detail-refresh]');
+    if (button) button.hidden = false;
+  }
+
+  function loadRecordDetail(detail, receipt, initial) {
+    var box = document.getElementById('record-detail-modal');
+    if (!box) return;
+    var requestId = ++state.detailRequestId;
+    if (initial) box.innerHTML = '<div class="logs-placeholder">Loading detail...</div>';
+    box.setAttribute('aria-busy', 'true');
+    app.http.text(detailUrl(detail), { headers: { 'HX-Request': 'true' } }).then(function (html) {
+      if (!detailIsCurrent(detail, requestId)) return;
+      box.innerHTML = html;
+      // Aggregate openings intentionally omit a site.  Once the server has
+      // resolved the unique record, retain its actual site for any follow-up
+      // response instead of guessing that an unlabelled trigger is legacy.
+      var resolved = box.querySelector('.record-workbench[data-site-id]');
+      if (resolved && state.activeDetail === detail) state.activeDetail.siteId = resolved.dataset.siteId || detail.siteId;
+      box.removeAttribute('aria-busy');
+      app.processHtmx(box);
+      paintDetailReceipt(receipt);
+    }).catch(function (error) {
+      if (!detailIsCurrent(detail, requestId)) return;
+      box.removeAttribute('aria-busy');
+      if (initial) box.textContent = app.t('Detail failed: %(message)s', { message: error.message });
+      else {
+        var current = box.querySelector('.record-workbench');
+        var warning = current ? current.dataset.readbackFailed : '';
+        paintDetailReceipt({ outcome: 'failed', message: (receipt ? receipt.message + ' — ' : '') + warning + ' ' + error.message });
+        showDetailRefresh();
+      }
+    });
+  }
+
+  function closeRecordDetail() {
+    // A close invalidates every outstanding response.  Without it, a slow detail
+    // fetch could paint a modal the operator deliberately dismissed.
+    state.detailRequestId += 1;
+    state.activeDetail = null;
+    app.ui.hideModal('record-detail-modal-overlay');
+  }
 
   // One way to open a detection's detail, used by the ledger, the overview
   // quadrant, the scanner results and the cluster list alike.
@@ -356,16 +427,73 @@
     var box = document.getElementById('record-detail-modal');
     var overlay = document.getElementById('record-detail-modal-overlay');
     if (!box || !overlay) return;
-    box.innerHTML = '<div class="logs-placeholder">Loading detail...</div>';
+    var siteId = (siteApi() && siteApi().rowSite(trigger)) || trigger.dataset.siteId || (siteApi() && siteApi().current()) || '';
+    var detail = { path: path, siteId: siteId };
+    state.activeDetail = detail;
     app.ui.showModal(overlay);
-    app.http.text(scopedUrl('/admin/records/detail?file_path=' + encodeURIComponent(path), trigger), {
-      headers: { 'HX-Request': 'true' }
-    }).then(function (html) {
-      box.innerHTML = html;
-      app.processHtmx(box);
+    loadRecordDetail(detail, null, true);
+  }
+
+  function detailSource(trigger) {
+    var qid = trigger.dataset.quarantineId;
+    if (qid) showSource('Quarantine: ' + qid, 'qid=' + encodeURIComponent(qid), trigger);
+    else if (trigger.dataset.filePath) showSource(trigger.dataset.filePath, 'path=' + encodeURIComponent(trigger.dataset.filePath), trigger);
+  }
+
+  function detailResponse(trigger) {
+    var path = trigger.dataset.filePath;
+    var siteId = trigger.dataset.siteId;
+    var action = trigger.dataset.batchAction;
+    if (!path || !siteId || !action || trigger.disabled) return;
+    if (!app.confirm(trigger.dataset.confirmMessage || '')) return;
+    var originalLabel = trigger.textContent;
+    var detailAtStart = state.activeDetail;
+    var operationId = state.detailRequestId;
+    function isStillThisDetail() {
+      var overlay = document.getElementById('record-detail-modal-overlay');
+      return state.activeDetail === detailAtStart && state.detailRequestId === operationId && overlay && overlay.getAttribute('aria-hidden') === 'false';
+    }
+    var controls = document.querySelectorAll('.record-detail-response');
+    controls.forEach(function (control) { control.disabled = true; });
+    trigger.textContent = trigger.dataset.pendingLabel || originalLabel;
+    var body = new URLSearchParams({ action: action, site_id: siteId });
+    body.append('file_paths[]', path);
+    app.http.json('/admin/records/batch', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
+    }).then(function (result) {
+      var item = (result.items || []).find(function (candidate) {
+        return candidate.file_path === path && (!candidate.site_id || candidate.site_id === siteId);
+      });
+      if (!item || item.outcome !== 'success') {
+        var outcome = (item && item.outcome) || 'failed';
+        var message = (item && item.error) || result.error || app.t('The response did not complete.');
+        if (isStillThisDetail()) {
+          paintDetailReceipt({ outcome: outcome, message: originalLabel + ': ' + path + ' (' + siteId + ') — ' + message });
+          controls.forEach(function (control) { control.disabled = false; });
+          trigger.textContent = originalLabel;
+        }
+        return;
+      }
+      // The mutation still happened if its modal was closed. Refresh the list,
+      // but never paint the old object's receipt into a newly opened object.
+      document.dispatchEvent(new Event('anteumbra:stats-refresh'));
+      refreshRecords(visibleContainer('[id^="records-table-container"]'));
+      if (!isStillThisDetail()) return;
+      var receipt = { outcome: 'success', message: trigger.dataset.successMessage || (originalLabel + ': ' + path + ' (' + siteId + ')') };
+      paintDetailReceipt(receipt);
+      var active = state.activeDetail;
+      if (active === detailAtStart && active.path === path && active.siteId === siteId) loadRecordDetail(active, receipt, false);
     }).catch(function (error) {
-      box.textContent = 'Detail failed: ' + error.message;
+      if (isStillThisDetail()) {
+        paintDetailReceipt({ outcome: 'failed', message: originalLabel + ': ' + path + ' (' + siteId + ') — ' + error.message });
+        controls.forEach(function (control) { control.disabled = false; });
+        trigger.textContent = originalLabel;
+      }
     });
+  }
+
+  function refreshCurrentDetail() {
+    if (state.activeDetail) loadRecordDetail(state.activeDetail, null, false);
   }
 
   function reviewStatus() {
@@ -508,6 +636,10 @@
         if (path) showSource(path, 'path=' + encodeURIComponent(path), context.element);
       } },
       'records.detail-open': { handler: function (context) { openRecordDetail(context.element); } },
+      'records.detail-ledger': { handler: function (context) {
+        closeRecordDetail();
+        window.location.assign(context.element.href);
+      } },
       'records.mark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, true, context.element); } },
       'records.unmark-fp': { handler: function (context) { reviewRecord(context.element.dataset.filePath, false, context.element); } },
       'records.status': { handler: function (context) { switchStatus(context.element.dataset.status); } },
@@ -522,7 +654,10 @@
       'quarantine.detail-close': { handler: closeQuarantineDetail },
       'records.detail-close': { handler: closeRecordDetail },
       'records.detail-rearm': { handler: function (context) { rearmRecordAlert(context.element); } },
-      'records.detail-profile': { handler: function (context) { openProfileFromRecord(context.element); } }
+      'records.detail-profile': { handler: function (context) { openProfileFromRecord(context.element); } },
+      'records.detail-source': { handler: function (context) { detailSource(context.element); } },
+      'records.detail-response': { handler: function (context) { detailResponse(context.element); } },
+      'records.detail-refresh': { handler: refreshCurrentDetail }
     },
     mount: function (root) {
       restoreSelections(root);

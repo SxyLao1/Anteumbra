@@ -57,6 +57,7 @@ platforms need separate acceptance against their own implementations.
 | Navigation, bookmarks, back, site scope, language, themes, phone layout (G01/G03/U01) | `test_shell_navigation.py` |
 | Login, password change, logout (G02) | `test_operator_admin.py`, `test_password_entrypoints.py` |
 | Detection, evidence, source, FP/undo, re-alert, record deletion (R01–R04) | `test_detection_flow.py`, `test_record_actions.py`, `test_review_edges.py` |
+| Duty queue aggregation, site scope, grouped review, nested source escape, and response receipts (D03) | `test_duty_workflow.py` |
 | Quarantine, restore, permanent deletion and history (Q01) | `test_detection_flow.py`, `test_record_actions.py`, `test_review_edges.py` |
 | WAF profiles, reports, selected IPs, file clusters (P01–P03) | `test_investigation_workflow.py`, `test_integrations.py` |
 | New/known scan findings, stop, failure, history, report, partial quarantine (S01–S03) | `test_scanner_workflow.py`, `test_management_flows.py` |

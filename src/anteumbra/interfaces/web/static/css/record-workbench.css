@@ -1,0 +1,53 @@
+/* Detail work stays in the modal so a response can be checked before the operator returns to the ledger. */
+.record-workbench__metadata > summary {
+  cursor: pointer;
+  color: var(--console-accent);
+  font-size: 13px;
+  padding: 4px 0 12px;
+}
+.record-workbench { min-height: 0; }
+#record-detail-modal.modal-box--detail { width: min(1080px, calc(100vw - 32px)); max-width: none; max-height: 90dvh; }
+
+.record-workbench__header { align-items: flex-start; gap: 16px; }
+.record-workbench__identity { min-width: 0; }
+.record-workbench__eyebrow { display: block; color: var(--color-text-muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.record-workbench__identity h3 { margin: 3px 0 7px; overflow-wrap: anywhere; }
+.record-workbench__identity-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: var(--color-text-secondary); font-size: 12px; }
+.record-workbench__identity-meta code { overflow-wrap: anywhere; }
+
+.record-workbench__state { border: 1px solid var(--color-border); border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+.record-workbench__state--warning { color: var(--color-warning); }
+.record-workbench__state--danger { color: var(--color-danger); }
+.record-workbench__state--muted { color: var(--color-text-muted); }
+
+.record-workbench__body { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .8fr); gap: 24px; min-height: 0; overflow: auto; }
+.record-workbench__main { min-width: 0; }
+.record-workbench__section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.record-workbench__ledger-link { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 10px 0 0 10px; color: var(--color-accent); font-size: 12px; overflow-wrap: anywhere; }
+
+.record-workbench__response { align-self: start; display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg-secondary); }
+.record-workbench__response h4 { margin: 4px 0 0; color: var(--color-text-primary); font-size: 15px; }
+.record-workbench__response p { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.55; }
+.record-workbench__target { display: flex; flex-direction: column; gap: 3px; padding: 10px; border-left: 3px solid var(--color-accent); background: var(--color-bg-glass); overflow-wrap: anywhere; }
+.record-workbench__target strong { color: var(--color-text-primary); font-family: var(--font-mono); font-size: 12px; }
+.record-workbench__target span { color: var(--color-text-secondary); font-size: 12px; }
+.record-workbench__response-actions { display: grid; gap: 8px; }
+.record-workbench__response-actions .btn { justify-content: center; min-height: 34px; white-space: normal; }
+
+.record-workbench__receipt { padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.record-workbench__receipt[data-outcome="success"] { border-color: var(--color-safe); color: var(--color-safe); }
+.record-workbench__receipt[data-outcome="failed"] { border-color: var(--color-danger); color: var(--color-danger); }
+.record-workbench__receipt[data-outcome="skipped"] { border-color: var(--color-warning); color: var(--color-warning); }
+
+@media (max-width: 700px) {
+  .record-workbench__body { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 14px; }
+}
+
+@media (max-width: 390px) {
+  .record-workbench__header { gap: 8px; padding: 12px 14px; }
+  .record-workbench__identity h3 { font-size: 15px; }
+  .record-workbench__identity-meta { gap: 5px; }
+  .record-workbench__body { padding: 12px; }
+  .record-workbench .detail-table td:first-child { width: 82px; padding-right: 8px; white-space: normal; }
+  .record-workbench__ledger-link { margin-left: 0; }
+}

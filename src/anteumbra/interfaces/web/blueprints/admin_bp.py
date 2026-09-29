@@ -25,6 +25,7 @@ from flask import (
 from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash
 
+from anteumbra.application.duty_service import DUTY_PAGE_SIZE, DUTY_VIEWS, build_duty_queue
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
@@ -172,6 +173,35 @@ def overview():
     except Exception as e:
         current_app.logger.error(f"[ADMIN] overview失败: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
+
+
+@admin_bp.route("/duty-queue")
+@require_auth
+def duty_queue():
+    """Return the read-only, site-scoped overview duty queue fragment."""
+    view = request.args.get("view", "active")
+    if view not in DUTY_VIEWS:
+        view = "active"
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        runtime = get_runtime()
+        queue = build_duty_queue(
+            runtime.registry,
+            websites=runtime.config.get_enabled_websites(),
+            site_id=active_site_id(),
+            quarantine_lookup=runtime.quarantine.get_detail,
+            view=view,
+            page=page,
+            per_page=DUTY_PAGE_SIZE,
+        )
+        return render_template("admin/duty_queue.html", queue=queue, **site_context())
+    except Exception as exc:
+        current_app.logger.error("[ADMIN] duty queue failed: %s", exc, exc_info=True)
+        return render_template("admin/error.html", error=str(exc)), 500
 
 
 @admin_bp.route("/threats")

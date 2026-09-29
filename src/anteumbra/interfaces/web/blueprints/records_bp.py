@@ -468,11 +468,24 @@ def get_record_detail():
         quarantine_records = get_runtime().quarantine.list_records(
             status=None, site_id=record.get("site_id")
         )
-        quarantine_info = None
-        for q in quarantine_records:
-            if q.get("original_path", "") == file_path:
-                quarantine_info = q
-                break
+        # A path can be restored and quarantined again. Prefer its current
+        # payload identity, never an older cycle's receipt/source file.
+        quarantine_id = record.get("quarantine_id", "")
+        candidates = [
+            q for q in quarantine_records
+            if q.get("original_path")
+            and path_to_key(q["original_path"]) == path_to_key(record["file_path"])
+        ]
+        quarantine_info = next(
+            (q for q in candidates if q.get("quarantine_id") == quarantine_id),
+            None,
+        ) if quarantine_id else None
+        if not quarantine_info and not quarantine_id:
+            quarantine_info = max(
+                candidates,
+                key=lambda q: str(q.get("quarantine_time") or q.get("created_at") or ""),
+                default=None,
+            )
 
         linked_profiles = []
         try:
@@ -494,12 +507,13 @@ def get_record_detail():
             logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 
         site = site_fields(record, names_by_id=_configured_site_names())
+        features = _deserialize_list(record.get("features"))
         detail = {
             "file_path": file_path,
             "display_name": display_name,
             "detected_at": record.get("detected_at", "N/A"),
-            "features": record.get("features", []),
-            "rule_name": record.get("features", ["未知"])[0] if record.get("features") else "未知",
+            "features": features,
+            "rule_name": features[0] if features else "—",
             "file_exists": record.get("file_exists", False),
             "file_size": file_size,
             "communication_count": record.get("communication_count", 0),
@@ -514,12 +528,16 @@ def get_record_detail():
             "missing_reason": record.get("missing_reason", ""),
             "missing_at": record.get("missing_at", ""),
             "content_hash": record.get("content_hash", ""),
+            "quarantine_id": quarantine_id,
             "quarantine_info": quarantine_info,
             "linked_profiles": linked_profiles,
         }
 
         if request.headers.get("HX-Request"):
-            return render_template("admin/record_detail.html", record=detail, **site_context())
+            # The object's site is not a change to the operator's list scope.
+            # Resolving site_context here would persist a row's site and silently
+            # narrow the aggregate queue on its next refresh.
+            return render_template("admin/record_detail.html", record=detail)
         else:
             return jsonify(detail)
     except Exception as e:

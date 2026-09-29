@@ -1,119 +1,67 @@
-<div class="record-detail-modal" data-site-id="{{ record.site_id }}">
-  <div class="modal-header">
-    <h3>{{ _('Detection Detail') }}</h3>
-    <button class="modal-close" type="button" data-action="records.detail-close">&times;</button>
+<div class="record-detail-modal record-workbench" data-site-id="{{ record.site_id or 'legacy' }}" data-file-path="{{ record.file_path|e }}"
+     data-readback-failed="{{ '状态重读失败，请重新读取详情后再核对结果。' if current_locale == 'zh' else 'State could not be reloaded. Refresh the detail to verify the result.' }}">
+  {% set zh = current_locale == 'zh' %}
+  {% set workbench_label = '检测处置台' if zh else 'Detection workbench' %}
+  {% set awaiting_label = '待研判' if zh else 'Awaiting review' %}
+  {% set missing_label = '文件缺失' if zh else 'File missing' %}
+  {% set response_label = '处置响应' if zh else 'Response' %}
+  {% set named_response_label = '指定对象处置' if zh else 'Named-object response' %}
+  {% set response_hint = '操作仅作用于该站点中的这个文件。' if zh else 'Actions apply only to this file in the named site.' %}
+  {% set ledger_label = '打开该站点的隔离台账' if zh else 'Open this site’s quarantine ledger' %}
+  {% set already_quarantined_label = '已隔离' if zh else 'Already quarantined' %}
+  {% set quarantine_label = '隔离此文件' if zh else 'Quarantine this file' %}
+  {% set mark_fp_label = '标记为误报' if zh else 'Mark false positive' %}
+  {% set undo_fp_label = '撤销误报标记' if zh else 'Undo false positive' %}
+  {% set unavailable_label = '文件缺失，无法隔离' if zh else 'File missing; quarantine unavailable' %}
+  {% set quarantine_id = record.quarantine_id %}
+  {% set quarantined = quarantine_id and record.quarantine_info and record.quarantine_info.status == 'quarantined' %}
+  {% set source_deleted = record.quarantine_info and record.quarantine_info.status == 'deleted' and not record.file_exists %}
+  {% set source_unavailable = source_deleted or (not record.file_exists and not quarantined) %}
+  {% if record.marked_false_positive %}{% set current_state = _('False positive') %}{% set current_state_class = 'warning' %}
+  {% elif quarantined %}{% set current_state = _('Quarantined') %}{% set current_state_class = 'danger' %}
+  {% elif record.file_exists %}{% set current_state = awaiting_label %}{% set current_state_class = 'warning' %}
+  {% else %}{% set current_state = missing_label %}{% set current_state_class = 'muted' %}{% endif %}
+  <div class="modal-header record-workbench__header">
+    <div class="record-workbench__identity">
+      <span class="record-workbench__eyebrow">{{ workbench_label }}</span>
+      <h3 title="{{ record.display_name }}">{{ record.display_name }}</h3>
+      <div class="record-workbench__identity-meta"><span class="badge badge-gray">{% if record.site_unassigned %}{{ _('Unassigned') }}{% else %}{{ record.site_name }}{% endif %}</span><code>{{ record.site_id }}</code><span class="record-workbench__state record-workbench__state--{{ current_state_class }}">{{ current_state }}</span></div>
+    </div>
+    <button class="modal-close" type="button" data-action="records.detail-close" aria-label="{{ _('Close') }}">&times;</button>
   </div>
-  <div class="modal-body">
-    <div class="detail-section">
-      <h4>{{ _('File Info') }}</h4>
-      <table class="detail-table">
-        <tr><td>{{ _('File name') }}</td><td>{{ record.display_name }}</td></tr>
-        <tr><td>{{ _('Site') }}</td><td>{% if record.site_unassigned %}<span class="badge badge-muted">{{ _('Unassigned') }}</span>{% else %}<span class="badge badge-gray">{{ record.site_name }}</span>{% endif %}<code>{{ record.site_id }}</code></td></tr>
+  <div class="modal-body record-workbench__body">
+    <div class="record-workbench__main">
+
+      <section class="detail-section record-workbench__section"><h4>{{ _('Detection Info') }}</h4><table class="detail-table">
+        <tr><td>{{ _('Detected at') }}</td><td>{{ record.detected_at }}</td></tr><tr><td>{{ _('Matched rule') }}</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
+        <tr><td>{{ _('Feature list') }}</td><td>{% for feature in record.features %}<span class="badge badge-blue">{{ feature }}</span>{% else %}<span class="detail-profile-meta">{{ _('Not recorded') }}</span>{% endfor %}</td></tr>
+        <tr><td>{{ _('Communications') }}</td><td>{{ record.communication_count }} <span class="detail-profile-meta">{{ _('Cumulative count; request history is not available here.') }}</span></td></tr><tr><td>{{ _('First seen IP') }}</td><td>{{ record.first_seen_ip }}</td></tr>
+        <tr><td>{{ _('Content SHA-256') }}</td><td>{% if record.content_hash %}<code>{{ record.content_hash }}</code>{% else %}<span class="detail-profile-meta">{{ _('Not recorded') }}</span>{% endif %}</td></tr>
+      </table></section>
+      <section class="detail-section record-workbench__section"><h4>{{ _('Source') }}</h4><p class="detail-profile-meta">{{ _('The source viewer reads this record only when the file is still available and authorized.') }}</p>
+        <button class="btn btn-sm btn-ghost" type="button"{% if source_unavailable %} disabled aria-disabled="true"{% else %} data-action="records.detail-source" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id or 'legacy' }}"{% if quarantined and quarantine_id %} data-quarantine-id="{{ quarantine_id }}"{% endif %}{% endif %}>{{ _('View source') }}</button>
+        {% if source_deleted %}<span class="detail-profile-meta">{{ '隔离证据已删除，源码不可用。' if zh else 'Quarantine evidence was deleted; source is unavailable.' }}</span>{% elif source_unavailable %}<span class="detail-profile-meta">{{ '文件缺失，源码不可用。' if zh else 'File is missing; source is unavailable.' }}</span>{% endif %}
+        {% if quarantined and quarantine_id %}<a class="record-workbench__ledger-link" data-action="records.detail-ledger" href="{{ '/admin/quarantine?status=all&site=' ~ ((record.site_id or 'legacy')|urlencode) }}">{{ ledger_label }} <code>{{ quarantine_id }}</code></a>{% endif %}
+      </section>
+      <details class="detail-section record-workbench__section record-workbench__metadata"><summary>{{ _('File Info') }}</summary><table class="detail-table">
         <tr><td>{{ _('Full path') }}</td><td><code>{{ record.file_path }}</code></td></tr>
         <tr><td>{{ _('File size') }}</td><td>{{ "%.2f"|format(record.file_size / 1024) }} {{ _('KB') }}</td></tr>
-        <tr><td>{{ _('File status') }}</td><td>
-          {% if record.file_exists %}
-            <span class="badge badge-green">{{ _('Present') }}</span>
-          {% else %}
-            <span class="badge badge-red">{{ _('Deleted') }}</span>
-            {% set missing_labels = {
-              'deleted-on-disk': _('Deleted outside the product'),
-              'quarantined': _('Moved to quarantine'),
-              'gone-while-stopped': _('Missing after restart'),
-            } %}
-            {% if record.missing_reason %}
-              <span class="badge badge-muted">{{ missing_labels.get(record.missing_reason, record.missing_reason) }}</span>
-            {% endif %}
-            {% if record.missing_at %}
-              <span class="detail-profile-meta">{{ record.missing_at }}</span>
-            {% endif %}
-          {% endif %}
-        </td></tr>
-      </table>
-    </div>
-
-    <div class="detail-section">
-      <h4>{{ _('Detection Info') }}</h4>
-      <table class="detail-table">
-        <tr><td>{{ _('Detected at') }}</td><td>{{ record.detected_at }}</td></tr>
-        <tr><td>{{ _('Matched rule') }}</td><td><span class="badge badge-yellow">{{ record.rule_name }}</span></td></tr>
-        <tr><td>{{ _('Feature list') }}</td><td>
-          {% for feature in record.features %}
-            <span class="badge badge-blue">{{ feature }}</span>
-          {% endfor %}
-        </td></tr>
-        <tr><td>{{ _('Communications') }}</td><td>{{ record.communication_count }} <span class="detail-profile-meta">{{ _('Cumulative count; request history is not available here.') }}</span></td></tr>
-        <tr><td>{{ _('First seen IP') }}</td><td>{{ record.first_seen_ip }}</td></tr>
-        <tr><td>{{ _('Content SHA-256') }}</td><td>
-          {% if record.content_hash %}
-            <code>{{ record.content_hash }}</code>
-          {% else %}
-            <span class="detail-profile-meta">{{ _('Not recorded') }}</span>
-          {% endif %}
-        </td></tr>
-      </table>
-    </div>
-
-    <div class="detail-section">
-      <h4>{{ _('Source') }}</h4>
-      <p class="detail-profile-meta">{{ _('The source viewer reads this record only when the file is still available and authorized.') }}</p>
-      <button class="btn btn-sm btn-ghost" type="button" data-action="records.view-path" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}">{{ _('View source') }}</button>
-    </div>
-
-    <div class="detail-section">
-      <h4>{{ _('Alert status') }}</h4>
-      <table class="detail-table">
-        <tr><td>{{ _('Alerted') }}</td><td>
-          {% if record.alerted %}
-            <span class="badge badge-green">{{ _('Yes') }}</span>
-            <button class="btn btn-sm btn-ghost" type="button"
-                    data-action="records.detail-rearm" data-file-path="{{ record.file_path|e }}">{{ _('Alert me again') }}</button>
-          {% else %}
-            <span class="badge badge-gray">{{ _('No') }}</span>
-          {% endif %}
-        </td></tr>
-        <tr><td>{{ _('False positive') }}</td><td>
-          {% if record.marked_false_positive %}
-            <span class="badge badge-yellow">{{ _('Marked') }}</span>
-          {% else %}
-            <span class="badge badge-gray">{{ _('Not marked') }}</span>
-          {% endif %}
-        </td></tr>
-      </table>
-    </div>
-
-    {% if record.quarantine_info %}
-    <div class="detail-section">
-      <h4>{{ _('Quarantine Info') }}</h4>
-      <table class="detail-table">
+        <tr><td>{{ _('File status') }}</td><td>{% if record.file_exists %}<span class="badge badge-green">{{ _('Present') }}</span>{% else %}<span class="badge badge-red">{{ _('Deleted') }}</span>{% set missing_labels = {'deleted-on-disk': _('Deleted outside the product'), 'quarantined': _('Moved to quarantine'), 'gone-while-stopped': _('Missing after restart')} %}{% if record.missing_reason %}<span class="badge badge-muted">{{ missing_labels.get(record.missing_reason, record.missing_reason) }}</span>{% endif %}{% if record.missing_at %}<span class="detail-profile-meta">{{ record.missing_at }}</span>{% endif %}{% endif %}</td></tr>
+      </table></details>
+      {% if record.quarantine_info %}
+      <section class="detail-section record-workbench__section"><h4>{{ _('Quarantine Info') }}</h4><table class="detail-table">
         <tr><td>{{ _('Quarantine ID') }}</td><td><code>{{ record.quarantine_info.quarantine_id }}</code></td></tr>
         <tr><td>{{ _('Quarantine path') }}</td><td><code>{{ record.quarantine_info.quarantine_path }}</code></td></tr>
         <tr><td>{{ _('Quarantined at') }}</td><td>{{ record.quarantine_info.quarantine_time }}</td></tr>
-      </table>
+        <tr><td>{{ _('Status') }}</td><td><span class="badge badge-gray">{{ record.quarantine_info.status }}</span></td></tr>
+      </table></section>
+      {% endif %}
+      <section class="detail-section record-workbench__section"><h4>{{ _('Alert status') }}</h4><table class="detail-table"><tr><td>{{ _('Alerted') }}</td><td>{% if record.alerted %}<span class="badge badge-green">{{ _('Yes') }}</span><button class="btn btn-sm btn-ghost" type="button" data-action="records.detail-rearm" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}">{{ _('Alert me again') }}</button>{% else %}<span class="badge badge-gray">{{ _('No') }}</span>{% endif %}</td></tr><tr><td>{{ _('False positive') }}</td><td>{% if record.marked_false_positive %}<span class="badge badge-yellow">{{ _('Marked') }}</span>{% else %}<span class="badge badge-gray">{{ _('Not marked') }}</span>{% endif %}</td></tr></table></section>
+      {% if record.linked_profiles %}<section class="detail-section record-workbench__section"><h4>{{ _('Linked threat profiles') }}</h4><div class="detail-profile-list">{% for lp in record.linked_profiles %}<div class="detail-profile-row"><div class="detail-profile-main"><code>{{ lp.profile_id }}</code><span class="detail-profile-risk detail-profile-risk--{{ 'high' if lp.risk_score >= 0.7 else 'medium' if lp.risk_score >= 0.4 else 'low' }}">{{ _('Risk:') }} {{ lp.risk_score }}</span><span class="detail-profile-meta">{{ _('%(count)s IPs', count=lp.ip_count) }}</span><span class="detail-profile-meta">{{ lp.tool_signature }}</span></div><button class="btn btn-sm btn-ghost" type="button" data-action="records.detail-profile" data-profile-id="{{ lp.profile_id }}" data-profile-label="{{ lp.profile_id[:8] }}" data-site-id="{{ lp.site_id }}">{{ _('View') }} →</button></div>{% endfor %}</div></section>{% endif %}
     </div>
-    {% endif %}
-
-    {% if record.linked_profiles %}
-    <div class="detail-section">
-      <h4>{{ _('Linked threat profiles') }}</h4>
-      <div class="detail-profile-list">
-        {% for lp in record.linked_profiles %}
-        <div class="detail-profile-row">
-          <div class="detail-profile-main">
-            <code>{{ lp.profile_id }}</code>
-            <span class="detail-profile-risk detail-profile-risk--{{ 'high' if lp.risk_score >= 0.7 else 'medium' if lp.risk_score >= 0.4 else 'low' }}">{{ _('Risk:') }} {{ lp.risk_score }}</span>
-            <span class="detail-profile-meta">{{ _('%(count)s IPs', count=lp.ip_count) }}</span>
-            <span class="detail-profile-meta">{{ lp.tool_signature }}</span>
-          </div>
-          <button class="btn btn-sm btn-ghost" type="button"
-                  data-action="records.detail-profile" data-profile-id="{{ lp.profile_id }}" data-profile-label="{{ lp.profile_id[:8] }}" data-site-id="{{ lp.site_id }}">
-            {{ _('View') }} →
-          </button>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
+    <aside class="record-workbench__response" aria-label="{{ response_label }}"><div><span class="record-workbench__eyebrow">{{ response_label }}</span><h4>{{ named_response_label }}</h4><p>{{ response_hint }}</p></div><div class="record-workbench__target"><strong>{{ record.display_name }}</strong><span>{% if record.site_unassigned %}{{ _('Unassigned') }}{% else %}{{ record.site_name }}{% endif %}</span></div><div class="record-workbench__response-actions">
+      {% if quarantined %}<button class="btn btn-sm" type="button" disabled>{{ already_quarantined_label }}</button>{% elif not record.file_exists %}<button class="btn btn-sm" type="button" disabled>{{ unavailable_label }}</button>{% else %}<button class="btn btn-danger btn-sm record-detail-response" type="button" data-action="records.detail-response" data-batch-action="quarantine" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id or 'legacy' }}" data-confirm-message="{{ ('确认在站点 ' ~ record.site_name ~ ' 隔离文件 ' ~ record.display_name ~ '？') if zh else ('Quarantine ' ~ record.display_name ~ ' on ' ~ record.site_name ~ '?') }}" data-pending-label="{{ '正在隔离…' if zh else 'Quarantining...' }}" data-success-message="{{ ('已在站点 ' ~ record.site_name ~ ' 隔离文件 ' ~ record.display_name) if zh else ('Quarantined ' ~ record.display_name ~ ' on ' ~ record.site_name) }}">{{ quarantine_label }}</button>{% endif %}
+      {% if record.marked_false_positive %}<button class="btn btn-success btn-sm record-detail-response" type="button" data-action="records.detail-response" data-batch-action="unmark_false_positive" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id or 'legacy' }}" data-confirm-message="{{ ('确认撤销站点 ' ~ record.site_name ~ ' 中 ' ~ record.display_name ~ ' 的误报标记？') if zh else ('Undo false positive for ' ~ record.display_name ~ ' on ' ~ record.site_name ~ '?') }}" data-pending-label="{{ '正在撤销误报标记…' if zh else 'Undoing false positive...' }}" data-success-message="{{ ('已撤销站点 ' ~ record.site_name ~ ' 中 ' ~ record.display_name ~ ' 的误报标记') if zh else ('Cleared false positive for ' ~ record.display_name ~ ' on ' ~ record.site_name) }}">{{ undo_fp_label }}</button>{% else %}<button class="btn btn-warning btn-sm record-detail-response" type="button" data-action="records.detail-response" data-batch-action="false_positive" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id or 'legacy' }}" data-confirm-message="{{ ('确认将站点 ' ~ record.site_name ~ ' 中的文件 ' ~ record.display_name ~ ' 标记为误报？') if zh else ('Mark ' ~ record.display_name ~ ' on ' ~ record.site_name ~ ' as a false positive?') }}" data-pending-label="{{ '正在标记误报…' if zh else 'Marking false positive...' }}" data-success-message="{{ ('已将站点 ' ~ record.site_name ~ ' 中的文件 ' ~ record.display_name ~ ' 标记为误报') if zh else ('Marked ' ~ record.display_name ~ ' on ' ~ record.site_name ~ ' as a false positive') }}">{{ mark_fp_label }}</button>{% endif %}
+    </div><div class="record-workbench__receipt" data-detail-receipt role="status" aria-live="polite" hidden></div><button class="btn btn-sm btn-ghost" type="button" data-action="records.detail-refresh" data-detail-refresh hidden>{{ '重新读取详情' if zh else 'Refresh detail' }}</button></aside>
   </div>
 </div>
-<!-- v1.8.0: showRecordDetail() 由按钮的 hx-on::after-swap 触发 -->

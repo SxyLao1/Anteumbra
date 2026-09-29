@@ -1,85 +1,58 @@
 {% set zh = current_locale == 'zh' %}
-<div class="overview-stack">
-<section class="console-duty-intro">
-  <div><h2>{{ '开始本次值守' if zh else 'Start your watch' }}</h2>
-    <p class="muted-copy">{{ '确认接入 → 调查异常 → 选择处置 → 复核结果。每次操作都以具体站点和对象为准。' if zh else 'Check coverage → investigate → respond → verify. Each action belongs to a specific site and object.' }}</p>
+<div class="overview-stack duty-workspace">
+  <header class="duty-heading">
+    <div>
+      <p class="duty-eyebrow">{{ '安全值守 / 当前范围' if zh else 'SECURITY WATCH / CURRENT SCOPE' }}</p>
+      <h2>{{ active_site_name or active_site or ('全部站点' if zh else 'All sites') }}</h2>
+      <p class="muted-copy">{{ '从待研判文件开始，查看证据后选择处置；每条记录保留自己的站点归属。' if zh else 'Start with files awaiting investigation. Review the evidence before responding; each record keeps its own site.' }}</p>
+    </div>
+    <a class="btn btn-ghost" href="{{ with_site('/admin/sites') }}">{{ '检查站点接入' if zh else 'Check site coverage' }} →</a>
+  </header>
+  {% if runtime_capabilities.status == 'degraded' or runtime_capabilities.warnings %}
+  <div data-testid="runtime-capabilities" class="capability-band">
+    <strong class="capability-band__status">{{ _('Degraded') if runtime_capabilities.status == 'degraded' else _('Healthy') }}</strong>
+    <span>{{ _('Detection') }}: {{ _('YARA + Emergency') if runtime_capabilities.detection.mode == 'yara_and_emergency' else _('Emergency signatures') }}</span>
+    <span>{{ _('Notifications') }}: {{ _('External (%(channels)s)', channels=runtime_capabilities.notifications.configured_channels|join(', ')) if runtime_capabilities.notifications.mode == 'external' else _('Local logs only') }}</span>
+    {% for warning in runtime_capabilities.warnings %}<span class="capability-band__warning">{{ warning.message }}</span>{% endfor %}
   </div>
-  <div class="page-toolbar">
-    <a class="btn btn-ghost" href="{{ with_site('/admin/sites') }}">{{ '检查站点接入' if zh else 'Check site coverage' }}</a>
-    <a class="btn btn-primary" href="{{ with_site('/admin/threats') }}">{{ '调查检测记录' if zh else 'Investigate detections' }}</a>
-    <a class="btn btn-ghost" href="{{ with_site('/admin/quarantine') }}">{{ '复核隔离结果' if zh else 'Review quarantine' }}</a>
-  </div>
-</section>
-{# The capability band only carries information when something is wrong.  The
-   healthy state used to render "正常 检测: … 通知: …" on every visit, costing the
-   quadrants ~48px of height to say nothing. #}
-{% if runtime_capabilities.status == 'degraded' or runtime_capabilities.warnings %}
-<div data-testid="runtime-capabilities" class="capability-band">
-  <strong class="capability-band__status">{{ _('Degraded') if runtime_capabilities.status == 'degraded' else _('Healthy') }}</strong>
-  <span>{{ _('Detection') }}: {{ _('YARA + Emergency') if runtime_capabilities.detection.mode == 'yara_and_emergency' else _('Emergency signatures') }}</span>
-  <span>{{ _('Notifications') }}: {{ _('External (%(channels)s)', channels=runtime_capabilities.notifications.configured_channels|join(', ')) if runtime_capabilities.notifications.mode == 'external' else _('Local logs only') }}</span>
-  {% for warning in runtime_capabilities.warnings %}<span class="capability-band__warning">{{ warning.message }}</span>{% endfor %}
-</div>
-{% endif %}
-<div class="dashboard-grid console-duty-grid" data-testid="overview-grid">
-  <!-- 安全报告面板 -->
-  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
-    <div class="card-header">
-      <span><span class="card-header-icon">◆</span> {{ _('Security Report') }}</span>
+  {% endif %}
+  <section class="duty-primary" aria-label="{{ '值守队列' if zh else 'Duty queue' }}">
+    <div class="duty-section-heading">
+      <div><h3>{{ '现在需要关注什么' if zh else 'What needs attention' }}</h3>
+        <p class="muted-copy">{{ '先看归属和线索，再进入研判。队列按记录事实分组，不代表事件已结案。' if zh else 'Check the site and evidence, then investigate. Groups describe recorded facts, not incident closure.' }}</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="duty.refresh">{{ '刷新队列' if zh else 'Refresh queue' }}</button>
     </div>
-    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-stats"
-         hx-get="{{ with_site('/admin/dashboard_content') }}"
-         hx-trigger="load, every 10s"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
-    </div>
-  </div>
-
-  <!-- 系统指标面板 -->
-  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
-    <div class="card-header">
-      <span><span class="card-header-icon">◆</span> {{ _('System Metrics') }}</span>
-      <span class="badge badge-info">{{ _('Live') }}</span>
-    </div>
-    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto;" id="overview-metrics"
-         hx-get="/admin/metrics/data"
-         hx-trigger="load, every 10s"
-         hx-swap="innerHTML">
-      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading metrics...') }}</p></div>
-    </div>
-  </div>
-
-  <!-- 最近检测（原安全报告内的列表，现独立象限） -->
-  <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
-    <div class="card-header">
-      <span><span class="card-header-icon">📋</span> {{ _('Recent Detections') }}</span>
-      {% if active_site %}<span class="badge badge-warning">{{ active_site_name or active_site }}</span>{% endif %}
-      <span class="toolbar-spacer"></span>
-      <a class="btn btn-ghost btn-sm" href="{{ with_site('/admin/threats') }}" data-action="core.navigate-location"
-         data-url="{{ with_site('/admin/threats') }}">{{ _('View all') }}</a>
-    </div>
-    <div class="card-body" style="flex: 1; padding: 0; overflow-y: auto;" id="overview-recent"
-         hx-get="{{ with_site('/admin/recent-detections') }}"
-         hx-trigger="load, every 30s"
-         hx-swap="innerHTML">
+    <div id="duty-queue" hx-get="{{ with_site('/admin/duty-queue') }}" hx-trigger="load" hx-swap="innerHTML" hx-sync="this:replace">
       <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading records...') }}</p></div>
     </div>
-  </div>
-
-  <!-- 实时日志流 -->
-  <div class="card" style="display: flex; flex-direction: column;">
-    <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
-      <span style="flex: 1;"><span class="card-header-icon">◆</span> {{ _('LIVE LOG STREAM') }}</span>
-      <input type="text" class="form-input log-filter-input"
-             placeholder="{{ _('Quick filter...') }}" data-action="dashboard.log-stream-filter" id="log-filter-input">
-      <span class="badge badge-info">{{ _('SSE') }}</span>
-      <a class="btn btn-ghost btn-xs" href="/admin/logs/analyzer"
-         data-action="core.navigate-location" data-url="/admin/logs/analyzer">{{ _('Analyze') }}</a>
+  </section>
+  <nav class="duty-other-signals" aria-label="{{ '其他调查入口' if zh else 'Other investigation paths' }}">
+    <a href="{{ with_site('/admin/profiles') }}"><strong>{{ '攻击者画像' if zh else 'Threat profiles' }} →</strong><span>{{ '从 WAF 与访问行为继续调查来源' if zh else 'Investigate sources using WAF and access activity' }}</span></a>
+    <a href="{{ with_site('/admin/memory-shell') }}"><strong>{{ '内存排查' if zh else 'Memory inspection' }} →</strong><span>{{ '查看探针发现与取证结果' if zh else 'Review probe findings and forensic evidence' }}</span></a>
+    <a href="{{ with_site('/admin/blocklist') }}"><strong>{{ '封禁结果' if zh else 'Blocking results' }} →</strong><span>{{ '按站点核对设备回执与失败项' if zh else 'Check device receipts and failures by site' }}</span></a>
+  </nav>
+  <details class="duty-support" open>
+    <summary>{{ '站点态势与历史统计' if zh else 'Site posture and historical totals' }}</summary>
+    <div id="overview-stats" hx-get="{{ with_site('/admin/dashboard_content') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
+      <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading...') }}</p></div>
     </div>
-    <div class="card-body" style="flex: 1; padding: 16px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;"
-         id="live-log-stream">
-      {{ log_history|safe if log_history else '<div class="empty-state"><p>' + _('Connecting to log stream...') + '</p></div>' }}
+  </details>
+  <details class="duty-support">
+    <summary>{{ '运行指标与实时日志' if zh else 'Runtime metrics and live logs' }}</summary>
+    <p class="duty-support-note">{{ '以下运行指标与日志属于整个服务，不随站点筛选。' if zh else 'Runtime metrics and logs cover the whole service, regardless of the site filter.' }}</p>
+    <div class="duty-runtime-grid" data-testid="overview-grid">
+      <section class="card">
+        <div class="card-header">{{ _('System Metrics') }}</div>
+        <div class="card-body" id="overview-metrics" hx-get="/admin/metrics/data" hx-trigger="load, every 30s" hx-swap="innerHTML"></div>
+      </section>
+      <section class="card">
+        <div class="card-header duty-log-heading"><span>{{ _('LIVE LOG STREAM') }}</span>
+          <input type="text" class="form-input log-filter-input" placeholder="{{ _('Quick filter...') }}" data-action="dashboard.log-stream-filter" id="log-filter-input">
+          <a class="btn btn-ghost btn-xs" href="/admin/logs/analyzer">{{ _('Analyze') }}</a>
+        </div>
+        <div class="card-body duty-log-stream" id="live-log-stream">{{ log_history|safe if log_history else _('Connecting to log stream...') }}</div>
+      </section>
     </div>
-  </div>
-</div>
+  </details>
 </div>

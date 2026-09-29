@@ -52,7 +52,7 @@ def test_scanner_new_known_source_report_history_and_partial_quarantine(real_ins
 
     finding.get_by_role("button", name="Detail", exact=True).click()
     detail = page.locator("#record-detail-modal")
-    expect(detail).to_contain_text("Detection Detail")
+    expect(detail).to_contain_text("Detection workbench")
     expect(detail).to_contain_text("scanner-new.php")
     detail.locator("button.modal-close").click()
 

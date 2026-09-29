@@ -3,7 +3,7 @@
   {% if recent_events %}
   <div class="recent-list">
     {% for event in recent_events %}
-    <article class="recent-item" data-path="{{ event.path|e }}">
+    <article class="recent-item" data-path="{{ event.path|e }}" data-site-id="{{ event.site_id or 'legacy' }}">
       <div class="recent-main">
         <span class="recent-file" title="{{ event.path or event.file }}">{{ event.file }}</span>
         {% if aggregate_scope %}

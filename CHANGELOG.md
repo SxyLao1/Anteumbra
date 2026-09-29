@@ -9,6 +9,9 @@
 ## [1.0.41] - Unreleased
 
 ### Changed
+- Lead the duty overview with a site-attributed, paginated review queue. Inspect
+  evidence, quarantine a file or review a false positive from its detail workbench,
+  then read the per-object receipt and updated state without leaving the sample.
 - Group the live console into duty, investigation, response, site protection,
   settings and maintenance workspaces, with persistent site scope, browser
   history, mobile navigation and modular dark/light theme styles.
@@ -18,6 +21,8 @@
   blocking, SIEM and probe counterparts. Business operations use the UI.
 
 ### Fixed
+- Keep aggregate scope when opening a site's sample, and resolve the current
+  quarantine payload rather than an earlier restore/quarantine cycle.
 - Show per-object batch results and per-device blocking failures; preserve failed
   selections and the target site when continuing an investigation.
 - Keep SIEM snapshot formats separate from the running exporter, render successful

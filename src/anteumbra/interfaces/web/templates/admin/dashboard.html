@@ -23,6 +23,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/console-tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/console-components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/console-shell.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/duty-workspace.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/record-workbench.css') }}">
 
   {# Site scope: with several watched sites an operator must never mistake one
      site's figures for the whole deployment's, so the active scope carries a
@@ -46,6 +48,7 @@
   <script src="{{ url_for('static', filename='js/modules/clusters.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/selection-controller.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/modules/records.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/modules/duty.js') }}" defer></script>
 </head>
 {# With a single watched site nothing changes visually: the switcher, the badge
    and the accent only exist when there is a scope an operator could confuse. #}
