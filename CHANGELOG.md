@@ -9,6 +9,10 @@
 ## [1.0.41] - Unreleased
 
 ### Changed
+- Keep the duty workspace concise, with object state and operational controls
+  instead of step-by-step teaching prompts.
+- Extend real-browser coverage to cross-page batches, partial retries, communication
+  attribution, rule effectiveness and multi-IP/device receipts on desktop and phone.
 - Lead the duty overview with a site-attributed, paginated review queue. Inspect
   evidence, quarantine a file or review a false positive from its detail workbench,
   then read the per-object receipt and updated state without leaving the sample.
@@ -21,6 +25,12 @@
   blocking, SIEM and probe counterparts. Business operations use the UI.
 
 ### Fixed
+- Identify batch selections by both site and path, retain only failed selections
+  after a partial result, and keep quarantine search across pagination.
+- Attribute communication counts by site-relative script path rather than basename.
+- Honour explicitly selected manual-scan extensions in the YARA scan engine.
+- Confirm maintenance writes and prevent older panel/ledger responses from replacing
+  newer views.
 - Keep aggregate scope when opening a site's sample, and resolve the current
   quarantine payload rather than an earlier restore/quarantine cycle.
 - Show per-object batch results and per-device blocking failures; preserve failed

@@ -33,6 +33,7 @@ class ExternalLab:
             <title>Anteumbra external test lab</title><h1>External integrations lab</h1>
             <p>Loopback devices. Receipts below are actual requests from Anteumbra.</p>
             <form method="post" action="/scenario"><button>Generate Portal WAF events</button></form>
+            <form method="post" action="/scenario-many-ips"><button>Generate 37 Portal IP WAF events</button></form>
             <form method="post" action="/failure"><button>{{ 'Recover device' if failure else 'Fail device B' }}</button></form>
             <a href="/">Refresh receipts</a><p id="event-count">{{ count }} WAF events</p>
             <table><thead><tr><th>Channel</th><th>Payload</th></tr></thead><tbody>
@@ -56,6 +57,20 @@ class ExternalLab:
         @app.post("/failure")
         def failure():
             self._failure = not self._failure
+            return redirect("/")
+
+        @app.post("/scenario-many-ips")
+        def scenario_many_ips():
+            now = datetime.now(timezone.utc).isoformat()
+            with self._lock:
+                for number in range(37):
+                    self._events.append({
+                        "event_id": f"browser-waf-many-{len(self._events)}", "timestamp": now,
+                        "src_ip": f"203.0.113.{number + 1}", "http_method": "POST",
+                        "url": f"/uploads/many-ip-{number}.php", "user_agent": "sqlmap/1.8",
+                        "waf_rule_id": "BrowserWAF", "waf_score": 0.95,
+                        "attack_type": "webshell", "site_id": "portal", "site_name": "Portal test site",
+                    })
             return redirect("/")
 
         @app.get("/status")

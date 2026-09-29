@@ -19,7 +19,7 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
@@ -219,7 +219,15 @@ class ManualScanner:
         # ── 逐文件扫描 ──
         progress_interval = max(1, result.total_files // 50)  # 每 2% 回调一次
         if website is not None:
-            scan_options = website.scan_options
+            # The extensions submitted by the manual-scan form decide both
+            # which files are collected and which files ScannerService may
+            # inspect.  Keep every other per-site guard (size, exclusions,
+            # debug settings) while making that explicit operator choice
+            # effective for this scan only.
+            scan_options = replace(
+                website.scan_options,
+                monitor_extensions=list(extensions),
+            )
         else:
             scan_options = ScanOptions(
                 monitor_extensions=list(extensions),

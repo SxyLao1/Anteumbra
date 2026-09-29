@@ -68,6 +68,10 @@ platforms need separate acceptance against their own implementations.
 | Site inventory, configuration three views, structure/batch edits, conflicts, versions/restore (C01–C03/C08–C11) | `test_management_flows.py`, `test_operator_admin.py`, `test_configuration_depth.py` |
 | Notifications, secrets, plugins and account configuration (C04–C07) | `test_operator_admin.py`, `test_configuration_depth.py`, `test_password_entrypoints.py` |
 | Storage/health views, SIEM formats and live stream, registry/WAL/sessions/reload (D01/D02/O01–O06) | `test_management_flows.py`, `test_integrations.py`, `test_configuration_depth.py` |
+| Cross-page selection, exclusions, filter redraws, site isolation, partial failure and retry, bulk restore | `test_bulk_selection.py` |
+| Site-relative access attribution, duplicate basenames, query strings, cumulative counts | `test_communication_flow.py` |
+| Rule upload/edit/delete changes actual detection; explicit manual scan extensions | `test_rule_effectiveness.py` |
+| Cross-page profile IP selection, multi-IP/device receipts, maintenance cancellation | `test_operator_edges.py` |
 
 The map identifies checks; it is not a claim that every conceivable condition is
 exhaustively covered. A successful current run is established by its JUnit result,
@@ -80,6 +84,15 @@ the isolated browser context clipboard permissions, copy through the profile
 control, and paste into a visible input. They do not test denied permissions or
 OS clipboard interoperability. Notifications are delivered to the loopback webhook;
 external SMTP and WeChat delivery are not exercised.
+
+Communication checks use owned access-log inputs and visible record/detail counts.
+They do not establish compatibility with every rewrite or document-root alias.
+Rule effectiveness checks scan fresh files to completion after each UI edit/delete;
+absence of a finding is asserted on the completed scan, not inferred from a delay.
+Maintenance cancellation is covered for registry compaction; stale-response guards
+are reviewed in source, not proven by a controlled browser race. Session checks do
+not seed expired sessions or prove crash recovery. Blocking supports multiple IPs
+in its action form; the ledger itself has no cross-page row selection control.
 
 ## Manual development preview
 

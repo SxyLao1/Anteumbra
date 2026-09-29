@@ -4,9 +4,8 @@
     <div>
       <p class="duty-eyebrow">{{ '安全值守 / 当前范围' if zh else 'SECURITY WATCH / CURRENT SCOPE' }}</p>
       <h2>{{ active_site_name or active_site or ('全部站点' if zh else 'All sites') }}</h2>
-      <p class="muted-copy">{{ '从待研判文件开始，查看证据后选择处置；每条记录保留自己的站点归属。' if zh else 'Start with files awaiting investigation. Review the evidence before responding; each record keeps its own site.' }}</p>
     </div>
-    <a class="btn btn-ghost" href="{{ with_site('/admin/sites') }}">{{ '检查站点接入' if zh else 'Check site coverage' }} →</a>
+    <a class="btn btn-ghost" href="{{ with_site('/admin/sites') }}">{{ '站点管理' if zh else 'Sites' }} →</a>
   </header>
   {% if runtime_capabilities.status == 'degraded' or runtime_capabilities.warnings %}
   <div data-testid="runtime-capabilities" class="capability-band">
@@ -18,8 +17,7 @@
   {% endif %}
   <section class="duty-primary" aria-label="{{ '值守队列' if zh else 'Duty queue' }}">
     <div class="duty-section-heading">
-      <div><h3>{{ '现在需要关注什么' if zh else 'What needs attention' }}</h3>
-        <p class="muted-copy">{{ '先看归属和线索，再进入研判。队列按记录事实分组，不代表事件已结案。' if zh else 'Check the site and evidence, then investigate. Groups describe recorded facts, not incident closure.' }}</p>
+      <div><h3>{{ '值守队列' if zh else 'Duty queue' }}</h3>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" data-action="duty.refresh">{{ '刷新队列' if zh else 'Refresh queue' }}</button>
     </div>
@@ -28,9 +26,9 @@
     </div>
   </section>
   <nav class="duty-other-signals" aria-label="{{ '其他调查入口' if zh else 'Other investigation paths' }}">
-    <a href="{{ with_site('/admin/profiles') }}"><strong>{{ '攻击者画像' if zh else 'Threat profiles' }} →</strong><span>{{ '从 WAF 与访问行为继续调查来源' if zh else 'Investigate sources using WAF and access activity' }}</span></a>
-    <a href="{{ with_site('/admin/memory-shell') }}"><strong>{{ '内存排查' if zh else 'Memory inspection' }} →</strong><span>{{ '查看探针发现与取证结果' if zh else 'Review probe findings and forensic evidence' }}</span></a>
-    <a href="{{ with_site('/admin/blocklist') }}"><strong>{{ '封禁结果' if zh else 'Blocking results' }} →</strong><span>{{ '按站点核对设备回执与失败项' if zh else 'Check device receipts and failures by site' }}</span></a>
+    <a href="{{ with_site('/admin/profiles') }}"><strong>{{ '攻击者画像' if zh else 'Threat profiles' }} →</strong><span>{{ 'WAF / 访问活动' if zh else 'WAF / Access activity' }}</span></a>
+    <a href="{{ with_site('/admin/memory-shell') }}"><strong>{{ '内存排查' if zh else 'Memory inspection' }} →</strong><span>{{ '探针 / 取证' if zh else 'Probes / Forensics' }}</span></a>
+    <a href="{{ with_site('/admin/blocklist') }}"><strong>{{ '封禁结果' if zh else 'Blocking results' }} →</strong><span>{{ '设备回执' if zh else 'Device receipts' }}</span></a>
   </nav>
   <details class="duty-support" open>
     <summary>{{ '站点态势与历史统计' if zh else 'Site posture and historical totals' }}</summary>
@@ -40,7 +38,7 @@
   </details>
   <details class="duty-support">
     <summary>{{ '运行指标与实时日志' if zh else 'Runtime metrics and live logs' }}</summary>
-    <p class="duty-support-note">{{ '以下运行指标与日志属于整个服务，不随站点筛选。' if zh else 'Runtime metrics and logs cover the whole service, regardless of the site filter.' }}</p>
+    <p class="duty-support-note">{{ '范围：服务器' if zh else 'Scope: server' }}</p>
     <div class="duty-runtime-grid" data-testid="overview-grid">
       <section class="card">
         <div class="card-header">{{ _('System Metrics') }}</div>

@@ -31,8 +31,7 @@
 .duty-card__title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .duty-card__title > strong { font: 600 15px var(--font-mono); overflow-wrap: anywhere; }
 .duty-card__meta { grid-column: 1; display: flex; gap: 6px 18px; flex-wrap: wrap; color: var(--console-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.duty-card__next { grid-column: 1; font-size: 12px; color: var(--console-muted); line-height: 1.6; }
-.duty-card__actions { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+.duty-card__actions { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 .duty-card__actions .btn { background: var(--console-surface-2); color: var(--console-text); border-color: var(--console-border); min-height: 38px; }
 .duty-card__actions .btn:hover { border-color: var(--console-accent); color: var(--console-accent); }
 .duty-queue > .pagination-bar { padding: 10px 22px 20px; }

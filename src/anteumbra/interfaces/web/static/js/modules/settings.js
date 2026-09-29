@@ -4,11 +4,39 @@
 
   var app = window.Anteumbra;
   var systemPanels = {
-    registry: { title: 'Registry Status', url: '/admin/system/registry_panel', action: '/admin/system/registry/compact', label: 'Compact' },
-    wal: { title: 'WAL Management', url: '/admin/system/wal_panel', action: '/admin/system/wal/replay', label: 'Replay' },
-    session: { title: 'Session Management', url: '/admin/system/session_panel?per_page=6', action: '/admin/system/session/cleanup', label: 'Cleanup' },
-    config: { title: 'Config Reload', url: '/admin/system/config_panel', action: '/admin/system/config/reload', label: 'Reload' }
+    registry: { title: 'Registry Status', url: '/admin/system/registry_panel', action: '/admin/system/registry/compact', label: 'Compact', confirm: { en: 'Compact Registry?', zh: '压缩注册表？' } },
+    wal: { title: 'WAL Management', url: '/admin/system/wal_panel', action: '/admin/system/wal/replay', label: 'Replay', confirm: { en: 'Replay WAL?', zh: '重放 WAL？' } },
+    session: { title: 'Session Management', url: '/admin/system/session_panel?per_page=6', action: '/admin/system/session/cleanup', label: 'Cleanup', confirm: { en: 'Cleanup expired sessions?', zh: '清理已过期会话？' } },
+    config: { title: 'Config Reload', url: '/admin/system/config_panel', action: '/admin/system/config/reload', label: 'Reload', confirm: { en: 'Reload config?', zh: '重新加载配置？' } }
   };
+  var systemRequestId = 0;
+
+  function systemModalIsCurrent(requestId, body) {
+    var modal = document.getElementById('system-modal');
+    return requestId === systemRequestId && body && body.isConnected && modal && modal.getAttribute('aria-hidden') === 'false';
+  }
+
+  function systemConfirmation(panel) {
+    return document.documentElement.lang.indexOf('zh') === 0 ? panel.confirm.zh : panel.confirm.en;
+  }
+
+  function invalidateSystemRequests() {
+    systemRequestId += 1;
+  }
+
+  function installSystemModalGuard() {
+    if (document.documentElement.dataset.systemModalGuard) return;
+    document.documentElement.dataset.systemModalGuard = 'true';
+    document.addEventListener('click', function (event) {
+      var close = event.target.closest('[data-action="core.modal-hide"][data-modal="system-modal"]');
+      var backdrop = event.target.closest('#system-modal[data-action="core.backdrop-close"]');
+      if (close || (backdrop && event.target === backdrop)) invalidateSystemRequests();
+    });
+    document.addEventListener('keydown', function (event) {
+      var modal = document.getElementById('system-modal');
+      if (event.key === 'Escape' && modal) invalidateSystemRequests();
+    });
+  }
 
   function resultNode(id, text, failed) {
     var node = document.getElementById(id);
@@ -93,6 +121,7 @@
     var title = document.getElementById('system-modal-title');
     var body = document.getElementById('system-modal-body');
     var actions = document.getElementById('system-modal-actions');
+    var requestId = ++systemRequestId;
     if (title) title.textContent = panel.title;
     if (body) body.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>';
     if (actions) {
@@ -105,20 +134,28 @@
       actions.appendChild(button);
     }
     app.http.text(panel.url, { headers: { 'HX-Request': 'true' } }).then(function (html) {
-      if (body) { body.innerHTML = html; app.processHtmx(body); app.mount(body); }
-    }).catch(function (error) { if (body) body.textContent = error.message; });
+      if (!systemModalIsCurrent(requestId, body)) return;
+      body.innerHTML = html;
+      app.processHtmx(body);
+      app.mount(body);
+    }).catch(function (error) {
+      if (systemModalIsCurrent(requestId, body)) body.textContent = error.message;
+    });
   }
 
   function runSystemAction(type) {
     var panel = systemPanels[type];
     var body = document.getElementById('system-modal-body');
-    if (!panel || !body) return;
-    if (type === 'config' && !app.confirm(app.t('Reload config?'))) return;
+    if (!panel || !body || !app.confirm(systemConfirmation(panel))) return;
+    var requestId = ++systemRequestId;
     app.http.text(panel.action, { method: 'POST', headers: { 'HX-Request': 'true' } }).then(function (html) {
+      if (!systemModalIsCurrent(requestId, body)) return;
       body.innerHTML = html;
       app.processHtmx(body);
       app.mount(body);
-    }).catch(function (error) { body.textContent = error.message; });
+    }).catch(function (error) {
+      if (systemModalIsCurrent(requestId, body)) body.textContent = error.message;
+    });
   }
 
   function installTooltip() {
@@ -172,6 +209,6 @@
       'settings.config-reload-button': { handler: function () { runSystemAction('config'); } },
       'settings.siem-export': { handler: function (context) { exportSiem(context.element.dataset.siemFormat); } }
     },
-    mount: function (root) { installTooltip(); updateSessionHeader(root); }
+    mount: function (root) { installTooltip(); installSystemModalGuard(); updateSessionHeader(root); }
   });
 }());

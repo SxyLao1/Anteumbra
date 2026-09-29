@@ -10,7 +10,7 @@
     {% for status, label in [('all', _('All')), ('quarantined', _('Active')), ('restored', _('Restored')), ('deleted', _('Deleted'))] %}
     <button class="btn btn-sm {% if current_status == status %}btn-primary{% else %}btn-ghost{% endif %}" hx-get="{{ with_site('/admin/quarantine?status=' ~ status ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ label }}</button>
     {% endfor %}
-    <input type="search" class="form-input" placeholder="{{ _('Search...') }}" data-action="quarantine.filter" data-container="quarantine-list-container">
+    <input type="search" class="form-input q-search" value="{{ request.args.get('q', '') }}" placeholder="{{ _('Search...') }}" data-action="quarantine.filter" data-container="quarantine-list-container">
   </div>
 
   <div class="quarantine-stats">
@@ -37,8 +37,8 @@
     {% else %}<div class="empty-state"><p>{{ _('No quarantine records found') }}</p></div>{% endfor %}
   </div>
   {% if total_pages > 1 %}<div class="pagination-bar">
-    {% if page > 1 %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page - 1) ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Prev') }}</button>{% endif %}
+    {% if page > 1 %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page - 1) ~ ('&q=' ~ request.args.get('q')|urlencode if request.args.get('q') else '') ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Prev') }}</button>{% endif %}
     <span class="page-info">{{ _('Page') }} {{ page }} / {{ total_pages }} ({{ total }} {{ _('total') }})</span>
-    {% if page < total_pages %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page + 1) ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Next') }}</button>{% endif %}
+    {% if page < total_pages %}<button class="btn btn-ghost btn-sm" hx-get="{{ with_site('/admin/quarantine?status=' ~ current_status ~ '&page=' ~ (page + 1) ~ ('&q=' ~ request.args.get('q')|urlencode if request.args.get('q') else '') ~ ('&compact=1' if compact else '')) }}" hx-target="#quarantine-list-container" hx-swap="outerHTML">{{ _('Next') }}</button>{% endif %}
   </div>{% endif %}
 </div>

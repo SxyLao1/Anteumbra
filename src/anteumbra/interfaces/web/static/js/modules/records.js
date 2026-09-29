@@ -17,6 +17,7 @@
     }),
     lineWrap: false,
     recordFilters: Object.create(null),
+    quarantineFilters: Object.create(null),
     recordSelections: Object.create(null),
     quarantineSelections: Object.create(null),
     activeRecordScope: null,
@@ -100,12 +101,14 @@
     var scope = root && root.querySelectorAll ? root : document;
     if (scope.querySelector('.rec-checkbox')) {
       activateSelectionScope('records');
-      scope.querySelectorAll('.rec-checkbox').forEach(function (checkbox) { checkbox.checked = state.records.has(checkbox.value); });
+      scope.querySelectorAll('.rec-checkbox').forEach(function (checkbox) { checkbox.checked = state.records.has(recordKeyFromCheckbox(checkbox)); });
       applyRecordFilter(scope);
     }
     if (scope.querySelector('.q-checkbox')) {
       activateSelectionScope('quarantine');
       scope.querySelectorAll('.q-checkbox').forEach(function (checkbox) { checkbox.checked = state.quarantine.has(checkbox.value); });
+      var quarantineSearch = scope.querySelector('.q-search');
+      if (quarantineSearch) quarantineSearch.value = state.quarantineFilters[currentScopeKey()] || '';
     }
     updateRecordControls();
     updateQuarantineControls();
@@ -125,8 +128,38 @@
   function setVisibleCheckboxes(container, selector, selection, checked) {
     (container || document).querySelectorAll(selector).forEach(function (checkbox) {
       checkbox.checked = checked;
-      if (checked) selection.add(checkbox.value); else selection.delete(checkbox.value);
+      var key = selector === '.rec-checkbox' ? recordKeyFromCheckbox(checkbox) : checkbox.value;
+      if (checked) selection.add(key); else selection.delete(key);
     });
+  }
+
+  function recordKey(siteId, filePath) {
+    return JSON.stringify({ site_id: String(siteId || 'legacy'), file_path: String(filePath || '') });
+  }
+
+  function recordKeyFromCheckbox(checkbox) {
+    try {
+      var item = JSON.parse(checkbox.dataset.selectionKey || '');
+      if (item && item.file_path) return recordKey(item.site_id, item.file_path);
+    } catch (_) { /* Fall back to the row attributes used by legacy fragments. */ }
+    return recordKey(checkbox.dataset.siteId, checkbox.value);
+  }
+
+  function recordItemFromKey(key) {
+    try {
+      var item = JSON.parse(key);
+      if (item && item.file_path) return { site_id: String(item.site_id || 'legacy'), file_path: String(item.file_path) };
+    } catch (_) { /* Legacy selections are only valid in the active site scope. */ }
+    return { site_id: (siteApi() && siteApi().current()) || '', file_path: String(key || '') };
+  }
+
+  function selectAllRecordItems(container) {
+    if (!container || !container.dataset.allItems) return;
+    try {
+      JSON.parse(container.dataset.allItems).forEach(function (item) {
+        if (item && item.file_path) state.records.add(recordKey(item.site_id, item.file_path));
+      });
+    } catch (_) { app.ui.toast(app.t('Selection metadata is invalid.'), 'error'); }
   }
 
   function selectAllFromDataset(container, key, selection) {
@@ -158,7 +191,8 @@
   function refreshQuarantine(container) {
     if (!container || !window.htmx) return;
     var status = encodeURIComponent(container.dataset.currentStatus || 'quarantined');
-    window.htmx.ajax('GET', siteUrl('/admin/quarantine?status=' + status), { target: '#' + container.id, swap: 'outerHTML' });
+    var query = encodeURIComponent(state.quarantineFilters[currentScopeKey()] || '');
+    window.htmx.ajax('GET', siteUrl('/admin/quarantine?status=' + status + '&q=' + query), { target: '#' + container.id, swap: 'outerHTML' });
   }
 
   function batchResultHost(container) {
@@ -206,17 +240,25 @@
     });
   }
 
+  function clearSuccessfulRecordSelections(result) {
+    (result.items || []).forEach(function (item) {
+      if (item.outcome === 'success' && item.file_path) state.records.delete(recordKey(item.site_id, item.file_path));
+    });
+  }
+
   function batchRecords(action, trigger) {
     activateSelectionScope('records');
-    var records = Array.from(state.records);
+    var records = Array.from(state.records).map(recordItemFromKey).filter(function (item) { return item.file_path; });
     if (!records.length) return;
-    var labels = { quarantine: app.t('Quarantine'), false_positive: app.t('Mark as FP'), delete: app.t('Delete') };
+    var labels = { quarantine: app.t('Quarantine'), false_positive: app.t('Mark as FP'), unmark_false_positive: app.t('Clear FP'), delete: app.t('Delete') };
     if (!app.confirm(app.t('%(action)s %(count)s records?', { action: labels[action], count: records.length }))) return;
-    var body = new URLSearchParams({ action: action });
+    var body = new URLSearchParams({ action: action, items: JSON.stringify(records) });
     var scope = siteApi() ? siteApi().current() : '';
     if (scope) body.set('site_id', scope);
-    records.forEach(function (path) { body.append('file_paths[]', path); });
+    if (scope) records.forEach(function (item) { body.append('file_paths[]', item.file_path); });
     var container = visibleContainer('[id^="records-table-container"]') || containerFor(trigger, '[id^="records-table-container"]');
+    var buttons = document.querySelectorAll('.rec-batch-btn');
+    buttons.forEach(function (button) { button.disabled = true; });
     app.http.json('/admin/records/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -224,13 +266,14 @@
     }).then(function (result) {
       if (result.error) throw new Error(result.error);
       renderBatchResults(result, container);
-      clearSuccessfulSelections(state.records, result, 'file_path');
+      clearSuccessfulRecordSelections(result);
       rememberSelectionScope('records');
       updateRecordControls();
       document.dispatchEvent(new Event('anteumbra:stats-refresh'));
       refreshRecords(container);
     }).catch(function (error) {
       app.ui.toast(app.t('Batch failed: %(message)s', { message: error.message }), 'error');
+      updateRecordControls();
     });
   }
 
@@ -244,6 +287,8 @@
     var scope = siteApi() ? siteApi().current() : '';
     if (scope) body.set('site_id', scope);
     ids.forEach(function (id) { body.append('qids[]', id); });
+    var buttons = document.querySelectorAll('.q-batch-btn');
+    buttons.forEach(function (button) { button.disabled = true; });
     app.http.json('/admin/quarantine/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -259,6 +304,7 @@
       refreshQuarantine(container);
     }).catch(function (error) {
       app.ui.toast(app.t('Batch failed: %(message)s', { message: error.message }), 'error');
+      updateQuarantineControls();
     });
   }
 
@@ -565,7 +611,8 @@
       'records.selection-change': { handler: function (context) {
         activateSelectionScope('records');
         var checkbox = context.element;
-        if (checkbox.checked) state.records.add(checkbox.value); else state.records.delete(checkbox.value);
+        var key = recordKeyFromCheckbox(checkbox);
+        if (checkbox.checked) state.records.add(key); else state.records.delete(key);
         rememberSelectionScope('records');
         updateRecordControls();
       }, events: ['change'], preventDefault: false },
@@ -578,7 +625,7 @@
       'records.select-all': { handler: function (context) {
         activateSelectionScope('records');
         var container = containerFor(context.element, '[id^="records-table-container"]');
-        selectAllFromDataset(container, 'allPaths', state.records);
+        selectAllRecordItems(container);
         setVisibleCheckboxes(container, '.rec-checkbox', state.records, true);
         rememberSelectionScope('records');
         updateRecordControls();
@@ -629,7 +676,12 @@
       } },
       'quarantine.batch': { handler: function (context) { batchQuarantine(context.element.dataset.batchAction, context.element); } },
       'quarantine.filter': { handler: function (context) {
-        filterList(context.element, '.record-item', function (item) { return item.textContent || ''; });
+        state.quarantineFilters[currentScopeKey()] = context.element.value || '';
+        var panel = context.element.closest('[data-record-list]');
+        window.clearTimeout(state.quarantineSearchTimer);
+        state.quarantineSearchTimer = window.setTimeout(function () {
+          if (panel && panel.isConnected) refreshQuarantine(panel);
+        }, 300);
       }, events: ['input'], preventDefault: false },
       'records.view-path': { handler: function (context) {
         var path = context.element.dataset.filePath || (context.element.closest('.record-item') || {}).dataset.path;

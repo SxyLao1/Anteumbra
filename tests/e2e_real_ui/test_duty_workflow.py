@@ -243,9 +243,8 @@ def test_duty_missing_and_quarantined_groups_keep_evidence_and_site(real_instanc
     missing.unlink()
     select_duty_view(page, "missing")
     missing_card = wait_for_duty_card(page, missing.name)
-    expect(page.locator("#duty-queue .duty-queue__hint")).to_contain_text(
-        "does not establish that risk is gone"
-    )
+    expect(missing_card).to_have_attribute("data-site-id", "portal")
+    expect(missing_card).to_contain_text("Portal test site")
     detail = open_detail(page, missing_card)
     expect(detail.get_by_role('button', name='View source', exact=True)).to_be_disabled()
     expect(detail).to_contain_text('File is missing; source is unavailable.')

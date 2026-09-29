@@ -17,19 +17,7 @@
     {% endfor %}
   </div>
 
-  <p class="duty-queue__hint">
-    {% if queue.view == 'active' %}
-      {{ '通信次数大于 0 的项目优先显示；这是累计通信优先级，不代表攻击仍在持续。' if zh else 'Records with communication count above zero are shown first. This is a cumulative communication priority, not proof an attack is ongoing.' }}
-    {% elif queue.view == 'quarantined' %}
-      {{ '隔离记录表示已进入隔离流程，仍需复核证据与处置结果。' if zh else 'A quarantine record shows the file entered the quarantine flow; evidence and the response outcome still need review.' }}
-    {% elif queue.view == 'missing' %}
-      {{ '文件缺失只说明当前记录观察到它不在原路径，不能据此认定风险已消除。' if zh else 'Missing means the record observes no file at its original path; it does not establish that risk is gone.' }}
-    {% elif queue.view == 'unknown' %}
-      {{ '历史记录未给出文件存在状态；它未被计入待处置，也仍可在此调查。' if zh else 'Historical records without an existence state are not counted as active, but remain available for investigation here.' }}
-    {% else %}
-      {{ '误报标记是已有复核结论；证据变化时仍应重新检查。' if zh else 'A false-positive mark is an existing review decision and should be reconsidered if evidence changes.' }}
-    {% endif %}
-  </p>
+  {% if queue.view == 'active' %}<p class="duty-queue__hint">{{ '排序：累计通信优先' if zh else 'Order: cumulative communications first' }}</p>{% endif %}
 
   <div class="duty-queue__records">
     {% for record in queue.records %}
@@ -43,20 +31,14 @@
         <span>{{ '时间' if zh else 'Time' }}: {{ record.display_time }}</span>
         <span>{{ '通信' if zh else 'Comms' }}: {{ record.communication_count }}</span>
       </div>
-      <div class="duty-card__next">
-        {% if queue.view == 'active' %}{{ '下一步：查看检测证据并判断处置。' if zh else 'Next: inspect detection evidence and decide a response.' }}
-        {% elif queue.view == 'missing' %}{{ '下一步：确认缺失证据并追查关联活动。' if zh else 'Next: confirm the missing-file evidence and trace related activity.' }}
-        {% elif queue.view == 'quarantined' %}{{ '下一步：复核隔离证据与后续处置结果。' if zh else 'Next: review quarantine evidence and the response outcome.' }}
-        {% elif queue.view == 'reviewed' %}{{ '下一步：需要时复核误报依据。' if zh else 'Next: revisit the false-positive basis if needed.' }}
-        {% else %}{{ '下一步：补齐文件存在状态后再判断。' if zh else 'Next: establish file existence before deciding.' }}{% endif %}
-      </div>
+
       <div class="duty-card__actions">
         <button class="btn btn-info btn-sm" type="button" data-action="records.detail-open"
                 data-site-id="{{ record.site_id or 'legacy' }}" data-file-path="{{ record.file_path|e }}">{{ '查看证据' if zh else 'View evidence' }}</button>
       </div>
     </article>
     {% else %}
-    <div class="empty-state"><p>{{ '此分组没有记录。0 条待研判不代表站点安全。' if zh else 'No records in this group. Zero items to review does not establish that the site is safe.' }}</p></div>
+    <div class="empty-state"><p>{{ '暂无记录' if zh else 'No records' }}</p></div>
     {% endfor %}
   </div>
 

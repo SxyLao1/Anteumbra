@@ -48,7 +48,7 @@ def test_monitor_detects_quarantines_and_restores_only_portal_instance(real_inst
     portal_row.get_by_role("button", name="详情", exact=True).click()
     detail = page.locator("#record-detail-modal")
     expect(detail).to_contain_text("累计计数；此处不提供逐次请求历史。")
-    expect(detail).to_contain_text("仅在文件仍可用且已获授权时")
+    expect(detail.get_by_role("button", name="查看源码", exact=True)).to_be_enabled()
     detail.get_by_role("button", name="查看源码", exact=True).click()
     expect(page.get_by_role("dialog", name="File source viewer")).to_contain_text("ANTEUMBRA_E2E_MARKER")
     page.keyboard.press("Escape")

@@ -207,6 +207,10 @@ def get_records():
         enhanced = _enhance_records(paginated)
         all_paths = [r.get("file_path", "") for r in all_records if r.get("file_path")]
 
+        all_items = [
+            {"file_path": r["file_path"], "site_id": r.get("site_id") or "legacy"}
+            for r in all_records if r.get("file_path")
+        ]
         compact = request.args.get("compact") == "1"
         if request.headers.get("HX-Request") or request.headers.get("Sec-Fetch-Dest") == "document":
             return render_page(
@@ -220,6 +224,7 @@ def get_records():
                 status_filter=status_filter,
                 compact=compact,
                 all_paths=all_paths,
+                all_items=all_items,
             )
         else:
             return jsonify(
@@ -290,12 +295,33 @@ def records_batch():
     """批量操作：隔离/误报/删除"""
     try:
         action = request.form.get("action", "")
-        file_paths = request.form.getlist("file_paths[]")
-        if not file_paths:
+        requested_site = _requested_site_id()
+        if "items" in request.form:
+            try:
+                items = json.loads(request.form["items"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid selection items"}), 400
+            if not isinstance(items, list) or not items:
+                return jsonify({"error": "missing selection items"}), 400
+            targets = []
+            for item in items:
+                if not isinstance(item, dict):
+                    return jsonify({"error": "invalid selection item"}), 400
+                fp, item_site = item.get("file_path"), item.get("site_id")
+                if not isinstance(fp, str) or not fp.strip() or not isinstance(item_site, str) or not item_site.strip():
+                    return jsonify({"error": "each item requires file_path and site_id"}), 400
+                item_site = item_site.strip().lower()
+                if requested_site and item_site != requested_site:
+                    return jsonify({"error": "selection is outside the requested site scope"}), 400
+                targets.append((path_to_key(fp), item_site))
+        else:
+            # Single-object detail and older scoped clients retain their contract.
+            targets = [(path_to_key(fp), requested_site) for fp in request.form.getlist("file_paths[]") if fp]
+        targets = list(dict.fromkeys(targets))
+        if not targets:
             return jsonify({"error": "missing file_paths"}), 400
 
         results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "items": []}
-        site_id = _requested_site_id()
         names_by_id = _configured_site_names()
 
         def add_item(file_path, outcome, *, record=None, error=None):
@@ -303,12 +329,14 @@ def records_batch():
             item = {"file_path": str(file_path), "outcome": outcome}
             if record is not None:
                 item.update(site_fields(record, names_by_id=names_by_id))
+            elif site_id:
+                item.update(site_fields({"site_id": site_id}, names_by_id=names_by_id))
             if error:
                 item["error"] = str(error)
             results["items"].append(item)
 
         if action == "quarantine":
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
                     if not record:
@@ -349,7 +377,7 @@ def records_batch():
                     )
         elif action == "false_positive":
             # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
                     if not record:
@@ -376,7 +404,7 @@ def records_batch():
                     )
         elif action == "unmark_false_positive":
             # Undo a review: the record returns to the active threat set.
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
                     if not record:
@@ -403,7 +431,7 @@ def records_batch():
                     )
         elif action == "delete":
             # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
                     if not record:

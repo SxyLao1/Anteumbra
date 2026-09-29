@@ -3,7 +3,7 @@
 {% set status_url = '/admin/records?compact=1&status=' %}
 {% set page_common = '&status=' ~ active_status ~ ('&q=' ~ request.args.get('q')|urlencode if request.args.get('q') else '') ~ ('&compact=1' if compact else '') %}
 <div id="{{ container_id }}" class="records-panel" data-record-list data-status="{{ active_status }}"
-     data-all-paths='{{ all_paths|default([])|tojson }}' data-audit-mode="{{ 'true' if audit_mode else 'false' }}">
+     data-all-paths='{{ all_paths|default([])|tojson }}' data-all-items='{{ all_items|default([])|tojson }}' data-audit-mode="{{ 'true' if audit_mode else 'false' }}">
   <div class="records-status-filter" role="group" aria-label="{{ _('Status filter') }}">
     <button class="btn btn-sm ledger-filter{% if active_status == 'all' %} active{% endif %}" type="button"
             data-action="records.status" data-status="all">{{ _('All') }}</button>
@@ -14,7 +14,6 @@
     <button class="btn btn-sm ledger-filter{% if active_status == 'deleted' %} active{% endif %}" type="button"
             data-action="records.status" data-status="deleted">{{ _('Deleted') }}</button>
     <span class="toolbar-spacer"></span>
-    <span class="records-status-hint">{{ _('False positives stay listed here — clear the mark to return a file to the active set.') }}</span>
   </div>
 
   <div class="batch-toolbar">
@@ -36,7 +35,7 @@
        aggregate list still resolves the record it belongs to. #}
     <article class="record-item {% if record.marked_false_positive %}record-false-positive{% endif %}"
              data-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}">
-      <input type="checkbox" class="rec-checkbox" value="{{ record.file_path|e }}" data-action="records.selection-change" aria-label="{{ _('Select record') }}">
+      <input type="checkbox" class="rec-checkbox" value="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}" data-selection-key='{{ {'site_id': record.site_id, 'file_path': record.file_path}|tojson }}' data-action="records.selection-change" aria-label="{{ _('Select record') }}">
       <div class="record-info">
         <div class="record-title">{{ record.display_name }}</div>
         <div class="record-meta">

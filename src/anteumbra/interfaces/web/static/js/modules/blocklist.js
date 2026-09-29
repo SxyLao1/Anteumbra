@@ -3,7 +3,7 @@
   'use strict';
 
   var app = window.Anteumbra;
-  var state = { filter: 'all', page: 1, query: '', timer: null, devices: {}, selectedDevices: {} };
+  var state = { filter: 'all', page: 1, query: '', timer: null, devices: {}, selectedDevices: {}, ledgerRequestId: 0 };
   function scopeUrl(url) {
     var site = window.AnteumbraSite && window.AnteumbraSite.current();
     return site ? url + (url.indexOf('?') >= 0 ? '&' : '?') + 'site_id=' + encodeURIComponent(site) : url;
@@ -31,10 +31,16 @@
   function fetchLedger() {
     var target = document.getElementById('ledger-tbody');
     if (!target) return;
+    var requestId = ++state.ledgerRequestId;
     target.textContent = 'Loading...';
     app.http.json(scopeUrl('/admin/blocklist/data?source=' + encodeURIComponent(state.filter) + '&page=' + state.page + '&q=' + encodeURIComponent(state.query)))
-      .then(renderLedger)
-      .catch(function (error) { target.textContent = 'Failed to load: ' + error.message; });
+      .then(function (data) {
+        if (requestId !== state.ledgerRequestId || !target.isConnected) return;
+        renderLedger(data);
+      })
+      .catch(function (error) {
+        if (requestId === state.ledgerRequestId && target.isConnected) target.textContent = 'Failed to load: ' + error.message;
+      });
   }
 
   function tableCell(text) {

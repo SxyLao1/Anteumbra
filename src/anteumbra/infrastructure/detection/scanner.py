@@ -109,7 +109,14 @@ class YaraScanner(BaseScanner):
         return "yara"
 
     def can_scan(self, file_path: Path, scan_options: ScanOptions) -> bool:
-        return file_path.suffix.lower() in _WEB_EXTENSIONS and _within_size_limit(
+        # Manual scans may explicitly select extensions outside the site's
+        # monitoring policy.  ScannerService has already applied that policy
+        # as its admission gate; honour the same effective options here so a
+        # selected file reaches the YARA engine.  A missing policy retains the
+        # established Web-file default for monitor-driven scans.
+        configured_extensions = scan_options.monitor_extensions or _WEB_EXTENSIONS
+        extensions = {str(extension).lower() for extension in configured_extensions}
+        return file_path.suffix.lower() in extensions and _within_size_limit(
             file_path, scan_options, self.config_provider.get()
         )
 
