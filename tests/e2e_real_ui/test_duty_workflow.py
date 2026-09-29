@@ -19,7 +19,7 @@ ARTIFACTS = Path(
 
 def screenshot(page, name: str) -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(ARTIFACTS / name), full_page=True)
+    page.screenshot(path=str(ARTIFACTS / name), full_page=True, animations="disabled")
 
 
 def assert_essential_geometry(page, *selectors: str) -> None:
@@ -176,6 +176,18 @@ def test_detail_source_escape_cancel_and_false_positive_undo(real_instance):
     expect(detail).to_contain_text('检测处置台')
     assert_essential_geometry(page, "#record-detail-modal", ".record-workbench__response")
     screenshot(page, f"duty-detail-zh-light-{page.viewport_size['width']}.png")
+    original_viewport = page.viewport_size
+    page.set_viewport_size({"width": 320, "height": 740})
+    expect(page.locator("#record-detail-modal-overlay")).to_have_css("opacity", "1")
+    body_box = detail.locator(".record-workbench__body").bounding_box()
+    assert body_box is not None
+    for note in detail.locator(".detail-profile-meta").all():
+        if note.is_visible():
+            note_box = note.bounding_box()
+            assert note_box is not None
+            assert note_box["x"] + note_box["width"] <= body_box["x"] + body_box["width"] + 1
+    screenshot(page, "duty-detail-zh-light-320.png")
+    page.set_viewport_size(original_viewport)
 
 
 def test_duty_missing_and_quarantined_groups_keep_evidence_and_site(real_instance):
@@ -210,6 +222,9 @@ def test_duty_missing_and_quarantined_groups_keep_evidence_and_site(real_instanc
     expect(receipt).to_contain_text(quarantined.name)
     expect(receipt).to_contain_text("Portal test site")
     expect(detail.locator(".record-workbench__state--danger")).to_contain_text("Quarantined")
+    detail.locator(".record-workbench__metadata summary").click()
+    expect(detail.locator(".record-workbench__metadata")).to_contain_text("Moved to quarantine")
+    expect(detail.locator(".record-workbench__metadata")).not_to_contain_text("Deleted outside the product")
     expect(detail.locator('.record-workbench__ledger-link')).to_have_attribute(
         'href', '/admin/quarantine?status=all&site=portal'
     )

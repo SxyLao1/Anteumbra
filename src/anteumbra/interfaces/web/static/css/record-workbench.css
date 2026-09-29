@@ -22,6 +22,7 @@
 
 .record-workbench__body { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .8fr); gap: 24px; min-height: 0; overflow: auto; }
 .record-workbench__main { min-width: 0; }
+.record-workbench .detail-profile-meta { white-space: normal; overflow-wrap: anywhere; }
 .record-workbench__section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .record-workbench__ledger-link { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 10px 0 0 10px; color: var(--color-accent); font-size: 12px; overflow-wrap: anywhere; }
 
