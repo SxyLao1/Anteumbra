@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 RULE = "rule anteumbra_selection_{index} {{ condition: true }}\n"
 CREATED = 9  # more than one page at the default page size
 
@@ -21,7 +23,7 @@ def _create_rules(runtime) -> list:
 
 
 def _open_rules(page) -> None:
-    page.click("a.nav-link[data-path='yara/rules']")
+    open_console_route(page, "yara/rules")
     expect(page.locator(".yara-checkbox").first).to_be_visible(timeout=10000)
 
 

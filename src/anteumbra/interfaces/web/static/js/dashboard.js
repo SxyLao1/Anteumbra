@@ -3,7 +3,7 @@
   'use strict';
 
   var app = window.Anteumbra;
-  var state = { path: 'overview', title: 'Overview', requestId: 0, started: false, logObserver: null, logStream: null };
+  var state = { path: 'overview', title: 'Overview', url: window.location.pathname + window.location.search + window.location.hash, requestId: 0, started: false, logObserver: null, logStream: null };
   var threatUrls = {
     active: '/admin/records?compact=1&status=all',
     quarantine: '/admin/quarantine?status=quarantined',
@@ -74,6 +74,7 @@
   }
 
   function closeSidebar() {
+    document.querySelectorAll('.console-mobile-nav details[open]').forEach(function (menu) { menu.open = false; });
     var sidebar = document.querySelector('.app-sidebar');
     var overlay = document.getElementById('sidebar-overlay');
     var toggle = document.getElementById('sidebar-toggle');
@@ -83,6 +84,7 @@
   }
 
   function toggleSidebar() {
+    document.querySelectorAll('.console-mobile-nav details[open]').forEach(function (menu) { menu.open = false; });
     var sidebar = document.querySelector('.app-sidebar');
     var overlay = document.getElementById('sidebar-overlay');
     var toggle = document.getElementById('sidebar-toggle');
@@ -113,21 +115,45 @@
     app.mount(target);
   }
 
-  function load(path, title) {
+  function routeUrl(route) {
+    var value = String(route || 'overview');
+    if (value.charAt(0) !== '/') value = '/admin/' + value.replace(/^\/+/, '');
+    var url = new window.URL(value, window.location.origin);
+    var current = new window.URL(window.location.href);
+    ['site', 'lang'].forEach(function (name) {
+      if (!url.searchParams.has(name) && current.searchParams.has(name)) url.searchParams.set(name, current.searchParams.get(name));
+    });
+    return url;
+  }
+
+  function load(path, title, options) {
+    options = options || {};
     var target = mainContent();
     if (!target) return Promise.resolve();
-    state.path = path;
+    if (!options.skipConfirm && window.AnteumbraConsoleShell && !window.AnteumbraConsoleShell.confirmNavigation()) return Promise.resolve();
+    var requestUrl = routeUrl(path);
+    state.path = requestUrl.pathname.replace(/^\/admin\/?/, '') + requestUrl.search;
     state.title = title || path;
     setTitle(state.title);
-    highlightNavigation(path.replace('_content', ''));
+    highlightNavigation(requestUrl.pathname.replace(/^\/admin\/?/, '').replace('_content', ''));
     closeSidebar();
     var requestId = ++state.requestId;
     app.unmount(target);
     setLoading(target, 'Loading ' + state.title + '...');
-    return app.http.text(siteUrl('/admin/' + path), { headers: { 'HX-Request': 'true' } })
+    return app.http.text(requestUrl.pathname + requestUrl.search, { headers: { 'HX-Request': 'true' } })
       .then(function (html) {
         if (requestId !== state.requestId) return;
         applyFragment(target, html);
+        if (!options.skipHistory && window.history && window.history.pushState) {
+          window.history.pushState({ anteumbraPath: requestUrl.pathname + requestUrl.search + requestUrl.hash, anteumbraTitle: state.title }, '', requestUrl.pathname + requestUrl.search + requestUrl.hash);
+        }
+        state.url = window.location.pathname + window.location.search + window.location.hash;
+        if (window.AnteumbraConsoleShell) window.AnteumbraConsoleShell.snapshot(target);
+        if (window.AnteumbraConsoleShell) window.AnteumbraConsoleShell.inferWorkspace(requestUrl.pathname);
+        if (requestUrl.hash) {
+          var anchor = document.getElementById(requestUrl.hash.slice(1));
+          if (anchor) anchor.scrollIntoView({ block: 'start' });
+        }
       })
       .catch(function (error) {
         if (requestId !== state.requestId) return;
@@ -141,7 +167,7 @@
       });
   }
 
-  function refresh() { return load(state.path, state.title); }
+  function refresh() { return load(state.path, state.title, { skipHistory: true }); }
 
   function htmxReplace(target, url) {
     return app.http.text(url, { headers: { 'HX-Request': 'true' } }).then(function (html) {
@@ -353,7 +379,7 @@
         // the server already produced - only the idle placeholder is replaced.
         var serverRendered = !!bootstrap && !/Initializing dashboard/.test(bootstrap.textContent || '');
         if (initialPath) {
-          state.path = initialPath;
+          state.path = initialPath + window.location.search;
           state.title = bootstrap.dataset.initialTitle || initialPath;
           highlightNavigation(state.path);
         }
@@ -363,11 +389,28 @@
           if (!initialPath && !serverRendered) load('overview', 'Overview');
         }, 0);
         document.addEventListener('anteumbra:stats-refresh', refreshStatistics);
+        ['htmx:pushedIntoHistory', 'htmx:replacedInHistory'].forEach(function (name) {
+          document.addEventListener(name, function () { state.url = window.location.pathname + window.location.search + window.location.hash; });
+        });
+        // The shell is the sole history owner. HTMX's default restoration can
+        // replace the whole body with a fragment and race the draft warning.
+        window.onpopstate = function (event) {
+          if (window.AnteumbraConsoleShell && !window.AnteumbraConsoleShell.confirmNavigation()) {
+            // Cancel before HTMX restores cached DOM, keeping the visible draft.
+            event.stopImmediatePropagation();
+            window.history.pushState({ anteumbraPath: state.url, anteumbraTitle: state.title }, '', state.url);
+            return;
+          }
+          var saved = event.state || {};
+          var path = saved.anteumbraPath || (window.location.pathname + window.location.search + window.location.hash);
+          load(path, saved.anteumbraTitle || path, { skipHistory: true, skipConfirm: true });
+        };
         document.addEventListener('keydown', function (event) {
           if (event.key !== 'Escape') return;
           // Escape dismisses the topmost layer: an open modal first, then the
           // log analyzer and the mobile sidebar.
-          var openModal = document.querySelector('.modal-overlay.active');
+          var layers = document.querySelectorAll('.modal-overlay.active');
+          var openModal = document.querySelector('.modal-overlay--front.active') || layers[layers.length - 1];
           if (openModal) {
             app.ui.hideModal(openModal);
             return;

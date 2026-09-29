@@ -185,6 +185,17 @@ def threats():
         return render_template("admin/error.html", error=str(e)), 500
 
 
+@admin_bp.route("/sites")
+@require_auth
+def sites_workspace():
+    """Configured site inventory; configuration is not monitor health."""
+    runtime = get_runtime()
+    return render_page(
+        "admin/sites.html",
+        managed_sites=runtime.config.get_websites(),
+    )
+
+
 @admin_bp.route("/dashboard_content")
 @require_auth
 def dashboard_content():
@@ -446,6 +457,11 @@ def account_page():
 @require_auth
 def change_password():
     """修改密码API"""
+    def rejected(message, status=400):
+        if not request.is_json:
+            return render_page("admin/account.html", error=message)
+        return jsonify({"success": False, "error": message}), status
+
     try:
         # v1.0.10: 优先 JSON（API 客户端），fallback form（Web UI HTML form）
         data = request.get_json(silent=True) or {}
@@ -456,23 +472,25 @@ def change_password():
 
         # 验证必填
         if not current_password or not new_password:
-            return jsonify({"success": False, "error": "请填写所有字段"}), 400
+            return rejected("请填写所有字段 / Complete all fields")
+        if not request.is_json and new_password != data.get("confirm_password"):
+            return rejected("两次输入的新密码不一致 / New passwords do not match")
 
         # 验证当前密码
         _, stored_hash, _ = get_admin_credentials()
         if not check_password_hash(stored_hash, current_password):
-            return jsonify({"success": False, "error": "当前密码错误"}), 401
+            return rejected("当前密码错误 / Current password is incorrect", 401)
 
         # 验证新密码强度
         passwords = get_runtime().passwords
         is_strong, msg = passwords.check_strength(new_password)
         if not is_strong:
-            return jsonify({"success": False, "error": msg}), 400
+            return rejected(msg)
 
         # 生成新哈希并更新
         success, msg = passwords.set_password(new_password)
         if not success:
-            return jsonify({"success": False, "error": msg}), 500
+            return rejected(msg, 500)
 
         username = session.get("username", "admin")
         log_with_symbol(
@@ -482,6 +500,8 @@ def change_password():
             current_app.logger,
         )
         session.pop("authenticated", None)
+        if not request.is_json:
+            return redirect(url_for("admin.login"))
         return jsonify({"success": True, "message": msg})
 
     except Exception as e:

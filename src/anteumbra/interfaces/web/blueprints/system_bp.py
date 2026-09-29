@@ -18,6 +18,7 @@ from flask import Blueprint, current_app, render_template, request, session
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def system_management():
         except Exception:
             logger.debug("Failed to count session files in system_management", exc_info=True)
 
-        return render_template(
+        return render_page(
             "admin/system_management.html",
             auth_header=auth_header,
             username=session.get("username"),

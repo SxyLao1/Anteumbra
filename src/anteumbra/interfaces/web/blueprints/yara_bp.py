@@ -8,15 +8,13 @@
 v1.7.6: YARA规则管理蓝图
 """
 
-import json
 import shutil
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from flask import Blueprint, abort, current_app, jsonify, request
-from markupsafe import escape as html_escape
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
 from anteumbra.application.path_service import normalize_path
@@ -444,73 +442,7 @@ def edit_rule_modal(filename):
             abort(404)
 
         file_content = target_file.read_text(encoding="utf-8", errors="ignore")
-        escaped_content = html_escape(file_content).replace("%", "%%")
-        filename_arg = html_escape(json.dumps(filename))
-
-        # 使用 % 格式化避免 f-string 解析问题
-        html = """
-        <div style="display:flex;flex-direction:column;height:100%%;gap:16px;">
-          <textarea id="rule-editor" class="form-textarea" style="flex:1;min-height:300px;font-family:var(--font-mono);font-size:13px;line-height:1.6;">%s</textarea>
-          <div id="yara-validation-result" style="font-family:var(--font-mono);font-size:12px;min-height:24px;"></div>
-          <div style="display:flex;gap:10px;justify-content:flex-end;">
-            <button class="btn btn-ghost" onclick="validateYaraRule()">Validate Syntax</button>
-            <button class="btn btn-primary" onclick='saveYaraRule(%s)'>Save Update</button>
-          </div>
-        </div>
-
-        <script>
-        (function(){
-          const el = document.querySelector('meta[name="csrf-token"]');
-          const csrfToken = el ? el.content : '';
-
-          window.validateYaraRule = function() {
-            const content = document.getElementById('rule-editor').value;
-            const resultDiv = document.getElementById('yara-validation-result');
-            resultDiv.innerHTML = '<span style="color:var(--color-info)">[INFO] Validating...</span>';
-            fetch('/admin/yara/validate', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-              body: JSON.stringify({content: content})
-            })
-            .then(r => r.json())
-            .then(data => {
-              if (data.valid) {
-                resultDiv.innerHTML = '<span style="color:var(--color-safe)">[✓] Syntax OK</span>';
-              } else {
-                resultDiv.innerHTML = '<span style="color:var(--color-danger)">[✗] ' + (data.error || 'Unknown error').replace(/</g, '&lt;') + '</span>';
-              }
-            })
-            .catch(e => {
-              resultDiv.innerHTML = '<span style="color:var(--color-danger)">[✗] Request failed: ' + e.message + '</span>';
-            });
-          };
-
-          window.saveYaraRule = function(filename) {
-            const content = document.getElementById('rule-editor').value;
-            if (!confirm('Confirm update? This will overwrite the original file.')) return;
-            fetch('/admin/yara/rules/' + filename, {
-              method: 'PUT',
-              headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-              body: JSON.stringify({content: content})
-            })
-            .then(r => r.json())
-            .then(data => {
-              if (data.success) {
-                AnteumbraUtils.toast('Rule updated successfully', 'success');
-                AnteumbraUtils.modal.hide('yara-edit-modal');
-                htmx.ajax('GET', '/admin/yara/rules', {target: '#main-content'});
-              } else {
-                AnteumbraUtils.toast('Update failed: ' + (data.error || 'Unknown'), 'error');
-              }
-            })
-            .catch(e => {
-              AnteumbraUtils.toast('Save failed: ' + e.message, 'error');
-            });
-          };
-        })();
-        </script>
-        """ % (escaped_content, filename_arg)
-        return html
+        return render_template("admin/yara_editor.html", filename=filename, content=file_content)
     except Exception as e:
         log_with_symbol("yara_error", "error", f"编辑弹窗失败: {e}", current_app.logger)
         abort(500)

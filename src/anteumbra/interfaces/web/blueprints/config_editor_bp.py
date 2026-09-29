@@ -41,7 +41,6 @@ from typing import Any
 from flask import Blueprint, Response, current_app, request
 from flask_babel import gettext
 from markupsafe import Markup, escape
-from werkzeug.security import generate_password_hash
 
 from anteumbra.application import config_document as cd
 from anteumbra.application.config_history_service import ConfigRevisionStore
@@ -1270,53 +1269,27 @@ def _env_write(key: str, value: str):
 @config_editor_bp.route("/config/editor/password", methods=["POST"])
 @require_auth
 def config_password():
-    """Set a new admin password: hashed here, written to ``.env``, never echoed."""
+    """Set a new admin password through the runtime credential service."""
     password = request.form.get("password", "")
     confirmation = request.form.get("password_confirm", "")
-    if len(password) < 8:
-        return _render_result(
-            _Plan(
-                notice=_notice(
-                    "error", gettext("Use at least 8 characters for the admin password.")
-                )
-            )
-        )
     if password != confirmation:
         return _render_result(
             _Plan(notice=_notice("error", gettext("The two passwords do not match.")))
         )
-    hashed = generate_password_hash(password)
+    updated, detail = _runtime().passwords.set_password(password)
     del password, confirmation
-    config_path = _config_path()
-    env_path = config_path.parent / ".env"
-    try:
-        with _WRITE_LOCK:
-            write_env_value(env_path, PASSWORD_ENV_KEY, hashed)
-            reload_error = _reload_runtime()
-    except Exception as exc:  # noqa: BLE001 - inline error, never a 500
-        current_app.logger.error("[CONFIG] password write failed: %s", exc, exc_info=True)
-        return _render_result(
-            _Plan(
-                notice=_notice(
-                    "error",
-                    gettext("The new password could not be written: %(detail)s", detail=str(exc)),
-                )
-            )
-        )
+    if not updated:
+        return _render_result(_Plan(notice=_notice("error", gettext(detail))))
     plan = _Plan(label=gettext("Set a new admin password"))
     plan.written = True
-    plan.reload_error = reload_error
     plan.notes = [
         gettext("The hash is never displayed, not even to you."),
         gettext(
-            "web_admin.password_hash resolves this value, and it is read on every "
-            "sign-in, so the reload above is what activates the new password."
+            "web_admin.password_hash is updated when a deployment uses a literal hash, "
+            "so the next sign-in uses this password."
         ),
     ]
-    plan.notice = _notice(
-        "warning" if reload_error else "success",
-        gettext("The new password is active for the next sign-in."),
-    )
+    plan.notice = _notice("success", gettext(detail))
     return _render_result(plan)
 
 

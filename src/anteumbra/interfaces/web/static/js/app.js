@@ -132,7 +132,10 @@
       } catch (_) {
         if (body) message = body;
       }
-      throw new Error(message);
+      var error = new Error(message);
+      error.status = response.status;
+      error.payload = parsed;
+      throw error;
     });
   }
 

@@ -1,6 +1,3 @@
-<div id="quarantine-detail-modal" class="modal-overlay" aria-hidden="true" data-action="core.backdrop-close">
-  <div id="quarantine-detail-content" class="modal-box modal-box--detail"></div>
-</div>
 <div id="quarantine-list-container" class="quarantine-list records-panel" data-record-list data-all-qids='{{ all_qids|default([])|tojson }}' data-current-status="{{ current_status }}">
   <div class="batch-toolbar">
     <button class="btn btn-ghost btn-sm" type="button" data-action="quarantine.select-page">{{ _('Sel Page') }}</button>

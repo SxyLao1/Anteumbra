@@ -57,6 +57,7 @@ jobs:
         run: |
           python -m pytest tests/ \
             --ignore=tests/e2e_ui \
+            --ignore=tests/e2e_real_ui \
             --cov=anteumbra \
             --cov-fail-under=60 \
             -v \
@@ -92,10 +93,17 @@ jobs:
 
       - name: Run UI tests
         run: |
-          python -m pytest tests/e2e_ui/ -v --tb=short -p no:warnings
+          python -m pytest tests/e2e_real_ui/ -v --tb=short -p no:warnings --junitxml=test-results/browser.xml
         env:
-          ANTEUMBRA_TOOL_MODE: "true"
+          ANTEUMBRA_E2E_ARTIFACTS: test-results/browser
+          ANTEUMBRA_UI_ARTIFACTS: test-results/browser
 
+      - name: Save browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-acceptance
+          path: test-results/
   # ── Package Build Check ───────────────────────────────────
   build:
     name: "Build Check"

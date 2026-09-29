@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import tomli_w
-from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask import Blueprint, Response, current_app, jsonify, render_template, request, session
 from flask_babel import gettext
 
 from anteumbra.cli.config_support import (
@@ -908,7 +908,8 @@ def settings_notifications():
         wechat = notifier.get("wechat", {})
         webhook = notifier.get("webhook", {})
         return render_page(
-            "admin/panels/notify_config.html", email=email, wechat=wechat, webhook=webhook
+            "admin/panels/notify_config.html", email=email, wechat=wechat, webhook=webhook,
+            notification_enabled=bool(notifier.get("enabled", False)),
         )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] notifications failed: {e}", exc_info=True)
@@ -1040,32 +1041,30 @@ def settings_config_data():
 def settings_env_save():
     """v1.8.0: Save .env file (structured variables)"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         vars_data = data.get("vars", {})
         config_path = get_runtime().config.path
         env_path = os.path.join(os.path.dirname(config_path), ".env")
 
-        existing = {}
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if "=" in line and not line.startswith("#"):
-                        k, v = line.split("=", 1)
-                        existing[k.strip()] = line
+        if not isinstance(vars_data, Mapping):
+            return jsonify({"success": False, "error": "Invalid environment values"}), 400
 
-        for k, v in vars_data.items():
-            if v:
-                existing[k] = f"{k}={v}"
+        allowed = {*ENVIRONMENT_KEYS, "ANTEUMBRA_PASSWORD_HASH"}
+        unknown = set(vars_data) - allowed
+        if unknown:
+            return jsonify({"success": False, "error": "Unsupported environment key"}), 400
 
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.write("# Anteumbra .env -- managed via Settings UI\n")
-            for k in sorted(existing.keys()):
-                f.write(existing[k] + "\n")
+        password_hash = str(vars_data.get("ANTEUMBRA_PASSWORD_HASH") or "").strip()
+        if password_hash:
+            updated, detail = get_runtime().passwords.set_password_hash(password_hash)
+            if not updated:
+                return jsonify({"success": False, "error": detail}), 400
 
-        for k, v in vars_data.items():
-            if v:
-                os.environ[k] = v
+        for key in ENVIRONMENT_KEYS:
+            value = str(vars_data.get(key) or "").strip()
+            if value:
+                write_env_value(Path(env_path), key, value)
+
         try:
             get_runtime().config.reload()
         except Exception:
@@ -1082,20 +1081,17 @@ def settings_env_save():
 def settings_env_hash():
     """v1.8.0: Generate scrypt password hash"""
     try:
-        data = request.get_json()
-        password = data.get("password", "")
-        if not password or len(password) < 6:
-            return jsonify({"error": "Password too short (min 6 chars)"}), 400
+        data = request.get_json(silent=True) or {}
+        password = str(data.get("password") or "")
+        accepted, message = get_runtime().passwords.check_strength(password)
+        if not accepted:
+            return jsonify({"error": message}), 400
         from werkzeug.security import generate_password_hash
 
-        h = generate_password_hash(password, method="scrypt:32768:8:1")
+        h = generate_password_hash(password)
         return jsonify({"hash": h})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-#: Minimum admin password length, matching ``anteumbra config password``.
-MIN_ADMIN_PASSWORD_LENGTH = 6
 
 
 @settings_bp.route("/settings/password/save", methods=["POST"])
@@ -1117,28 +1113,11 @@ def settings_password_save():
     try:
         password = str(request.form.get("new_password") or "")
         confirm = str(request.form.get("confirm_password") or "")
-        if len(password) < MIN_ADMIN_PASSWORD_LENGTH:
-            notice = _notice(
-                "error",
-                gettext(
-                    "Password too short: at least %(count)s characters are required.",
-                    count=MIN_ADMIN_PASSWORD_LENGTH,
-                ),
-            )
-        elif confirm and confirm != password:
+        if password != confirm:
             notice = _notice("error", gettext("The two passwords do not match."))
         else:
-            from werkzeug.security import generate_password_hash
-
-            env_path = Path(get_runtime().config.path).parent / ".env"
-            write_env_value(env_path, "ANTEUMBRA_PASSWORD_HASH", generate_password_hash(password))
-            notice = _notice(
-                "success",
-                gettext(
-                    "New password hash written to .env. Existing sessions stay signed in "
-                    "until they expire; the next sign-in uses the new password."
-                ),
-            )
+            updated, detail = get_runtime().passwords.set_password(password)
+            notice = _notice("success" if updated else "error", gettext(detail))
     except Exception as exc:  # noqa: BLE001 - inline error, never a 500
         current_app.logger.error(f"[SETTINGS] password change failed: {exc}", exc_info=True)
         notice = _notice(
@@ -1159,7 +1138,7 @@ def settings_notifications_save():
     try:
         section = request.form.get("section", "")
         key = request.form.get("key", "")
-        value = request.form.get("value", "on")
+        value = request.form.get("value", "off")
 
         if section not in ("email", "wechat", "webhook") or key not in ("enabled",):
             return jsonify({"error": "Invalid parameters"}), 400
@@ -1185,7 +1164,13 @@ def settings_notifications_save():
         with open(config_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
-        return jsonify({"success": True, "message": f"{section}.{key} updated"})
+        get_runtime().config.reload()
+        return jsonify(
+            {
+                "success": True,
+                "message": f"{section}.{key} saved. Restart the notification service to apply it.",
+            }
+        )
     except Exception as e:
         current_app.logger.error(f"[SETTINGS] save failed: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -1201,6 +1186,15 @@ def siem_export():
     fmt = request.args.get("format", "")
     try:
         exporter = _siem_exporter()
+        if request.args.get("download") == "1":
+            output_format = fmt or "json_lines"
+            records = get_runtime().registry.get_all(include_deleted=False)
+            content = exporter.render_download(records, output_format)
+            extension = {"json": "jsonl", "json_lines": "jsonl", "cef": "cef", "csv": "csv"}[output_format]
+            return Response(
+                content, mimetype="text/csv" if extension == "csv" else "text/plain",
+                headers={"Content-Disposition": f"attachment; filename=anteumbra-siem.{extension}"},
+            )
         if fmt:
             exporter.set_format(fmt)
         records = get_runtime().registry.get_all(include_deleted=False)

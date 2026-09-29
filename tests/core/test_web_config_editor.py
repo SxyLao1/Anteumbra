@@ -787,7 +787,7 @@ def test_the_password_flow_hashes_and_never_echoes(editor) -> None:
         )
     )
 
-    assert "The new password is active for the next sign-in." in response
+    assert "Password updated and active for new logins." in response
     assert "Str0ngPassw0rd!" not in response
     stored = dict(
         line.split("=", 1)

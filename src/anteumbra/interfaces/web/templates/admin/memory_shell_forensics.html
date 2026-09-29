@@ -10,7 +10,7 @@
       {# The panel is fetched so the page shell renders even when the probe
          plugin is not enabled; the panel itself reports that state. #}
       <div id="memory-shell-forensics-panel"
-           hx-get="/admin/memory-shell/forensics/panel"
+           hx-get="{{ url_for('memory_shell.memory_shell_forensics_panel', site=active_site or '', site_id=request.args.get('site_id', ''), kind=request.args.get('kind', ''), name=request.args.get('name', '')) }}"
            hx-trigger="load"
            hx-swap="innerHTML">
         <div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div>

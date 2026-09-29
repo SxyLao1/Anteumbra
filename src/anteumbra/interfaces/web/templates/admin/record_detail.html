@@ -1,4 +1,4 @@
-<div class="record-detail-modal">
+<div class="record-detail-modal" data-site-id="{{ record.site_id }}">
   <div class="modal-header">
     <h3>{{ _('Detection Detail') }}</h3>
     <button class="modal-close" type="button" data-action="records.detail-close">&times;</button>
@@ -8,6 +8,7 @@
       <h4>{{ _('File Info') }}</h4>
       <table class="detail-table">
         <tr><td>{{ _('File name') }}</td><td>{{ record.display_name }}</td></tr>
+        <tr><td>{{ _('Site') }}</td><td>{% if record.site_unassigned %}<span class="badge badge-muted">{{ _('Unassigned') }}</span>{% else %}<span class="badge badge-gray">{{ record.site_name }}</span>{% endif %}<code>{{ record.site_id }}</code></td></tr>
         <tr><td>{{ _('Full path') }}</td><td><code>{{ record.file_path }}</code></td></tr>
         <tr><td>{{ _('File size') }}</td><td>{{ "%.2f"|format(record.file_size / 1024) }} {{ _('KB') }}</td></tr>
         <tr><td>{{ _('File status') }}</td><td>
@@ -41,7 +42,7 @@
             <span class="badge badge-blue">{{ feature }}</span>
           {% endfor %}
         </td></tr>
-        <tr><td>{{ _('Communications') }}</td><td>{{ record.communication_count }}</td></tr>
+        <tr><td>{{ _('Communications') }}</td><td>{{ record.communication_count }} <span class="detail-profile-meta">{{ _('Cumulative count; request history is not available here.') }}</span></td></tr>
         <tr><td>{{ _('First seen IP') }}</td><td>{{ record.first_seen_ip }}</td></tr>
         <tr><td>{{ _('Content SHA-256') }}</td><td>
           {% if record.content_hash %}
@@ -51,6 +52,12 @@
           {% endif %}
         </td></tr>
       </table>
+    </div>
+
+    <div class="detail-section">
+      <h4>{{ _('Source') }}</h4>
+      <p class="detail-profile-meta">{{ _('The source viewer reads this record only when the file is still available and authorized.') }}</p>
+      <button class="btn btn-sm btn-ghost" type="button" data-action="records.view-path" data-file-path="{{ record.file_path|e }}" data-site-id="{{ record.site_id }}">{{ _('View source') }}</button>
     </div>
 
     <div class="detail-section">
@@ -99,7 +106,7 @@
             <span class="detail-profile-meta">{{ lp.tool_signature }}</span>
           </div>
           <button class="btn btn-sm btn-ghost" type="button"
-                  data-action="records.detail-profile" data-profile-id="{{ lp.profile_id }}" data-profile-label="{{ lp.profile_id[:8] }}">
+                  data-action="records.detail-profile" data-profile-id="{{ lp.profile_id }}" data-profile-label="{{ lp.profile_id[:8] }}" data-site-id="{{ lp.site_id }}">
             {{ _('View') }} →
           </button>
         </div>

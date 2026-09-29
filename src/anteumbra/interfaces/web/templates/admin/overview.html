@@ -1,8 +1,15 @@
-<!-- v1.8.0: Overview — 安全态势首页 -->
-{# 象限几何必须写在片段自己的内联样式里：这个片段是由前端路由 swap 进来的，
-   而 swap 不会重新解析样式表——页面打开期间改过 CSS 的话，新片段配上旧 CSS
-   就会退化成从上往下的列表（四象限全丢）。样式表只管外观，布局随片段走。 #}
-<div class="overview-stack" style="display:flex;flex-direction:column;height:100%;min-height:0;">
+{% set zh = current_locale == 'zh' %}
+<div class="overview-stack">
+<section class="console-duty-intro">
+  <div><h2>{{ '开始本次值守' if zh else 'Start your watch' }}</h2>
+    <p class="muted-copy">{{ '确认接入 → 调查异常 → 选择处置 → 复核结果。每次操作都以具体站点和对象为准。' if zh else 'Check coverage → investigate → respond → verify. Each action belongs to a specific site and object.' }}</p>
+  </div>
+  <div class="page-toolbar">
+    <a class="btn btn-ghost" href="{{ with_site('/admin/sites') }}">{{ '检查站点接入' if zh else 'Check site coverage' }}</a>
+    <a class="btn btn-primary" href="{{ with_site('/admin/threats') }}">{{ '调查检测记录' if zh else 'Investigate detections' }}</a>
+    <a class="btn btn-ghost" href="{{ with_site('/admin/quarantine') }}">{{ '复核隔离结果' if zh else 'Review quarantine' }}</a>
+  </div>
+</section>
 {# The capability band only carries information when something is wrong.  The
    healthy state used to render "正常 检测: … 通知: …" on every visit, costing the
    quadrants ~48px of height to say nothing. #}
@@ -14,8 +21,7 @@
   {% for warning in runtime_capabilities.warnings %}<span class="capability-band__warning">{{ warning.message }}</span>{% endfor %}
 </div>
 {% endif %}
-<!-- v1.0.36: fixed four-quadrant overview — no page scrollbar, each quadrant scrolls -->
-<div class="dashboard-grid" data-testid="overview-grid" style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:20px;flex:1 1 auto;min-height:0;">
+<div class="dashboard-grid console-duty-grid" data-testid="overview-grid">
   <!-- 安全报告面板 -->
   <div class="card" style="display: flex; flex-direction: column; min-height: 0;">
     <div class="card-header">

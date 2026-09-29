@@ -134,6 +134,7 @@ def test_admin_and_monitor_route_contracts_preserve_methods_and_authentication()
     assert admin_routes == {
         ("/", ("GET",), True),
         ("/overview", ("GET",), True),
+        ("/sites", ("GET",), True),
         ("/threats", ("GET",), True),
         ("/dashboard_content", ("GET",), True),
         ("/recent-detections", ("GET",), True),

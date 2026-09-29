@@ -10,6 +10,13 @@
 
   function node(id) { return document.getElementById(id); }
 
+  function setControlVisible(id, visible) {
+    var control = node(id);
+    if (!control) return;
+    control.hidden = !visible;
+    control.style.display = visible ? '' : 'none';
+  }
+
   function ownsScanner(root) {
     return Boolean(root && (
       root.id === 'scan-target-dir' ||
@@ -19,10 +26,10 @@
 
   function setState(status, progressText) {
     var labels = { starting: 'Starting', running: 'Running', stopping: 'Stopping', completed: 'Completed', stopped: 'Stopped', failed: 'Failed' };
-    var colors = { starting: '#ffaa00', running: '#00ff41', stopping: '#ffaa00', completed: '#00ff41', stopped: '#ffaa00', failed: '#ff4444' };
+    var colors = { starting: 'var(--color-warning)', running: 'var(--color-safe)', stopping: 'var(--color-warning)', completed: 'var(--color-safe)', stopped: 'var(--color-warning)', failed: 'var(--color-danger)' };
     var active = ['starting', 'running', 'stopping'].indexOf(status) >= 0;
     var statusNode = node('scan-status');
-    if (statusNode) { statusNode.textContent = labels[status] || status; statusNode.dataset.state = status; statusNode.style.color = colors[status] || '#888'; }
+    if (statusNode) { statusNode.textContent = app.t(labels[status] || status); statusNode.dataset.state = status; statusNode.style.color = colors[status] || 'var(--color-text-muted)'; }
     var progress = node('scan-progress-text');
     if (progress && progressText != null) progress.textContent = progressText;
     var stop = node('scan-stop-btn');
@@ -41,6 +48,39 @@
     table.querySelector('.scan-result-message').style.color = error ? 'var(--color-danger)' : '';
   }
 
+  function clearQuarantineResults() {
+    var results = node('scan-quarantine-results');
+    if (results) results.remove();
+  }
+
+  function renderQuarantineResults(succeeded, failed) {
+    var card = node('scan-results-card');
+    if (!card) return;
+    clearQuarantineResults();
+    var results = document.createElement('div');
+    results.id = 'scan-quarantine-results';
+    results.className = 'scan-quarantine-results';
+    results.setAttribute('role', 'status');
+    var heading = document.createElement('strong');
+    heading.textContent = app.t('Quarantine results');
+    results.appendChild(heading);
+    succeeded.forEach(function (path) {
+      var item = document.createElement('div');
+      item.className = 'scan-quarantine-result scan-quarantine-result--success';
+      item.textContent = app.t('Quarantined: ') + path;
+      results.appendChild(item);
+    });
+    failed.forEach(function (entry) {
+      var item = document.createElement('div');
+      item.className = 'scan-quarantine-result scan-quarantine-result--failed';
+      item.textContent = app.t('Failed: ') + entry.path + ' — ' + entry.error;
+      results.appendChild(item);
+    });
+    var body = card.querySelector('.card-body');
+    if (body) card.insertBefore(results, body);
+    else card.appendChild(results);
+  }
+
   function start() {
     var target = node('scan-target-dir');
     if (!target || !target.value.trim()) { app.ui.toast(app.t('Please enter a target directory.'), 'warning'); return; }
@@ -50,6 +90,9 @@
     state.startedAt = Date.now();
     state.selected.clear();
     state.quarantined.clear();
+    clearQuarantineResults();
+    setControlVisible('scan-report-btn', false);
+    setControlVisible('scan-selected-count', false);
     if (state.stream) state.stream.close();
     var table = node('results-tbody');
     if (table) table.replaceChildren();
@@ -108,7 +151,7 @@
       var terminalText = failed ? 'Failed - ' + (event.message || event.error_message || 'Unknown error') : (stopped ? 'Stopped' : null);
       setState(terminalStatus, terminalText);
       if (state.stream) { state.stream.close(); state.stream = null; }
-      if (state.findings.length) node('scan-report-btn').style.display = '';
+      setControlVisible('scan-report-btn', Boolean(state.scanId));
       window.setTimeout(loadHistory, 50);
     }
   }
@@ -129,7 +172,7 @@
     cells[2].textContent = finding.file_path;
     cells[3].textContent = finding.engine || '';
     cells[4].textContent = (finding.features || []).join(', ');
-    cells[5].textContent = finding.quarantine_id ? 'Quarantined' : 'Active';
+    cells[5].textContent = app.t(finding.quarantine_id ? 'Quarantined' : 'Active');
     var actions = document.createElement('div');
     actions.className = 'record-actions';
     var source = document.createElement('button');
@@ -175,7 +218,8 @@
     document.querySelectorAll('.scan-cb:checked').forEach(function (checkbox) { state.selected.add(checkbox.dataset.filePath); });
     var count = node('scan-selected-count');
     var button = node('scan-quarantine-sel-btn');
-    if (count) { count.textContent = state.selected.size + ' selected'; count.style.display = state.selected.size ? '' : 'none'; }
+    if (count) count.textContent = app.t('%(count)s selected', { count: state.selected.size });
+    setControlVisible('scan-selected-count', state.selected.size > 0);
     if (button) button.disabled = state.selected.size === 0;
   }
 
@@ -183,11 +227,34 @@
     var paths = Array.from(state.selected);
     if (!paths.length || !app.confirm(app.t('Quarantine %(count)s selected files?', { count: paths.length }))) return;
     var completed = 0;
+    var failed = [];
+    var succeeded = [];
+    function finish() {
+      document.querySelectorAll('.scan-cb').forEach(function (checkbox) {
+        if (succeeded.indexOf(checkbox.dataset.filePath) >= 0) checkbox.checked = false;
+      });
+      updateSelection();
+      renderQuarantineResults(succeeded, failed);
+      if (failed.length) {
+        app.ui.toast(app.t('Quarantined %(completed)s file(s); %(failed)s failed.', { completed: completed, failed: failed.length }), 'error');
+      } else {
+        app.ui.toast(app.t('Done: %(count)s quarantined', { count: completed }), 'success');
+      }
+    }
     function next() {
       var path = paths.shift();
-      if (!path) { window.alert(app.t('Done: %(count)s quarantined', { count: completed })); state.selected.clear(); updateSelection(); return; }
+      if (!path) { finish(); return; }
       app.http.json('/admin/scanner/quarantine', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'file_path=' + encodeURIComponent(path) })
-        .then(function (result) { if (result.success) completed += 1; next(); }).catch(next);
+        .then(function (result) {
+          if (!result.success) throw new Error(result.error || 'Quarantine failed');
+          completed += 1;
+          succeeded.push(path);
+          state.quarantined.add(path);
+          var row = document.querySelector('#results-tbody tr[data-file-path="' + CSS.escape(path) + '"]');
+          if (row && row.cells[5]) row.cells[5].textContent = app.t('Quarantined');
+          next();
+        })
+        .catch(function (error) { failed.push({ path: path, error: error.message }); next(); });
     }
     next();
   }
@@ -267,6 +334,7 @@
 
   function viewResults(scanId) {
     state.findings = []; state.selected.clear(); state.quarantined.clear();
+    clearQuarantineResults();
     setResultsMessage(app.t('Loading results...'));
     app.http.json('/admin/scanner/results?scan_id=' + encodeURIComponent(scanId)).then(function (result) {
       var tbody = node('results-tbody');
@@ -279,8 +347,8 @@
       if (!fresh) switchTab(state.findings.length ? 'known' : 'all');
       var results = node('scan-results-card');
       if (results) { results.hidden = false; results.style.display = 'flex'; }
-      node('scan-report-btn').style.display = '';
-      setState('complete', 'Completed - ' + state.findings.length + ' findings');
+      setControlVisible('scan-report-btn', Boolean(state.scanId));
+      setState('completed', app.t('Completed - %(count)s findings', { count: state.findings.length }));
     }).catch(function (error) { setResultsMessage(error.message, true); });
   }
 

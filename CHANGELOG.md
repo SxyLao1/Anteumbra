@@ -6,6 +6,30 @@
 
 ---
 
+## [1.0.41] - Unreleased
+
+### Changed
+- Group the live console into duty, investigation, response, site protection,
+  settings and maintenance workspaces, with persistent site scope, browser
+  history, mobile navigation and modular dark/light theme styles.
+- Keep source evidence, profiles, scan reports, configuration history and shared
+  server settings reachable from the operational workflow.
+- Run browser acceptance against isolated real runtimes and loopback WAF,
+  blocking, SIEM and probe counterparts. Business operations use the UI.
+
+### Fixed
+- Show per-object batch results and per-device blocking failures; preserve failed
+  selections and the target site when continuing an investigation.
+- Keep SIEM snapshot formats separate from the running exporter, render successful
+  component remediation correctly, and handle timezone-aware WAF events in profiles.
+- Preserve scanner report/selection visibility and terminal states, avoid duplicate
+  quarantine dialogs, search detections across pages, and persist notification toggles.
+- Activate password changes for deployments that store a literal password hash.
+- Keep unsaved configuration drafts when browser-back navigation is cancelled,
+  scope forensic activity to the selected site, and clear actionable memory-shell
+  findings after a successful clean probe while preserving investigation history.
+- Translate the new evidence, scanner history and device-result controls into Chinese.
+
 ## [1.0.40] - 2026-09-14
 
 ### Fixed

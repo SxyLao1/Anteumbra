@@ -3198,3 +3198,157 @@ msgstr "警告"
 
 msgid "Secure Login"
 msgstr "安全登录"
+
+msgid "Batch results"
+msgstr "批量处理结果"
+
+#, python-format
+msgid "%(success)s succeeded, %(skipped)s skipped, %(failed)s failed"
+msgstr "成功 %(success)s 条，跳过 %(skipped)s 条，失败 %(failed)s 条"
+
+msgid "Succeeded"
+msgstr "成功"
+
+#, python-format
+msgid "Source is no longer available: %(message)s"
+msgstr "源码已不可用: %(message)s"
+
+msgid "Validate Syntax"
+msgstr "校验语法"
+
+msgid "Save Update"
+msgstr "保存规则"
+
+msgid "Validating..."
+msgstr "正在校验…"
+
+msgid "Syntax OK"
+msgstr "语法正确"
+
+msgid "Rule updated successfully"
+msgstr "规则已更新"
+
+msgid "Validation failed"
+msgstr "校验失败"
+
+msgid "Confirm update? This will overwrite the original file."
+msgstr "确定更新规则吗？这将覆盖原文件。"
+
+#, python-format
+msgid "Quarantined %(completed)s file(s); %(failed)s failed."
+msgstr "已隔离 %(completed)s 个文件，%(failed)s 个失败。"
+
+msgid "Quarantine results"
+msgstr "隔离执行结果"
+
+msgid "Quarantined: "
+msgstr "已隔离："
+
+msgid "Failed: "
+msgstr "失败："
+
+msgid "All values"
+msgstr "全部值"
+
+msgid "Only non-default values"
+msgstr "仅显示非默认值"
+
+msgid "Only changed from shipped defaults"
+msgstr "仅显示与出厂配置不同的值"
+
+msgid "min 8 characters, 3 character categories"
+msgstr "至少 8 字符，包含三类字符"
+
+msgid "Saved changes apply after the notification service restarts."
+msgstr "保存后需重启 Anteumbra，通知通道配置才会生效。"
+
+msgid "Password updated and active for new logins."
+msgstr "密码已更新，下次登录使用新密码。"
+
+msgid "Password hash format is invalid."
+msgstr "密码哈希格式无效。"
+
+msgid "Password must be at least 8 characters."
+msgstr "密码至少需要 8 个字符。"
+
+msgid "Password must not exceed 64 characters."
+msgstr "密码不能超过 64 个字符。"
+
+msgid "Choose a password that is not commonly used."
+msgstr "请勿使用常见弱密码。"
+
+msgid "Use at least three of uppercase, lowercase, digits, and symbols."
+msgstr "密码至少包含大写、小写、数字和符号中的三类。"
+
+msgid "Do not use three repeated characters in sequence."
+msgstr "请勿连续使用三个相同字符。"
+
+msgid "Do not use keyboard or sequential patterns."
+msgstr "请勿使用键盘排列或连续字符模式。"
+
+msgid "web_admin.password_hash is updated when a deployment uses a literal hash, so the next sign-in uses this password."
+msgstr "若部署配置使用固定密码哈希，系统会同步更新，确保下次登录使用新密码。"
+
+msgid "Latest successful probe findings"
+msgstr "最近成功探测的发现"
+
+msgid "Notification master switch:"
+msgstr "通知总开关："
+
+msgid "Channels send only when the master switch is enabled."
+msgstr "只有总开关启用后，各通道才会发送通知。"
+
+msgid "Full configuration"
+msgstr "完整配置"
+
+#: src/anteumbra/interfaces/web/templates/admin/record_detail.html
+msgid "Cumulative count; request history is not available here."
+msgstr "累计计数；此处不提供逐次请求历史。"
+
+#: src/anteumbra/interfaces/web/templates/admin/record_detail.html
+msgid "The source viewer reads this record only when the file is still available and authorized."
+msgstr "仅在文件仍可用且已获授权时，才能查看该记录的源码。"
+
+#: src/anteumbra/interfaces/web/templates/admin/record_detail.html
+msgid "View source"
+msgstr "查看源码"
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html
+msgid "Switch theme"
+msgstr "切换主题"
+
+#: src/anteumbra/interfaces/web/templates/admin/dashboard.html
+msgid "Mobile navigation"
+msgstr "移动端导航"
+
+#: src/anteumbra/interfaces/web/static/js/modules/scanner.js
+msgid "Completed - %(count)s findings"
+msgstr "已完成 - %(count)s 个结果"
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "Enter IP addresses"
+msgstr "请输入 IP 地址"
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "Blocking %(count)s IPs..."
+msgstr "正在封禁 %(count)s 个 IP..."
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "Unblocking %(count)s IPs..."
+msgstr "正在解封 %(count)s 个 IP..."
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "OK "
+msgstr "成功 "
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "FAIL "
+msgstr "失败 "
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "DONE: "
+msgstr "完成："
+
+#: src/anteumbra/interfaces/web/static/js/modules/blocklist.js
+msgid "Error: "
+msgstr "错误："

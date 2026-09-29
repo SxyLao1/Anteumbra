@@ -15,6 +15,9 @@ service.  What is pinned down here is the contract the frontend relies on:
 from __future__ import annotations
 
 import os
+import re
+from html import unescape
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -279,7 +282,13 @@ def test_forensics_page_loads_its_panel_and_dialog_container(make_client):
 
     assert body.status_code == 200
     assert 'id="memory-shell-forensics-view"' in text
-    assert f'hx-get="{FORENSICS_PANEL}"' in text
+    panel = re.search(r'id="memory-shell-forensics-panel"\s+hx-get="([^"]+)"', text)
+    assert panel
+    parsed = urlsplit(unescape(panel.group(1)))
+    assert parsed.path == FORENSICS_PANEL
+    assert parse_qs(parsed.query, keep_blank_values=True) == {
+        "site": [""], "site_id": [""], "kind": [""], "name": [""]
+    }
     assert 'hx-trigger="load"' in text
     assert 'id="memory-shell-dialog"' in text
 

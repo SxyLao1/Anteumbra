@@ -9,6 +9,8 @@ on unpkg.com CDN <script> tags. Fresh Flask server per test.
 import pytest
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 
 def go(page, url, **kw):
     """Navigate to target URL cleanly: first unload the current page
@@ -34,7 +36,7 @@ class TestDashboard:
 
     def test_dashboard_stats_panel(self, page, server_url):
         """Overview page should load metric cards."""
-        page.click("a.nav-link[data-path='overview']")
+        open_console_route(page, "overview")
         page.wait_for_timeout(1500)
         body_text = page.locator("body").inner_text()
         assert len(body_text) > 100, "Dashboard body should have meaningful content"
@@ -47,7 +49,7 @@ class TestDashboard:
         now rendered only when the runtime is degraded or carries warnings, so a
         healthy instance must not show it.
         """
-        page.click("a.nav-link[data-path='overview']")
+        open_console_route(page, "overview")
         expect(page.locator("[data-testid='overview-grid']")).to_be_visible(timeout=10000)
 
         band = page.locator("[data-testid='runtime-capabilities']")
@@ -61,9 +63,9 @@ class TestDashboard:
 
     def test_page_title_appears_once(self, page, server_url):
         """Only the sidebar states which page you are on."""
-        page.click("a.nav-link[data-path='overview']")
+        open_console_route(page, "overview")
         page.wait_for_timeout(1200)
-        assert page.locator("a.nav-link.active", has_text="Overview").count() == 1
+        assert page.locator('#console-context-nav a[aria-current="page"][href="/admin/overview"]').count() == 1
         assert page.locator("#page-title").count() == 0
         assert page.locator(".brand-sub", has_text="Overview").count() == 0
 
@@ -78,7 +80,7 @@ class TestDashboard:
         runtime.sse.persist_log_line(f"[{stamp}] INFO - {marker}")
 
         go(page, f"{server_url}/admin/")
-        page.click("a.nav-link[data-path='overview']")
+        open_console_route(page, "overview")
 
         expect(page.locator("#live-log-stream")).to_contain_text(
             marker,
@@ -87,7 +89,7 @@ class TestDashboard:
 
     def test_threats_has_table(self, page, server_url):
         """Threats page should render a table (even if empty)."""
-        page.click("a.nav-link[data-path='threats']")
+        open_console_route(page, "threats")
         page.wait_for_timeout(1500)
         # Should have a table or content container, or at minimum no error
         error_el = page.locator(".error-500, .server-error")

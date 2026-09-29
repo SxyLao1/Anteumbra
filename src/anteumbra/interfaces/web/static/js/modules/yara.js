@@ -6,6 +6,26 @@
   var selected = new Set();
   var uploadFile = null;
 
+  function editRule(save) {
+    var editor = document.getElementById('rule-editor');
+    var result = document.getElementById('yara-validation-result');
+    if (!editor || !result) return;
+    if (save && !app.confirm(app.t('Confirm update? This will overwrite the original file.'))) return;
+    var filename = editor.closest('[data-rule-filename]').dataset.ruleFilename;
+    var url = save ? '/admin/yara/rules/' + encodeURIComponent(filename) : '/admin/yara/validate';
+    result.textContent = app.t('Validating...');
+    app.http.json(url, { method: save ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: editor.value }) })
+      .then(function (data) {
+        var success = save ? data.success : data.valid;
+        result.textContent = success ? app.t(save ? 'Rule updated successfully' : 'Syntax OK') : String(data.error || app.t('Validation failed'));
+        result.dataset.status = success ? 'success' : 'error';
+        if (save && success) refreshRules(document.getElementById('yara-rules-container'));
+      }).catch(function (error) {
+        result.textContent = error.message;
+        result.dataset.status = 'error';
+      });
+  }
+
   // Selection controls keep their place and are disabled instead of hidden: a
   // toolbar that swaps "select all" for "delete selected" in the same spot gets
   // clicked twice, and the second click lands on whichever button moved there.
@@ -164,6 +184,8 @@
         refreshSelection(context.element.closest('#yara-rules-container') || document);
       } },
       'yara.batch-delete': { handler: batchDelete },
+      'yara.validate': { handler: function () { editRule(false); } },
+      'yara.save': { handler: function () { editRule(true); } },
       'yara.filter': { handler: function (context) { filterRules(context.element); }, events: ['input'], preventDefault: false },
       'yara.edit-open': { handler: function (context) {
         var modal = document.getElementById('yara-edit-modal');

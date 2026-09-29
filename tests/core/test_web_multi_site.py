@@ -184,7 +184,7 @@ def _compact(body: str) -> str:
 # ── Site switcher ──────────────────────────────────────────────────────────
 
 
-def test_switcher_is_absent_with_a_single_site(_app, detection_runtime, monkeypatch):
+def test_single_site_can_still_select_unassigned_history(_app, detection_runtime, monkeypatch):
     from anteumbra.interfaces.web import pages
 
     runtime = detection_runtime.runtime
@@ -196,8 +196,9 @@ def test_switcher_is_absent_with_a_single_site(_app, detection_runtime, monkeypa
             flask_session["username"] = "admin"
         body = _body(test_client.get("/admin/"))
 
-    assert 'id="site-switcher"' not in body
-    assert "data-site-badge" not in body
+    assert 'id="site-switcher"' in body
+    assert 'value="legacy"' in body
+    assert "data-site-badge" in body
 
 
 def test_switcher_lists_every_site_and_the_aggregate(client):
@@ -426,20 +427,20 @@ def test_recent_detections_label_the_rows_site(client):
     assert "Unassigned" in body
 
 
-def test_shell_marks_the_site_and_offers_the_memory_shell_entry(client):
+def test_shell_marks_the_site_and_offers_the_investigation_workspace(client):
     body = _body(client.get("/admin/threats?site=alpha", headers={"Sec-Fetch-Dest": "document"}))
 
     assert 'data-site="alpha"' in body
-    assert 'data-path="memory-shell"' in body
-    assert 'data-path="memory-shell/forensics"' in body
+    assert 'data-console-workspaces' in body
+    assert 'data-workspace="investigate"' in body
+    assert 'href="/admin/threats"' in body
 
 
-def test_memory_shell_nav_names_both_entries_in_chinese(client):
+def test_investigation_workspace_has_a_chinese_label(client):
     body = _body(client.get("/admin/threats?site=alpha&lang=zh", headers={"Sec-Fetch-Dest": "document"}))
 
-    assert "内存马" in body
-    assert ">检测<" in body
-    assert ">取证<" in body
+    assert 'data-workspace="investigate"' in body
+    assert "检测与调查" in body
 
 
 # ── File clusters ──────────────────────────────────────────────────────────

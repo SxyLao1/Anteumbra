@@ -52,7 +52,7 @@
       <a href="{{ filter_urls.get(name, '/admin/settings') }}" hx-get="{{ filter_urls.get(name, '/admin/settings') }}"
          hx-target="#main-content" hx-swap="innerHTML" hx-push-url="true"
          data-settings-filter="{{ name }}" data-settings-filter-active="{{ 'true' if active_filter == name else 'false' }}"
-         style="font-size:10px;padding:3px 8px;border-radius:3px;text-decoration:none;border:1px solid {{ '#00ff41' if active_filter == name else 'var(--color-border)' }};color:{{ '#00ff41' if active_filter == name else 'var(--color-text-secondary)' }};">{{ _(label) }}</a>
+         style="font-size:10px;padding:3px 8px;border-radius:3px;text-decoration:none;border:1px solid {{ 'var(--color-accent)' if active_filter == name else 'var(--color-border)' }};color:{{ 'var(--color-accent)' if active_filter == name else 'var(--color-text-secondary)' }};">{{ _(label) }}</a>
       {% endfor %}
       <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label for="settings-jump" style="font-size:11px;color:var(--color-text-secondary);">{{ _('Jump to:') }}</label>
@@ -64,7 +64,7 @@
           {% endfor %}
         </select>
         <a href="{{ advanced_editor_url }}" data-settings-advanced-editor-link="1"
-           style="font-size:10px;color:#4a9eff;text-decoration:none;border:1px solid var(--color-border);border-radius:3px;padding:3px 8px;">{{ _('Advanced config editor') }} →</a>
+           style="font-size:10px;color:var(--color-info);text-decoration:none;border:1px solid var(--color-border);border-radius:3px;padding:3px 8px;">{{ _('Advanced config editor') }} →</a>
       </span>
     </div>
   </div>
@@ -75,9 +75,9 @@
     {{ section_header('environment', _('ENVIRONMENT & SECRETS')) }}
     <div class="card-body" id="settings-environment" {% if 'environment' not in open_sections %}style="display:none;"{% endif %}>
       <p class="muted-copy" style="font-size:11px;margin:0 0 8px 0;">{{ _('Mail credentials, tokens and keys are stored in .env next to config.toml. Empty fields are left untouched; values are never committed to git.') }}</p>
-      <p style="font-size:10px;margin:0 0 8px 0;color:#ffaa00;line-height:1.6;">{{ _('This section is the only place on this page that writes .env. The config editor below is a legacy copy of the same fields; it is kept for compatibility and is not needed for a normal change.') }}</p>
+      <p style="font-size:10px;margin:0 0 8px 0;color:var(--color-warning);line-height:1.6;">{{ _('This section is the only place on this page that writes .env. The config editor below is a legacy copy of the same fields; it is kept for compatibility and is not needed for a normal change.') }}</p>
       {% if env_notice %}
-      <div class="form-result" data-env-notice="{{ env_notice.level }}" style="color:{{ '#ff4444' if env_notice.level == 'error' else '#00ff41' }};font-size:11px;margin-bottom:8px;">{{ env_notice.text }}</div>
+      <div class="form-result" data-env-notice="{{ env_notice.level }}" style="color:{{ 'var(--color-danger)' if env_notice.level == 'error' else 'var(--color-safe)' }};font-size:11px;margin-bottom:8px;">{{ env_notice.text }}</div>
       {% endif %}
       <form hx-post="/admin/settings/environment/save" hx-target="#main-content" hx-swap="innerHTML" style="display:grid;gap:8px;">
         {% for key in env_keys %}
@@ -118,7 +118,7 @@
       {% if site_rows %}
       <div style="display:flex;flex-direction:column;gap:6px;">
         {% for site in site_rows %}
-        <div style="padding:6px 8px;background:#0a0a0a;border-radius:3px;border-left:3px solid {{ '#00ff41' if site.enabled else '#666' }};">
+        <div style="padding:6px 8px;background:var(--color-bg-secondary);border-radius:3px;border-left:3px solid {{ 'var(--color-safe)' if site.enabled else 'var(--color-text-muted)' }};">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;">
             <strong>{{ site.name }}</strong>
             <span class="badge badge-blue" style="font-size:8px;">{{ _('Enabled') if site.enabled else _('Disabled') }}</span>
@@ -150,11 +150,11 @@
 
       {% if dangerous_keys %}
       <div data-settings-dangerous-keys="1" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--color-border);">
-        <div style="font-size:11px;color:#ffaa00;margin-bottom:6px;">{{ _('Keys that remove a protection') }}</div>
+        <div style="font-size:11px;color:var(--color-warning);margin-bottom:6px;">{{ _('Keys that remove a protection') }}</div>
         {% for d in dangerous_keys %}
-        <div data-settings-dangerous="{{ d.key }}" style="padding:6px 8px;margin-bottom:4px;background:#0a0a0a;border-radius:3px;border-left:3px solid #ffaa00;">
+        <div data-settings-dangerous="{{ d.key }}" style="padding:6px 8px;margin-bottom:4px;background:var(--color-bg-secondary);border-radius:3px;border-left:3px solid var(--color-warning);">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;">
-            <code style="color:#ffcc66;">{{ d.key }}</code>
+            <code style="color:var(--color-warning);">{{ d.key }}</code>
             <span class="badge badge-warning" style="font-size:8px;">{{ _('caution') }}</span>
             <span style="margin-left:auto;color:var(--color-text-muted);font-size:9px;">{{ _('current:') }} <code>{{ d.value }}</code> · {{ _('from') }} {{ d.source }}</span>
           </div>
@@ -201,21 +201,21 @@
       {# Password: the hash is never edited as text.  A new password is hashed
          with werkzeug exactly as `anteumbra config password` does, and only the
          hash reaches .env. #}
-      <div data-settings-password="1" style="margin-bottom:12px;padding:8px;background:#0a0a0a;border-radius:3px;border-left:3px solid #4a9eff;">
+      <div data-settings-password="1" style="margin-bottom:12px;padding:8px;background:var(--color-bg-secondary);border-radius:3px;border-left:3px solid var(--color-info);">
         <div style="font-size:11px;color:var(--color-text-primary);margin-bottom:4px;">{{ _('Admin password') }}</div>
         <p class="muted-copy" style="font-size:10px;margin:0 0 6px 0;">{{ _('config.toml stores only a hash (web_admin.password_hash). Set a new password here; it is hashed before it is written, so no plaintext ever reaches disk.') }}</p>
         {% if password_notice %}
-        <div data-settings-password-notice="{{ password_notice.level }}" style="color:{{ '#ff4444' if password_notice.level == 'error' else '#00ff41' }};font-size:10px;margin-bottom:6px;">{{ password_notice.text }}</div>
+        <div data-settings-password-notice="{{ password_notice.level }}" style="color:{{ 'var(--color-danger)' if password_notice.level == 'error' else 'var(--color-safe)' }};font-size:10px;margin-bottom:6px;">{{ password_notice.text }}</div>
         {% endif %}
         <form hx-post="/admin/settings/password/save" hx-target="#main-content" hx-swap="innerHTML" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <input type="password" name="new_password" id="settings-new-password" autocomplete="new-password" placeholder="{{ _('New password (min 6 characters)') }}" style="min-width:220px;">
+          <input type="password" name="new_password" id="settings-new-password" autocomplete="new-password" placeholder="{{ _('min 8 characters, 3 character categories') }}" style="min-width:220px;">
           <input type="password" name="confirm_password" id="settings-confirm-password" autocomplete="new-password" placeholder="{{ _('Repeat the new password') }}" style="min-width:180px;">
           <button class="btn btn-primary btn-sm" type="submit">{{ _('Set a new password') }}</button>
           <span class="muted-copy" style="font-size:9px;">{{ _('Hash: scrypt via werkzeug') }}</span>
         </form>
       </div>
 
-      <p style="font-size:10px;margin:0 0 8px 0;"><a href="{{ advanced_editor_url }}" data-settings-advanced-editor-link="1" style="color:#4a9eff;">{{ _('Raw config.toml editing (advanced)') }} →</a> <span class="muted-copy" style="font-size:9px;">{{ _('Every key in the file, full validation, and a backup on every save.') }}</span></p>
+      <p style="font-size:10px;margin:0 0 8px 0;"><a href="{{ advanced_editor_url }}" data-settings-advanced-editor-link="1" style="color:var(--color-info);">{{ _('Raw config.toml editing (advanced)') }} →</a> <span class="muted-copy" style="font-size:9px;">{{ _('Every key in the file, full validation, and a backup on every save.') }}</span></p>
 
       <div id="settings-siem" hx-get="/admin/settings/siem-status" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading panel...') }}</p></div></div>
       <div id="settings-config" style="margin-top:12px;" hx-get="/admin/settings/config/editor" hx-trigger="load" hx-swap="innerHTML"><div class="empty-state"><div class="spinner"></div><p>{{ _('Loading config editor...') }}</p></div></div>

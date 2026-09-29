@@ -1,0 +1,9 @@
+<div class="console-rule-editor" data-rule-filename="{{ filename }}">
+  <label for="rule-editor">{{ _('Source') }} · {{ filename }}</label>
+  <textarea id="rule-editor" class="form-textarea">{{ content }}</textarea>
+  <div id="yara-validation-result" role="status" aria-live="polite"></div>
+  <div class="page-toolbar">
+    <button class="btn btn-ghost" type="button" data-action="yara.validate">{{ _('Validate Syntax') }}</button>
+    <button class="btn btn-primary" type="button" data-action="yara.save">{{ _('Save Update') }}</button>
+  </div>
+</div>

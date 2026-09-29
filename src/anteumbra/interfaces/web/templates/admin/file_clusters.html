@@ -65,11 +65,13 @@
         <span class="cluster-time">{{ c.created }}</span>
       </button>
       <div class="cluster-files" hidden>
-        {% for path in c.sample_paths %}
+        {% for member in c.sample_members %}
+        {% set path = member.path %}
         {% set name = path.replace('\\', '/').split('/')[-1] %}
-        <div class="cluster-file" data-path="{{ path|e }}">
+        <div class="cluster-file" data-path="{{ path|e }}"{% if member.site_id %} data-site-id="{{ member.site_id|e }}"{% endif %}>
           <span class="cluster-file-name" title="{{ path|e }}">{{ name }}</span>
           <span class="cluster-file-path" title="{{ path|e }}">{{ path|e }}</span>
+          {% if member.site_name %}<span class="badge badge-gray">{{ member.site_name }}</span>{% endif %}
           <span class="cluster-file-actions">
             <button class="btn btn-ghost btn-sm" type="button"
                     data-action="records.view-path" data-file-path="{{ path|e }}">{{ _('Source') }}</button>

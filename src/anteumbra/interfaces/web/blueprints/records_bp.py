@@ -21,7 +21,6 @@ from anteumbra.application.text_encoding import decode_source_bytes
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_quarantine,
-    verify_file_in_registry,
 )
 from anteumbra.interfaces.web.pages import active_site_id, render_page, site_context
 from anteumbra.interfaces.web.runtime import get_runtime
@@ -194,6 +193,11 @@ def get_records():
                 if not r.get("marked_false_positive") and r.get("file_exists")
             ]
 
+        query = request.args.get("q", "").strip().casefold()
+        if query:
+            all_records = [r for r in all_records if query in (
+                str(r.get("file_path", "")) + " " + " ".join(r.get("features", []))
+            ).casefold()]
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
@@ -290,14 +294,30 @@ def records_batch():
         if not file_paths:
             return jsonify({"error": "missing file_paths"}), 400
 
-        results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+        results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "items": []}
         site_id = _requested_site_id()
+        names_by_id = _configured_site_names()
+
+        def add_item(file_path, outcome, *, record=None, error=None):
+            """Return a durable, per-object batch outcome without guessing its site."""
+            item = {"file_path": str(file_path), "outcome": outcome}
+            if record is not None:
+                item.update(site_fields(record, names_by_id=names_by_id))
+            if error:
+                item["error"] = str(error)
+            results["items"].append(item)
+
         if action == "quarantine":
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
-                    if not record or record.get("quarantine_id"):
+                    if not record:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
+                    if record.get("quarantine_id"):
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record is already quarantined")
                         continue
                     features = record.get("features", [])
                     rule = features[0] if features else "batch"
@@ -311,17 +331,16 @@ def records_batch():
                     )
                     if qr:
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["failed"] += 1
-                        results["errors"].append(
-                            {
-                                "file_path": fp,
-                                "error": "source file is missing or could not be moved",
-                            }
-                        )
+                        error = "source file is missing or could not be moved"
+                        results["errors"].append({"file_path": fp, "error": error})
+                        add_item(fp, "failed", record=record, error=error)
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch quarantine failed for %s: %s",
                         fp,
@@ -333,15 +352,22 @@ def records_batch():
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().mark_false_positive(
-                        fp, "", record.get("site_id") if record else None
+                        fp, "", record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch false-positive failed for %s: %s",
                         fp,
@@ -353,15 +379,22 @@ def records_batch():
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().unmark_false_positive(
-                        fp, record.get("site_id") if record else None
+                        fp, record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch unmark-false-positive failed for %s: %s",
                         fp,
@@ -373,15 +406,22 @@ def records_batch():
             for fp in file_paths:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().soft_delete_record(
-                        fp, record.get("site_id") if record else None
+                        fp, record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch delete failed for %s: %s",
                         fp,
@@ -444,6 +484,7 @@ def get_record_detail():
                 linked_profiles.append(
                     {
                         "profile_id": profile.profile_id,
+                        "site_id": record.get("site_id", "legacy"),
                         "risk_score": round(profile.risk_score, 2),
                         "ip_count": len(profile.ip_pool),
                         "tool_signature": profile.tool_signature or "N/A",
@@ -465,8 +506,8 @@ def get_record_detail():
             "first_seen_ip": record.get("first_seen_ip", "N/A"),
             "alerted": record.get("alerted", False),
             "marked_false_positive": record.get("marked_false_positive", False),
-            "site_id": record.get("site_id", "legacy"),
-            "site_name": record.get("site_name", "Legacy / unassigned"),
+            "site_id": site["site_id"],
+            "site_name": site["site_name"],
             "site_unassigned": site["site_unassigned"],
             "site_label": "" if site["site_unassigned"] else site["site_name"],
             "deleted_at": record.get("deleted_at", "N/A"),
@@ -735,15 +776,27 @@ def view_file_content():
 
         actual_path = None
         if quarantine_id:
+            quarantine_record = get_runtime().quarantine.get_detail(quarantine_id)
+            requested_site = _requested_site_id()
+            if not quarantine_record or (
+                requested_site
+                and str(quarantine_record.get("site_id") or "").strip().lower() != requested_site
+            ):
+                return jsonify({"error": "source is no longer available or authorized"}), 404
+            # Resolve the path only through the quarantine record after its site
+            # boundary has been checked; the qid alone is not cross-site authority.
             actual_path = verify_file_in_quarantine(quarantine_id)
         elif file_path:
-            if verify_file_in_registry(file_path):
+            # The viewer is opened from a record row or its detail.  Resolve the
+            # record in that row's own site, rather than treating a same-path
+            # record in another site as authority to read this file.
+            if _find_record(file_path, site_id=_requested_site_id()):
                 actual_path = Path(file_path)
         else:
             return jsonify({"error": "缺少 path 或 qid 参数"}), 400
 
         if not actual_path or not actual_path.exists():
-            return jsonify({"error": "文件不存在或无权访问"}), 404
+            return jsonify({"error": "source is no longer available or authorized"}), 404
 
         # 二次路径穿越确认
         resolved = actual_path.resolve()

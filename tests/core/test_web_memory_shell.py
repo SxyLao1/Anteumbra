@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 import re
+from html import unescape
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -218,9 +220,14 @@ def test_panel_reports_findings_failures_and_cleanup_state(make_client):
     assert "Probe cleanup failed:" in body
     assert "PermissionError: cannot delete mb-x/probe.jsp" in body
     assert "A probe file may still exist in the web root. Remove it manually." in body
-    # per-site row and the trigger button
+    # The button preserves the aggregate scope explicitly; selected sites
+    # replace the blank value with their id.
     assert "E:/www/alpha" in body
-    assert f'hx-post="{PROBE_URL}?site_id=alpha"' in body
+    action = re.search(r'hx-post="([^"]+)"', body)
+    assert action
+    parsed = urlsplit(unescape(action.group(1)))
+    assert parsed.path == PROBE_URL
+    assert parse_qs(parsed.query, keep_blank_values=True) == {"site_id": ["alpha"], "site": [""]}
 
 
 def test_panel_reports_a_failed_run(make_client):
@@ -338,7 +345,11 @@ def test_page_shell_renders_without_the_service(make_client):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert 'id="memory-shell-view"' in body
-    assert 'hx-get="/admin/memory-shell/panel"' in body
+    panel = re.search(r'id="memory-shell-panel"\s+hx-get="([^"]+)"', body)
+    assert panel
+    parsed = urlsplit(unescape(panel.group(1)))
+    assert parsed.path == PANEL_URL
+    assert parse_qs(parsed.query, keep_blank_values=True) == {"site": [""]}
 
 
 # ── manual trigger ──────────────────────────────────────────────────────────

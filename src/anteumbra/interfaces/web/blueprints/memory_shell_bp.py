@@ -32,7 +32,7 @@ from flask_babel import gettext as _
 from markupsafe import escape as html_escape
 
 from anteumbra.interfaces.web.auth import require_auth
-from anteumbra.interfaces.web.pages import render_page
+from anteumbra.interfaces.web.pages import active_site_id, render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -247,14 +247,34 @@ def _panel_context(service, *, error: str = "", triggered_site: str | None = Non
         context["error"] = error or snapshot_error
         return context
 
+    scope = active_site_id()
     recent_runs = []
-    for outcome in _as_sequence(snapshot.get("history"))[:RECENT_RUN_LIMIT]:
+    for outcome in _as_sequence(snapshot.get("history")):
         view = _outcome_view(outcome)
         if not view["site_id"] and not view["site_name"]:
             continue
+        if scope and view["site_id"] != scope:
+            continue
         recent_runs.append(view)
 
-    running = [str(item) for item in _as_sequence(snapshot.get("running"))]
+    # History is an audit trail, not a list of currently actionable components.
+    # A clean re-probe supersedes an earlier finding. A failed probe cannot
+    # establish that a component vanished, so retain the last successful result.
+    latest_successful = {}
+    for outcome in _as_mapping(snapshot.get("latest")).values():
+        view = _outcome_view(outcome)
+        if scope and view["site_id"] != scope:
+            continue
+        if view["ok"] and not view["failure"] and not view["report_error"]:
+            latest_successful[view["site_id"]] = view
+    for view in recent_runs:
+        if view["ok"] and not view["failure"] and not view["report_error"]:
+            latest_successful.setdefault(view["site_id"], view)
+
+    running = [
+        str(item) for item in _as_sequence(snapshot.get("running"))
+        if not scope or str(item) == scope
+    ]
     context.update(
         {
             "state": "error" if error else "ready",
@@ -265,12 +285,14 @@ def _panel_context(service, *, error: str = "", triggered_site: str | None = Non
             "trigger_extensions": [
                 str(item) for item in _as_sequence(snapshot.get("trigger_extensions"))
             ],
-            "runs": _as_count(snapshot.get("runs"), 0),
-            "failures": _as_count(snapshot.get("failures"), 0),
+            "scoped": bool(scope),
+            "runs": len(recent_runs) if scope else _as_count(snapshot.get("runs"), 0),
+            "failures": sum(bool(view["failure"]) for view in recent_runs)
+            if scope else _as_count(snapshot.get("failures"), 0),
             "running": running,
-            "sites": _site_views(snapshot),
-            "recent_runs": recent_runs,
-            "findings": [view for view in recent_runs if view["suspects"]],
+            "sites": [site for site in _site_views(snapshot) if not scope or site["site_id"] == scope],
+            "recent_runs": recent_runs[:RECENT_RUN_LIMIT],
+            "findings": [view for view in latest_successful.values() if view["suspects"]],
             # A probe that was just started may not have reached the service's
             # own "running" set yet, so the freshly triggered panel polls too.
             "polling": bool(running) or triggered_site is not None,
@@ -437,10 +459,16 @@ def _forensics_context(service, *, error: str = "", component=None, triggered_si
         context["error"] = error or _("The forensics store returned no usable state.")
         return context
 
+    scope = active_site_id()
     runs = []
-    for run in _as_sequence(snapshot.get("runs"))[:FORENSICS_RUN_LIMIT]:
-        if isinstance(run, dict):
+    for run in _as_sequence(snapshot.get("runs")):
+        if isinstance(run, dict) and (not scope or run.get("site_id") == scope):
             runs.append(_run_view(run))
+    runs = runs[:FORENSICS_RUN_LIMIT]
+    running = [
+        str(item) for item in _as_sequence(snapshot.get("running"))
+        if not scope or str(item) == scope
+    ]
 
     site_id = ""
     if isinstance(component, dict):
@@ -457,13 +485,13 @@ def _forensics_context(service, *, error: str = "", component=None, triggered_si
             "max_dump_mb": _as_count(snapshot.get("max_dump_mb"), 0),
             "timeout_seconds": _as_number(snapshot.get("timeout_seconds"), 0),
             "root": str(snapshot.get("root") or ""),
-            "running": [str(item) for item in _as_sequence(snapshot.get("running"))],
+            "running": running,
             "runs": runs,
             "total_bytes": _human_bytes(sum(run["bytes"] for run in runs)),
             "sites": [
                 dict(site) for site in _as_sequence(snapshot.get("sites")) if isinstance(site, dict)
             ],
-            "polling": bool(snapshot.get("running")) or bool(triggered_site),
+            "polling": bool(running) or bool(triggered_site and (not scope or triggered_site == scope)),
             "component_site": site_id,
         }
     )
@@ -872,7 +900,9 @@ def memory_shell_remediate():
             )
         )
 
-    view = _as_mapping(outcome)
+    # The service returns a RemediationOutcome value object, not a dict.
+    # Preserve its status so a successful removal is not presented as failure.
+    view = _as_mapping(outcome.as_dict() if hasattr(outcome, "as_dict") else outcome)
     reason = str(view.get("reason") or "")
     # A refusal because there is no evidence is answered with the same three
     # button warning, so the operator can still choose 立即处置 explicitly.

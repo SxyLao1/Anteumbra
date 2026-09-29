@@ -144,13 +144,9 @@
   }
 
   function exportSiem(format) {
-    var query = format === 'cef' ? '?format=cef' : '';
-    app.http.json('/admin/siem/export' + query).then(function (result) {
-      var message = format === 'cef'
-        ? app.t('Exported %(count)s events (CEF)', { count: result.exported || 0 })
-        : app.t('Exported %(count)s events to %(file)s', { count: result.exported || 0, file: result.file || app.t('export file') });
-      app.ui.toast(message, 'success');
-    }).catch(function (error) { app.ui.toast(app.t('SIEM export failed: %(message)s', { message: error.message }), 'error'); });
+    // Snapshot downloads never change the live streaming format or re-emit
+    // historical detections to the external collector.
+    window.location.assign('/admin/siem/export?download=1&format=' + encodeURIComponent(format || 'json_lines'));
   }
 
   function updateSessionHeader(root) {

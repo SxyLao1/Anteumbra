@@ -4,6 +4,8 @@ import time
 
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 
 def test_navigation_closes_active_scanner_sse_without_cancelling_job(page, tmp_path, monkeypatch):
     target = tmp_path / "scanner-lifecycle"
@@ -20,7 +22,7 @@ def test_navigation_closes_active_scanner_sse_without_cancelling_job(page, tmp_p
         slow_clean_scan,
     )
 
-    page.click("a.nav-link[data-path='scanner']")
+    open_console_route(page, "scanner")
     page.wait_for_selector("#scan-target-dir", timeout=10000)
     page.evaluate(
         """() => {
@@ -44,7 +46,7 @@ def test_navigation_closes_active_scanner_sse_without_cancelling_job(page, tmp_p
         "data-state", "running", timeout=10000
     )
 
-    page.click("a.nav-link[data-path='overview']")
+    open_console_route(page, "overview")
     page.wait_for_function("() => window.__anteumbraScannerCloseCalls > 0")
 
     assert page.evaluate("window.__anteumbraScannerCloseCalls") == 1
