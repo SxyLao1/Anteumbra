@@ -6,6 +6,11 @@
 
 ---
 
+## [1.0.45] - 2026-10-11
+
+### Fixed
+- Make the protection switch required while editing the only enabled site so the browser blocks an invalid submission before the request.
+
 ## [1.0.44] - 2026-10-11
 
 ### Fixed

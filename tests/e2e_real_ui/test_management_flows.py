@@ -183,4 +183,5 @@ def test_site_manager_explains_last_enabled_site_guard(real_instance):
     expect(page.locator("[data-testid=site-editor]")).to_contain_text("This is the only enabled site")
     page.get_by_test_id("site-enabled").uncheck()
     page.get_by_test_id("review-site-save").click()
-    expect(page.locator("#ce-result")).to_contain_text("At least one site must remain enabled")
+    expect(page.locator("#ce-result")).not_to_contain_text("At least one site must remain enabled")
+    assert page.get_by_test_id("site-enabled").evaluate("element => !element.checkValidity()")

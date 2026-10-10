@@ -53,7 +53,7 @@
           </label>
         </div>
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-alt,rgba(255,255,255,.03));">
-          <label class="muted-copy" style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" {% if site_form.enabled %}checked{% endif %} data-testid="site-enabled"> {{ '启用站点保护' if zh else 'Enable site protection' }} <span class="badge {{ 'badge-green' if site_form.enabled else 'badge-gray' }}">{{ ('已启用' if site_form.enabled else '已停用') if zh else ('Enabled' if site_form.enabled else 'Disabled') }}</span></label>
+          <label class="muted-copy" style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" {% if site_form.enabled %}checked{% endif %}{% if site_form.only_enabled %} required{% endif %} data-testid="site-enabled"> {{ '启用站点保护' if zh else 'Enable site protection' }} <span class="badge {{ 'badge-green' if site_form.enabled else 'badge-gray' }}">{{ ('已启用' if site_form.enabled else '已停用') if zh else ('Enabled' if site_form.enabled else 'Disabled') }}</span></label>
           {% if site_form.only_enabled %}
           <small class="muted-copy" style="flex-basis:100%;color:var(--color-warning,#d99a22);">{{ '这是当前唯一启用的站点；如需保留监控，请保持勾选。关闭后校验会阻止保存。' if zh else 'This is the only enabled site. Keep it checked to retain monitoring; disabling it will be blocked.' }}</small>
           {% endif %}
