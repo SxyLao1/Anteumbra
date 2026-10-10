@@ -167,3 +167,20 @@ def test_site_manager_adds_and_edits_site_paths_and_access_logs(real_instance):
     portal_card = page.locator('[data-managed-site="portal"]')
     expect(portal_card).to_contain_text(str(updated_root))
     expect(portal_card).to_contain_text(str(updated_log))
+
+
+def test_site_manager_explains_last_enabled_site_guard(real_instance):
+    """Disabling the last protected site stays a visible, site-level error."""
+    page, _, _ = real_instance
+    open_page(page, "sites?edit=shop")
+    page.get_by_test_id("site-enabled").uncheck()
+    page.get_by_test_id("review-site-save").click()
+    page.locator("#ce-result").get_by_role("button").click()
+    expect(page.locator("#ce-result")).to_contain_text("written")
+
+    open_page(page, "sites?edit=portal")
+    expect(page.get_by_test_id("site-enabled")).to_be_checked()
+    expect(page.locator("[data-testid=site-editor]")).to_contain_text("This is the only enabled site")
+    page.get_by_test_id("site-enabled").uncheck()
+    page.get_by_test_id("review-site-save").click()
+    expect(page.locator("#ce-result")).to_contain_text("At least one site must remain enabled")

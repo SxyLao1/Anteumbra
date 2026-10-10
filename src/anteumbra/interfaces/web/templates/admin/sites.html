@@ -19,7 +19,7 @@
     </div>
     <div class="card-body">
       <p class="muted-copy" style="margin-top:0;">{{ '保存前会显示配置差异并校验路径；站点配置变更需要重启监控进程后完全生效。' if zh else 'The change is previewed and validated before saving; restart the monitor after site configuration changes.' }}</p>
-      <form method="post" action="/admin/config/editor/site" hx-post="/admin/config/editor/site" hx-target="#ce-result" hx-swap="innerHTML" data-testid="site-form">
+      <form method="post" action="/admin/config/editor/site" autocomplete="off" hx-post="/admin/config/editor/site" hx-target="#ce-result" hx-swap="innerHTML" data-testid="site-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="confirm" value="0">
         <input type="hidden" name="mode" value="{{ site_form.mode }}">
@@ -52,8 +52,11 @@
             <input class="form-input" name="access_log_path" value="{{ site_form.access_log_path }}" placeholder="E:\\server\\logs\\access.log" data-testid="site-log-path">
           </label>
         </div>
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--color-border);">
-          <label class="muted-copy"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" {% if site_form.enabled %}checked{% endif %} data-testid="site-enabled"> {{ '启用文件监控' if zh else 'Enable file monitoring' }}</label>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-alt,rgba(255,255,255,.03));">
+          <label class="muted-copy" style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" {% if site_form.enabled %}checked{% endif %} data-testid="site-enabled"> {{ '启用站点保护' if zh else 'Enable site protection' }} <span class="badge {{ 'badge-green' if site_form.enabled else 'badge-gray' }}">{{ ('已启用' if site_form.enabled else '已停用') if zh else ('Enabled' if site_form.enabled else 'Disabled') }}</span></label>
+          {% if site_form.only_enabled %}
+          <small class="muted-copy" style="flex-basis:100%;color:var(--color-warning,#d99a22);">{{ '这是当前唯一启用的站点；如需保留监控，请保持勾选。关闭后校验会阻止保存。' if zh else 'This is the only enabled site. Keep it checked to retain monitoring; disabling it will be blocked.' }}</small>
+          {% endif %}
           <label class="muted-copy"><input type="hidden" name="log_monitor_enabled" value="0"><input type="checkbox" name="log_monitor_enabled" value="1" {% if site_form.log_monitor_enabled %}checked{% endif %} data-testid="site-log-enabled"> {{ '启用访问日志分析' if zh else 'Enable access-log analysis' }}</label>
           <label class="muted-copy"><input type="hidden" name="filter_internal_ip" value="0"><input type="checkbox" name="filter_internal_ip" value="1" {% if site_form.filter_internal_ip %}checked{% endif %}> {{ '过滤内网来源地址' if zh else 'Filter internal IPs' }}</label>
         </div>

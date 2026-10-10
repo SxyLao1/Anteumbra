@@ -6,6 +6,17 @@
 
 ---
 
+## [1.0.44] - 2026-10-11
+
+### Fixed
+- Disable browser history restoration for the site editor so a stale unchecked state cannot overwrite the current configuration.
+
+## [1.0.43] - 2026-10-11
+
+### Fixed
+- Make the site protection switch a prominent status block and explain when it is the only enabled site.
+- Return a site-level error before validation when an edit would disable the last enabled site.
+
 ## [1.0.42] - 2026-10-11
 
 ### Fixed
@@ -1007,3 +1018,7 @@ bugfix: Bug fix, reliability, optimization, or compatible cleanup
 - **v1.0.x**: DDD migration + surgery cycle (2026-06/07)
 - **v1.1.x**: Multi-site operations + extension SDK (planned)
 - **v2.0.x**: Async EventBus + Pydantic Schema (planned)
+## 1.0.43 - 2026-10-11
+
+- Clarify the site protection switch in the site editor and show when it is the only enabled site.
+- Reject disabling the last enabled site with a site-level error before config validation.

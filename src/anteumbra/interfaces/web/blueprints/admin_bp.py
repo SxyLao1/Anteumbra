@@ -221,6 +221,7 @@ def sites_workspace():
     """Configured site inventory; configuration is not monitor health."""
     runtime = get_runtime()
     managed_sites = runtime.config.get_websites()
+    enabled_site_count = sum(1 for site in managed_sites if site.enabled)
     requested_id = request.args.get("edit", "").strip().lower()
     show_new = request.args.get("new") == "1"
     site_form = None
@@ -239,6 +240,7 @@ def sites_workspace():
                     "path": str(selected.path),
                     "port": selected.port,
                     "enabled": selected.enabled,
+                    "only_enabled": bool(selected.enabled and enabled_site_count == 1),
                     "access_log_path": str(log_config.get("access_log_path") or ""),
                     "log_monitor_enabled": bool(log_config.get("log_monitor_enabled")),
                     "filter_internal_ip": bool(log_config.get("filter_internal_ip")),
@@ -252,6 +254,7 @@ def sites_workspace():
                 "path": "",
                 "port": 80,
                 "enabled": True,
+                "only_enabled": False,
                 "access_log_path": "",
                 "log_monitor_enabled": False,
                 "filter_internal_ip": False,
@@ -260,6 +263,7 @@ def sites_workspace():
         "admin/sites.html",
         managed_sites=managed_sites,
         site_form=site_form,
+        enabled_site_count=enabled_site_count,
     )
 
 

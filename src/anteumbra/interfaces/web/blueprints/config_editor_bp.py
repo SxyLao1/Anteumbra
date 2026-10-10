@@ -654,6 +654,14 @@ def _candidate_for_site(doc: cd.ConfigDocument, form: Mapping[str, str]) -> _Can
         sites.append(entry)
         label = gettext("Add site %(site)s", site=entry["name"])
 
+    if not any(bool(site.get("enabled", True)) for site in sites):
+        raise cd.ConfigDocumentError(
+            gettext(
+                "At least one site must remain enabled; keep this site enabled or "
+                "enable another site first."
+            )
+        )
+
     # Keep a single [website] block as-is until a second site is actually added;
     # adding the second site deliberately promotes it to [[website]] entries.
     data["website"] = sites[0] if was_single_table and mode == "edit" else sites
