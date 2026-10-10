@@ -189,6 +189,14 @@ def test_site_manager_explains_last_enabled_site_guard(real_instance):
     page.get_by_test_id("review-site-save").click()
     page.locator("#ce-result").get_by_role("button").click()
     expect(page.locator("#ce-result")).to_contain_text("written")
+    expect(page.locator('#ce-result [data-config-written="true"]')).to_be_visible()
+    assert page.evaluate(
+        """() => {
+            const event = new Event('beforeunload', {cancelable: true});
+            window.dispatchEvent(event);
+            return event.defaultPrevented;
+        }"""
+    ) is False
 
     open_page(page, "sites?edit=portal")
     expect(page.get_by_test_id("site-enabled")).to_be_checked()

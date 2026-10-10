@@ -4,7 +4,7 @@
 {% set level_class = {'success': 'badge-success', 'warning': 'badge-warning',
                       'error': 'badge-danger', 'info': 'badge-info'} %}
 {% if plan %}
-<div class="ce-result-panel" style="border:1px solid var(--color-border);border-radius:4px;padding:10px 12px;">
+<div class="ce-result-panel" data-config-written="{{ 'true' if plan.written else 'false' }}" style="border:1px solid var(--color-border);border-radius:4px;padding:10px 12px;">
   {% if plan.notice %}
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
     <span class="badge {{ level_class.get(plan.notice.level, 'badge-gray') }}">{{ plan.notice.level }}</span>

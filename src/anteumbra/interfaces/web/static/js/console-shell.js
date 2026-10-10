@@ -21,6 +21,10 @@
   function formValue(form) { return Array.prototype.map.call(form.elements || [], function (field) { if (!field.name || field.disabled || field.type === 'hidden') return ''; if (field.type === 'checkbox' || field.type === 'radio') return field.name + '=' + (field.checked ? '1' : '0'); return field.name + '=' + field.value; }).join('&'); }
   function snapshot(root) { businessForms(root).forEach(function (form) { snapshots.set(form, formValue(form)); }); }
   function isDirty() { var dirty = false; businessForms(document).forEach(function (form) { if (snapshots.has(form) && snapshots.get(form) !== formValue(form)) dirty = true; }); return dirty; }
+  function clearDirtyAfterConfigSave(event) {
+    var target = event.detail && event.detail.target;
+    if (target && target.querySelector && target.querySelector('[data-config-written="true"]')) snapshot(document);
+  }
   function confirmNavigation() { return !isDirty() || window.confirm(locale === 'zh' ? '存在未保存的业务表单修改，确定离开当前工作区？' : 'There are unsaved business-form changes. Leave this workspace?'); }
   function title(item) { return item[locale === 'zh' ? 0 : 1]; }
   function renderContext(workspace) { var nav = document.getElementById('console-context-nav'), data = workspaces[workspace]; if (!nav || !data) return; nav.innerHTML = data.items.map(function (item) { return '<a href="' + item[2] + '" data-action="console.route" data-route="' + item[2] + '">' + title(item) + '</a>'; }).join(''); document.querySelectorAll('[data-workspace]').forEach(function (link) { link.classList.toggle('active', link.dataset.workspace === workspace); }); }
@@ -60,6 +64,7 @@
 
   try { applyTheme(window.localStorage.getItem(storageKey) === 'light' ? 'light' : 'dark'); } catch (error) { applyTheme('dark'); }
   snapshot(document);
+  document.addEventListener('htmx:afterSwap', clearDirtyAfterConfigSave);
   window.addEventListener('beforeunload', function (event) { if (!isDirty()) return; event.preventDefault(); event.returnValue = ''; });
   if (app && app.register) app.register('console-shell', { actions: {
     'console.theme-toggle': { handler: toggleTheme },

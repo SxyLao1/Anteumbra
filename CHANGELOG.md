@@ -6,6 +6,11 @@
 
 ---
 
+## [1.0.47] - 2026-10-11
+
+### Fixed
+- Clear the page dirty state after a confirmed configuration save so leaving the page does not show a false unsaved-changes warning.
+
 ## [1.0.46] - 2026-10-11
 
 ### Fixed
