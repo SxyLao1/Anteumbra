@@ -232,6 +232,11 @@
         var binding = module.actions[actionName];
         registerAction(actionName, binding.handler, binding.events, binding.preventDefault);
       });
+      // Scripts are deferred and HTMX can insert them after the shell has
+      // already started.  Mount a late module immediately so its initial
+      // fragment (for example the threat record list) is not left on a
+      // permanent loading placeholder.
+      if (started && module.mount) module.mount(document);
       return module;
     },
     module: function (name) { return modules.get(name); },
@@ -312,5 +317,18 @@
   });
 
   window.Anteumbra = app;
-  document.addEventListener('DOMContentLoaded', function () { app.start(); });
+  // Full-page loads fire DOMContentLoaded after deferred scripts, but an
+  // HTMX fragment can load this shell after that event has already happened.
+  // In the latter case waiting for the event leaves every delegated action
+  // inert (search, selection, detail and batch controls appear clickable but
+  // do nothing).  start() is idempotent, so cover both lifecycles.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { app.start(); });
+  } else {
+    // A deferred script can observe `interactive` while later deferred
+    // modules are still registering their actions.  Defer one task so those
+    // registrations complete before the first mount.  This also covers a
+    // shell injected after DOMContentLoaded.
+    window.setTimeout(function () { app.start(); }, 0);
+  }
 }(window, document));
