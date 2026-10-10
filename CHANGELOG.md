@@ -6,6 +6,16 @@
 
 ---
 
+## [1.0.42] - 2026-10-11
+
+### Fixed
+- Add a dedicated site management form for creating sites and editing their web root,
+  service port, access-log path, log analysis and enabled state.
+- Route site saves through the existing diff preview, validation, timestamped backup and
+  runtime reload pipeline while keeping the stable site ID unchanged during edits.
+- Add a direct site-management entry to Settings so operators do not have to use raw TOML
+  editing for routine site changes.
+
 ## [1.0.41] - Unreleased
 
 ### Changed

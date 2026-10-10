@@ -49,6 +49,7 @@ from anteumbra.cli.config_support import (
     write_env_value,
     write_toml_file,
 )
+from anteumbra.domain.site import SiteIdentity
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
@@ -551,6 +552,114 @@ def _candidate_for_batch(doc: cd.ConfigDocument, form: Mapping[str, str]) -> _Ca
     )
 
 
+def _site_checkbox(form: Mapping[str, str], name: str) -> bool:
+    """Read the explicit hidden+checkbox value used by the site form."""
+    values = form.getlist(name) if hasattr(form, "getlist") else [form.get(name, "0")]
+    return any(str(value).strip().lower() in {"1", "true", "on", "yes"} for value in values)
+
+
+def _site_entry_from_form(form: Mapping[str, str]) -> dict[str, Any]:
+    """Build one validated website entry from the operator-facing form."""
+    name = form.get("name", "").strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise cd.ConfigDocumentError(
+            gettext("Site name is required and must not contain path separators.")
+        )
+
+    supplied_id = form.get("site_id", "").strip().lower()
+    identity = SiteIdentity.from_values(supplied_id or None, name)
+    path = form.get("path", "").strip()
+    if not path:
+        raise cd.ConfigDocumentError(gettext("Website root path is required."))
+    try:
+        port = int(form.get("port", ""))
+    except (TypeError, ValueError) as exc:
+        raise cd.ConfigDocumentError(gettext("Service port must be an integer.")) from exc
+    if not 1 <= port <= 65535:
+        raise cd.ConfigDocumentError(gettext("Service port must be between 1 and 65535."))
+
+    access_log_path = form.get("access_log_path", "").strip()
+    log_config: dict[str, Any] = {
+        "access_log_path": access_log_path,
+        "log_monitor_enabled": _site_checkbox(form, "log_monitor_enabled"),
+        "filter_internal_ip": _site_checkbox(form, "filter_internal_ip"),
+    }
+    return {
+        "id": identity.site_id,
+        "name": identity.site_name,
+        "path": path,
+        "port": port,
+        "enabled": _site_checkbox(form, "enabled"),
+        "log_config": log_config,
+    }
+
+
+def _candidate_for_site(doc: cd.ConfigDocument, form: Mapping[str, str]) -> _Candidate:
+    """Add or update one ``website`` entry while preserving unrelated options.
+
+    The general tree editor can add an empty ``[[website]]`` block, but it cannot
+    express the ownership invariant that a site ID stays stable while its name,
+    root, or log path changes.  This small domain-shaped editor owns that rule,
+    then hands the resulting document to the same validation and backup pipeline.
+    """
+    entry = _site_entry_from_form(form)
+    data = copy.deepcopy(doc.data())
+    raw_sites = data.get("website")
+    was_single_table = isinstance(raw_sites, Mapping)
+    if was_single_table:
+        sites: list[dict[str, Any]] = [dict(raw_sites)]
+    elif isinstance(raw_sites, list) and all(isinstance(item, Mapping) for item in raw_sites):
+        sites = [dict(item) for item in raw_sites]
+    else:
+        raise cd.ConfigDocumentError(gettext("The website configuration is not a table."))
+
+    mode = form.get("mode", "add").strip().lower()
+    original_id = form.get("original_site_id", "").strip().lower()
+    existing_ids: list[str] = []
+    target_index: int | None = None
+    for index, current in enumerate(sites):
+        current_name = str(current.get("name", "")).strip()
+        current_id = str(current.get("id") or current.get("site_id") or "").strip().lower()
+        current_id = SiteIdentity.from_values(current_id or None, current_name).site_id
+        existing_ids.append(current_id)
+        if mode == "edit" and current_id == (original_id or entry["id"]):
+            target_index = index
+
+    if mode == "edit":
+        if target_index is None:
+            raise cd.ConfigDocumentError(gettext("The selected site no longer exists."))
+        if entry["id"] != existing_ids[target_index]:
+            raise cd.ConfigDocumentError(gettext("A site's stable ID cannot be changed while editing it."))
+        merged = dict(sites[target_index])
+        merged.update(entry)
+        old_log_config = dict(merged.get("log_config") or {})
+        old_log_config.update(entry["log_config"])
+        merged["log_config"] = old_log_config
+        scan_options = dict(merged.get("scan_options") or {})
+        if entry["log_config"]["access_log_path"]:
+            scan_options["access_log_path"] = entry["log_config"]["access_log_path"]
+        else:
+            scan_options.pop("access_log_path", None)
+        if scan_options:
+            merged["scan_options"] = scan_options
+        else:
+            merged.pop("scan_options", None)
+        sites[target_index] = merged
+        label = gettext("Edit site %(site)s", site=entry["name"])
+    else:
+        if entry["id"] in existing_ids:
+            raise cd.ConfigDocumentError(
+                gettext("A site with stable ID %(site_id)s already exists.", site_id=entry["id"])
+            )
+        sites.append(entry)
+        label = gettext("Add site %(site)s", site=entry["name"])
+
+    # Keep a single [website] block as-is until a second site is actually added;
+    # adding the second site deliberately promotes it to [[website]] entries.
+    data["website"] = sites[0] if was_single_table and mode == "edit" else sites
+    return _Candidate(doc.with_data(data), True, label, f"website.{entry['id']}")
+
+
 # -- view models -------------------------------------------------------------
 
 
@@ -1017,6 +1126,14 @@ def config_value():
 def config_batch():
     """Review every changed field of the form view at once."""
     return _mutation_response(lambda doc: _candidate_for_batch(doc, request.form))
+
+
+@config_editor_bp.route("/config/editor/site", methods=["POST"])
+@require_auth
+def config_site():
+    """Review an add/edit site form through the normal gated config pipeline."""
+    form = request.form.copy()
+    return _mutation_response(lambda doc: _candidate_for_site(doc, form))
 
 
 @config_editor_bp.route("/config/editor/key/add", methods=["POST"])

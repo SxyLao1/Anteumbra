@@ -117,3 +117,53 @@ def test_sites_settings_plugins_and_maintenance_are_real_pages(real_instance):
         page.get_by_role("button", name=action, exact=True).click()
     page.reload()
     expect(page.locator("#system-registry-panel")).to_be_visible()
+
+
+def test_site_manager_adds_and_edits_site_paths_and_access_logs(real_instance):
+    """The site page must own the common add/edit path, without raw TOML work."""
+    page, portal, _ = real_instance
+    root = portal.parent
+    blog = root / "blog"
+    blog.mkdir()
+    blog_log = root / "test-inputs" / "blog-access.log"
+    blog_log.parent.mkdir(exist_ok=True)
+    blog_log.touch()
+
+    open_page(page, "sites")
+    expect(page.get_by_test_id("site-management")).to_be_visible()
+    page.get_by_test_id("add-site").click()
+    expect(page.get_by_test_id("site-editor")).to_be_visible()
+    page.get_by_test_id("site-name").fill("Blog test site")
+    page.get_by_test_id("site-id").fill("blog")
+    page.get_by_test_id("site-path").fill(str(blog))
+    page.get_by_test_id("site-port").fill("18082")
+    page.get_by_test_id("site-log-path").fill(str(blog_log))
+    page.get_by_test_id("site-log-enabled").check()
+    page.get_by_test_id("review-site-save").click()
+    result = page.locator("#ce-result")
+    expect(result).to_contain_text("website")
+    result.get_by_role("button").click()
+    expect(result).to_contain_text("written")
+
+    page.goto(f"{page.url.split('/admin/')[0]}/admin/sites")
+    blog_card = page.locator('[data-managed-site="blog"]')
+    expect(blog_card).to_contain_text(str(blog))
+    expect(blog_card).to_contain_text(str(blog_log))
+
+    updated_root = root / "portal-updated"
+    updated_root.mkdir()
+    updated_log = root / "test-inputs" / "portal-updated-access.log"
+    updated_log.touch()
+    page.locator('[data-managed-site="portal"]').get_by_test_id("edit-site-portal").click()
+    expect(page.get_by_test_id("site-editor")).to_be_visible()
+    page.get_by_test_id("site-path").fill(str(updated_root))
+    page.get_by_test_id("site-log-path").fill(str(updated_log))
+    page.get_by_test_id("site-log-enabled").check()
+    page.get_by_test_id("review-site-save").click()
+    result.get_by_role("button").click()
+    expect(result).to_contain_text("written")
+
+    page.goto(f"{page.url.split('/admin/')[0]}/admin/sites")
+    portal_card = page.locator('[data-managed-site="portal"]')
+    expect(portal_card).to_contain_text(str(updated_root))
+    expect(portal_card).to_contain_text(str(updated_log))

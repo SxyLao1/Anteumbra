@@ -90,6 +90,12 @@
   <div class="muted-copy" style="margin-top:8px;">{{ _('The runtime reloaded this change live.') }}</div>
   {% endif %}
 
+  {% if plan.written and plan.confirm_url.endswith('/config/editor/site') %}
+  <div style="margin-top:10px;">
+    <a class="btn btn-primary btn-sm" href="/admin/sites">{{ _('Return to site management') }}</a>
+  </div>
+  {% endif %}
+
   {% for note in plan.notes %}
   <div class="muted-copy" style="margin-top:6px;">{{ note }}</div>
   {% endfor %}

@@ -220,9 +220,46 @@ def threats():
 def sites_workspace():
     """Configured site inventory; configuration is not monitor health."""
     runtime = get_runtime()
+    managed_sites = runtime.config.get_websites()
+    requested_id = request.args.get("edit", "").strip().lower()
+    show_new = request.args.get("new") == "1"
+    site_form = None
+    if show_new or requested_id:
+        if requested_id:
+            selected = next(
+                (site for site in managed_sites if site.site_id == requested_id), None
+            )
+            if selected is not None:
+                log_config = dict(selected.log_config or {})
+                site_form = {
+                    "mode": "edit",
+                    "site_id": selected.site_id,
+                    "original_site_id": selected.site_id,
+                    "name": selected.name,
+                    "path": str(selected.path),
+                    "port": selected.port,
+                    "enabled": selected.enabled,
+                    "access_log_path": str(log_config.get("access_log_path") or ""),
+                    "log_monitor_enabled": bool(log_config.get("log_monitor_enabled")),
+                    "filter_internal_ip": bool(log_config.get("filter_internal_ip")),
+                }
+        elif show_new:
+            site_form = {
+                "mode": "add",
+                "site_id": "",
+                "original_site_id": "",
+                "name": "",
+                "path": "",
+                "port": 80,
+                "enabled": True,
+                "access_log_path": "",
+                "log_monitor_enabled": False,
+                "filter_internal_ip": False,
+            }
     return render_page(
         "admin/sites.html",
-        managed_sites=runtime.config.get_websites(),
+        managed_sites=managed_sites,
+        site_form=site_form,
     )
 
 

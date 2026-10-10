@@ -1,10 +1,72 @@
 {% set zh = current_locale == 'zh' %}
-<section class="site-inventory">
+<section class="site-inventory" data-testid="site-management">
   <div class="page-toolbar">
-    <div><h2>{{ '站点与防护' if zh else 'Sites & Protection' }}</h2>
+    <div>
+      <h2>{{ '站点与防护' if zh else 'Sites & Protection' }}</h2>
+      <p class="muted-copy" style="margin:4px 0 0;">{{ '在这里维护受监控站点、网站根目录和访问日志入口。' if zh else 'Maintain monitored sites, web roots and access-log inputs here.' }}</p>
     </div>
-    <a class="btn btn-primary" href="/admin/config?view=raw">{{ '接入或编辑站点' if zh else 'Add or edit sites' }}</a>
+    <span class="toolbar-spacer"></span>
+    <a class="btn btn-primary" href="/admin/sites?new=1" data-testid="add-site">{{ '添加站点' if zh else 'Add site' }}</a>
+    <a class="btn btn-ghost" href="/admin/config?view=raw">{{ '高级配置' if zh else 'Advanced config' }}</a>
   </div>
+
+  {% if site_form %}
+  <section class="card" id="site-editor" data-testid="site-editor">
+    <div class="card-header">
+      <strong>{{ ('编辑站点' if zh else 'Edit site') if site_form.mode == 'edit' else ('新增站点' if zh else 'Add site') }}</strong>
+      <span class="toolbar-spacer"></span>
+      <a class="btn btn-ghost btn-sm" href="/admin/sites">{{ '取消' if zh else 'Cancel' }}</a>
+    </div>
+    <div class="card-body">
+      <p class="muted-copy" style="margin-top:0;">{{ '保存前会显示配置差异并校验路径；站点配置变更需要重启监控进程后完全生效。' if zh else 'The change is previewed and validated before saving; restart the monitor after site configuration changes.' }}</p>
+      <form method="post" action="/admin/config/editor/site" hx-post="/admin/config/editor/site" hx-target="#ce-result" hx-swap="innerHTML" data-testid="site-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="confirm" value="0">
+        <input type="hidden" name="mode" value="{{ site_form.mode }}">
+        <input type="hidden" name="original_site_id" value="{{ site_form.original_site_id }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 16px;">
+          <label class="cfg-field">
+            <span>{{ '站点名称' if zh else 'Site name' }}</span>
+            <input class="form-input" name="name" value="{{ site_form.name }}" required maxlength="120" data-testid="site-name">
+          </label>
+          <label class="cfg-field">
+            <span>{{ '稳定标识' if zh else 'Stable ID' }}</span>
+            {% if site_form.mode == 'edit' %}
+            <input class="form-input" value="{{ site_form.site_id }}" readonly>
+            <input type="hidden" name="site_id" value="{{ site_form.site_id }}">
+            {% else %}
+            <input class="form-input" name="site_id" value="{{ site_form.site_id }}" pattern="[a-z0-9][a-z0-9\-]{0,62}" placeholder="{{ '可留空，按名称生成' if zh else 'Optional; derived from name' }}" data-testid="site-id">
+            {% endif %}
+            <small class="muted-copy">{{ '用于归属记录，编辑时保持不变。' if zh else 'Owns detections and remains stable when the name changes.' }}</small>
+          </label>
+          <label class="cfg-field" style="grid-column:1/-1;">
+            <span>{{ '网站根目录' if zh else 'Website root path' }}</span>
+            <input class="form-input" name="path" value="{{ site_form.path }}" required placeholder="E:\\sites\\example" data-testid="site-path">
+          </label>
+          <label class="cfg-field">
+            <span>{{ '服务端口' if zh else 'Service port' }}</span>
+            <input class="form-input" type="number" name="port" value="{{ site_form.port }}" min="1" max="65535" required data-testid="site-port">
+          </label>
+          <label class="cfg-field" style="grid-column:1/-1;">
+            <span>{{ '访问日志路径' if zh else 'Access log path' }}</span>
+            <input class="form-input" name="access_log_path" value="{{ site_form.access_log_path }}" placeholder="E:\\server\\logs\\access.log" data-testid="site-log-path">
+          </label>
+        </div>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--color-border);">
+          <label class="muted-copy"><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1" {% if site_form.enabled %}checked{% endif %} data-testid="site-enabled"> {{ '启用文件监控' if zh else 'Enable file monitoring' }}</label>
+          <label class="muted-copy"><input type="hidden" name="log_monitor_enabled" value="0"><input type="checkbox" name="log_monitor_enabled" value="1" {% if site_form.log_monitor_enabled %}checked{% endif %} data-testid="site-log-enabled"> {{ '启用访问日志分析' if zh else 'Enable access-log analysis' }}</label>
+          <label class="muted-copy"><input type="hidden" name="filter_internal_ip" value="0"><input type="checkbox" name="filter_internal_ip" value="1" {% if site_form.filter_internal_ip %}checked{% endif %}> {{ '过滤内网来源地址' if zh else 'Filter internal IPs' }}</label>
+        </div>
+        <div class="page-toolbar" style="margin-top:14px;margin-bottom:0;">
+          <button class="btn btn-primary" type="submit" data-testid="review-site-save">{{ '预览并保存' if zh else 'Review and save' }}</button>
+          <span class="muted-copy">{{ '不会直接覆盖文件；确认后会生成配置备份。' if zh else 'The file is backed up before the confirmed write.' }}</span>
+        </div>
+      </form>
+      <div id="ce-result" class="ce-result" style="margin-top:12px;"></div>
+    </div>
+  </section>
+  {% endif %}
+
   <div class="console-site-grid">
   {% for site in managed_sites %}
     <section class="card" data-managed-site="{{ site.site_id }}">
@@ -19,10 +81,11 @@
           <dt>{{ '实时监控状态' if zh else 'Live monitor health' }}</dt><dd>{{ '请通过运行日志核实；此配置摘要不提供心跳证明。' if zh else 'Verify in runtime logs; this configuration summary does not provide a heartbeat.' }}</dd>
         </dl>
         <div class="page-toolbar">
-          <a class="btn btn-primary" href="/admin/threats?site={{ site.site_id|urlencode }}">{{ '调查本站记录' if zh else 'Investigate this site' }}</a>
+          <a class="btn btn-primary" href="/admin/sites?edit={{ site.site_id|urlencode }}" data-testid="edit-site-{{ site.site_id }}">{{ '编辑站点' if zh else 'Edit site' }}</a>
+          <a class="btn btn-ghost" href="/admin/threats?site={{ site.site_id|urlencode }}">{{ '调查本站记录' if zh else 'Investigate this site' }}</a>
           <a class="btn btn-ghost" href="/admin/scanner?site={{ site.site_id|urlencode }}">{{ '主动扫描' if zh else 'Scan' }}</a>
           <a class="btn btn-ghost" href="/admin/logs/analyzer?site={{ site.site_id|urlencode }}">{{ '日志与接入检查' if zh else 'Logs and ingestion' }}</a>
-          <a class="btn btn-ghost" href="/admin/settings?open=sites&site={{ site.site_id|urlencode }}">{{ '配置详情' if zh else 'Configuration' }}</a>
+          <a class="btn btn-ghost" href="/admin/settings?open=sites&site={{ site.site_id|urlencode }}">{{ '配置概览' if zh else 'Configuration' }}</a>
         </div>
       </div>
     </section>

@@ -132,6 +132,10 @@
       {% else %}
       <p class="muted-copy" style="font-size:11px;">{{ _('No website is configured.') }}</p>
       {% endif %}
+      <div class="page-toolbar" style="margin-top:10px;margin-bottom:0;">
+        <a class="btn btn-primary btn-sm" href="/admin/sites">{{ '打开站点管理' if current_locale == 'zh' else 'Open site management' }}</a>
+        <a class="btn btn-ghost btn-sm" href="/admin/sites?new=1">{{ '添加站点' if current_locale == 'zh' else 'Add site' }}</a>
+      </div>
     </div>
   </section>
 
