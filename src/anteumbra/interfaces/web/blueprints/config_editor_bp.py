@@ -394,12 +394,21 @@ def _record_revision(changes: list[cd.Change], label: str) -> str:
 
 
 def _confirm_payload() -> dict[str, str]:
-    """The submitted fields a confirmation has to re-post unchanged."""
-    return {
-        key: value
-        for key, value in request.form.items()
-        if key not in ("csrf_token", "confirm", "base")
-    }
+    """The submitted fields a confirmation has to re-post unchanged.
+
+    HTML checkbox fallbacks submit a hidden ``0`` followed by the checked
+    checkbox's ``1``.  ``request.form.items()`` keeps only the first value,
+    which made the confirmation form silently turn an enabled site off.  The
+    browser's last value is the effective value, so preserve that value when a
+    field is repeated.
+    """
+    payload: dict[str, str] = {}
+    for key in request.form:
+        if key in ("csrf_token", "confirm", "base"):
+            continue
+        values = request.form.getlist(key)
+        payload[key] = str(values[-1]) if values else ""
+    return payload
 
 
 def _render_result(plan: _Plan):

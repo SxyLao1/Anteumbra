@@ -6,6 +6,11 @@
 
 ---
 
+## [1.0.46] - 2026-10-11
+
+### Fixed
+- Preserve the checked value when confirming a site edit so the hidden checkbox fallback cannot incorrectly disable the only enabled site.
+
 ## [1.0.45] - 2026-10-11
 
 ### Fixed
