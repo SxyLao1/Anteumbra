@@ -3,6 +3,7 @@
 [中文](ROADMAP_cn.md)
 
 > **Latest Release**: v1.0.40 (released, 2026-09-14)
+> **Current development version**: v1.0.41 (unreleased)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
 > **Source Status**: the released v1.0.40 tag contains 1210 non-browser tests and 49 browser tests, expanded Ruff checks, Wheel/source parity, Windows runtime and Docker health/login/functional smoke.
 
