@@ -72,3 +72,36 @@ def test_selection_survives_pagination_and_select_every_page(page, runtime):
     finally:
         for path in files:
             path.unlink(missing_ok=True)
+
+
+def test_upload_modal_resets_button_after_reopening(page, tmp_path):
+    """Opening the upload modal again restores its initial button state."""
+    open_console_route(page, "yara/rules")
+    upload = page.get_by_role("button", name="[+] Upload", exact=True)
+    upload.click()
+
+    modal = page.locator("#yara-upload-modal")
+    button = page.locator("#yara-upload-btn")
+    expect(modal).to_be_visible()
+    expect(button).to_have_text("Upload")
+    expect(button).to_be_disabled()
+
+    page.route(
+        "**/admin/yara/rules/upload",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"success": true, "message": "Upload successful"}',
+        ),
+    )
+    rule_file = tmp_path / "upload-state.yar"
+    rule_file.write_text("rule upload_state { condition: true }\n", encoding="utf-8")
+    page.locator("#yara-file-input").set_input_files(str(rule_file))
+    expect(button).to_be_enabled()
+    button.click()
+
+    expect(modal).to_be_hidden(timeout=5000)
+    upload.click()
+    expect(modal).to_be_visible()
+    expect(button).to_have_text("Upload")
+    expect(button).to_be_disabled()

@@ -83,7 +83,10 @@
     var info = document.getElementById('yara-file-info');
     var submit = document.getElementById('yara-upload-btn');
     if (info) { info.hidden = true; info.style.display = 'none'; }
-    if (submit) submit.disabled = true;
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = app.t('Upload');
+    }
   }
 
   function submitUpload() {
