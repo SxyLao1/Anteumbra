@@ -120,6 +120,7 @@ ZH_MAP_EXTRA_MEMSSHELL = {
     "No site was selected for remediation.": "未选择要处置的站点。",
     "No component kind was selected for remediation.": "未选择要处置的组件类型。",
     "No component was selected for remediation.": "未选择要处置的组件。",
+    "Latest successful probe findings": "最近一次成功探测的发现",
     "Select a component in the detection tab (or open forensics from a finding) before running forensics.": (
         "请先在检测页选择组件（或从检出结果点进取证页），再运行取证。"
     ),

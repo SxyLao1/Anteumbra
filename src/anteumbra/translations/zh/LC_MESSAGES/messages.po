@@ -3290,7 +3290,7 @@ msgid "web_admin.password_hash is updated when a deployment uses a literal hash,
 msgstr "若部署配置使用固定密码哈希，系统会同步更新，确保下次登录使用新密码。"
 
 msgid "Latest successful probe findings"
-msgstr "最近成功探测的发现"
+msgstr "最近一次成功探测的发现"
 
 msgid "Notification master switch:"
 msgstr "通知总开关："

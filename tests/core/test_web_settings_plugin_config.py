@@ -30,12 +30,14 @@ from typing import Any
 
 import pytest
 import tomli_w
+from dotenv import dotenv_values
 
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
+from anteumbra.application.password_service import PasswordService
 from anteumbra.application.plugin_manager import PluginManager
 from anteumbra.domain.plugin import DomainEvent, Plugin
 
@@ -244,6 +246,7 @@ class _Config:
 class _Runtime:
     def __init__(self, config: _Config) -> None:
         self.config = config
+        self.passwords = PasswordService(config)
 
 
 class Harness:
@@ -880,9 +883,9 @@ def test_setting_a_new_password_stores_only_a_hash(harness):
     env_text = harness.env_text()
     assert password not in env_text, "the plaintext must never reach disk"
     assert password not in body, "nor the page it re-renders"
-    stored = re.search(r"ANTEUMBRA_PASSWORD_HASH=(\S+)", env_text)
+    stored = dotenv_values(harness.env_path).get("ANTEUMBRA_PASSWORD_HASH")
     assert stored, "the hash must be written to .env"
-    assert check_password_hash(stored.group(1), password)
+    assert check_password_hash(stored, password)
     assert "Password updated and active for new logins." in body
 
 
