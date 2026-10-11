@@ -420,7 +420,10 @@ def system_session_cleanup():
     """Clean up expired sessions (returns rendered panel HTML + pagination)"""
     try:
         session_dir = current_app.config.get("SESSION_FILE_DIR")
-        deleted = cleanup_sessions(session_dir, days=7)
+        deleted = cleanup_sessions(
+            session_dir,
+            lifetime_seconds=current_app.config.get("SESSION_LIFETIME_SECONDS", 7 * 86400),
+        )
         all_sessions = []
 
         if session_dir:

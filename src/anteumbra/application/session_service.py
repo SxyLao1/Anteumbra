@@ -8,13 +8,24 @@ from pathlib import Path
 from anteumbra.domain.paths import normalize_path
 
 
-def cleanup_sessions(session_dir: str | Path | None = None, days: int = 7) -> int:
-    """Delete session files older than the configured age threshold."""
+def cleanup_sessions(
+    session_dir: str | Path | None = None,
+    days: int = 7,
+    *,
+    lifetime_seconds: int | float | None = None,
+) -> int:
+    """Delete session files older than the configured age threshold.
+
+    ``days`` remains the compatibility default for existing callers. Web
+    routes pass the configured session lifetime in seconds so sub-day values
+    are preserved.
+    """
     session_path = normalize_path(session_dir if session_dir is not None else "flask_session")
     if not session_path.exists():
         return 0
 
-    cutoff = time.time() - (days * 86400)
+    age_seconds = days * 86400 if lifetime_seconds is None else lifetime_seconds
+    cutoff = time.time() - age_seconds
     deleted = 0
 
     for sess_file in session_path.iterdir():
