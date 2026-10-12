@@ -36,7 +36,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     import tomli as tomllib
 
-from anteumbra.application.config_history_service import ConfigHistoryLogger
+from anteumbra.application.config_history_service import ConfigHistoryLogger, ConfigRevisionStore
 from anteumbra.application.password_service import PasswordService
 from anteumbra.interfaces.web.blueprints import config_editor_bp as bp
 
@@ -447,6 +447,24 @@ def test_every_write_keeps_a_timestamped_backup(editor) -> None:
         [first.encode("utf-8"), second.encode("utf-8")]
     )
     assert all(re.search(r"\.\d{8}-\d{6}(?:-\d+)?\.bak$", path.name) for path in backups)
+
+
+def test_same_second_backup_collision_suffix_orders_newest_first(editor) -> None:
+    """A ``-1`` backup is newer even when both names share one second."""
+    older = editor.text()
+    newer = older.replace("port = 11174", "port = 12000")
+    first = editor.config_path.with_name("config.toml.20260101-120000.bak")
+    second = editor.config_path.with_name("config.toml.20260101-120000-1.bak")
+    first.write_text(older, encoding="utf-8")
+    second.write_text(newer, encoding="utf-8")
+
+    revisions = [
+        revision
+        for revision in ConfigRevisionStore(editor.config_path, editor.history).list_revisions()
+        if revision.kind == "backup"
+    ]
+
+    assert revisions[0].revision_id == f"backup:{second.name}"
 
 
 # ── the raw view ────────────────────────────────────────────────────────────
