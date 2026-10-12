@@ -29,15 +29,17 @@ def _review_and_confirm(page: Page, form) -> None:
     form.get_by_role("button", name="Add table or block", exact=True).click()
     result = page.locator("#ce-result")
     expect(result.get_by_role("button", name="Confirm save", exact=True)).to_be_visible()
+    expect(result.locator('[data-config-written="true"]')).to_have_count(0)
     result.get_by_role("button", name="Confirm save", exact=True).click()
-    expect(result).to_contain_text("written")
+    expect(result.locator('[data-config-written="true"]')).to_be_visible()
 
 
 def _confirm_result(page: Page) -> None:
     result = page.locator("#ce-result")
     expect(result.get_by_role("button", name="Confirm save", exact=True)).to_be_visible()
+    expect(result.locator('[data-config-written="true"]')).to_have_count(0)
     result.get_by_role("button", name="Confirm save", exact=True).click()
-    expect(result).to_contain_text("written")
+    expect(result.locator('[data-config-written="true"]')).to_be_visible()
 
 
 def _open_plugins(page: Page) -> None:
@@ -129,13 +131,13 @@ def test_config_tree_structures_and_write_only_secrets(real_instance):
     # A test-owned value can be explicitly cleared; empty save never means clear.
     secret_row.locator('input[name="value"]').fill("e2e-only-secret")
     secret_row.get_by_role("button", name="Save to .env", exact=True).click()
-    expect(page.locator("#ce-result")).to_contain_text("written")
+    expect(page.locator('#ce-result [data-config-written="true"]')).to_be_visible()
     page.reload()
     secret_row = page.locator('[data-env-key="ANTEUMBRA_EMAIL_PASSWORD"]')
     expect(secret_row.get_by_role("button", name="Clear", exact=True)).to_be_visible()
     page.once("dialog", lambda dialog: dialog.accept())
     secret_row.get_by_role("button", name="Clear", exact=True).click()
-    expect(page.locator("#ce-result")).to_contain_text("written")
+    expect(page.locator('#ce-result [data-config-written="true"]')).to_be_visible()
 
 
 def test_plugin_controls_and_notification_surfaces(real_instance):

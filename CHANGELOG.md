@@ -11,6 +11,8 @@
 ## [1.0.48] - Unreleased
 
 ### Added
+- Add a Docker runtime snapshot helper that checks archive integrity, rejects unsafe
+  entries and verifies restored contents, permissions and numeric ownership.
 - Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
 - Document the current single-operator administration model; user lists, role-based permissions, and multi-tenant accounts remain outside the current scope.
 
@@ -31,6 +33,10 @@
   blocking, SIEM and probe counterparts. Business operations use the UI.
 
 ### Fixed
+- Initialize mounted Docker runtime directories from installed package assets,
+  preserving existing configuration, credentials and custom rules.
+- Handle Docker SIGTERM with orderly runtime shutdown before taking a snapshot.
+- Do not report a heap-dump failure when heap collection is disabled.
 - Replay Registry WAL records conservatively and keep expired-session cleanup aligned
   with the configured runtime lifetime.
 - Complete cross-page blocklist batches with per-device receipts, preserving failed

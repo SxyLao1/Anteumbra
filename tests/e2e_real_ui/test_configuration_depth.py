@@ -20,8 +20,9 @@ def _open(page, path):
 def _confirm(page):
     result = page.locator("#ce-result")
     expect(result.get_by_role("button", name="Confirm save", exact=True)).to_be_visible()
+    expect(result.locator('[data-config-written="true"]')).to_have_count(0)
     result.get_by_role("button", name="Confirm save", exact=True).click()
-    expect(result).to_contain_text("written")
+    expect(result.locator('[data-config-written="true"]')).to_be_visible()
 
 
 def test_notification_values_and_full_editor_filters_batch(real_instance):

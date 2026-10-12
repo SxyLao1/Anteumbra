@@ -173,15 +173,19 @@ python -m pytest
 docker build -t anteumbra .
 docker run -d --name anteumbra \
   -p 127.0.0.1:18080:8080 \
-  -v $(pwd)/anteumbra-data:/app/data \
-  -v $(pwd)/anteumbra-logs:/app/logs \
+  -e ANTEUMBRA_HOME=/var/lib/anteumbra \
+  -v anteumbra-runtime:/var/lib/anteumbra \
   anteumbra
 docker logs anteumbra
 ```
 
-容器会启动与 `anteumbra run` 相同的完整运行时，首次启动自动生成 Docker 友好的默认配置，
-将本机 Docker 网关加入后台 IP 白名单，并在 `docker logs` 中打印初始管理员密码。打开
-`http://127.0.0.1:18080/admin`。
+命名卷保存完整可变运行时：`config.toml`、`.env`、`rules`、`data`、`logs` 和 `sites`。
+容器首次启动时从镜像内已安装包提供的模板创建运行时，将本机 Docker 网关加入后台 IP
+白名单，并在 `docker logs` 中打印初始管理员密码。用同一个卷重建容器会保留配置、密钥和
+自定义规则。现有 `/app` 路径仍可用于旧版 bind mount 部署；新部署应将完整运行时卷挂载到
+`/var/lib/anteumbra`。打开 `http://127.0.0.1:18080/admin`。
+
+可复核的备份与恢复步骤见[发布指南](docs/RELEASE_cn.md#docker-运行时备份与恢复)。
 
 ## 架构
 

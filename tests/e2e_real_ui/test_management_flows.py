@@ -17,6 +17,12 @@ def download_text(page, button):
     return pending.value.path().read_text(encoding="utf-8-sig")
 
 
+def confirm_config_save(result):
+    expect(result.locator('[data-config-written="true"]')).to_have_count(0)
+    result.get_by_role("button", name="Confirm save", exact=True).click()
+    expect(result.locator('[data-config-written="true"]')).to_be_visible()
+
+
 def test_config_three_views_validation_save_backup_restore(real_instance):
     page, _, _ = real_instance
     open_page(page, "config?view=raw")
@@ -26,8 +32,7 @@ def test_config_three_views_validation_save_backup_restore(real_instance):
     page.get_by_role("button", name="Review raw changes", exact=True).click()
     result = page.locator("#ce-result")
     expect(result).to_contain_text("acceptance_note.text")
-    result.get_by_role("button", name="Confirm save", exact=True).click()
-    expect(result).to_contain_text("written")
+    confirm_config_save(result)
     # A real browser reload must see the persisted document.
     page.reload()
     expect(raw).to_have_value(baseline + "\n[acceptance_note]\ntext = 'browser-saved'\n")
@@ -38,8 +43,7 @@ def test_config_three_views_validation_save_backup_restore(real_instance):
     row.locator("input.ce-value").fill('"second-value"')
     row.get_by_role("button", name="Review change", exact=True).click()
     expect(result).to_contain_text("second-value")
-    result.get_by_role("button", name="Confirm save", exact=True).click()
-    expect(result).to_contain_text("written")
+    confirm_config_save(result)
     page.get_by_role("button", name="Tree", exact=True).click()
     expect(page.locator("#ce-list")).to_contain_text("acceptance_note")
     page.get_by_role("tab", name="History", exact=True).click()
@@ -50,7 +54,7 @@ def test_config_three_views_validation_save_backup_restore(real_instance):
     assert "acceptance_note" in download_text(page, revision.get_by_role("link", name="Download", exact=True))
     page.once("dialog", lambda dialog: dialog.accept())
     revision.get_by_role("button", name="Restore", exact=True).click()
-    expect(result).to_contain_text("written")
+    expect(result.locator('[data-config-written="true"]')).to_be_visible()
     open_page(page, "config?view=raw")
     expect(raw).to_contain_text("browser-saved")
 
@@ -142,8 +146,7 @@ def test_site_manager_adds_and_edits_site_paths_and_access_logs(real_instance):
     page.get_by_test_id("review-site-save").click()
     result = page.locator("#ce-result")
     expect(result).to_contain_text("website")
-    result.get_by_role("button").click()
-    expect(result).to_contain_text("written")
+    confirm_config_save(result)
 
     page.goto(f"{page.url.split('/admin/')[0]}/admin/sites")
     blog_card = page.locator('[data-managed-site="blog"]')
@@ -160,8 +163,7 @@ def test_site_manager_adds_and_edits_site_paths_and_access_logs(real_instance):
     page.get_by_test_id("site-log-path").fill(str(updated_log))
     page.get_by_test_id("site-log-enabled").check()
     page.get_by_test_id("review-site-save").click()
-    result.get_by_role("button").click()
-    expect(result).to_contain_text("written")
+    confirm_config_save(result)
 
     page.goto(f"{page.url.split('/admin/')[0]}/admin/sites")
     portal_card = page.locator('[data-managed-site="portal"]')
@@ -175,8 +177,7 @@ def test_site_manager_explains_last_enabled_site_guard(real_instance):
     open_page(page, "sites?edit=shop")
     page.get_by_test_id("site-enabled").uncheck()
     page.get_by_test_id("review-site-save").click()
-    page.locator("#ce-result").get_by_role("button").click()
-    expect(page.locator("#ce-result")).to_contain_text("written")
+    confirm_config_save(page.locator("#ce-result"))
 
     open_page(page, "sites?edit=portal")
     expect(page.get_by_test_id("site-enabled")).to_be_checked()
@@ -187,9 +188,7 @@ def test_site_manager_explains_last_enabled_site_guard(real_instance):
     page.get_by_test_id("site-log-path").fill(str(log_path))
     page.get_by_test_id("site-log-enabled").check()
     page.get_by_test_id("review-site-save").click()
-    page.locator("#ce-result").get_by_role("button").click()
-    expect(page.locator("#ce-result")).to_contain_text("written")
-    expect(page.locator('#ce-result [data-config-written="true"]')).to_be_visible()
+    confirm_config_save(page.locator("#ce-result"))
 
     open_page(page, "sites?edit=portal")
     expect(page.get_by_test_id("site-enabled")).to_be_checked()

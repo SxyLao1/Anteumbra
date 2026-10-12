@@ -181,16 +181,23 @@ See [Contributing](CONTRIBUTING.md) for the full workflow.
 docker build -t anteumbra .
 docker run -d --name anteumbra \
   -p 127.0.0.1:18080:8080 \
-  -v $(pwd)/anteumbra-data:/app/data \
-  -v $(pwd)/anteumbra-logs:/app/logs \
+  -e ANTEUMBRA_HOME=/var/lib/anteumbra \
+  -v anteumbra-runtime:/var/lib/anteumbra \
   anteumbra
 docker logs anteumbra
 ```
 
-The container starts the same full runtime as `anteumbra run`, creates a
-Docker-friendly default config on first start, permits the local Docker gateway
-to reach the admin IP allowlist, and prints the initial admin password in
-`docker logs`. Open `http://127.0.0.1:18080/admin`.
+The named volume is the complete mutable runtime: `config.toml`, `.env`,
+`rules`, `data`, `logs`, and `sites`. On its first start the container creates
+the runtime from templates packaged in the image, permits the local Docker
+gateway to reach the admin IP allowlist, and prints the initial admin password
+in `docker logs`. Recreating the container with the same volume preserves
+configuration, secrets, and custom rules. Existing `/app` paths remain
+available for older bind-mount deployments; new deployments should mount the
+complete runtime volume at `/var/lib/anteumbra`. Open
+`http://127.0.0.1:18080/admin`.
+
+For a verified backup and restore procedure, see [Release Guide](docs/RELEASE.md#docker-runtime-backup-and-restore).
 
 ## Architecture
 

@@ -87,3 +87,76 @@ Environment: pypi
 ```
 
 如果 PyPI 未配置 Trusted Publishing，工作流会成功构建，但会在发布步骤失败。
+
+
+## Docker 运行目录备份与恢复
+
+挂载到 `/var/lib/anteumbra` 的命名卷包含运行配置、凭据与 TOTP 状态、规则、检测记录、隔离历史、日志和卷内站点文件。
+卷外网站挂载需要单独备份。
+以下步骤从源码仓库目录在 POSIX shell 中执行，使用仓库自带的快照工具。
+
+先在本地构建候选镜像，再把两个镜像引用设置为确定的标签或不可变摘要。
+示例不代表这些镜像已经公开发布。
+备份前必须停止全部写入方。
+工具拒绝覆盖已有快照或向非空目录恢复，先核对压缩包 SHA-256，再逐项核对恢复后的文件内容、权限和数字 UID/GID，包含运行根目录。
+链接（包括符号链接和硬链接）及特殊文件会被拒绝。
+压缩包及两个旁侧校验文件须一起保留并限制访问，因为压缩包含凭据和站点数据。
+只使用可信备份位置中的快照；校验文件用于发现损坏，不能证明归档来源。
+工具在解包前核对内容与元数据，恢复后再次对账。备份或恢复失败时保留失败产物用于排查，
+改用新的快照名称或新的空卷重试，不能将部分恢复的卷直接作为运行实例。
+
+```bash
+set -eu
+OLD_IMAGE='anteumbra:1.0.47'
+NEW_IMAGE='anteumbra:1.0.48'
+RUNTIME_VOLUME='anteumbra-runtime'
+RESTORE_VOLUME='anteumbra-runtime-restored'
+SNAPSHOT='before-upgrade.tar.gz'
+SCRIPT="$(pwd)/scripts/docker_runtime_snapshot.py"
+BACKUPS="$(pwd)/anteumbra-runtime-snapshots"
+
+test -f "$SCRIPT"
+test "$(docker inspect -f '{{.Config.Image}}' anteumbra)" = "$OLD_IMAGE"
+test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/anteumbra"}}{{.Name}}{{end}}{{end}}' anteumbra)" = "$RUNTIME_VOLUME"
+docker volume inspect "$RUNTIME_VOLUME" >/dev/null
+# 旧版 1.0.47 用 SIGINT 正常退出；1.0.48 也支持 Docker 默认的 SIGTERM。
+docker stop --signal SIGINT --timeout 30 anteumbra
+test "$(docker inspect -f '{{.State.ExitCode}}' anteumbra)" = '0'
+mkdir -p "$BACKUPS"
+docker run --rm --network none --user 0 --entrypoint python \
+  -v "$RUNTIME_VOLUME:/runtime:ro" -v "$BACKUPS:/backup" \
+  -v "$SCRIPT:/snapshot.py:ro" "$NEW_IMAGE" /snapshot.py backup \
+  --archive "/backup/$SNAPSHOT"
+
+if docker volume inspect "$RESTORE_VOLUME" >/dev/null 2>&1; then
+  echo "Restore volume already exists; choose a new name." >&2
+  exit 1
+fi
+docker volume create "$RESTORE_VOLUME"
+docker run --rm --network none --user 0 --entrypoint python \
+  -v "$RESTORE_VOLUME:/runtime" -v "$BACKUPS:/backup:ro" \
+  -v "$SCRIPT:/snapshot.py:ro" "$NEW_IMAGE" /snapshot.py restore \
+  --archive "/backup/$SNAPSHOT"
+
+docker run -d --name anteumbra-upgrade \
+  -p 127.0.0.1:18080:8080 \
+  -e ANTEUMBRA_HOME=/var/lib/anteumbra \
+  -v "$RESTORE_VOLUME:/var/lib/anteumbra" "$NEW_IMAGE"
+```
+
+使用原有凭据及 TOTP 登录替换容器，回读站点配置、自定义规则和隔离历史，再完成一轮无害检测、隔离与还原。
+健康接口正常不能单独证明恢复成功。
+替换容器验收前，保留停止状态的原容器、原卷和完整快照。
+
+本流程中新版只写恢复卷，原卷保持升级前状态。
+回滚时停止新版，再启动连接原卷的旧容器：
+
+```bash
+docker stop --timeout 30 anteumbra-upgrade
+test "$(docker inspect -f '{{.State.ExitCode}}' anteumbra-upgrade)" = '0'
+docker start anteumbra
+```
+
+若新版已经写入原卷，不能直接把旧镜像接到该卷。
+应使用同一工具把升级前快照恢复到另一个新卷，再用旧镜像启动该恢复卷，并保留新版卷供调查。
+以上步骤不会删除已有数据卷。
