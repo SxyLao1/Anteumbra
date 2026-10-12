@@ -150,10 +150,15 @@ def _unblock(data: Mapping[str, Any]) -> tuple[dict[str, object], int]:
     results = blocker.unblock(ips, device_names=_device_filter(data))
     ledger_errors: list[dict[str, str]] = []
     for ip in ips:
-        if not any(item.success and item.ip == ip for item in results):
+        ip_results = [item for item in results if item.ip == ip]
+        # The ledger has one state per site/IP, not per device. A partial
+        # receipt cannot certify the requested unblock and must stay retryable.
+        if not ip_results or not all(item.success for item in ip_results):
             continue
         try:
-            ledger.mark_unblocked(ip, site_id=site.site_id, unblocked_by="admin")
+            updated = ledger.mark_unblocked(ip, site_id=site.site_id, unblocked_by="admin")
+            if not updated:
+                ledger_errors.append({"ip": ip, "error": "Audit record not found"})
         except Exception as exc:
             current_app.logger.exception(
                 "Block ledger unblock update failed for site=%s ip=%s",
