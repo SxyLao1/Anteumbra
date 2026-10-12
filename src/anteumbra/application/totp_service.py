@@ -132,6 +132,8 @@ class TotpService:
         return self.enabled and self.verify_code(self.secret, code, now=now)
 
     def consume_recovery_code(self, code: str) -> bool:
+        if not self.enabled:
+            return False
         candidate = self.recovery_hash(code)
         hashes = self.recovery_hashes
         if not candidate or candidate not in hashes:

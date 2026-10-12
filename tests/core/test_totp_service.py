@@ -58,4 +58,5 @@ def test_enable_disable_persists_secret_only_in_env(tmp_path, monkeypatch):
     service.disable()
     assert service.enabled is False
     assert service.secret == ""
+    assert service.consume_recovery_code(recovery[1]) is False
     assert service._config.get()["web_admin"]["totp_enabled"] is False
