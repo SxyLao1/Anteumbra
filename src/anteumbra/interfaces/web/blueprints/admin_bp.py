@@ -11,6 +11,7 @@ v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 import base64
 import logging
 import secrets
+import time
 
 from flask import (
     Blueprint,
@@ -402,10 +403,11 @@ def monitor_content():
         current_app.logger.error(f"[ADMIN] monitor_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
-
 @admin_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        if session.get("totp_pending_username"):
+            return redirect(url_for("admin_totp.login_totp"))
         if session.get("authenticated"):
             return redirect(url_for("admin.dashboard_index"))
         return render_template("admin/login.html")
@@ -445,6 +447,19 @@ def login():
         )
         return render_template("admin/login.html", error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
+        totp = getattr(get_runtime(), "totp", None)
+        if totp is not None and totp.enabled:
+            session.pop("authenticated", None)
+            session.pop("sse_token", None)
+            session["totp_pending_username"] = username
+            session["totp_pending_at"] = time.time()
+            log_with_symbol(
+                "notice",
+                "info",
+                f"用户 {username} 密码验证通过，等待 TOTP 二次认证",
+                current_app.logger,
+            )
+            return redirect(url_for("admin_totp.login_totp"))
         login_rate_limiter.reset(client_ip)
         session["authenticated"] = True
         session["username"] = username
@@ -455,7 +470,6 @@ def login():
     log_with_symbol("critical_permission", "critical", f"登录失败: {username}", current_app.logger)
     return render_template("admin/login.html", error="用户名或密码错误"), 401
 
-
 @admin_bp.route("/logout")
 @require_auth
 def logout():
@@ -463,12 +477,13 @@ def logout():
     session.pop("authenticated", None)
     session.pop("username", None)
     session.pop("sse_token", None)
+    session.pop("totp_pending_username", None)
+    session.pop("totp_pending_at", None)
     session.clear()
     response = redirect(url_for("admin.login"))
     response.set_cookie("session", "", expires=0)
     log_with_symbol("success", "info", f"用户 {username} 已登出", current_app.logger)
     return response
-
 
 @admin_bp.route("/dashboard")
 @require_auth
@@ -515,13 +530,6 @@ def to_hash(value):
     import hashlib
 
     return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()[:8]
-
-
-@admin_bp.route("/account", methods=["GET"])
-@require_auth
-def account_page():
-    """账户设置页面"""
-    return render_page("admin/account.html", username=session.get("username"))
 
 
 @admin_bp.route("/account/password", methods=["POST"])

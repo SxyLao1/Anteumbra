@@ -3,7 +3,7 @@
 [中文](ROADMAP_cn.md)
 
 > **Latest Release**: v1.0.47 (released, 2026-10-11)
-> **Current development version**: v1.0.47
+> **Current development version**: v1.0.47 (single-admin TOTP lifecycle complete on the development branch; not released yet)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
 > **Source Status**: the v1.0.47 source includes the release-gate checks, expanded Ruff checks, Wheel/source parity, Windows runtime and Docker health/login/functional smoke.
 
@@ -142,7 +142,7 @@ wheel/source/Docker/PyPI checklist.
 |----------|-----------|
 | P1 | Geo-IP enrichment for attacker profiles |
 | P1 | AbuseIPDB/MISP-style threat intelligence feed integration |
-| P1 | Admin 2FA/TOTP and API key management |
+| P1 | Admin TOTP: single-admin enrollment, login challenge, recovery codes, disablement, failure paths, audit logging, and real-browser acceptance are complete on the development branch; API key management remains a separate evaluation. |
 | P2 | Multi-site configuration (`[[website]]`) with clear UI separation |
 | P2 | Better report export for security review workflows |
 
