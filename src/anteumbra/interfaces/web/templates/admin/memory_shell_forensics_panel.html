@@ -9,44 +9,44 @@
 <div class="memory-shell-forensics-panel"
      data-forensics-panel
      data-forensics-state="{{ state }}"
-     {% if polling %}hx-get="/admin/memory-shell/forensics/panel" hx-trigger="every 3s" hx-target="#memory-shell-forensics-panel" hx-swap="innerHTML"{% endif %}>
+     {% if polling %}hx-get="{{ url_for('memory_shell.memory_shell_forensics_panel', site=active_site or '') }}" hx-trigger="every 3s" hx-target="#memory-shell-forensics-panel" hx-swap="innerHTML"{% endif %}>
   <span hidden
-        hx-get="/admin/memory-shell/forensics/panel"
+        hx-get="{{ url_for('memory_shell.memory_shell_forensics_panel', site=active_site or '') }}"
         hx-trigger="memory-shell-refresh from:body"
         hx-target="#memory-shell-forensics-panel"
         hx-swap="innerHTML"></span>
 
   {% if error %}
-  <div role="alert" style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:10px;margin-bottom:12px;color:#ff4444;font-size:11px;">{{ error }}</div>
+  <div role="alert" style="border:1px solid var(--color-danger);background:var(--color-bg-secondary);border-radius:4px;padding:10px;margin-bottom:12px;color:var(--color-danger);font-size:11px;">{{ error }}</div>
   {% endif %}
 
   {% if not available %}
-  <div style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:12px;">
-    <div style="color:#ff4444;font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Forensics unavailable') }}</div>
+  <div style="border:1px solid var(--color-danger);background:var(--color-bg-secondary);border-radius:4px;padding:12px;">
+    <div style="color:var(--color-danger);font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Forensics unavailable') }}</div>
     <div style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;">{{ unavailable_reason or store_error }}</div>
   </div>
   {% else %}
 
   {# ── status row ─────────────────────────────────────── #}
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Forensics:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong></span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Heap dump:') }} <strong style="color:{{ '#00ff41' if heap_dump_enabled else '#888888' }};">{{ _('Enabled') if heap_dump_enabled else _('Disabled') }}</strong></span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Index keeps:') }} <strong style="color:#00ff41;">{{ history }}</strong></span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Dump bound:') }} <strong style="color:#00ff41;">{{ max_dump_mb }}</strong> MB</span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Artifacts:') }} <strong style="color:#00ff41;">{{ runs|length }}</strong> · {{ total_bytes }}</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Forensics:') }} <strong style="color:{{ 'var(--color-safe)' if enabled else 'var(--color-danger)' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Heap dump:') }} <strong style="color:{{ 'var(--color-safe)' if heap_dump_enabled else 'var(--color-text-muted)' }};">{{ _('Enabled') if heap_dump_enabled else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Index keeps:') }} <strong style="color:var(--color-safe);">{{ history }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Dump bound:') }} <strong style="color:var(--color-safe);">{{ max_dump_mb }}</strong> MB</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Artifacts:') }} <strong style="color:var(--color-safe);">{{ runs|length }}</strong> · {{ total_bytes }}</span>
     {% if running %}
-    <span style="color:#ffaa00;font-size:11px;">{{ _('Forensics running for') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
+    <span style="color:var(--color-warning);font-size:11px;">{{ _('Forensics running for') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
     {% endif %}
   </div>
   <div style="color:var(--color-text-muted);font-size:10px;margin-bottom:14px;word-break:break-all;">
-    {{ _('Store:') }} <code style="color:#00ff41;">{{ root }}</code>
+    {{ _('Store:') }} <code style="color:var(--color-safe);">{{ root }}</code>
   </div>
 
   {# ── run forensics for one component ────────────────── #}
   {% if component and component.kind and component.name %}
-  <div style="border:1px solid #334455;background:#0a1018;border-radius:4px;padding:10px;margin-bottom:16px;">
+  <div style="border:1px solid var(--color-info);background:var(--color-bg-secondary);border-radius:4px;padding:10px;margin-bottom:16px;">
     <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:8px;">{{ _('Run forensics') }}</div>
-    <div style="font-family:var(--font-mono);font-size:11px;color:#e0e0e0;margin-bottom:8px;word-break:break-all;">
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-primary);margin-bottom:8px;word-break:break-all;">
       {{ component.kind }}:{{ component.name }}
       <span style="color:var(--color-text-muted);">@ {{ component.site_id }}</span>
     </div>
@@ -68,7 +68,7 @@
     </form>
   </div>
   {% else %}
-  <div style="border:1px solid #334455;background:#0a1018;border-radius:4px;padding:10px;margin-bottom:16px;color:var(--color-text-secondary);font-size:11px;line-height:1.6;">
+  <div style="border:1px solid var(--color-info);background:var(--color-bg-secondary);border-radius:4px;padding:10px;margin-bottom:16px;color:var(--color-text-secondary);font-size:11px;line-height:1.6;">
     {{ _('Open forensics from a finding on the detection tab (取证) to choose the component to dump. Each run stores a manifest, the class bytes when they exist, and optionally a heap dump.') }}
   </div>
   {% endif %}
@@ -92,7 +92,7 @@
       {% for run in runs %}
       <tr>
         <td>
-          <div style="font-family:var(--font-mono);font-size:10px;color:#e0e0e0;word-break:break-all;">{{ run.artifact_id }}</div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--color-text-primary);word-break:break-all;">{{ run.artifact_id }}</div>
           <div style="color:var(--color-text-muted);font-size:9px;">
             {{ _('Manual') if run.trigger == 'manual' else _('Auto') }}
             {% if run.site_name %}<span> · {{ run.site_name }}</span>{% endif %}
@@ -101,7 +101,7 @@
         <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.created_at }}</td>
         <td style="font-size:10px;">
           <span class="badge badge-info">{{ run.kind }}</span>
-          <span style="color:#e0e0e0;word-break:break-all;">{{ run.name }}</span>
+          <span style="color:var(--color-text-primary);word-break:break-all;">{{ run.name }}</span>
         </td>
         <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;color:var(--color-text-secondary);">
           {{ run.class_name or _('Unknown') }}

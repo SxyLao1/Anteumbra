@@ -25,7 +25,7 @@
             role="tab" aria-selected="{{ 'true' if tab == name else 'false' }}"
             hx-get="/admin/config?tab={{ name }}&view={{ view }}"
             hx-target="#config-editor-root" hx-select="#config-editor-root"
-            hx-swap="innerHTML" hx-push-url="true">
+            hx-swap="innerHTML" hx-replace-url="true">
       {{ tab_titles[name] }}
     </button>
     {% endfor %}

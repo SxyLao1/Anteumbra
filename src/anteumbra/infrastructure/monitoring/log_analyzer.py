@@ -16,6 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+from urllib.parse import unquote, urlsplit
 
 # v1.7.4新增：导入符号化日志接口（铁律19）
 from anteumbra.domain.logging import log_with_symbol
@@ -224,6 +225,38 @@ class LogAnalyzer:
             return 16 <= second_octet <= 31
         return False
 
+    def _shell_url_path(self, shell_path: Path) -> Optional[str]:
+        """Return the URL path for a shell relative to the configured site root."""
+        site_root = Path(self.website.path).resolve()
+        target = Path(shell_path)
+        if target.is_absolute():
+            try:
+                relative = target.resolve().relative_to(site_root)
+            except ValueError:
+                return None
+        else:
+            relative = target
+
+        path = relative.as_posix().replace("\\", "/").lstrip("/")
+        prefix = ""
+        root_parts = site_root.parts
+        lowered_parts = [part.lower() for part in root_parts]
+        for index in range(len(lowered_parts) - 1):
+            if lowered_parts[index : index + 2] == ["webapps", "root"]:
+                context_parts = root_parts[index + 2 :]
+                if context_parts:
+                    prefix = f"/{context_parts[0]}"
+                break
+        return f"{prefix}/{path}" if path else (prefix or "/")
+
+    def _url_matches_shell(self, request_url: str, shell_url_path: str) -> bool:
+        """Match the exact shell URL and its PATH_INFO suffix."""
+        request_path = unquote(urlsplit(request_url).path).replace("\\", "/")
+        request_path = "/" + request_path.lstrip("/")
+        return request_path == shell_url_path or request_path.startswith(
+            shell_url_path.rstrip("/") + "/"
+        )
+
     def analyze_shell_access(
         self, shell_path: Path, time_window_minutes: int = 0
     ) -> Optional[Dict]:
@@ -237,6 +270,15 @@ class LogAnalyzer:
             return None
 
         log_with_symbol("debug_scan", "debug", f"开始全量扫描: {self.log_path.name}", self.logger)
+        shell_url_path = self._shell_url_path(shell_path)
+        if shell_url_path is None:
+            log_with_symbol("debug_scan", "debug", f"目标文件不在网站根目录: {shell_path}", self.logger)
+            return {
+                "shell_path": str(shell_path),
+                "analysis_mode": "URL路径匹配（无时间窗口）",
+                "suspicious_ips": {},
+                "log_path": str(self.log_path),
+            }
 
         # 如果log_path是通过通配符获取的，在分析前重新验证文件存在性
         if not self.log_path.exists():
@@ -283,8 +325,9 @@ class LogAnalyzer:
                     if not ip:
                         continue
 
-                    # 匹配URL路径
-                    if f"/{shell_path.name}" in line:
+                    match = re.match(self.LOG_PATTERNS[0], line)
+                    request_url = match.group("url") if match else None
+                    if request_url and self._url_matches_shell(request_url, shell_url_path):
                         suspicious_ips[ip] = suspicious_ips.get(ip, 0) + 1
                         log_with_symbol(
                             "debug_scan",

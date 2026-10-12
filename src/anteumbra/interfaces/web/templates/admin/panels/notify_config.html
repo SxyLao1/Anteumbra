@@ -1,23 +1,28 @@
 <!-- v1.8.0: Web Config Panel — 通知设置可视化配置 -->
-<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+<p class="notify-note" data-notification-master="{{ 'on' if notification_enabled else 'off' }}">
+  {{ _('Notification master switch:') }} <strong>{{ _('Enabled') if notification_enabled else _('Disabled') }}</strong>.
+  {{ _('Channels send only when the master switch is enabled.') }}
+  <a class="site-link" href="/admin/config?q=notifier.enabled">{{ _('Full configuration') }}</a>
+</p>
+<div class="notify-grid">
   <!-- Email -->
-  <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('Email') }}</h4>
-    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-      <input type="checkbox" {% if email.get('enabled') %}checked{% endif %}
+  <div class="notify-section">
+    <h4 >{{ _('Email') }}</h4>
+    <label class="notify-toggle">
+      <input type="checkbox" name="value" value="on" {% if email.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "email", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">{{ _('Enable Email') }}</span>
+      <span >{{ _('Enable Email') }}</span>
     </label>
-    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+    <div class="notify-fields">
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('SMTP Host') }}</label>
-        <div style="color: #ccc;">{{ email.get('smtp_host', 'smtp.163.com') }}</div>
+        <div >{{ email.get('smtp_host', 'smtp.163.com') }}</div>
       </div>
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('Username') }}</label>
-        <div style="color: #ccc;">{{ email.get('username', '') }}</div>
+        <div >{{ email.get('username', '') }}</div>
       </div>
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('Password') }}</label>
@@ -25,22 +30,22 @@
       </div>
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('To') }}</label>
-        <div style="color: #ccc;">{{ email.get('to_addrs', [''])[0] }}</div>
+        <div >{{ email.get('to_addrs', [''])[0] }}</div>
       </div>
     </div>
   </div>
 
   <!-- WeChat (Server酱) -->
-  <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('WeChat (Server酱)') }}</h4>
-    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-      <input type="checkbox" {% if wechat.get('enabled') %}checked{% endif %}
+  <div class="notify-section">
+    <h4 >{{ _('WeChat (Server酱)') }}</h4>
+    <label class="notify-toggle">
+      <input type="checkbox" name="value" value="on" {% if wechat.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "wechat", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">{{ _('Enable WeChat') }}</span>
+      <span >{{ _('Enable WeChat') }}</span>
     </label>
-    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+    <div class="notify-fields">
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('API Key') }}</label>
         <div style="color: var(--color-text-secondary);">•••••••• {{ _('(set via ANTEUMBRA_WECHAT_API_KEY env var)') }}</div>
@@ -49,16 +54,16 @@
   </div>
 
   <!-- Webhook -->
-  <div class="notify-section" style="background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 16px;">
-    <h4 style="color: #00ff41; margin: 0 0 12px 0;">{{ _('Webhook') }}</h4>
-    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-      <input type="checkbox" {% if webhook.get('enabled') %}checked{% endif %}
+  <div class="notify-section">
+    <h4 >{{ _('Webhook') }}</h4>
+    <label class="notify-toggle">
+      <input type="checkbox" name="value" value="on" {% if webhook.get('enabled') %}checked{% endif %}
              hx-post="/admin/settings/notifications/save"
              hx-vals='{"section": "webhook", "key": "enabled"}'
              hx-swap="none">
-      <span style="font-size: 13px; color: #ccc;">{{ _('Enable Webhook') }}</span>
+      <span >{{ _('Enable Webhook') }}</span>
     </label>
-    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+    <div class="notify-fields">
       <div>
         <label style="color: var(--color-text-secondary);">{{ _('URL') }}</label>
         <div style="color: var(--color-text-secondary);">{{ webhook.get('url', _('Not configured')) }}</div>
@@ -67,7 +72,8 @@
   </div>
 </div>
 
-<div style="margin-top: 16px; padding: 12px; background: #0a0a0a; border-left: 3px solid #ffaa00; font-size: 12px; color: var(--color-text-secondary);">
+<div class="notify-note">
   {{ _('Sensitive credentials (passwords, API keys) are managed via') }} <code>.env</code> {{ _('file for security.') }}
   {{ _('Toggle switches above enable/disable each notification channel in') }} <code>config.toml</code>.
+  {{ _('Saved changes apply after the notification service restarts.') }}
 </div>

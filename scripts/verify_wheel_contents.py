@@ -7,7 +7,6 @@ import sys
 import zipfile
 from pathlib import Path, PurePosixPath
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_PACKAGE = PROJECT_ROOT / "src" / "anteumbra"
 

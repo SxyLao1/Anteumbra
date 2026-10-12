@@ -400,7 +400,8 @@ def scanner_quarantine():
         )
 
         if result is None:
-            return jsonify({"error": "隔离失败，文件可能已被删除或移动"}), 500
+            status = 404 if not normalize_path(file_path).exists() else 409
+            return jsonify({"success": False, "error": "隔离失败，文件可能已被删除或移动"}), status
 
         current_app.logger.info(f"[SCANNER] 手动隔离: {file_path} -> {result['quarantine_id']}")
         return jsonify(

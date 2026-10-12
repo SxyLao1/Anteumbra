@@ -1,7 +1,10 @@
 #!/bin/sh
 set -eu
 
-cd "${ANTEUMBRA_HOME:-/app}"
+runtime_home="${ANTEUMBRA_HOME:-/app}"
+package_dir="$(python -c 'from pathlib import Path; import anteumbra; print(Path(anteumbra.__file__).resolve().parent)')"
+
+cd "$runtime_home"
 
 should_bootstrap=false
 if [ "${1:-}" = "anteumbra" ] && { [ "${2:-}" = "run" ] || [ "${2:-}" = "start" ]; }; then
@@ -16,12 +19,12 @@ mkdir -p data/registry data/quarantine data/wal data/sessions data/archives data
 
 if [ ! -f config.toml ]; then
   echo "[Docker] config.toml missing; creating a default runtime config."
-  anteumbra config init --output config.toml --force
+  cp "$package_dir/config.toml" config.toml
 fi
 
-if [ ! -d rules/webshell ] && [ -d src/anteumbra/rules/webshell ]; then
+if [ ! -d rules/webshell ] && [ -d "$package_dir/rules/webshell" ]; then
   mkdir -p rules
-  cp -r src/anteumbra/rules/webshell rules/webshell
+  cp -r "$package_dir/rules/webshell" rules/webshell
 fi
 
 if python - <<'PY'
@@ -158,7 +161,7 @@ elif password:
     print("  Password:   from ANTEUMBRA_ADMIN_PASSWORD")
 else:
     print("  Password:   from ANTEUMBRA_PASSWORD_HASH")
-print("  Saved to:   /app/.env")
+print(f"  Saved to:   {env_path.resolve()}")
 print("=" * 60)
 print("")
 PY

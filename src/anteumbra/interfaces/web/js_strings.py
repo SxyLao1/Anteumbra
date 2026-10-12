@@ -18,11 +18,23 @@ from flask_babel import gettext as _
 
 # Strings referenced by static/js/**/*.js through app.t('...').
 JS_SOURCES: tuple[str, ...] = (
+    'Failed: ',
+    'Quarantined: ',
+    'Quarantine results',
+    'Quarantined %(completed)s file(s); %(failed)s failed.',
+    'Confirm update? This will overwrite the original file.',
+    'Validation failed',
+    'Rule updated successfully',
+    'Syntax OK',
+    'Validating...',
+    'Save Update',
+    'Validate Syntax',
     # scanner: result rows, history grid, statuses
     "Scan", "Started", "Target", "Coverage", "New", "Known", "Clean", "Errors", "Took",
     "View", "Report", "Source", "Detail", "Select All", "Clear", "Quarantine Selected",
     "Generate Report", "Loading results...", "Loading history...", "No scan history yet.",
     "Failed to load history.", "Completed", "Running", "Stopped", "Failed",
+    "Completed - %(count)s findings",
     "Please enter a target directory.", "Quarantine %(count)s selected files?",
     "Done: %(count)s quarantined",
     # log analyzer
@@ -45,6 +57,8 @@ JS_SOURCES: tuple[str, ...] = (
     "%(action)s %(count)s records?", "%(action)s %(count)s quarantine records?",
     "Done: %(success)s success, %(skipped)s skipped, %(failed)s failed",
     "Done: %(success)s success, %(failed)s failed", "Batch failed: %(message)s",
+    "Batch results", "%(success)s succeeded, %(skipped)s skipped, %(failed)s failed",
+    "Succeeded", "Skipped", "Source is no longer available: %(message)s",
     "Reload failed: %(message)s", "Review failed: %(message)s", "Filter failed: %(message)s",
     "Alert re-armed.", "Re-arm failed: %(message)s",
     # profiles / IP reputation
@@ -61,6 +75,8 @@ JS_SOURCES: tuple[str, ...] = (
     # blocklist ledger
     "No block records found.", "Prev", "Next",
     "Page %(page)s / %(total_pages)s (%(total)s total)",
+    "Enter IP addresses", "Blocking %(count)s IPs...", "Unblocking %(count)s IPs...",
+    "OK ", "FAIL ", "DONE: ", "Error: ",
     # SSE indicator + block status bar
     "Connected", "Disconnected", "Auto: OFF", "Auto: ON (>%(score)s%%)", "Devices: %(count)s",
     "Queue: %(count)s", "Blocked: %(count)s",
@@ -84,6 +100,17 @@ def js_strings() -> dict[str, str]:
 def _extraction_only() -> tuple[str, ...]:
     """Unused at runtime: keeps the literals visible to ``pybabel extract``."""
     return (
+        _('Failed: '),
+        _('Quarantined: '),
+        _('Quarantine results'),
+        _('Quarantined %(completed)s file(s); %(failed)s failed.'),
+        _('Confirm update? This will overwrite the original file.'),
+        _('Validation failed'),
+        _('Rule updated successfully'),
+        _('Syntax OK'),
+        _('Validating...'),
+        _('Save Update'),
+        _('Validate Syntax'),
         # scanner
         _("Scan"), _("Started"), _("Target"), _("Coverage"), _("New"), _("Known"),
         _("Clean"), _("Errors"), _("Took"), _("View"), _("Report"), _("Source"),
@@ -91,6 +118,7 @@ def _extraction_only() -> tuple[str, ...]:
         _("Generate Report"), _("Loading results..."), _("Loading history..."),
         _("No scan history yet."), _("Failed to load history."), _("Completed"),
         _("Running"), _("Stopped"), _("Failed"), _("Please enter a target directory."),
+        _("Completed - %(count)s findings"),
         _("Quarantine %(count)s selected files?"), _("Done: %(count)s quarantined"),
         # log analyzer
         _("Lines scanned"), _("Matched filters"), _("Errors + Critical"), _("Detection hits"),
@@ -115,6 +143,8 @@ def _extraction_only() -> tuple[str, ...]:
         _("%(action)s %(count)s records?"), _("%(action)s %(count)s quarantine records?"),
         _("Done: %(success)s success, %(skipped)s skipped, %(failed)s failed"),
         _("Done: %(success)s success, %(failed)s failed"), _("Batch failed: %(message)s"),
+        _("Batch results"), _("%(success)s succeeded, %(skipped)s skipped, %(failed)s failed"),
+        _("Succeeded"), _("Skipped"), _("Source is no longer available: %(message)s"),
         _("Reload failed: %(message)s"), _("Review failed: %(message)s"),
         _("Filter failed: %(message)s"), _("Alert re-armed."),
         _("Re-arm failed: %(message)s"),
@@ -133,6 +163,8 @@ def _extraction_only() -> tuple[str, ...]:
         # blocklist ledger
         _("No block records found."), _("Prev"), _("Next"),
         _("Page %(page)s / %(total_pages)s (%(total)s total)"),
+        _("Enter IP addresses"), _("Blocking %(count)s IPs..."), _("Unblocking %(count)s IPs..."),
+        _("OK "), _("FAIL "), _("DONE: "), _("Error: "),
         # SSE indicator + block status bar
         _("Connected"), _("Disconnected"), _("Auto: OFF"), _("Auto: ON (>%(score)s%%)"),
         _("Devices: %(count)s"), _("Queue: %(count)s"), _("Blocked: %(count)s"),

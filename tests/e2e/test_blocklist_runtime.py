@@ -2,7 +2,7 @@
 
 import pytest
 
-from anteumbra.domain.blocking import BlockDecision
+from anteumbra.domain.blocking import BlockDecision, BlockResult
 from anteumbra.domain.site import SiteIdentity
 from anteumbra.infrastructure.block_ledger import BlockLedger
 from anteumbra.infrastructure.ip_blocker import IPBlocker, MockDevice
@@ -95,3 +95,54 @@ def test_unblock_route_retains_audit_record(blocking_client):
     assert (
         runtime.block_ledger.get_by_ip("10.10.0.5", site_id=site.site_id)["status"] == "unblocked"
     )
+
+
+def test_partial_unblock_retains_failed_ip_and_other_site_state(blocking_client, tmp_path):
+    client, runtime, site, device = blocking_client
+
+    class SelectiveDevice(MockDevice):
+        fail = True
+
+        def unblock(self, ip):
+            if self.fail and ip == "10.10.0.7":
+                return BlockResult(self.name, False, "device refused", ip)
+            return super().unblock(ip)
+
+    second = SelectiveDevice("second-waf")
+    runtime.ip_blocker = IPBlocker([device, second], retry_path=tmp_path / "retry-bulk.json")
+    for ip in ("10.10.0.6", "10.10.0.7"):
+        for target in (device, second):
+            target.block(BlockDecision(ip=ip, reason="setup", site=site))
+        runtime.block_ledger.add_entry(ip, site=site)
+    runtime.block_ledger.add_entry("10.10.0.7", site=SiteIdentity.legacy())
+    payload = {
+        "ips": ["10.10.0.6", "10.10.0.7"],
+        "site_id": site.site_id,
+        "devices": [device.name, second.name],
+    }
+
+    response = client.post("/admin/blocklist/unblock", json=payload)
+
+    assert response.status_code == 207
+    assert len(response.get_json()["results"]) == 4
+    assert runtime.block_ledger.get_by_ip("10.10.0.6", site_id=site.site_id)["status"] == "unblocked"
+    assert runtime.block_ledger.get_by_ip("10.10.0.7", site_id=site.site_id)["status"] == "blocked"
+    assert runtime.block_ledger.get_by_ip("10.10.0.7", site_id="legacy")["status"] == "blocked"
+    assert second.is_blocked("10.10.0.7")
+
+    second.fail = False
+    response = client.post("/admin/blocklist/unblock", json={**payload, "ips": ["10.10.0.7"]})
+    assert response.status_code == 200
+    assert runtime.block_ledger.get_by_ip("10.10.0.7", site_id=site.site_id)["status"] == "unblocked"
+    assert runtime.block_ledger.get_by_ip("10.10.0.7", site_id="legacy")["status"] == "blocked"
+
+
+def test_unblock_reports_missing_audit_record(blocking_client):
+    client, _, site, device = blocking_client
+    response = client.post(
+        "/admin/blocklist/unblock",
+        json={"ips": ["10.10.0.8"], "site_id": site.site_id, "devices": [device.name]},
+    )
+    assert response.status_code == 207
+    assert response.get_json()["success"] is False
+    assert response.get_json()["ledger_errors"][0]["ip"] == "10.10.0.8"

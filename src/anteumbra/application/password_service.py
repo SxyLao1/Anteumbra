@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import string
+import tempfile
 import threading
 from collections.abc import Mapping
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 from dotenv import set_key
 from werkzeug.security import generate_password_hash
 
+from anteumbra.application.config_document import ConfigDocument
 from anteumbra.domain.runtime import ConfigProviderPort
 
 WEAK_PASSWORDS = frozenset(
@@ -115,8 +117,63 @@ class PasswordService:
         accepted, message = self.check_strength(password)
         if not accepted:
             return False, message
+        return self.set_password_hash(generate_password_hash(password))
+
+    @staticmethod
+    def is_valid_password_hash(password_hash: str) -> bool:
+        """Accept only the Werkzeug hash shapes this application can verify.
+
+        Settings may receive a generated hash from an already authenticated
+        browser.  Keeping this validation here prevents that write-only path
+        from becoming a generic config-value setter.
+        """
+        value = str(password_hash or "").strip()
+        parts = value.split("$")
+        if len(parts) != 3 or not all(parts):
+            return False
+        method, salt, digest = parts
+        return bool(
+            re.fullmatch(r"(?:scrypt|pbkdf2)(?::[A-Za-z0-9_-]+)*", method)
+            and re.fullmatch(r"[A-Za-z0-9._-]+", salt)
+            and re.fullmatch(r"[A-Fa-f0-9]+", digest)
+        )
+
+    def set_password_hash(self, password_hash: str) -> tuple[bool, str]:
+        """Publish a validated Werkzeug password hash from a trusted UI flow."""
+        new_hash = str(password_hash or "").strip()
+        if not self.is_valid_password_hash(new_hash):
+            return False, "Password hash format is invalid."
         try:
-            self._write_env_values({"ANTEUMBRA_PASSWORD_HASH": generate_password_hash(password)})
+            with self._lock:
+                self._write_env_values({"ANTEUMBRA_PASSWORD_HASH": new_hash})
+                # Older deployments can hold a literal hash instead of an env
+                # reference. Updating .env alone leaves that credential active.
+                path = self._config.path
+                if path.exists():
+                    document = ConfigDocument.load(path)
+                    stored = document.find("web_admin.password_hash")
+                    if stored and not str(stored.value).startswith("${"):
+                        candidate = document.set_leaf("web_admin.password_hash", new_hash)
+                        with tempfile.NamedTemporaryFile(
+                            mode="w",
+                            encoding="utf-8",
+                            newline="",
+                            dir=path.parent,
+                            prefix=".password-",
+                            suffix=".tmp",
+                            delete=False,
+                        ) as stream:
+                            temporary = Path(stream.name)
+                            stream.write(candidate.text)
+                        try:
+                            if path.read_bytes().decode("utf-8") != document.text:
+                                raise RuntimeError(
+                                    "Configuration changed; retry the password update."
+                                )
+                            temporary.replace(path)
+                        finally:
+                            temporary.unlink(missing_ok=True)
+                        self._config.reload()
         except (OSError, RuntimeError, ValueError) as exc:
             return False, f"Password update failed: {exc}"
         return True, "Password updated and active for new logins."

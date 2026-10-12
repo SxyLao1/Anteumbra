@@ -4,7 +4,7 @@
 
 # Anteumbra · 本影
 
-<img src="https://img.shields.io/badge/version-1.0.40-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.48-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -25,6 +25,10 @@ Anteumbra 按一个产品交付。PyPI 用户和源码安装开发者都使用�
 ## 使用边界
 
 Anteumbra 面向单机或小规模 Web 负载：提供文件完整性监控、WebShell 检测、本地研判与响应，并向既有安全体系输出标准告警或 SIEM 事件。它不替代内联 WAF、EDR、SIEM、集中化主机管理或分布式高可用平台。
+
+## 管理模型
+
+产品当前按一个运维管理员运行，定位类似只有单一操作人员的主机面板。管理员账号支持密码登录和可选的 TOTP 二次验证，覆盖启用配置、登录挑战、一次性恢复码、停用、失败处理和审计记录。当前范围不包含用户列表、基于角色的权限体系或多租户账号。
 
 ## 文档导航
 
@@ -169,15 +173,19 @@ python -m pytest
 docker build -t anteumbra .
 docker run -d --name anteumbra \
   -p 127.0.0.1:18080:8080 \
-  -v $(pwd)/anteumbra-data:/app/data \
-  -v $(pwd)/anteumbra-logs:/app/logs \
+  -e ANTEUMBRA_HOME=/var/lib/anteumbra \
+  -v anteumbra-runtime:/var/lib/anteumbra \
   anteumbra
 docker logs anteumbra
 ```
 
-容器会启动与 `anteumbra run` 相同的完整运行时，首次启动自动生成 Docker 友好的默认配置，
-将本机 Docker 网关加入后台 IP 白名单，并在 `docker logs` 中打印初始管理员密码。打开
-`http://127.0.0.1:18080/admin`。
+命名卷保存完整可变运行时：`config.toml`、`.env`、`rules`、`data`、`logs` 和 `sites`。
+容器首次启动时从镜像内已安装包提供的模板创建运行时，将本机 Docker 网关加入后台 IP
+白名单，并在 `docker logs` 中打印初始管理员密码。用同一个卷重建容器会保留配置、密钥和
+自定义规则。现有 `/app` 路径仍可用于旧版 bind mount 部署；新部署应将完整运行时卷挂载到
+`/var/lib/anteumbra`。打开 `http://127.0.0.1:18080/admin`。
+
+可复核的备份与恢复步骤见[发布指南](docs/RELEASE_cn.md#docker-运行时备份与恢复)。
 
 ## 架构
 
@@ -204,5 +212,5 @@ MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.40 · MIT License</sub>
+  <sub>Anteumbra v1.0.48 · MIT License</sub>
 </div>

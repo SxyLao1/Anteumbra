@@ -414,6 +414,7 @@ def test_admin_data_actions_are_registered():
     sources = [
         frontend_root / "app.js",
         frontend_root / "dashboard.js",
+        frontend_root / "console-shell.js",
         *sorted((frontend_root / "modules").glob("*.js")),
     ]
     registered: set[str] = set()

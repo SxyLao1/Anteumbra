@@ -8,23 +8,23 @@
 <div class="memory-shell-panel"
      data-memory-shell-panel
      data-memory-shell-state="{{ state }}"
-     {% if polling %}hx-get="/admin/memory-shell/panel" hx-trigger="every 2s" hx-target="#memory-shell-panel" hx-swap="innerHTML"{% endif %}>
+     {% if polling %}hx-get="{{ url_for('memory_shell.memory_shell_panel', site=active_site or '') }}" hx-trigger="every 2s" hx-target="#memory-shell-panel" hx-swap="innerHTML"{% endif %}>
   {# A completed 处置 (or a finished forensics run) tells both panels to re-read
      their state through this listener, so the post-action component list is
      visible without a reload. #}
   <span hidden
-        hx-get="/admin/memory-shell/panel"
+        hx-get="{{ url_for('memory_shell.memory_shell_panel', site=active_site or '') }}"
         hx-trigger="memory-shell-refresh from:body"
         hx-target="#memory-shell-panel"
         hx-swap="innerHTML"></span>
 
   {% if error %}
-  <div role="alert" style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:10px;margin-bottom:12px;color:#ff4444;font-size:11px;">{{ error }}</div>
+  <div role="alert" style="border:1px solid var(--color-danger);background:var(--color-bg-secondary);border-radius:4px;padding:10px;margin-bottom:12px;color:var(--color-danger);font-size:11px;">{{ error }}</div>
   {% endif %}
 
   {% if not available %}
-  <div style="border:1px solid #ff4444;background:#1a0505;border-radius:4px;padding:12px;">
-    <div style="color:#ff4444;font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Memory-shell probe unavailable') }}</div>
+  <div style="border:1px solid var(--color-danger);background:var(--color-bg-secondary);border-radius:4px;padding:12px;">
+    <div style="color:var(--color-danger);font-size:12px;font-weight:bold;margin-bottom:6px;">{{ _('Memory-shell probe unavailable') }}</div>
     <div style="color:var(--color-text-secondary);font-size:11px;line-height:1.6;">{{ unavailable_reason }}</div>
   </div>
   {% else %}
@@ -32,25 +32,25 @@
   {# ── status row ─────────────────────────────────────── #}
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--color-text-secondary);font-size:11px;">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ '#00ff41' if enabled else '#ff4444' }};"></span>
-      {{ _('Probe:') }} <strong style="color:{{ '#00ff41' if enabled else '#ff4444' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ 'var(--color-safe)' if enabled else 'var(--color-danger)' }};"></span>
+      {{ _('Probe:') }} <strong style="color:{{ 'var(--color-safe)' if enabled else 'var(--color-danger)' }};">{{ _('Enabled') if enabled else _('Disabled') }}</strong>
     </span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Auto probe:') }} <strong style="color:{{ '#00ff41' if auto_probe else '#888888' }};">{{ _('Enabled') if auto_probe else _('Disabled') }}</strong></span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Cooldown:') }} <strong style="color:#00ff41;">{{ cooldown_seconds }}</strong>s</span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('HTTP timeout:') }} <strong style="color:#00ff41;">{{ http_timeout_seconds }}</strong>s</span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Runs:') }} <strong style="color:#00ff41;">{{ runs }}</strong></span>
-    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Failures:') }} <strong style="color:{{ '#ff4444' if failures else '#00ff41' }};">{{ failures }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Auto probe:') }} <strong style="color:{{ 'var(--color-safe)' if auto_probe else 'var(--color-text-muted)' }};">{{ _('Enabled') if auto_probe else _('Disabled') }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Cooldown:') }} <strong style="color:var(--color-safe);">{{ cooldown_seconds }}</strong>s</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('HTTP timeout:') }} <strong style="color:var(--color-safe);">{{ http_timeout_seconds }}</strong>s</span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Recent runs') if scoped else _('Runs:') }} <strong style="color:var(--color-safe);">{{ runs }}</strong></span>
+    <span style="color:var(--color-text-muted);font-size:11px;">{{ _('Failures:') }} <strong style="color:{{ 'var(--color-danger)' if failures else 'var(--color-safe)' }};">{{ failures }}</strong></span>
     {% if running %}
-    <span style="color:#ffaa00;font-size:11px;">{{ _('Probing...') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
+    <span style="color:var(--color-warning);font-size:11px;">{{ _('Probing...') }} <span style="font-family:var(--font-mono);">{{ running|join(', ') }}</span></span>
     {% endif %}
   </div>
   <div style="color:var(--color-text-muted);font-size:10px;margin-bottom:14px;">
     {{ _('Trigger extensions:') }}
-    {% for extension in trigger_extensions %}<code style="color:#00ff41;">{{ extension }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+    {% for extension in trigger_extensions %}<code style="color:var(--color-safe);">{{ extension }}</code>{% if not loop.last %} {% endif %}{% endfor %}
   </div>
 
   {% if not enabled %}
-  <div style="border:1px solid #665500;background:#1a1400;border-radius:4px;padding:8px;margin-bottom:12px;color:#ffaa00;font-size:11px;">
+  <div style="border:1px solid var(--color-warning);background:var(--color-bg-secondary);border-radius:4px;padding:8px;margin-bottom:12px;color:var(--color-warning);font-size:11px;">
     {{ _('The memory-shell probe is disabled in config.toml; manual probes would only be recorded as failures.') }}
   </div>
   {% endif %}
@@ -74,7 +74,7 @@
       {% for site in sites %}
       <tr>
         <td>
-          <div style="color:#e0e0e0;">{{ site.name }}</div>
+          <div style="color:var(--color-text-primary);">{{ site.name }}</div>
           <div style="color:var(--color-text-muted);font-size:9px;font-family:var(--font-mono);">{{ site.site_id }}</div>
         </td>
         <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;color:var(--color-text-secondary);">{{ site.root or _('None') }}</td>
@@ -88,16 +88,16 @@
         <td>
           {% if site.suspect_count %}
           <span class="badge badge-danger">{{ site.suspect_count }}</span>
-          {% else %}<span style="color:#00ff41;">0</span>{% endif %}
+          {% else %}<span style="color:var(--color-safe);">0</span>{% endif %}
         </td>
         <td style="font-size:10px;color:var(--color-text-muted);">{{ site.cooldown_remaining }}s</td>
         <td>
           {% if site.running %}
-          <span style="color:#ffaa00;font-size:10px;">{{ _('Probing...') }}</span>
+          <span style="color:var(--color-warning);font-size:10px;">{{ _('Probing...') }}</span>
           {% else %}
           <button class="btn btn-primary btn-sm" type="button"
                   {% if not enabled %}disabled{% endif %}
-                  hx-post="/admin/memory-shell/probe?site_id={{ site.site_id|urlencode }}"
+                  hx-post="{{ url_for('memory_shell.memory_shell_probe', site_id=site.site_id, site=active_site or '') }}"
                   hx-target="#memory-shell-panel" hx-swap="innerHTML"
                   hx-disabled-elt="this"
                   hx-confirm="{{ _('Run a memory-shell probe on this site now?') }}">{{ _('Probe Memory Shell') }}</button>
@@ -111,12 +111,12 @@
   </table>
 
   {# ── findings ───────────────────────────────────────── #}
-  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:6px;">{{ _('Findings') }}</div>
+  <div style="color:var(--color-text-secondary);font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:6px;">{{ _('Latest successful probe findings') }}</div>
   {% for finding in findings %}
-  <div style="border:1px solid #552222;background:#140808;border-radius:4px;padding:10px;margin-bottom:10px;">
+  <div style="border:1px solid var(--color-danger);background:var(--color-bg-secondary);border-radius:4px;padding:10px;margin-bottom:10px;">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
       <span class="badge badge-danger">{{ _('Suspicious') }} {{ finding.suspect_count }}</span>
-      <strong style="color:#ff4444;font-size:12px;">{{ finding.site_name }}</strong>
+      <strong style="color:var(--color-danger);font-size:12px;">{{ finding.site_name }}</strong>
       <span style="color:var(--color-text-muted);font-size:10px;">{{ finding.finished_at }}</span>
       {% if finding.url %}<span style="color:var(--color-text-muted);font-size:10px;font-family:var(--font-mono);">{{ finding.url }}</span>{% endif %}
       {% if finding.container %}<span style="color:var(--color-text-muted);font-size:10px;">{{ _('Container:') }} {{ finding.container }}</span>{% endif %}
@@ -143,8 +143,8 @@
           <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ entry.class_name or _('None') }}</td>
           <td style="font-family:var(--font-mono);font-size:10px;word-break:break-all;">{{ entry.class_loader or _('None') }}</td>
           <td>
-            {% if entry.on_disk %}<span style="color:#00ff41;">{{ _('Yes') }}</span>
-            {% else %}<span style="color:#ff4444;font-weight:bold;">{{ _('No') }}</span>{% endif %}
+            {% if entry.on_disk %}<span style="color:var(--color-safe);">{{ _('Yes') }}</span>
+            {% else %}<span style="color:var(--color-danger);font-weight:bold;">{{ _('No') }}</span>{% endif %}
           </td>
           <td>
             {% for reason in entry.reasons %}<span class="badge badge-warning">{{ reason }}</span>{% if not loop.last %} {% endif %}{% endfor %}
@@ -190,7 +190,7 @@
       {% for run in recent_runs %}
       <tr>
         <td>
-          <div style="color:#e0e0e0;">{{ run.site_name }}</div>
+          <div style="color:var(--color-text-primary);">{{ run.site_name }}</div>
           {% if run.triggered_by %}<div style="color:var(--color-text-muted);font-size:9px;">{{ _('Triggered by:') }} {{ run.triggered_by }}</div>{% endif %}
         </td>
         <td style="font-size:10px;color:var(--color-text-secondary);">{{ run.finished_at or _('Never') }}</td>
@@ -199,6 +199,7 @@
         <td>
           {% if run.failure %}<span class="badge badge-danger">{{ _('Failed') }}</span>
           {% elif not run.cleanup_ok %}<span class="badge badge-danger">{{ _('Cleanup failed') }}</span>
+          {% elif run.suspect_count %}<span class="badge badge-danger">{{ _('Suspicious') }}</span>
           {% elif run.ok %}<span class="badge badge-success">{{ _('Clean') }}</span>
           {% else %}<span class="badge badge-warning">{{ _('Unknown') }}</span>{% endif %}
         </td>
@@ -208,14 +209,14 @@
           <div style="color:var(--color-text-muted);">{{ _('%(count)s non-suspicious entries collapsed', count=run.clean_count) }}</div>
           {% endif %}
           {% if run.failure %}
-          <div style="color:#ff4444;">{{ _('Probe failed:') }} {{ run.failure }}</div>
+          <div style="color:var(--color-danger);">{{ _('Probe failed:') }} {{ run.failure }}</div>
           {% endif %}
           {% if not run.cleanup_ok %}
-          <div style="color:#ff4444;font-weight:bold;">{{ _('Probe cleanup failed:') }} {{ run.cleanup_error or _('Unknown') }}</div>
-          <div style="color:#ff4444;">{{ _('A probe file may still exist in the web root. Remove it manually.') }}</div>
+          <div style="color:var(--color-danger);font-weight:bold;">{{ _('Probe cleanup failed:') }} {{ run.cleanup_error or _('Unknown') }}</div>
+          <div style="color:var(--color-danger);">{{ _('A probe file may still exist in the web root. Remove it manually.') }}</div>
           {% endif %}
           {% if run.report_error %}
-          <div style="color:#ffaa00;">{{ _('Report error:') }} {{ run.report_error }}</div>
+          <div style="color:var(--color-warning);">{{ _('Report error:') }} {{ run.report_error }}</div>
           {% endif %}
         </td>
       </tr>

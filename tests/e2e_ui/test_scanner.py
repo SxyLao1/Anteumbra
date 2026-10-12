@@ -2,9 +2,11 @@ import time
 
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 
 def _open_scanner(page):
-    page.click("a.nav-link[data-path='scanner']")
+    open_console_route(page, "scanner")
     page.wait_for_selector("#scan-target-dir", timeout=10000)
 
 

@@ -2,6 +2,8 @@
 
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 
 def test_yara_batch_delete_keeps_selection_when_a_delete_fails(page, runtime):
     filename = "anteumbra_batch_failure.yar"
@@ -22,7 +24,7 @@ def test_yara_batch_delete_keeps_selection_when_a_delete_fails(page, runtime):
         route.continue_()
 
     try:
-        page.click("a.nav-link[data-path='yara/rules']")
+        open_console_route(page, "yara/rules")
         checkbox = page.locator(f"input.yara-checkbox[data-filename='{filename}']")
         expect(checkbox).to_be_visible(timeout=10000)
         page.evaluate("window.confirm = () => true")

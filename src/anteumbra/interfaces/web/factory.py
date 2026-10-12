@@ -198,6 +198,9 @@ def create_app(
     # === 新增Session配置 ===
     session_type = web_admin_config.get("session_type", "filesystem")
     session_dir = normalize_path(web_admin_config.get("session_dir", "data/sessions"))
+    session_lifetime = int(web_admin_config.get("session_lifetime", 3600))
+    app.config["SESSION_FILE_DIR"] = str(session_dir)
+    app.config["SESSION_LIFETIME_SECONDS"] = session_lifetime
     if session_type == "filesystem":
         from cachelib.file import FileSystemCache
 
@@ -211,7 +214,7 @@ def create_app(
         app.config["SESSION_TYPE"] = session_type
     app.config["SESSION_PERMANENT"] = web_admin_config.get("session_permanent", False)
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
-        seconds=web_admin_config.get("session_lifetime", 3600)
+        seconds=session_lifetime
     )
     app.config["SESSION_COOKIE_SECURE"] = _session_cookie_secure(web_admin_config)
     app.config["SESSION_COOKIE_HTTPONLY"] = True

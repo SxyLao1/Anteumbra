@@ -30,12 +30,14 @@ from typing import Any
 
 import pytest
 import tomli_w
+from dotenv import dotenv_values
 
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
+from anteumbra.application.password_service import PasswordService
 from anteumbra.application.plugin_manager import PluginManager
 from anteumbra.domain.plugin import DomainEvent, Plugin
 
@@ -244,6 +246,7 @@ class _Config:
 class _Runtime:
     def __init__(self, config: _Config) -> None:
         self.config = config
+        self.passwords = PasswordService(config)
 
 
 class Harness:
@@ -874,22 +877,21 @@ def _post_password(harness, **data):
 def test_setting_a_new_password_stores_only_a_hash(harness):
     from werkzeug.security import check_password_hash
 
-    body = _post_password(
-        harness, new_password="correct-horse-battery", confirm_password="correct-horse-battery"
-    )
+    password = "Correct-Horse9!"
+    body = _post_password(harness, new_password=password, confirm_password=password)
 
     env_text = harness.env_text()
-    assert "correct-horse-battery" not in env_text, "the plaintext must never reach disk"
-    assert "correct-horse-battery" not in body, "nor the page it re-renders"
-    stored = re.search(r"ANTEUMBRA_PASSWORD_HASH=(\S+)", env_text)
+    assert password not in env_text, "the plaintext must never reach disk"
+    assert password not in body, "nor the page it re-renders"
+    stored = dotenv_values(harness.env_path).get("ANTEUMBRA_PASSWORD_HASH")
     assert stored, "the hash must be written to .env"
-    assert check_password_hash(stored.group(1), "correct-horse-battery")
-    assert "New password hash written to .env" in body
+    assert check_password_hash(stored, password)
+    assert "Password updated and active for new logins." in body
 
 
 def test_the_password_flow_reports_a_mismatch_without_writing(harness):
     body = _post_password(
-        harness, new_password="correct-horse-battery", confirm_password="something-else"
+        harness, new_password="Correct-Horse9!", confirm_password="something-else"
     )
 
     assert "do not match" in body
@@ -899,7 +901,7 @@ def test_the_password_flow_reports_a_mismatch_without_writing(harness):
 def test_a_too_short_password_is_refused_without_writing(harness):
     body = _post_password(harness, new_password="short", confirm_password="short")
 
-    assert "Password too short" in body
+    assert "Password must be at least 8 characters." in body
     assert "ANTEUMBRA_PASSWORD_HASH" not in harness.env_text()
 
 
