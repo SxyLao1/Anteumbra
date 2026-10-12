@@ -6,6 +6,12 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+- Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
+- Document the current single-operator administration model; user lists, role-based permissions, and multi-tenant accounts remain outside the current scope.
+
 ## [1.0.47] - 2026-10-11
 
 ### Fixed

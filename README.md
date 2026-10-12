@@ -26,6 +26,10 @@ Anteumbra is installed as one product. PyPI users and source-install developers 
 
 Anteumbra is designed for one host or a small web workload: filesystem integrity monitoring, WebShell detection, local triage and response, and export to an existing security stack. It is not a replacement for an inline WAF, endpoint detection and response, a SIEM, centralized fleet management, or distributed high availability.
 
+## Administration Model
+
+The product currently runs with one operations administrator, similar to a single-operator host panel. The admin account supports password authentication and an optional TOTP second factor, including enrollment, login challenge, one-time recovery codes, disablement, failure handling, and audit records. User lists, role-based permissions, and multi-tenant accounts are outside the current product scope.
+
 ## Documentation
 
 | Need | English | Chinese |
