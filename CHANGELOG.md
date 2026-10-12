@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-## [1.0.48] - Unreleased
+## [1.0.48] - 2026-10-13
 
 ### Added
 - Add a Docker runtime snapshot helper that checks archive integrity, rejects unsafe
