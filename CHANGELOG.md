@@ -8,43 +8,7 @@
 
 ## [Unreleased]
 
-## [1.0.47] - 2026-10-11
-
-### Fixed
-- Clear the page dirty state after a confirmed configuration save so leaving the page does not show a false unsaved-changes warning.
-
-## [1.0.46] - 2026-10-11
-
-### Fixed
-- Preserve the checked value when confirming a site edit so the hidden checkbox fallback cannot incorrectly disable the only enabled site.
-
-## [1.0.45] - 2026-10-11
-
-### Fixed
-- Make the protection switch required while editing the only enabled site so the browser blocks an invalid submission before the request.
-
-## [1.0.44] - 2026-10-11
-
-### Fixed
-- Disable browser history restoration for the site editor so a stale unchecked state cannot overwrite the current configuration.
-
-## [1.0.43] - 2026-10-11
-
-### Fixed
-- Make the site protection switch a prominent status block and explain when it is the only enabled site.
-- Return a site-level error before validation when an edit would disable the last enabled site.
-
-## [1.0.42] - 2026-10-11
-
-### Fixed
-- Add a dedicated site management form for creating sites and editing their web root,
-  service port, access-log path, log analysis and enabled state.
-- Route site saves through the existing diff preview, validation, timestamped backup and
-  runtime reload pipeline while keeping the stable site ID unchanged during edits.
-- Add a direct site-management entry to Settings so operators do not have to use raw TOML
-  editing for routine site changes.
-
-## [1.0.48] - 2026-10-12
+## [1.0.48] - Unreleased
 
 ### Added
 - Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
@@ -90,6 +54,42 @@
   scope forensic activity to the selected site, and clear actionable memory-shell
   findings after a successful clean probe while preserving investigation history.
 - Translate the new evidence, scanner history and device-result controls into Chinese.
+
+## [1.0.47] - 2026-10-11
+
+### Fixed
+- Clear the page dirty state after a confirmed configuration save so leaving the page does not show a false unsaved-changes warning.
+
+## [1.0.46] - 2026-10-11
+
+### Fixed
+- Preserve the checked value when confirming a site edit so the hidden checkbox fallback cannot incorrectly disable the only enabled site.
+
+## [1.0.45] - 2026-10-11
+
+### Fixed
+- Make the protection switch required while editing the only enabled site so the browser blocks an invalid submission before the request.
+
+## [1.0.44] - 2026-10-11
+
+### Fixed
+- Disable browser history restoration for the site editor so a stale unchecked state cannot overwrite the current configuration.
+
+## [1.0.43] - 2026-10-11
+
+### Fixed
+- Make the site protection switch a prominent status block and explain when it is the only enabled site.
+- Return a site-level error before validation when an edit would disable the last enabled site.
+
+## [1.0.42] - 2026-10-11
+
+### Fixed
+- Add a dedicated site management form for creating sites and editing their web root,
+  service port, access-log path, log analysis and enabled state.
+- Route site saves through the existing diff preview, validation, timestamped backup and
+  runtime reload pipeline while keeping the stable site ID unchanged during edits.
+- Add a direct site-management entry to Settings so operators do not have to use raw TOML
+  editing for routine site changes.
 
 ## [1.0.40] - 2026-09-14
 

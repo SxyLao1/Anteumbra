@@ -21,7 +21,7 @@ PyPI 跟随最新已发布 Tag，而不是 GitHub `main` 的最新提交。打 T
 并在全新虚拟环境安装该产物；可编辑源码安装不能替代分发产物测试。
 
 ```powershell
-$cleanPaths = @("build", "dist", "src/anteumbra.egg-info")
+$cleanPaths = @("build\lib", "dist", "src/anteumbra.egg-info")
 Remove-Item -Recurse -Force $cleanPaths -ErrorAction SilentlyContinue
 python -m build --wheel
 python scripts/verify_wheel_contents.py dist

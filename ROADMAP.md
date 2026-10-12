@@ -5,7 +5,7 @@
 > **Latest Release**: v1.0.47 (released, 2026-10-11)
 > **Current development version**: v1.0.48 (single-admin TOTP lifecycle and operator response workflows complete on the development branch; not released yet)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: the v1.0.48 candidate defines release-gate checks for expanded Ruff, Wheel/source parity, Windows runtime and Docker health/login/functional smoke; Docker smoke remains pending on this host.
+> **Source Status**: the v1.0.48 candidate has passed expanded Ruff, Wheel/source parity, Windows runtime and Docker health/login/functional smoke. Container restart checks preserve uploaded rules, detection records, restored-file contents and quarantine history; optional Docker fuzzy hashing remains best-effort.
 
 ---
 
@@ -34,6 +34,7 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Multi-site UI | A navigation site switcher scopes detection, quarantine and cluster views; the overview keeps global figures and adds a per-site table. |
 | Agent integration | `anteumbra mcp serve` exposes the instance over MCP (read-only tools by default, writes gated behind `--allow-write`) and `anteumbra skill export` ships an operator skill for a user's own agent. |
 | Configuration UX | `/admin/config` edits the real TOML with comment-preserving single-value writes, validation, timestamped backups and version rollback; every plugin is configurable from the settings page with its effective value and source. |
+| Administrator security | The product runs with one operations administrator. The account page supports TOTP enrollment, login challenges, one-time recovery codes, disablement and audit logging; user lists, role-based permissions and multi-tenant accounts are outside the current scope. |
 
 ### Known Truths
 

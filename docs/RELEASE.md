@@ -24,7 +24,7 @@ Before tagging, build the wheel and install that artifact into a new virtual
 environment. An editable source install is not a distribution test.
 
 ```powershell
-$cleanPaths = @("build", "dist", "src/anteumbra.egg-info")
+$cleanPaths = @("build\lib", "dist", "src/anteumbra.egg-info")
 Remove-Item -Recurse -Force $cleanPaths -ErrorAction SilentlyContinue
 python -m build --wheel
 python scripts/verify_wheel_contents.py dist
