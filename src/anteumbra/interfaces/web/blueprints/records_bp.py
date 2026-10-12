@@ -747,9 +747,7 @@ def unmark_false_positive_route(file_path):
     return _review_record_route(file_path, mark=False)
 
 
-@records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
-@require_auth
-def rearm_alert_route(file_path):
+def _rearm_alert_route(file_path):
     """重新告警 — re-arm alerting so the next detection of this file reports again.
 
     Repeat alerts are suppressed while the standing alert still covers the exact
@@ -770,6 +768,20 @@ def rearm_alert_route(file_path):
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 重新告警失败: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@records_bp.route("/records/rearm_alert", methods=["POST"])
+@require_auth
+def rearm_alert_query_route():
+    """重新告警 — query form keeps POSIX absolute paths intact."""
+    return _rearm_alert_route(request.values.get("file_path", ""))
+
+
+@records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
+@require_auth
+def rearm_alert_route(file_path):
+    """重新告警 — compatibility route for existing callers."""
+    return _rearm_alert_route(file_path)
 
 
 # ── Audit Log ──────────────────────────────────────────────

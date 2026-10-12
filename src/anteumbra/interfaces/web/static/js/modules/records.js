@@ -577,7 +577,8 @@
   function rearmRecordAlert(trigger) {
     var path = trigger && trigger.dataset ? trigger.dataset.filePath : '';
     if (!path) return;
-    app.http.text(scopedUrl('/admin/records/rearm_alert/' + encodeURIComponent(path), trigger), {
+    var query = new URLSearchParams({ file_path: path });
+    app.http.text(scopedUrl('/admin/records/rearm_alert?' + query.toString(), trigger), {
       method: 'POST', headers: { 'HX-Request': 'true' }
     }).then(function () {
       app.ui.toast(app.t('Alert re-armed.'), 'success');
