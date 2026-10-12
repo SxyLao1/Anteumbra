@@ -250,3 +250,24 @@ def go(page, url, **kw):
     page.goto("about:blank", wait_until="commit", timeout=10000)
     page.wait_for_timeout(200)
     return page.goto(url, **kw)
+
+
+CONSOLE_ROUTES = {
+    "overview": ("Duty desk", "Overview"),
+    "threats": ("Detection & investigation", "Detection records"),
+    "scanner": ("Detection & investigation", "Active scan"),
+    "profiles": ("Detection & investigation", "Profiles"),
+    "blocklist": ("Response & review", "Blocklist"),
+    "yara/rules": ("Sites & protection", "Rules"),
+    "settings": ("Settings", None),
+}
+
+
+def open_console_route(page, route: str):
+    """Follow the V3 primary workspace and its visible context link."""
+    workspace, context_link = CONSOLE_ROUTES[route]
+    primary = page.get_by_role("navigation", name="Primary navigation")
+    primary.get_by_role("link", name=workspace, exact=True).click()
+    if context_link:
+        context = page.get_by_role("navigation", name="Current workspace")
+        context.get_by_role("link", name=context_link, exact=True).click()

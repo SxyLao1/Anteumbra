@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -139,6 +140,7 @@ class RuntimeLifecycle:
             self._state = state
 
         runtime_logger = container.logging.get_logger("Anteumbra")
+        previous_sigterm_handler = self._install_sigterm_handler(state)
         try:
             data_dir.mkdir(parents=True, exist_ok=True)
             state.process_identity = dependencies.process_identity_writer(pid_file, Path.cwd())
@@ -255,7 +257,29 @@ class RuntimeLifecycle:
                 "Runtime startup failed. Check the runtime logs for details."
             ) from exc
         finally:
-            self.stop()
+            try:
+                self.stop()
+            finally:
+                self._restore_sigterm_handler(previous_sigterm_handler)
+
+    @staticmethod
+    def _install_sigterm_handler(state: RuntimeState):
+        """Request orderly shutdown when the foreground process receives SIGTERM."""
+        if threading.current_thread() is not threading.main_thread():
+            return None
+
+        previous = signal.getsignal(signal.SIGTERM)
+
+        def request_stop(_signum, _frame) -> None:
+            state.stop_event.set()
+
+        signal.signal(signal.SIGTERM, request_stop)
+        return previous
+
+    @staticmethod
+    def _restore_sigterm_handler(previous_handler) -> None:
+        if previous_handler is not None:
+            signal.signal(signal.SIGTERM, previous_handler)
 
     def status(self) -> dict[str, Any]:
         """Return a stable snapshot suitable for status APIs and diagnostics."""

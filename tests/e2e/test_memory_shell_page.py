@@ -13,6 +13,9 @@ covered by ``tests/core/test_web_memory_shell.py`` against a stub service.
 """
 
 import os
+import re
+from html import unescape
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -75,17 +78,21 @@ def test_page_loads_its_panel_fragment(client):
     body = client.get(ROUTE, headers={"HX-Request": "true"}).get_data(as_text=True)
 
     assert 'id="memory-shell-panel"' in body
-    assert f'hx-get="{PANEL_ROUTE}"' in body
+    panel = re.search(r'id="memory-shell-panel"\s+hx-get="([^"]+)"', body)
+    assert panel
+    parsed = urlsplit(unescape(panel.group(1)))
+    assert parsed.path == PANEL_ROUTE
+    assert parse_qs(parsed.query, keep_blank_values=True) == {"site": [""]}
     assert 'hx-trigger="load"' in body
 
 
-def test_navigation_advertises_the_page(client):
-    """The sidebar entry exists with the path the router and title map use."""
+def test_navigation_advertises_the_investigation_workspace(client):
+    """The console shell exposes investigation as a workspace; its contextual links are JS-owned."""
     body = client.get("/admin/", headers={"Sec-Fetch-Dest": "document"}).get_data(as_text=True)
 
-    assert f'href="{ROUTE}"' in body
-    assert 'data-path="memory-shell"' in body
-    assert 'data-title="Memory Shell"' in body
+    assert 'data-console-workspaces' in body
+    assert 'data-workspace="investigate"' in body
+    assert 'href="/admin/threats"' in body
 
 
 def test_panel_route_answers_with_or_without_the_probe_plugin(client):

@@ -1,8 +1,8 @@
-<section class="profile-detail-view" data-profile-id="{{ profile.profile_id }}">
+<section class="profile-detail-view" data-profile-id="{{ profile.profile_id }}" data-site-id="{{ profile.site_id }}">
   <header class="profile-detail-toolbar">
-    <button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.navigate" data-path="profiles" data-title="{{ _('Profiles') }}">{{ _('Back to Profiles') }}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="dashboard.navigate" data-path="profiles?site={{ profile.site_id|urlencode }}" data-title="{{ _('Profiles') }}">{{ _('Back to Profiles') }}</button>
     <span class="profile-detail-toolbar__spacer"></span>
-    <button class="btn btn-ghost btn-sm" type="button" data-action="core.open-window" data-url="/admin/profiles/{{ profile.profile_id }}/report">{{ _('Generate Report') }}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-action="core.open-window" data-url="/admin/profiles/{{ profile.profile_id }}/report?site={{ profile.site_id|urlencode }}">{{ _('Generate Report') }}</button>
     <span class="badge badge-{{ 'danger' if profile.risk_score > 0.8 else 'warning' if profile.risk_score > 0.5 else 'safe' }}">{{ _('CRITICAL') if profile.risk_score > 0.8 else _('HIGH') if profile.risk_score > 0.5 else _('MEDIUM') }}</span>
   </header>
 
@@ -69,7 +69,7 @@
       <tbody>{% for ipd in ip_details %}<tr data-action="profiles.ip-row-toggle"><td><input type="checkbox" class="ip-checkbox" value="{{ ipd.ip }}" data-action="profiles.ip-toggle"></td><td><code class="ip-addr">{{ ipd.ip }}</code><button class="btn btn-ghost btn-sm" type="button" data-action="profiles.ip-copy" data-ip="{{ ipd.ip }}">{{ _('Copy') }}</button></td><td>{{ ipd.event_count }}</td><td>{{ "%.2f"|format(ipd.waf_score_avg) }}</td><td>{{ ipd.cluster_level }}</td><td>{{ ipd.first_seen.strftime('%m-%d %H:%M') if ipd.first_seen else _('N/A') }}</td><td>{{ ipd.last_seen.strftime('%m-%d %H:%M') if ipd.last_seen else _('N/A') }}</td></tr>{% endfor %}</tbody>
     </table></div>
     {% if ip_total_pages > 1 %}
-    <div class="pagination-bar"><button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page - 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Prev') }}</button><span class="page-info">{{ _('Page') }} {{ ip_page }} / {{ ip_total_pages }}</span><input type="number" class="form-input page-jump" min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}" data-action="core.page-jump" data-page-url="/admin/profiles/{{ profile.profile_id }}?ip_page=__PAGE__" data-target="#main-content" data-swap="innerHTML"><button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?ip_page={{ ip_page + 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Next') }}</button></div>
+    <div class="pagination-bar"><button class="btn btn-ghost btn-sm" {% if ip_page <= 1 %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?site={{ profile.site_id|urlencode }}&ip_page={{ ip_page - 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Prev') }}</button><span class="page-info">{{ _('Page') }} {{ ip_page }} / {{ ip_total_pages }}</span><input type="number" class="form-input page-jump" min="1" max="{{ ip_total_pages }}" value="{{ ip_page }}" data-action="core.page-jump" data-page-url="/admin/profiles/{{ profile.profile_id }}?site={{ profile.site_id|urlencode }}&ip_page=__PAGE__" data-target="#main-content" data-swap="innerHTML"><button class="btn btn-ghost btn-sm" {% if ip_page >= ip_total_pages %}disabled{% endif %} hx-get="/admin/profiles/{{ profile.profile_id }}?site={{ profile.site_id|urlencode }}&ip_page={{ ip_page + 1 }}" hx-target="#main-content" hx-swap="innerHTML">{{ _('Next') }}</button></div>
     {% endif %}
   </section>
 </section>

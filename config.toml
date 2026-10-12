@@ -19,6 +19,7 @@ port = 8080
 username = "admin"
 # 密码哈希生成命令：python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('你的密码'))"
 password_hash = "${ANTEUMBRA_PASSWORD_HASH:-}"
+totp_enabled = false
 allowed_ips = ["127.0.0.1"]
 # Only accept X-Forwarded-* headers from these proxy IPs/CIDRs. Leave empty
 # for direct local access. Configure the Nginx/Caddy peer before exposing UI.

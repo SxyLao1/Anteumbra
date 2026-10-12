@@ -3,10 +3,5 @@
 {% block main_attrs %} data-initial-path="{{ initial_path | default('quarantine') }}" data-initial-title="Quarantine"{% endblock %}
 
 {% block main_content %}
-<div id="quarantine-list-container">
-  {% include "admin/quarantine_list.html" %}
-</div>
-<div id="quarantine-detail-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; overflow:auto;">
-  <!-- 详情内容通过 HTMX 加载到这里 -->
-</div>
+{% include "admin/quarantine_list.html" %}
 {% endblock %}

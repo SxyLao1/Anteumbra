@@ -51,21 +51,12 @@
   function blockSelected(trigger) {
     var ips = Array.from(selected);
     if (!ips.length) return;
-    var listing = ips.slice(0, 10).join('\n') +
-      (ips.length > 10 ? '\n' + app.t('... and %(count)s more', { count: ips.length - 10 }) : '');
-    if (!app.confirm(app.t('Block %(count)s IPs?', { count: ips.length }) + '\n\n' + listing)) return;
     var page = trigger.closest('[data-profile-id]');
     var profileId = page ? page.dataset.profileId : '';
-    app.http.json('/admin/api/v1/blocklist/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ips: ips, profile_id: profileId })
-    }).then(function (result) {
-      app.ui.toast((result.success ? app.t('OK: ') : app.t('FAIL: ')) + (result.message || app.t('Blocked')), result.success ? 'success' : 'error');
-      if (result.success) window.setTimeout(loadBlockStatus, 350);
-    }).catch(function (error) {
-      app.ui.toast(app.t('Block failed: %(message)s', { message: error.message }), 'error');
-    });
+    // The shared response page owns device selection, target preview and
+    // per-device results. A profile must never silently broadcast to all devices.
+    var query = new URLSearchParams({ site: page ? page.dataset.siteId : '', ips: ips.join('\n'), profile_id: profileId });
+    window.location.assign('/admin/blocklist?' + query.toString());
   }
 
   function appendLine(parent, content, className) {
@@ -160,11 +151,23 @@
       } },
       'profiles.ip-copy': { handler: function (context) { copy(context.element.dataset.ip || ''); } },
       'profiles.ip-copy-selected': { handler: function () { copy(selectedOrVisible().join('\n')); } },
-      'profiles.ip-copy-all': { handler: function () { copy(Array.from(document.querySelectorAll('.ip-addr')).map(function (node) { return node.textContent.trim(); }).join('\n')); } },
+      'profiles.ip-copy-all': { handler: function (context) {
+        var section = context.element.closest('[data-all-ips]') || document.getElementById('ip-table-section');
+        try {
+          copy(JSON.parse(section.dataset.allIps || '[]').map(function (ip) { return String(ip); }).join('\n'));
+        } catch (_) {
+          app.ui.toast(app.t('IP selection metadata is invalid.'), 'error');
+        }
+      } },
       'profiles.ip-block': { handler: function (context) { blockSelected(context.element); } },
       'profiles.block-detail': { handler: toggleBlockDetail }
     },
     mount: function (root) {
+      var detail = root && root.querySelector && root.querySelector('[data-profile-id]');
+      if (detail && detail.dataset.profileId !== selected.profileId) {
+        selected.clear();
+        selected.profileId = detail.dataset.profileId;
+      }
       restore(root);
       if (root && (root.id === 'block-status-panel' || root.querySelector && root.querySelector('#block-status-panel'))) loadBlockStatus();
     },

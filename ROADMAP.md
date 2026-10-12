@@ -2,9 +2,10 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.40 (released, 2026-09-14)
+> **Latest Release**: v1.0.47 (released, 2026-10-11)
+> **Current development version**: v1.0.48 (single-admin TOTP lifecycle and operator response workflows complete on the development branch; not released yet)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: the released v1.0.40 tag contains 1210 non-browser tests and 49 browser tests, expanded Ruff checks, Wheel/source parity, Windows runtime and Docker health/login/functional smoke.
+> **Source Status**: the v1.0.48 candidate has passed local regression and package/source checks, full Docker runtime backup and recovery, upgrade from the official 1.0.47 package and rollback with its pre-upgrade snapshot, and real Tomcat 7 probe/forensics/remediation/clean-reprobe acceptance. It is not released; optional Docker fuzzy hashing remains best-effort.
 
 ---
 
@@ -22,16 +23,18 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Web workflows | Dashboard, monitoring, scanner, quarantine, restore, false-positive marking, settings, logs, audit entry points, and health checks are wired. |
 | Access-log analysis | Nginx, Apache, Tomcat, and custom access-log presets are supported from CLI and web audit views. |
 | Log streaming | SSE log stream is quieter, loads historical monitor logs, and exposes notifier delivery state. |
-| Docker | Container now starts the full `anteumbra run` runtime, creates Docker-friendly defaults, prints first-start credentials, and passes health checks. |
+| Docker | A complete runtime volume preserves configuration, credentials, rules, site data and history. Non-root initialization, graceful SIGTERM shutdown, verified recovery into a new volume and old-package rollback have passed local acceptance. |
 | Runtime reliability | Multi-site resources have explicit startup/shutdown ownership; poison JSONL events advance through a dead-letter path; bounded queues use backpressure rather than drops; startup baseline scans and degraded capabilities are visible. |
 | Rule governance | 27 bundled YARA files compile independently; invalid custom files are isolated, failed reloads retain valid rules, and THOR shards stay independently verifiable. |
 | Architecture guardrails | Layer/import boundaries, source-only test imports, and Wheel/source parity are enforced; resolved debt stays out of builds. |
 | Runtime ownership | One `RuntimeLifecycle` owns startup, status, reverse-order shutdown, and per-app login throttling without mutable Web/launcher module state. |
 | Integration contracts | `RuntimeContainer` exposes required services through focused Domain Protocols; Web routes and plugins no longer reach Metrics, cluster, ThreatGraph, or Notifier private state. |
-| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. || Memory shell | Detection runs a token-guarded JSP probe that enumerates what the servlet container registered in memory, reports honest findings (including what cannot be dumped), keeps artifacts under `data/forensics`, and can remediate a component it identified - verified against a real Tomcat 7. |
+| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. |
+| Memory shell | Detection runs a token-guarded JSP probe that enumerates what the servlet container registered in memory, reports honest findings (including what cannot be dumped), keeps artifacts under `data/forensics`, and can remediate a component it identified - verified against a real Tomcat 7. |
 | Multi-site UI | A navigation site switcher scopes detection, quarantine and cluster views; the overview keeps global figures and adds a per-site table. |
 | Agent integration | `anteumbra mcp serve` exposes the instance over MCP (read-only tools by default, writes gated behind `--allow-write`) and `anteumbra skill export` ships an operator skill for a user's own agent. |
 | Configuration UX | `/admin/config` edits the real TOML with comment-preserving single-value writes, validation, timestamped backups and version rollback; every plugin is configurable from the settings page with its effective value and source. |
+| Administrator security | The product runs with one operations administrator. The account page supports TOTP enrollment, login challenges, one-time recovery codes, disablement and audit logging; user lists, role-based permissions and multi-tenant accounts are outside the current scope. |
 
 ### Known Truths
 
@@ -72,6 +75,18 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 ---
 
 ## Release Readiness Checklist
+
+### v1.0.48 candidate
+
+| Gate | Local acceptance |
+|------|------------------|
+| Durable Docker runtime | A stopped snapshot restored into a new volume and container preserves contents, permissions and numeric ownership; TOTP, consumed recovery-code rejection and quarantine restoration remain functional. |
+| Upgrade and rollback | The official 1.0.47 package's runtime upgrades to the candidate and accepts new UI operations. The old package with its pre-upgrade snapshot restores the old state without candidate-only data. |
+| Real JVM response | Browser-driven detection, manifest capture, component removal and clean reprobe pass on isolated Tomcat 7. Missing bytecode resources are reported as unavailable; heap dumping was disabled. |
+
+These are local candidate checks, not a release or production-deployment claim.
+
+### v1.0.35 release history
 
 The v1.0.35 release completed this checklist.
 
@@ -131,7 +146,7 @@ wheel/source/Docker/PyPI checklist.
 | P1 | Prometheus-compatible metrics endpoint or documented scrape path |
 | P1 | Reverse-proxy deployment examples for Nginx/Caddy |
 | P2 | Live syslog streaming mode for SIEM, beyond file export |
-| P2 | Stronger backup/restore documentation for `data/`, `logs/`, `config.toml`, and `.env` |
+| P2 | Complete-runtime Docker backup/restore guide and verified snapshot helper: implemented in the v1.0.48 candidate. |
 
 ---
 
@@ -141,7 +156,7 @@ wheel/source/Docker/PyPI checklist.
 |----------|-----------|
 | P1 | Geo-IP enrichment for attacker profiles |
 | P1 | AbuseIPDB/MISP-style threat intelligence feed integration |
-| P1 | Admin 2FA/TOTP and API key management |
+| P1 | Admin TOTP: single-admin enrollment, login challenge, recovery codes, disablement, failure paths, audit logging, and real-browser acceptance are complete on the development branch; API key management remains a separate evaluation. |
 | P2 | Multi-site configuration (`[[website]]`) with clear UI separation |
 | P2 | Better report export for security review workflows |
 

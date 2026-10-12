@@ -210,6 +210,23 @@ class SIEMExporter:
             )
         return self.emit_batch(events)
 
+    def render_download(self, records: List[Dict], output_format: str) -> str:
+        """Render a snapshot without changing the running exporter or replaying events."""
+        normalized = "json_lines" if output_format == "json" else output_format
+        if normalized not in {"json_lines", "cef", "csv"}:
+            raise ValueError("format must be json_lines, cef or csv")
+        formatter = SIEMFormatter({**self._config, "format": normalized})
+        lines = [formatter.csv_header()] if normalized == "csv" else []
+        for record in records:
+            lines.append(formatter.format_event({
+                **record,
+                "rule_name": (record.get("features") or ["unknown"])[0],
+                "source_ip": record.get("first_seen_ip", "unknown"),
+                "website_name": record.get("site_name", "Unassigned"),
+                "category": "webshell.detected",
+            }))
+        return "\n".join(lines) + ("\n" if lines else "")
+
     def emit_detection(
         self,
         record: Dict[str, Any],
@@ -231,6 +248,8 @@ class SIEMExporter:
                 "category": category,
                 "severity": "high",
                 "source_ip": record.get("first_seen_ip", "unknown"),
+                "site_id": record.get("site_id", "legacy"),
+                "website_name": record.get("site_name", "Unassigned"),
                 "confidence": 85,
                 "mitre_tid": "T1505.003",
                 "mitre_tactic": "Persistence",

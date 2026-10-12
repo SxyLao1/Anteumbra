@@ -203,6 +203,8 @@ def default_dump(params, write_heap=True) -> dict:
             body["heap_error"] = (
                 "heap_dump_failed: java.io.IOException: no space left on device"
             )
+    else:
+        body["heap_error"] = "heap_path_missing"
     return body
 
 
@@ -577,7 +579,7 @@ def test_a_failed_heap_dump_never_loses_the_manifest(tmp_path):
 
 def test_heap_dump_can_be_switched_off(tmp_path):
     server = FakeProbeServer()
-    service, _, _ = build_service(
+    service, _, store = build_service(
         tmp_path, server=server, config={"heap_dump_enabled": False}
     )
 
@@ -585,8 +587,10 @@ def test_heap_dump_can_be_switched_off(tmp_path):
 
     assert "heap_path" not in server.last(ACTION_DUMP)["params"]
     assert outcome.heap is None
+    assert outcome.heap_error == ""
     assert outcome.heap_skipped_reason == "heap_dump_disabled"
     assert outcome.ok, "a disabled dump is not a failure"
+    assert store.get(outcome.artifact_id)["heap_error"] == ""
 
 
 def test_forensics_cleans_up_its_probe_file(tmp_path):

@@ -13,6 +13,14 @@ from anteumbra.interfaces.web.runtime import get_runtime
 logger = logging.getLogger(__name__)
 
 
+@admin_bp.route("/account", methods=["GET"])
+@require_auth
+def account_page():
+    from anteumbra.interfaces.web.blueprints.admin_totp_bp import account_page as render_account
+
+    return render_account()
+
+
 @admin_bp.route("/metrics/<metric_name>")
 @require_auth
 def get_metric(metric_name):

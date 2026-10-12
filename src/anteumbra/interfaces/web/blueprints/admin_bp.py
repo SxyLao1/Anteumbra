@@ -11,6 +11,7 @@ v1.7.6-Patch30: 操作型接口返回HTML片段而非JSON
 import base64
 import logging
 import secrets
+import time
 
 from flask import (
     Blueprint,
@@ -25,6 +26,7 @@ from flask import (
 from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash
 
+from anteumbra.application.duty_service import DUTY_PAGE_SIZE, DUTY_VIEWS, build_duty_queue
 from anteumbra.application.platform_service import check_port_reachable
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import (
@@ -174,6 +176,35 @@ def overview():
         return render_template("admin/error.html", error=str(e)), 500
 
 
+@admin_bp.route("/duty-queue")
+@require_auth
+def duty_queue():
+    """Return the read-only, site-scoped overview duty queue fragment."""
+    view = request.args.get("view", "active")
+    if view not in DUTY_VIEWS:
+        view = "active"
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        runtime = get_runtime()
+        queue = build_duty_queue(
+            runtime.registry,
+            websites=runtime.config.get_enabled_websites(),
+            site_id=active_site_id(),
+            quarantine_lookup=runtime.quarantine.get_detail,
+            view=view,
+            page=page,
+            per_page=DUTY_PAGE_SIZE,
+        )
+        return render_template("admin/duty_queue.html", queue=queue, **site_context())
+    except Exception as exc:
+        current_app.logger.error("[ADMIN] duty queue failed: %s", exc, exc_info=True)
+        return render_template("admin/error.html", error=str(exc)), 500
+
+
 @admin_bp.route("/threats")
 @require_auth
 def threats():
@@ -183,6 +214,58 @@ def threats():
     except Exception as e:
         current_app.logger.error(f"[ADMIN] threats失败: {e}", exc_info=True)
         return render_template("admin/error.html", error=str(e)), 500
+
+
+@admin_bp.route("/sites")
+@require_auth
+def sites_workspace():
+    """Configured site inventory; configuration is not monitor health."""
+    runtime = get_runtime()
+    managed_sites = runtime.config.get_websites()
+    enabled_site_count = sum(1 for site in managed_sites if site.enabled)
+    requested_id = request.args.get("edit", "").strip().lower()
+    show_new = request.args.get("new") == "1"
+    site_form = None
+    if show_new or requested_id:
+        if requested_id:
+            selected = next(
+                (site for site in managed_sites if site.site_id == requested_id), None
+            )
+            if selected is not None:
+                log_config = dict(selected.log_config or {})
+                site_form = {
+                    "mode": "edit",
+                    "site_id": selected.site_id,
+                    "original_site_id": selected.site_id,
+                    "name": selected.name,
+                    "path": str(selected.path),
+                    "port": selected.port,
+                    "enabled": selected.enabled,
+                    "only_enabled": bool(selected.enabled and enabled_site_count == 1),
+                    "access_log_path": str(log_config.get("access_log_path") or ""),
+                    "log_monitor_enabled": bool(log_config.get("log_monitor_enabled")),
+                    "filter_internal_ip": bool(log_config.get("filter_internal_ip")),
+                }
+        elif show_new:
+            site_form = {
+                "mode": "add",
+                "site_id": "",
+                "original_site_id": "",
+                "name": "",
+                "path": "",
+                "port": 80,
+                "enabled": True,
+                "only_enabled": False,
+                "access_log_path": "",
+                "log_monitor_enabled": False,
+                "filter_internal_ip": False,
+            }
+    return render_page(
+        "admin/sites.html",
+        managed_sites=managed_sites,
+        site_form=site_form,
+        enabled_site_count=enabled_site_count,
+    )
 
 
 @admin_bp.route("/dashboard_content")
@@ -320,10 +403,11 @@ def monitor_content():
         current_app.logger.error(f"[ADMIN] monitor_content失败: {e}", exc_info=True)
         return f'<div style="color: #ff4444;">内容加载失败: {str(e)}</div>', 500
 
-
 @admin_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        if session.get("totp_pending_username"):
+            return redirect(url_for("admin_totp.login_totp"))
         if session.get("authenticated"):
             return redirect(url_for("admin.dashboard_index"))
         return render_template("admin/login.html")
@@ -363,6 +447,19 @@ def login():
         )
         return render_template("admin/login.html", error=f"IP {client_ip} 被拒绝访问"), 403
     if username == expected_username and check_password_hash(password_hash, password):
+        totp = getattr(get_runtime(), "totp", None)
+        if totp is not None and totp.enabled:
+            session.pop("authenticated", None)
+            session.pop("sse_token", None)
+            session["totp_pending_username"] = username
+            session["totp_pending_at"] = time.time()
+            log_with_symbol(
+                "notice",
+                "info",
+                f"用户 {username} 密码验证通过，等待 TOTP 二次认证",
+                current_app.logger,
+            )
+            return redirect(url_for("admin_totp.login_totp"))
         login_rate_limiter.reset(client_ip)
         session["authenticated"] = True
         session["username"] = username
@@ -373,7 +470,6 @@ def login():
     log_with_symbol("critical_permission", "critical", f"登录失败: {username}", current_app.logger)
     return render_template("admin/login.html", error="用户名或密码错误"), 401
 
-
 @admin_bp.route("/logout")
 @require_auth
 def logout():
@@ -381,12 +477,13 @@ def logout():
     session.pop("authenticated", None)
     session.pop("username", None)
     session.pop("sse_token", None)
+    session.pop("totp_pending_username", None)
+    session.pop("totp_pending_at", None)
     session.clear()
     response = redirect(url_for("admin.login"))
     response.set_cookie("session", "", expires=0)
     log_with_symbol("success", "info", f"用户 {username} 已登出", current_app.logger)
     return response
-
 
 @admin_bp.route("/dashboard")
 @require_auth
@@ -435,17 +532,15 @@ def to_hash(value):
     return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
-@admin_bp.route("/account", methods=["GET"])
-@require_auth
-def account_page():
-    """账户设置页面"""
-    return render_page("admin/account.html", username=session.get("username"))
-
-
 @admin_bp.route("/account/password", methods=["POST"])
 @require_auth
 def change_password():
     """修改密码API"""
+    def rejected(message, status=400):
+        if not request.is_json:
+            return render_page("admin/account.html", error=message)
+        return jsonify({"success": False, "error": message}), status
+
     try:
         # v1.0.10: 优先 JSON（API 客户端），fallback form（Web UI HTML form）
         data = request.get_json(silent=True) or {}
@@ -456,23 +551,25 @@ def change_password():
 
         # 验证必填
         if not current_password or not new_password:
-            return jsonify({"success": False, "error": "请填写所有字段"}), 400
+            return rejected("请填写所有字段 / Complete all fields")
+        if not request.is_json and new_password != data.get("confirm_password"):
+            return rejected("两次输入的新密码不一致 / New passwords do not match")
 
         # 验证当前密码
         _, stored_hash, _ = get_admin_credentials()
         if not check_password_hash(stored_hash, current_password):
-            return jsonify({"success": False, "error": "当前密码错误"}), 401
+            return rejected("当前密码错误 / Current password is incorrect", 401)
 
         # 验证新密码强度
         passwords = get_runtime().passwords
         is_strong, msg = passwords.check_strength(new_password)
         if not is_strong:
-            return jsonify({"success": False, "error": msg}), 400
+            return rejected(msg)
 
         # 生成新哈希并更新
         success, msg = passwords.set_password(new_password)
         if not success:
-            return jsonify({"success": False, "error": msg}), 500
+            return rejected(msg, 500)
 
         username = session.get("username", "admin")
         log_with_symbol(
@@ -482,6 +579,8 @@ def change_password():
             current_app.logger,
         )
         session.pop("authenticated", None)
+        if not request.is_json:
+            return redirect(url_for("admin.login"))
         return jsonify({"success": True, "message": msg})
 
     except Exception as e:

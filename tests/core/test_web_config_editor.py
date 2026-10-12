@@ -29,13 +29,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from dotenv import dotenv_values
 
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     import tomli as tomllib
 
-from anteumbra.application.config_history_service import ConfigHistoryLogger
+from anteumbra.application.config_history_service import ConfigHistoryLogger, ConfigRevisionStore
+from anteumbra.application.password_service import PasswordService
 from anteumbra.interfaces.web.blueprints import config_editor_bp as bp
 
 #: The literal secrets the config files carry; none of them may appear in a
@@ -113,7 +115,7 @@ class _Config:
     """The slice of the config provider the editor uses."""
 
     def __init__(self, path: Path, data: dict):
-        self.path = str(path)
+        self.path = path
         self._data = data
         self.reloads = 0
 
@@ -136,7 +138,11 @@ def editor(tmp_path, monkeypatch, _app):
 
     history = ConfigHistoryLogger(tmp_path / "config_history.json")
     config = _Config(config_path, tomllib.loads(CONFIG))
-    runtime = SimpleNamespace(config=config, config_history=history)
+    runtime = SimpleNamespace(
+        config=config,
+        config_history=history,
+        passwords=PasswordService(config),
+    )
     monkeypatch.setattr(bp, "get_runtime", lambda: runtime)
 
     client = _app.test_client()
@@ -441,6 +447,24 @@ def test_every_write_keeps_a_timestamped_backup(editor) -> None:
         [first.encode("utf-8"), second.encode("utf-8")]
     )
     assert all(re.search(r"\.\d{8}-\d{6}(?:-\d+)?\.bak$", path.name) for path in backups)
+
+
+def test_same_second_backup_collision_suffix_orders_newest_first(editor) -> None:
+    """A ``-1`` backup is newer even when both names share one second."""
+    older = editor.text()
+    newer = older.replace("port = 11174", "port = 12000")
+    first = editor.config_path.with_name("config.toml.20260101-120000.bak")
+    second = editor.config_path.with_name("config.toml.20260101-120000-1.bak")
+    first.write_text(older, encoding="utf-8")
+    second.write_text(newer, encoding="utf-8")
+
+    revisions = [
+        revision
+        for revision in ConfigRevisionStore(editor.config_path, editor.history).list_revisions()
+        if revision.kind == "backup"
+    ]
+
+    assert revisions[0].revision_id == f"backup:{second.name}"
 
 
 # ── the raw view ────────────────────────────────────────────────────────────
@@ -787,13 +811,9 @@ def test_the_password_flow_hashes_and_never_echoes(editor) -> None:
         )
     )
 
-    assert "The new password is active for the next sign-in." in response
+    assert "Password updated and active for new logins." in response
     assert "Str0ngPassw0rd!" not in response
-    stored = dict(
-        line.split("=", 1)
-        for line in editor.env_path.read_text("utf-8").splitlines()
-        if "=" in line
-    )["ANTEUMBRA_PASSWORD_HASH"]
+    stored = dotenv_values(editor.env_path)["ANTEUMBRA_PASSWORD_HASH"]
 
     from werkzeug.security import check_password_hash
 
@@ -805,7 +825,12 @@ def test_the_password_flow_hashes_and_never_echoes(editor) -> None:
 def test_the_password_flow_refuses_a_short_or_mismatched_password(editor) -> None:
     before = editor.env_path.read_text("utf-8")
 
-    short = _body(editor.client.post("/admin/config/editor/password", data={"password": "abc"}))
+    short = _body(
+        editor.client.post(
+            "/admin/config/editor/password",
+            data={"password": "abc", "password_confirm": "abc"},
+        )
+    )
     mismatched = _body(
         editor.client.post(
             "/admin/config/editor/password",

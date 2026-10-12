@@ -6,6 +6,8 @@ from pathlib import Path
 
 from playwright.sync_api import expect
 
+from .conftest import open_console_route
+
 
 def _seed_records(runtime, tmp_path: Path, prefix: str, count: int) -> list[str]:
     paths = []
@@ -47,7 +49,7 @@ def _seed_quarantine_records(runtime, tmp_path: Path, prefix: str, count: int):
 
 
 def _open_threats(page):
-    page.click("a.nav-link[data-path='threats']")
+    open_console_route(page, "threats")
     page.wait_for_selector("#records-table-container", timeout=10000)
     page.wait_for_selector("#records-table-container .record-item", timeout=10000)
     page.wait_for_timeout(500)

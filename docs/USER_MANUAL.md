@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.40
+# Anteumbra User Manual v1.0.48
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -37,10 +37,12 @@ Anteumbra is a **passive Web perimeter security observatory**. It does not block
 
 ### Operating Boundary
 
-Anteumbra is intended for a single host or a small web workload. It provides
+Anteumbra is intended for a single host or a small web workload operated by one
+configured administrator. It provides
 filesystem integrity monitoring, WebShell detection, local triage/response,
 and standard alert or SIEM output. It is not an inline WAF, EDR, SIEM,
-central-management platform, or distributed HA service.
+central-management platform, or distributed HA service. The current product
+does not provide user lists, role-based access control, or tenant accounts.
 
 ### Architecture at a Glance
 
@@ -581,6 +583,26 @@ config reload. Manual file edits should be followed by the System reload action
 or a restart. Restart is still recommended for startup-lifecycle settings such
 as web bind host/port, session backend, storage backend, plugin list, and
 monitored website path.
+
+#### 5.10.1 Administrator TOTP
+
+The **Account** panel is for the one configured administrator. To enable a
+second factor, enter the current password and start TOTP setup. Add the
+one-time secret or `otpauth://` URI to an authenticator, record every recovery
+code shown on that screen, and submit a current six-digit code. The secret and
+recovery codes are shown only during enrollment; the secret is never rendered
+again after activation.
+
+After activation, a new login first verifies the password and then asks for a
+six-digit authenticator code. A recovery code can be used once when the
+authenticator is unavailable; the use is written to the runtime log. To turn
+TOTP off, an authenticated administrator must provide the current password and
+either a current authenticator code or an unused recovery code. If all recovery
+codes are lost, use an authenticator code to disable TOTP and enroll again.
+
+TOTP state is stored with the runtime: the enable flag is in `config.toml`,
+while the secret and recovery-code hashes are in the instance `.env`. Never
+copy the secret or recovery codes into source control or support tickets.
 
 ### 5.11 System Management
 
@@ -1367,5 +1389,5 @@ it must complete before reporting success.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.40 — MIT License</sub>
+  <sub>Anteumbra v1.0.48 — MIT License</sub>
 </div>

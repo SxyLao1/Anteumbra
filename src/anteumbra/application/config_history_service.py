@@ -362,7 +362,13 @@ class ConfigRevisionStore:
                     detail=str(record.get("detail") or ""),
                 )
             )
-        revisions.sort(key=lambda item: item.timestamp, reverse=True)
+        # Backup names carry a collision suffix when two writes happen in the
+        # same second (``...-1.bak``, ``...-2.bak``).  The timestamp itself is
+        # intentionally second precision and ``copy2`` preserves the source
+        # mtime, so sorting by either alone can put an older backup first.  Use
+        # the suffix as a deterministic tie breaker while keeping the public
+        # timestamp/display value unchanged.
+        revisions.sort(key=lambda item: _revision_sort_key(item, self.config_path.name), reverse=True)
         return revisions[: max(0, int(limit))]
 
 
@@ -380,6 +386,24 @@ def _stamp_from_name(name: str, config_name: str) -> str:
     except ValueError:
         return ""
     return parsed.isoformat()
+
+
+def _revision_sort_key(item: ConfigRevision, config_name: str) -> tuple[str, int, int]:
+    """Return a stable newest-first key for mixed history entries.
+
+    ``ConfigRevision.timestamp`` deliberately exposes second-level timestamps
+    for backup filenames.  The numeric collision suffix is therefore kept out
+    of that field and applied only as an ordering tie breaker here.
+    """
+    if item.revision_id.startswith("backup:"):
+        name = item.revision_id.partition(":")[2]
+        match = re.match(
+            rf"^{re.escape(config_name)}\.\d{{8}}-\d{{6}}-(\d+)\.bak$",
+            name,
+        )
+        sequence = int(match.group(1)) if match else 0
+        return item.timestamp, 1, sequence
+    return item.timestamp, 0, 0
 
 
 def _display_time(stamp: str, fallback: float) -> str:

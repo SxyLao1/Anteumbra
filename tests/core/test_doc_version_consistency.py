@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """User-facing documents must state the version the package actually is.
 
-1.0.40 shipped with the README badge, both README footers and both roadmap
-headers still announcing 1.0.35: the release updated the manuals and changelogs
-but nothing checked the readme, and a truncated grep hid it from review. This
-guard fails the build instead.
+The package version is user-visible in the README, manuals, roadmap, changelog
+and Docker metadata. This guard keeps those surfaces aligned with the single
+source of truth.
 """
 
 from __future__ import annotations

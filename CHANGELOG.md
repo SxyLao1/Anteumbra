@@ -6,6 +6,97 @@
 
 ---
 
+## [Unreleased]
+
+## [1.0.48] - Unreleased
+
+### Added
+- Add a Docker runtime snapshot helper that checks archive integrity, rejects unsafe
+  entries and verifies restored contents, permissions and numeric ownership.
+- Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
+- Document the current single-operator administration model; user lists, role-based permissions, and multi-tenant accounts remain outside the current scope.
+
+### Changed
+- Keep the duty workspace concise, with object state and operational controls
+  instead of step-by-step teaching prompts.
+- Extend real-browser coverage to cross-page batches, partial retries, communication
+  attribution, rule effectiveness and multi-IP/device receipts on desktop and phone.
+- Lead the duty overview with a site-attributed, paginated review queue. Inspect
+  evidence, quarantine a file or review a false positive from its detail workbench,
+  then read the per-object receipt and updated state without leaving the sample.
+- Group the live console into duty, investigation, response, site protection,
+  settings and maintenance workspaces, with persistent site scope, browser
+  history, mobile navigation and modular dark/light theme styles.
+- Keep source evidence, profiles, scan reports, configuration history and shared
+  server settings reachable from the operational workflow.
+- Run browser acceptance against isolated real runtimes and loopback WAF,
+  blocking, SIEM and probe counterparts. Business operations use the UI.
+
+### Fixed
+- Initialize mounted Docker runtime directories from installed package assets,
+  preserving existing configuration, credentials and custom rules.
+- Handle Docker SIGTERM with orderly runtime shutdown before taking a snapshot.
+- Do not report a heap-dump failure when heap collection is disabled.
+- Replay Registry WAL records conservatively and keep expired-session cleanup aligned
+  with the configured runtime lifetime.
+- Complete cross-page blocklist batches with per-device receipts, preserving failed
+  items for a retryable partial result.
+- Identify batch selections by both site and path, retain only failed selections
+  after a partial result, and keep quarantine search across pagination.
+- Attribute communication counts by site-relative script path rather than basename.
+- Honour explicitly selected manual-scan extensions in the YARA scan engine.
+- Confirm maintenance writes and prevent older panel/ledger responses from replacing
+  newer views.
+- Keep aggregate scope when opening a site's sample, and resolve the current
+  quarantine payload rather than an earlier restore/quarantine cycle.
+- Show per-object batch results and per-device blocking failures; preserve failed
+  selections and the target site when continuing an investigation.
+- Keep SIEM snapshot formats separate from the running exporter, render successful
+  component remediation correctly, and handle timezone-aware WAF events in profiles.
+- Preserve scanner report/selection visibility and terminal states, avoid duplicate
+  quarantine dialogs, search detections across pages, and persist notification toggles.
+- Activate password changes for deployments that store a literal password hash.
+- Keep unsaved configuration drafts when browser-back navigation is cancelled,
+  scope forensic activity to the selected site, and clear actionable memory-shell
+  findings after a successful clean probe while preserving investigation history.
+- Translate the new evidence, scanner history and device-result controls into Chinese.
+
+## [1.0.47] - 2026-10-11
+
+### Fixed
+- Clear the page dirty state after a confirmed configuration save so leaving the page does not show a false unsaved-changes warning.
+
+## [1.0.46] - 2026-10-11
+
+### Fixed
+- Preserve the checked value when confirming a site edit so the hidden checkbox fallback cannot incorrectly disable the only enabled site.
+
+## [1.0.45] - 2026-10-11
+
+### Fixed
+- Make the protection switch required while editing the only enabled site so the browser blocks an invalid submission before the request.
+
+## [1.0.44] - 2026-10-11
+
+### Fixed
+- Disable browser history restoration for the site editor so a stale unchecked state cannot overwrite the current configuration.
+
+## [1.0.43] - 2026-10-11
+
+### Fixed
+- Make the site protection switch a prominent status block and explain when it is the only enabled site.
+- Return a site-level error before validation when an edit would disable the last enabled site.
+
+## [1.0.42] - 2026-10-11
+
+### Fixed
+- Add a dedicated site management form for creating sites and editing their web root,
+  service port, access-log path, log analysis and enabled state.
+- Route site saves through the existing diff preview, validation, timestamped backup and
+  runtime reload pipeline while keeping the stable site ID unchanged during edits.
+- Add a direct site-management entry to Settings so operators do not have to use raw TOML
+  editing for routine site changes.
+
 ## [1.0.40] - 2026-09-14
 
 ### Fixed
@@ -958,3 +1049,7 @@ bugfix: Bug fix, reliability, optimization, or compatible cleanup
 - **v1.0.x**: DDD migration + surgery cycle (2026-06/07)
 - **v1.1.x**: Multi-site operations + extension SDK (planned)
 - **v2.0.x**: Async EventBus + Pydantic Schema (planned)
+## 1.0.43 - 2026-10-11
+
+- Clarify the site protection switch in the site editor and show when it is the only enabled site.
+- Reject disabling the last enabled site with a site-level error before config validation.
