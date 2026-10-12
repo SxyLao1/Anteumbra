@@ -560,7 +560,11 @@
   function reviewRecord(path, mark, trigger) {
     if (!path) return;
     var action = mark ? 'mark_false_positive' : 'unmark_false_positive';
-    app.http.text(scopedUrl('/admin/' + action + '/' + encodeURIComponent(path) + '?status=' + encodeURIComponent(reviewStatus()), trigger), {
+    // Keep the file path in the query string. Flask canonicalizes an encoded
+    // leading slash in a <path:...> route on POSIX hosts, which drops the
+    // first separator before the registry can resolve the absolute path.
+    var query = new URLSearchParams({ file_path: path, status: reviewStatus() });
+    app.http.text(scopedUrl('/admin/' + action + '?' + query.toString(), trigger), {
       method: 'POST', headers: { 'HX-Request': 'true' }
     }).then(function () {
       app.ui.toast(app.t(mark ? 'Marked as false positive.' : 'False positive cleared.'), 'success');

@@ -700,16 +700,15 @@ def _records_table_response(status_filter: str = "all"):
     )
 
 
-@records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
-@require_auth
-def mark_false_positive_route(file_path):
-    """标记为误报 — v2.0: 委托给 centralized suspicious_registry.mark_false_positive()"""
+def _review_record_route(file_path, *, mark: bool):
+    """Apply a false-positive review while preserving the record site scope."""
     try:
         decoded_path = unquote(file_path)
         normalized_path = normalize_path(decoded_path)
 
         site_id = _requested_site_id()
-        ok = _registry().mark_false_positive(normalized_path, site_id=site_id)
+        operation = _registry().mark_false_positive if mark else _registry().unmark_false_positive
+        ok = operation(normalized_path, site_id=site_id)
         if not ok:
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
@@ -720,24 +719,32 @@ def mark_false_positive_route(file_path):
         return render_template("admin/error.html", error=str(e)), 500
 
 
+@records_bp.route("/mark_false_positive", methods=["POST"])
+@require_auth
+def mark_false_positive_query_route():
+    """标记为误报 — query form keeps POSIX absolute paths intact."""
+    return _review_record_route(request.values.get("file_path", ""), mark=True)
+
+
+@records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
+@require_auth
+def mark_false_positive_route(file_path):
+    """标记为误报 — compatibility route for existing callers."""
+    return _review_record_route(file_path, mark=True)
+
+
+@records_bp.route("/unmark_false_positive", methods=["POST"])
+@require_auth
+def unmark_false_positive_query_route():
+    """取消误报 — query form keeps POSIX absolute paths intact."""
+    return _review_record_route(request.values.get("file_path", ""), mark=False)
+
+
 @records_bp.route("/unmark_false_positive/<path:file_path>", methods=["POST"])
 @require_auth
 def unmark_false_positive_route(file_path):
-    """取消误报 — return a reviewed false positive to the active set."""
-    try:
-        decoded_path = unquote(file_path)
-        normalized_path = normalize_path(decoded_path)
-
-        site_id = _requested_site_id()
-        ok = _registry().unmark_false_positive(normalized_path, site_id=site_id)
-        if not ok:
-            return jsonify({"status": "error", "message": "记录不存在"}), 404
-
-        get_runtime().sse.trigger_registry_update()
-        return _records_table_response(str(request.args.get("status", "all")))
-    except Exception as e:
-        current_app.logger.error(f"[RECORDS] 取消误报失败: {e}", exc_info=True)
-        return render_template("admin/error.html", error=str(e)), 500
+    """取消误报 — compatibility route for existing callers."""
+    return _review_record_route(file_path, mark=False)
 
 
 @records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
