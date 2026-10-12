@@ -3,7 +3,8 @@
 [English](RELEASE.md)
 
 Anteumbra 不会在每次推送 `main` 时自动发布 PyPI。GitHub 工作流
-`.github/workflows/publish.yml` 只在推送版本 Tag 或手动触发时发布。
+`.github/workflows/publish.yml` 只在推送版本 Tag 或以版本 Tag 作为工作流引用手动触发时发布。
+工作流会检查 Tag 版本与包版本一致。
 
 ## 版本规则
 
@@ -17,12 +18,18 @@ src/anteumbra/__init__.py
 
 ## PyPI 发布
 
-PyPI 跟随最新已发布 Tag，而不是 GitHub `main` 的最新提交。打 Tag 前必须构建 Wheel，
-并在全新虚拟环境安装该产物；可编辑源码安装不能替代分发产物测试。
+只有针对准确发布 Tag 成功完成 `publish.yml`，才能证明 PyPI 发布完成。
+发布前必须分别核对 PyPI 与对应 GitHub Tag。
+不能根据 GitHub 提交推断 PyPI 已发布，也不能为修复历史发布记录而重建或移动历史 Tag。
+打 Tag 前必须构建 Wheel，并在全新虚拟环境安装该产物；可编辑源码安装不能替代分发产物测试。
 
 ```powershell
-$cleanPaths = @("build\lib", "dist", "src/anteumbra.egg-info")
-Remove-Item -Recurse -Force $cleanPaths -ErrorAction SilentlyContinue
+$releaseCheckout = Join-Path $env:TEMP "anteumbra-release-checkout"
+if (Test-Path -LiteralPath $releaseCheckout) {
+    throw "请选择新的空发布检出目录：$releaseCheckout"
+}
+git clone --branch <validated-branch> https://github.com/SxyLao1/Anteumbra.git $releaseCheckout
+Set-Location -LiteralPath $releaseCheckout
 python -m build --wheel
 python scripts/verify_wheel_contents.py dist
 python -m venv .release-smoke
@@ -43,21 +50,21 @@ Remove-Item Env:ANTEUMBRA_HOME
 确认生成的 `.env` 包含非占位 Session Secret；基础安装可使用 YARA；禁用的通知通道不会
 访问外网；启动就绪失败时命令返回非零。
 
-完成发布前质量门，并推进已验证的开发分支：
+完成发布前质量门后，按两个受保护 Pull Request 推进已验证的功能分支。
+每个 Pull Request 都必须通过六项必需检查：Python 3.10、Python 3.11、Python 3.12、
+Playwright UI、Build Check 和 Docker Build。
 
 ```powershell
-cd F:\Home\Github\Anteumbra
 python -m ruff check src tests
 python -m pytest -q -rs --ignore=tests\e2e_ui
 python -m pytest tests\e2e_ui -q
 git diff --check
 git status --short
-git switch dev
-git push origin dev
+git push origin <validated-feature-branch>
 ```
 
-创建 `dev -> main` promotion Pull Request，等待全部必需检查通过后再合并。PR 正文中出现的
-`Closes #N` 或 `Fixes #N` 必须在合并后核验对应 Issue 已关闭；没有关联 Issue 时填写 `N/A`。
+创建 `<validated-feature-branch> -> dev` Pull Request，等待六项必需检查全部通过后合并。
+再创建 `dev -> main` promotion Pull Request，等待晋级提交上的六项必需检查全部通过后合并。
 仓库必须保持自动删除已合并源分支的设置。
 
 promotion 合并后：
@@ -73,9 +80,9 @@ git push origin vX.Y.Z
 映射端口登录后台，并用一个无害检测样本走通 Registry、隔离和还原。宿主机登录用于验证
 Docker 网关发现结果与后台 IP 白名单一致。源码测试通过不能替代 Wheel 或容器验证。
 
-等待 `.github/workflows/publish.yml` 完成，再核对 GitHub 工作流与
-`pip index versions anteumbra` 都显示新版本。PyPI 上传失败后不得复用同一版本号；修复
-工作流并增加 bug 修复位。
+等待 `.github/workflows/publish.yml` 完成，再分别核对 PyPI 与 GitHub Tag 都显示准确版本。
+`publish.yml` 只向 PyPI 发布，不会创建 GitHub Release。应从已核对的 Tag 单独创建 GitHub Release。
+PyPI 上传失败后不得复用同一版本号；修复工作流并增加 bug 修复位。
 
 PyPI 项目需要配置 GitHub Trusted Publishing：
 

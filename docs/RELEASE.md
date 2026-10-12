@@ -4,7 +4,8 @@
 
 Anteumbra does not publish to PyPI from every `main` push. The GitHub workflow
 `.github/workflows/publish.yml` publishes only when a version tag is pushed or
-when the workflow is triggered manually.
+when it is manually dispatched with a version tag as the workflow ref.
+The workflow checks that the tag version matches the package version.
 
 ## Versioning
 
@@ -19,13 +20,20 @@ src/anteumbra/__init__.py
 
 ## PyPI Publishing
 
-PyPI currently follows the latest published tag, not the latest GitHub commit.
+PyPI publication is established only by a successful `publish.yml` run for
+the exact release tag. It must be checked independently against both PyPI and
+the matching GitHub tag. Do not infer a PyPI release from a GitHub commit, and
+do not recreate or move a historical tag to repair release history.
 Before tagging, build the wheel and install that artifact into a new virtual
 environment. An editable source install is not a distribution test.
 
 ```powershell
-$cleanPaths = @("build\lib", "dist", "src/anteumbra.egg-info")
-Remove-Item -Recurse -Force $cleanPaths -ErrorAction SilentlyContinue
+$releaseCheckout = Join-Path $env:TEMP "anteumbra-release-checkout"
+if (Test-Path -LiteralPath $releaseCheckout) {
+    throw "Choose a new empty release checkout path: $releaseCheckout"
+}
+git clone --branch <validated-branch> https://github.com/SxyLao1/Anteumbra.git $releaseCheckout
+Set-Location -LiteralPath $releaseCheckout
 python -m build --wheel
 python scripts/verify_wheel_contents.py dist
 python -m venv .release-smoke
@@ -48,23 +56,23 @@ Confirm that the generated `.env` has a non-placeholder session secret, YARA
 is available in the base install, no disabled notification channel attempts an
 outbound connection, and startup exits non-zero when readiness fails.
 
-Then promote the validated development branch and publish a version:
+Then promote the validated feature branch through both protected pull requests.
+Each pull request must pass all six required checks: Python 3.10, Python 3.11,
+Python 3.12, Playwright UI, Build Check, and Docker Build.
 
 ```powershell
-cd F:\Home\Github\Anteumbra
 python -m ruff check src tests
 python -m pytest -q -rs --ignore=tests\e2e_ui
 python -m pytest tests\e2e_ui -q
 git diff --check
 git status --short
-git switch dev
-git push origin dev
+git push origin <validated-feature-branch>
 ```
 
-Open a `dev -> main` promotion pull request. Wait for every required check to
-pass, merge the promotion PR, and verify that any `Closes #N` or `Fixes #N`
-references in its body closed their issues. Use `N/A` when no issue applies.
-The repository must keep automatic head-branch deletion enabled.
+Open a `<validated-feature-branch> -> dev` pull request, wait for all six
+required checks to pass, and merge it. Then open the `dev -> main` promotion
+pull request, wait for all six required checks on the promotion head, and merge
+it. The repository must keep automatic head-branch deletion enabled.
 
 After the promotion merge:
 
@@ -82,10 +90,12 @@ quarantine/restore. The host login verifies that Docker gateway discovery and
 the admin IP allowlist agree. A passing source test suite does not replace
 wheel or container validation.
 
-Wait for `.github/workflows/publish.yml`, then verify both the GitHub release
-workflow and `pip index versions anteumbra` report the tagged version. Do not
-reuse a version number after a failed PyPI upload; fix the workflow and bump the
-bugfix component.
+Wait for `.github/workflows/publish.yml`, then independently verify that PyPI
+and the GitHub tag both report the exact tagged version. The `publish.yml`
+workflow publishes to PyPI only; it does not create a GitHub Release. Create
+the GitHub Release separately from the verified tag. Do not reuse a version
+number after a failed PyPI upload; fix the workflow and bump the bugfix
+component.
 
 The PyPI project must also have GitHub Trusted Publishing configured for:
 
