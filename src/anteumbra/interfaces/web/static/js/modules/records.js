@@ -22,6 +22,7 @@
     quarantineSelections: Object.create(null),
     activeRecordScope: null,
     activeQuarantineScope: null,
+    recordRefreshId: 0,
     detailRequestId: 0,
     activeDetail: null
   };
@@ -181,11 +182,28 @@
     });
   }
 
+  function requestRecords(container, status, query) {
+    if (!container) return;
+    var requestId = ++state.recordRefreshId;
+    var url = siteUrl('/admin/records?compact=1&status=' + encodeURIComponent(status) + '&q=' + encodeURIComponent(query || ''));
+    app.http.text(url, { headers: { 'HX-Request': 'true' } }).then(function (html) {
+      // A status click and a debounced text filter can overlap.  Keep the
+      // response from the latest request only; an older response must not
+      // replace a newer filtered list with stale rows.
+      if (requestId !== state.recordRefreshId) return;
+      app.swapHtml(container, html, 'outerHTML');
+    }).catch(function (error) {
+      if (requestId === state.recordRefreshId) {
+        app.ui.toast(app.t('Filter failed: %(message)s', { message: error.message }), 'error');
+      }
+    });
+  }
+
   function refreshRecords(container) {
-    if (!container || !window.htmx) return;
-    var status = encodeURIComponent(container.dataset.status || 'all');
-    var query = encodeURIComponent(state.recordFilters[currentScopeKey()] || '');
-    window.htmx.ajax('GET', siteUrl('/admin/records?compact=1&status=' + status + '&q=' + query), { target: '#' + container.id, swap: 'outerHTML' });
+    if (!container) return;
+    var status = container.dataset.status || 'all';
+    var query = state.recordFilters[currentScopeKey()] || '';
+    requestRecords(container, status, query);
   }
 
   function refreshQuarantine(container) {
@@ -592,11 +610,7 @@
   function switchStatus(status) {
     var panel = document.querySelector('.records-panel[data-status]');
     if (!panel || !status) return;
-    app.http.text(siteUrl('/admin/records?compact=1&status=' + encodeURIComponent(status)), {
-      headers: { 'HX-Request': 'true' }
-    }).then(function (html) {
-      app.swapHtml(panel, html, 'outerHTML');
-    }).catch(function (error) { app.ui.toast(app.t('Filter failed: %(message)s', { message: error.message }), 'error'); });
+    requestRecords(panel, status, '');
   }
 
   function openProfileFromRecord(trigger) {
@@ -648,7 +662,11 @@
         var panel = context.element.closest('[data-record-list]');
         window.clearTimeout(state.searchTimer);
         state.searchTimer = window.setTimeout(function () {
-          if (panel && panel.isConnected) refreshRecords(panel);
+          // A status click can replace the panel during the debounce window.
+          // Resolve the current container at send time so the search is not
+          // silently discarded because its original DOM node was detached.
+          var currentPanel = visibleContainer('[id^="records-table-container"]') || panel;
+          if (currentPanel && currentPanel.isConnected) refreshRecords(currentPanel);
         }, 300);
       }, events: ['input'], preventDefault: false },
       'quarantine.selection-change': { handler: function (context) {
