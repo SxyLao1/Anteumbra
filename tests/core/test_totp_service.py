@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import tomli
+
 from anteumbra.application.totp_service import TotpService
 
 
@@ -11,9 +13,7 @@ class _Provider:
         self._data = {"web_admin": {"username": "admin", "totp_enabled": False}}
 
     def get(self):
-        import tomllib
-
-        self._data = tomllib.loads(self.path.read_text(encoding="utf-8"))
+        self._data = tomli.loads(self.path.read_text(encoding="utf-8"))
         return self._data
 
     def reload(self):
