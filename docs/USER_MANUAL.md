@@ -1,4 +1,4 @@
-# Anteumbra User Manual v1.0.47
+# Anteumbra User Manual v1.0.48
 
 > **Lightweight Web Perimeter Threat Intelligence** — Passive Detection · Semi-Active Response · File-Level Forensics
 
@@ -1389,5 +1389,5 @@ it must complete before reporting success.
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.47 — MIT License</sub>
+  <sub>Anteumbra v1.0.48 — MIT License</sub>
 </div>

@@ -3,9 +3,9 @@
 [中文](ROADMAP_cn.md)
 
 > **Latest Release**: v1.0.47 (released, 2026-10-11)
-> **Current development version**: v1.0.47 (single-admin TOTP lifecycle complete on the development branch; not released yet)
+> **Current development version**: v1.0.48 (single-admin TOTP lifecycle and operator response workflows complete on the development branch; not released yet)
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: the v1.0.47 source includes the release-gate checks, expanded Ruff checks, Wheel/source parity, Windows runtime and Docker health/login/functional smoke.
+> **Source Status**: the v1.0.48 candidate defines release-gate checks for expanded Ruff, Wheel/source parity, Windows runtime and Docker health/login/functional smoke; Docker smoke remains pending on this host.
 
 ---
 
@@ -29,7 +29,8 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 | Architecture guardrails | Layer/import boundaries, source-only test imports, and Wheel/source parity are enforced; resolved debt stays out of builds. |
 | Runtime ownership | One `RuntimeLifecycle` owns startup, status, reverse-order shutdown, and per-app login throttling without mutable Web/launcher module state. |
 | Integration contracts | `RuntimeContainer` exposes required services through focused Domain Protocols; Web routes and plugins no longer reach Metrics, cluster, ThreatGraph, or Notifier private state. |
-| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. || Memory shell | Detection runs a token-guarded JSP probe that enumerates what the servlet container registered in memory, reports honest findings (including what cannot be dumped), keeps artifacts under `data/forensics`, and can remediate a component it identified - verified against a real Tomcat 7. |
+| Documentation | README, user manual, architecture, roadmap, changelog, release guide, and memory-shell toolkit have explicit English/Chinese navigation. |
+| Memory shell | Detection runs a token-guarded JSP probe that enumerates what the servlet container registered in memory, reports honest findings (including what cannot be dumped), keeps artifacts under `data/forensics`, and can remediate a component it identified - verified against a real Tomcat 7. |
 | Multi-site UI | A navigation site switcher scopes detection, quarantine and cluster views; the overview keeps global figures and adds a per-site table. |
 | Agent integration | `anteumbra mcp serve` exposes the instance over MCP (read-only tools by default, writes gated behind `--allow-write`) and `anteumbra skill export` ships an operator skill for a user's own agent. |
 | Configuration UX | `/admin/config` edits the real TOML with comment-preserving single-value writes, validation, timestamped backups and version rollback; every plugin is configurable from the settings page with its effective value and source. |

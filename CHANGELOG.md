@@ -8,10 +8,6 @@
 
 ## [Unreleased]
 
-### Added
-- Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
-- Document the current single-operator administration model; user lists, role-based permissions, and multi-tenant accounts remain outside the current scope.
-
 ## [1.0.47] - 2026-10-11
 
 ### Fixed
@@ -48,7 +44,11 @@
 - Add a direct site-management entry to Settings so operators do not have to use raw TOML
   editing for routine site changes.
 
-## [1.0.41] - Unreleased
+## [1.0.48] - 2026-10-12
+
+### Added
+- Complete the single-admin TOTP lifecycle: enrollment, login challenge, one-time recovery codes, disablement, failure handling, audit logging, and real-browser acceptance coverage.
+- Document the current single-operator administration model; user lists, role-based permissions, and multi-tenant accounts remain outside the current scope.
 
 ### Changed
 - Keep the duty workspace concise, with object state and operational controls
@@ -67,6 +67,10 @@
   blocking, SIEM and probe counterparts. Business operations use the UI.
 
 ### Fixed
+- Replay Registry WAL records conservatively and keep expired-session cleanup aligned
+  with the configured runtime lifetime.
+- Complete cross-page blocklist batches with per-device receipts, preserving failed
+  items for a retryable partial result.
 - Identify batch selections by both site and path, retain only failed selections
   after a partial result, and keep quarantine search across pagination.
 - Attribute communication counts by site-relative script path rather than basename.
