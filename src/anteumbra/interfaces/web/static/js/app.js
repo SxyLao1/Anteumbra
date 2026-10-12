@@ -315,6 +315,14 @@
   registerAction('core.navigate-location', function (context) {
     if (context.element.dataset.url) window.location.assign(context.element.dataset.url);
   });
+  // Logout lives in the persistent shell, so it must remain available during
+  // the short window before the dashboard module finishes registering after a
+  // full-page login redirect.
+  registerAction('dashboard.logout', function () {
+    if (!app.confirm('Confirm logout?')) return;
+    if (window.AnteumbraSSEManager) window.AnteumbraSSEManager.disconnect();
+    window.location.assign('/admin/logout');
+  });
 
   window.Anteumbra = app;
   // Full-page loads fire DOMContentLoaded after deferred scripts, but an
