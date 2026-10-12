@@ -2,10 +2,10 @@
 
 [中文](ROADMAP_cn.md)
 
-> **Latest Release**: v1.0.47 (released, 2026-10-11)
-> **Current development version**: v1.0.48 (single-admin TOTP lifecycle and operator response workflows complete on the development branch; not released yet)
+> **Latest Release**: v1.0.48 (released, 2026-10-13)
+> **Current development version**: v1.0.48
 > **Vision**: Single-host and small-Web-workload security operations: passive file detection, access-log behavior analysis, attacker profiling, operator response, and standard SIEM output.
-> **Source Status**: the v1.0.48 candidate has passed local regression and package/source checks, full Docker runtime backup and recovery, upgrade from the official 1.0.47 package and rollback with its pre-upgrade snapshot, and real Tomcat 7 probe/forensics/remediation/clean-reprobe acceptance. It is not released; optional Docker fuzzy hashing remains best-effort.
+> **Source Status**: the v1.0.48 source has passed local regression and package/source checks, full Docker runtime backup and recovery, upgrade from the official 1.0.47 package and rollback with its pre-upgrade snapshot, and browser-driven JVM probe/forensics/remediation/clean-reprobe acceptance. Optional Docker fuzzy hashing remains best-effort.
 
 ---
 
@@ -76,15 +76,15 @@ Anteumbra has moved past the initial Trident rename and packaging surgery. The c
 
 ## Release Readiness Checklist
 
-### v1.0.48 candidate
+### v1.0.48 release gates
 
 | Gate | Local acceptance |
 |------|------------------|
 | Durable Docker runtime | A stopped snapshot restored into a new volume and container preserves contents, permissions and numeric ownership; TOTP, consumed recovery-code rejection and quarantine restoration remain functional. |
-| Upgrade and rollback | The official 1.0.47 package's runtime upgrades to the candidate and accepts new UI operations. The old package with its pre-upgrade snapshot restores the old state without candidate-only data. |
+| Upgrade and rollback | The official 1.0.47 package's runtime upgrades to v1.0.48 and accepts new UI operations. The old package with its pre-upgrade snapshot restores the old state without v1.0.48-only data. |
 | Real JVM response | Browser-driven detection, manifest capture, component removal and clean reprobe pass on isolated Tomcat 7. Missing bytecode resources are reported as unavailable; heap dumping was disabled. |
 
-These are local candidate checks, not a release or production-deployment claim.
+These checks were completed locally before the v1.0.48 release; they do not claim a production deployment.
 
 ### v1.0.35 release history
 
