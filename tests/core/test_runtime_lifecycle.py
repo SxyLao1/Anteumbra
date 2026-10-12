@@ -1,7 +1,40 @@
 """Runtime worker and launcher lifecycle regression tests."""
 
+import signal
 import threading
 from types import SimpleNamespace
+
+
+def test_sigterm_handler_requests_stop_and_restores_previous_handler():
+    from anteumbra.application import launcher
+
+    state = launcher.RuntimeState()
+    previous = signal.getsignal(signal.SIGTERM)
+    installed = launcher.RuntimeLifecycle._install_sigterm_handler(state)
+    try:
+        assert installed is previous
+        current = signal.getsignal(signal.SIGTERM)
+        current(signal.SIGTERM, None)
+        assert state.stop_event.is_set()
+    finally:
+        launcher.RuntimeLifecycle._restore_sigterm_handler(installed)
+
+    assert signal.getsignal(signal.SIGTERM) is previous
+
+
+def test_sigterm_handler_is_not_installed_from_a_background_thread():
+    from anteumbra.application import launcher
+
+    state = launcher.RuntimeState()
+    result = []
+    worker = threading.Thread(
+        target=lambda: result.append(launcher.RuntimeLifecycle._install_sigterm_handler(state))
+    )
+    worker.start()
+    worker.join()
+
+    assert result == [None]
+    assert not state.stop_event.is_set()
 
 
 def test_metrics_worker_start_is_idempotent_and_stops(tmp_path, monkeypatch):
@@ -271,6 +304,14 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
         "_start_site_monitors",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("monitor failure")),
     )
+    previous_handler = object()
+    signal_calls = []
+    monkeypatch.setattr(launcher.signal, "getsignal", lambda _number: previous_handler)
+    monkeypatch.setattr(
+        launcher.signal,
+        "signal",
+        lambda number, handler: signal_calls.append((number, handler)),
+    )
 
     lifecycle = launcher.RuntimeLifecycle(config_provider=provider, dependencies=dependencies)
     with pytest.raises(launcher.RuntimeStartupError, match="Runtime startup failed"):
@@ -288,3 +329,6 @@ def test_runtime_startup_failure_rolls_back_already_started_resources(tmp_path, 
         "logging",
     ]
     assert lifecycle.status()["running"] is False
+    assert signal_calls[0][0] == signal.SIGTERM
+    assert callable(signal_calls[0][1])
+    assert signal_calls[-1] == (signal.SIGTERM, previous_handler)

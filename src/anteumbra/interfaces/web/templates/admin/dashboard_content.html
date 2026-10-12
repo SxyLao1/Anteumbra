@@ -32,9 +32,9 @@
     </div>
 
     <div class="stat-card stat-card--accent">
-      <div class="stat-label">{{ _('Protection Rate') }}</div>
-      <div class="stat-value" id="stat-protection">{{ stats.protection_rate }}%</div>
-      <div class="stat-trend">{{ _('Quarantined / Total') }}</div>
+      <div class="stat-label">{{ '待调查文件' if current_locale == 'zh' else 'Files to investigate' }}</div>
+      <div class="stat-value" id="stat-protection">{{ stats.open_suspicious }}</div>
+      <div class="stat-trend">{{ '文件仍存在且未标记误报' if current_locale == 'zh' else 'Present files not marked false positive' }}</div>
     </div>
 
   </div>
@@ -70,8 +70,8 @@
               {% if site.site_id == 'legacy' %}
               <span class="badge badge-gray">{{ _('Unassigned') }}</span>
               {% else %}
-              <a class="site-link" href="{{ request.path }}?site={{ site.site_id|urlencode }}"
-                 data-action="core.navigate-location" data-url="{{ request.path }}?site={{ site.site_id|urlencode }}">{{ site.site_name }}</a>
+              <a class="site-link" href="/admin/threats?site={{ site.site_id|urlencode }}"
+                 data-action="core.navigate-location" data-url="/admin/threats?site={{ site.site_id|urlencode }}">{{ site.site_name }}</a>
               <code class="site-link__id">{{ site.site_id }}</code>
               {% endif %}
             </td>

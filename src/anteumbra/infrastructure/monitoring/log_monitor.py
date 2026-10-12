@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from threading import Thread
 from typing import Dict, List, Optional
+from urllib.parse import unquote, urlsplit
 
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.domain.memory_shell import InternalArtifactRegistryPort
@@ -220,6 +221,7 @@ class LogMonitor:
                 return
 
             access_url = url_match.group(1)
+            request_path = unquote(urlsplit(access_url).path)
 
             # Anteumbra's own probe request must never be attributed to anyone.
             if self.internal_artifacts is not None and self.internal_artifacts.contains_url(
@@ -237,8 +239,16 @@ class LogMonitor:
                 file_path = normalize_path(record["file_path"])
                 file_name = file_path.name
 
-                # 增强匹配逻辑
-                if f"/{file_name}" in access_url or access_url.endswith(file_name):
+                # A basename is not an identity: two directories may contain
+                # the same script, and /script.php.backup is another resource.
+                # Resolve against this monitored site's document root, leaving
+                # query strings out while allowing a script's PATH_INFO suffix.
+                try:
+                    relative_path = file_path.relative_to(normalize_path(self.website.path))
+                except ValueError:
+                    continue
+                script_url = "/" + relative_path.as_posix()
+                if request_path == script_url or request_path.startswith(script_url + "/"):
                     # ============================================================================
                     # v1.7.7-CRITICAL：增加显式 Registry 更新标记
                     # ============================================================================

@@ -21,7 +21,6 @@ from anteumbra.application.text_encoding import decode_source_bytes
 from anteumbra.interfaces.web.auth import require_auth
 from anteumbra.interfaces.web.blueprints._shared import (
     verify_file_in_quarantine,
-    verify_file_in_registry,
 )
 from anteumbra.interfaces.web.pages import active_site_id, render_page, site_context
 from anteumbra.interfaces.web.runtime import get_runtime
@@ -194,6 +193,11 @@ def get_records():
                 if not r.get("marked_false_positive") and r.get("file_exists")
             ]
 
+        query = request.args.get("q", "").strip().casefold()
+        if query:
+            all_records = [r for r in all_records if query in (
+                str(r.get("file_path", "")) + " " + " ".join(r.get("features", []))
+            ).casefold()]
         total = len(all_records)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = min(page, total_pages)
@@ -203,6 +207,10 @@ def get_records():
         enhanced = _enhance_records(paginated)
         all_paths = [r.get("file_path", "") for r in all_records if r.get("file_path")]
 
+        all_items = [
+            {"file_path": r["file_path"], "site_id": r.get("site_id") or "legacy"}
+            for r in all_records if r.get("file_path")
+        ]
         compact = request.args.get("compact") == "1"
         if request.headers.get("HX-Request") or request.headers.get("Sec-Fetch-Dest") == "document":
             return render_page(
@@ -216,6 +224,7 @@ def get_records():
                 status_filter=status_filter,
                 compact=compact,
                 all_paths=all_paths,
+                all_items=all_items,
             )
         else:
             return jsonify(
@@ -286,18 +295,57 @@ def records_batch():
     """批量操作：隔离/误报/删除"""
     try:
         action = request.form.get("action", "")
-        file_paths = request.form.getlist("file_paths[]")
-        if not file_paths:
+        requested_site = _requested_site_id()
+        if "items" in request.form:
+            try:
+                items = json.loads(request.form["items"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid selection items"}), 400
+            if not isinstance(items, list) or not items:
+                return jsonify({"error": "missing selection items"}), 400
+            targets = []
+            for item in items:
+                if not isinstance(item, dict):
+                    return jsonify({"error": "invalid selection item"}), 400
+                fp, item_site = item.get("file_path"), item.get("site_id")
+                if not isinstance(fp, str) or not fp.strip() or not isinstance(item_site, str) or not item_site.strip():
+                    return jsonify({"error": "each item requires file_path and site_id"}), 400
+                item_site = item_site.strip().lower()
+                if requested_site and item_site != requested_site:
+                    return jsonify({"error": "selection is outside the requested site scope"}), 400
+                targets.append((path_to_key(fp), item_site))
+        else:
+            # Single-object detail and older scoped clients retain their contract.
+            targets = [(path_to_key(fp), requested_site) for fp in request.form.getlist("file_paths[]") if fp]
+        targets = list(dict.fromkeys(targets))
+        if not targets:
             return jsonify({"error": "missing file_paths"}), 400
 
-        results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
-        site_id = _requested_site_id()
+        results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "items": []}
+        names_by_id = _configured_site_names()
+
+        def add_item(file_path, outcome, *, record=None, error=None):
+            """Return a durable, per-object batch outcome without guessing its site."""
+            item = {"file_path": str(file_path), "outcome": outcome}
+            if record is not None:
+                item.update(site_fields(record, names_by_id=names_by_id))
+            elif site_id:
+                item.update(site_fields({"site_id": site_id}, names_by_id=names_by_id))
+            if error:
+                item["error"] = str(error)
+            results["items"].append(item)
+
         if action == "quarantine":
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
-                    if not record or record.get("quarantine_id"):
+                    if not record:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
+                    if record.get("quarantine_id"):
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record is already quarantined")
                         continue
                     features = record.get("features", [])
                     rule = features[0] if features else "batch"
@@ -311,17 +359,16 @@ def records_batch():
                     )
                     if qr:
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["failed"] += 1
-                        results["errors"].append(
-                            {
-                                "file_path": fp,
-                                "error": "source file is missing or could not be moved",
-                            }
-                        )
+                        error = "source file is missing or could not be moved"
+                        results["errors"].append({"file_path": fp, "error": error})
+                        add_item(fp, "failed", record=record, error=error)
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch quarantine failed for %s: %s",
                         fp,
@@ -330,18 +377,25 @@ def records_batch():
                     )
         elif action == "false_positive":
             # v1.1.0: Use public mark_false_positive() API (was inline load→mutate→save)
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().mark_false_positive(
-                        fp, "", record.get("site_id") if record else None
+                        fp, "", record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch false-positive failed for %s: %s",
                         fp,
@@ -350,18 +404,25 @@ def records_batch():
                     )
         elif action == "unmark_false_positive":
             # Undo a review: the record returns to the active threat set.
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().unmark_false_positive(
-                        fp, record.get("site_id") if record else None
+                        fp, record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch unmark-false-positive failed for %s: %s",
                         fp,
@@ -370,18 +431,25 @@ def records_batch():
                     )
         elif action == "delete":
             # v1.1.0: Use public soft_delete_record() API (was inline load→mutate→save)
-            for fp in file_paths:
+            for fp, site_id in targets:
                 try:
                     record = _find_record(fp, site_id=site_id)
+                    if not record:
+                        results["skipped"] += 1
+                        add_item(fp, "skipped", error="record was not found in the requested site scope")
+                        continue
                     if _registry().soft_delete_record(
-                        fp, record.get("site_id") if record else None
+                        fp, record.get("site_id")
                     ):
                         results["success"] += 1
+                        add_item(fp, "success", record=record)
                     else:
                         results["skipped"] += 1
+                        add_item(fp, "skipped", record=record, error="record state was unchanged")
                 except Exception as exc:
                     results["failed"] += 1
                     results["errors"].append({"file_path": fp, "error": str(exc)})
+                    add_item(fp, "failed", error=exc)
                     current_app.logger.error(
                         "[RECORDS] batch delete failed for %s: %s",
                         fp,
@@ -428,11 +496,24 @@ def get_record_detail():
         quarantine_records = get_runtime().quarantine.list_records(
             status=None, site_id=record.get("site_id")
         )
-        quarantine_info = None
-        for q in quarantine_records:
-            if q.get("original_path", "") == file_path:
-                quarantine_info = q
-                break
+        # A path can be restored and quarantined again. Prefer its current
+        # payload identity, never an older cycle's receipt/source file.
+        quarantine_id = record.get("quarantine_id", "")
+        candidates = [
+            q for q in quarantine_records
+            if q.get("original_path")
+            and path_to_key(q["original_path"]) == path_to_key(record["file_path"])
+        ]
+        quarantine_info = next(
+            (q for q in candidates if q.get("quarantine_id") == quarantine_id),
+            None,
+        ) if quarantine_id else None
+        if not quarantine_info and not quarantine_id:
+            quarantine_info = max(
+                candidates,
+                key=lambda q: str(q.get("quarantine_time") or q.get("created_at") or ""),
+                default=None,
+            )
 
         linked_profiles = []
         try:
@@ -444,6 +525,7 @@ def get_record_detail():
                 linked_profiles.append(
                     {
                         "profile_id": profile.profile_id,
+                        "site_id": record.get("site_id", "legacy"),
                         "risk_score": round(profile.risk_score, 2),
                         "ip_count": len(profile.ip_pool),
                         "tool_signature": profile.tool_signature or "N/A",
@@ -453,32 +535,37 @@ def get_record_detail():
             logger.debug("Failed to load linked threat profiles for record detail", exc_info=True)
 
         site = site_fields(record, names_by_id=_configured_site_names())
+        features = _deserialize_list(record.get("features"))
         detail = {
             "file_path": file_path,
             "display_name": display_name,
             "detected_at": record.get("detected_at", "N/A"),
-            "features": record.get("features", []),
-            "rule_name": record.get("features", ["未知"])[0] if record.get("features") else "未知",
+            "features": features,
+            "rule_name": features[0] if features else "—",
             "file_exists": record.get("file_exists", False),
             "file_size": file_size,
             "communication_count": record.get("communication_count", 0),
             "first_seen_ip": record.get("first_seen_ip", "N/A"),
             "alerted": record.get("alerted", False),
             "marked_false_positive": record.get("marked_false_positive", False),
-            "site_id": record.get("site_id", "legacy"),
-            "site_name": record.get("site_name", "Legacy / unassigned"),
+            "site_id": site["site_id"],
+            "site_name": site["site_name"],
             "site_unassigned": site["site_unassigned"],
             "site_label": "" if site["site_unassigned"] else site["site_name"],
             "deleted_at": record.get("deleted_at", "N/A"),
             "missing_reason": record.get("missing_reason", ""),
             "missing_at": record.get("missing_at", ""),
             "content_hash": record.get("content_hash", ""),
+            "quarantine_id": quarantine_id,
             "quarantine_info": quarantine_info,
             "linked_profiles": linked_profiles,
         }
 
         if request.headers.get("HX-Request"):
-            return render_template("admin/record_detail.html", record=detail, **site_context())
+            # The object's site is not a change to the operator's list scope.
+            # Resolving site_context here would persist a row's site and silently
+            # narrow the aggregate queue on its next refresh.
+            return render_template("admin/record_detail.html", record=detail)
         else:
             return jsonify(detail)
     except Exception as e:
@@ -613,16 +700,15 @@ def _records_table_response(status_filter: str = "all"):
     )
 
 
-@records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
-@require_auth
-def mark_false_positive_route(file_path):
-    """标记为误报 — v2.0: 委托给 centralized suspicious_registry.mark_false_positive()"""
+def _review_record_route(file_path, *, mark: bool):
+    """Apply a false-positive review while preserving the record site scope."""
     try:
         decoded_path = unquote(file_path)
         normalized_path = normalize_path(decoded_path)
 
         site_id = _requested_site_id()
-        ok = _registry().mark_false_positive(normalized_path, site_id=site_id)
+        operation = _registry().mark_false_positive if mark else _registry().unmark_false_positive
+        ok = operation(normalized_path, site_id=site_id)
         if not ok:
             return jsonify({"status": "error", "message": "记录不存在"}), 404
 
@@ -633,29 +719,35 @@ def mark_false_positive_route(file_path):
         return render_template("admin/error.html", error=str(e)), 500
 
 
+@records_bp.route("/mark_false_positive", methods=["POST"])
+@require_auth
+def mark_false_positive_query_route():
+    """标记为误报 — query form keeps POSIX absolute paths intact."""
+    return _review_record_route(request.values.get("file_path", ""), mark=True)
+
+
+@records_bp.route("/mark_false_positive/<path:file_path>", methods=["POST"])
+@require_auth
+def mark_false_positive_route(file_path):
+    """标记为误报 — compatibility route for existing callers."""
+    return _review_record_route(file_path, mark=True)
+
+
+@records_bp.route("/unmark_false_positive", methods=["POST"])
+@require_auth
+def unmark_false_positive_query_route():
+    """取消误报 — query form keeps POSIX absolute paths intact."""
+    return _review_record_route(request.values.get("file_path", ""), mark=False)
+
+
 @records_bp.route("/unmark_false_positive/<path:file_path>", methods=["POST"])
 @require_auth
 def unmark_false_positive_route(file_path):
-    """取消误报 — return a reviewed false positive to the active set."""
-    try:
-        decoded_path = unquote(file_path)
-        normalized_path = normalize_path(decoded_path)
-
-        site_id = _requested_site_id()
-        ok = _registry().unmark_false_positive(normalized_path, site_id=site_id)
-        if not ok:
-            return jsonify({"status": "error", "message": "记录不存在"}), 404
-
-        get_runtime().sse.trigger_registry_update()
-        return _records_table_response(str(request.args.get("status", "all")))
-    except Exception as e:
-        current_app.logger.error(f"[RECORDS] 取消误报失败: {e}", exc_info=True)
-        return render_template("admin/error.html", error=str(e)), 500
+    """取消误报 — compatibility route for existing callers."""
+    return _review_record_route(file_path, mark=False)
 
 
-@records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
-@require_auth
-def rearm_alert_route(file_path):
+def _rearm_alert_route(file_path):
     """重新告警 — re-arm alerting so the next detection of this file reports again.
 
     Repeat alerts are suppressed while the standing alert still covers the exact
@@ -676,6 +768,20 @@ def rearm_alert_route(file_path):
     except Exception as e:
         current_app.logger.error(f"[RECORDS] 重新告警失败: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@records_bp.route("/records/rearm_alert", methods=["POST"])
+@require_auth
+def rearm_alert_query_route():
+    """重新告警 — query form keeps POSIX absolute paths intact."""
+    return _rearm_alert_route(request.values.get("file_path", ""))
+
+
+@records_bp.route("/records/rearm_alert/<path:file_path>", methods=["POST"])
+@require_auth
+def rearm_alert_route(file_path):
+    """重新告警 — compatibility route for existing callers."""
+    return _rearm_alert_route(file_path)
 
 
 # ── Audit Log ──────────────────────────────────────────────
@@ -735,15 +841,27 @@ def view_file_content():
 
         actual_path = None
         if quarantine_id:
+            quarantine_record = get_runtime().quarantine.get_detail(quarantine_id)
+            requested_site = _requested_site_id()
+            if not quarantine_record or (
+                requested_site
+                and str(quarantine_record.get("site_id") or "").strip().lower() != requested_site
+            ):
+                return jsonify({"error": "source is no longer available or authorized"}), 404
+            # Resolve the path only through the quarantine record after its site
+            # boundary has been checked; the qid alone is not cross-site authority.
             actual_path = verify_file_in_quarantine(quarantine_id)
         elif file_path:
-            if verify_file_in_registry(file_path):
+            # The viewer is opened from a record row or its detail.  Resolve the
+            # record in that row's own site, rather than treating a same-path
+            # record in another site as authority to read this file.
+            if _find_record(file_path, site_id=_requested_site_id()):
                 actual_path = Path(file_path)
         else:
             return jsonify({"error": "缺少 path 或 qid 参数"}), 400
 
         if not actual_path or not actual_path.exists():
-            return jsonify({"error": "文件不存在或无权访问"}), 404
+            return jsonify({"error": "source is no longer available or authorized"}), 404
 
         # 二次路径穿越确认
         resolved = actual_path.resolve()

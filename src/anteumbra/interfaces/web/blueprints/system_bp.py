@@ -18,6 +18,7 @@ from flask import Blueprint, current_app, render_template, request, session
 from anteumbra.application.session_service import cleanup_sessions
 from anteumbra.domain.logging import log_with_symbol
 from anteumbra.interfaces.web.auth import require_auth
+from anteumbra.interfaces.web.pages import render_page
 from anteumbra.interfaces.web.runtime import get_runtime
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def system_management():
         except Exception:
             logger.debug("Failed to count session files in system_management", exc_info=True)
 
-        return render_template(
+        return render_page(
             "admin/system_management.html",
             auth_header=auth_header,
             username=session.get("username"),
@@ -419,7 +420,10 @@ def system_session_cleanup():
     """Clean up expired sessions (returns rendered panel HTML + pagination)"""
     try:
         session_dir = current_app.config.get("SESSION_FILE_DIR")
-        deleted = cleanup_sessions(session_dir, days=7)
+        deleted = cleanup_sessions(
+            session_dir,
+            lifetime_seconds=current_app.config.get("SESSION_LIFETIME_SECONDS", 7 * 86400),
+        )
         all_sessions = []
 
         if session_dir:

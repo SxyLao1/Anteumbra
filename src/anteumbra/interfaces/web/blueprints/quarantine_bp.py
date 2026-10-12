@@ -234,29 +234,46 @@ def quarantine_batch():
         if not qids:
             return jsonify({"error": "missing qids"}), 400
 
-        results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+        results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "items": []}
         site_id = _requested_site_id()
         service = _quarantine_service()
+
+        def add_item(qid, outcome, *, record=None, error=None):
+            item = {"quarantine_id": str(qid), "outcome": outcome}
+            if record:
+                attributed = _with_site_rows([record])[0]
+                item.update(
+                    site_id=attributed.get("site_id", "legacy"),
+                    site_name=attributed.get("site_name", "Unassigned"),
+                )
+            if error:
+                item["error"] = str(error)
+            results["items"].append(item)
 
         for qid in qids:
             try:
                 record = service.get_detail(qid)
                 if not record or not _record_matches_site(record, site_id):
                     results["skipped"] += 1
+                    add_item(qid, "skipped", error="quarantine record was not found in the requested site scope")
                     continue
                 if action == "restore":
                     if service.restore_file(qid):
                         results["success"] += 1
+                        add_item(qid, "success", record=record)
                     else:
                         results["failed"] += 1
+                        add_item(qid, "failed", record=record, error="quarantine record could not be restored")
                 elif action == "delete":
                     service.delete_quarantine(qid)
                     results["success"] += 1
+                    add_item(qid, "success", record=record)
                 else:
                     return jsonify({"error": "unknown action"}), 400
             except Exception as exc:
                 results["failed"] += 1
                 results["errors"].append({"quarantine_id": qid, "error": str(exc)})
+                add_item(qid, "failed", error=exc)
                 current_app.logger.error(
                     "[QUARANTINE][BATCH] %s failed for %s: %s",
                     action,

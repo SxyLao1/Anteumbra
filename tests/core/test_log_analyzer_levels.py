@@ -100,3 +100,29 @@ def test_hits_are_reported_at_info(tmp_path, caplog):
     hits = result.get("suspicious_ips") if result else None
     if hits:
         assert any(r.levelno == logging.INFO for r in reported), "a real hit must be visible at INFO"
+
+
+def test_shell_url_matching_uses_site_relative_path_and_path_info(tmp_path):
+    site_root = tmp_path / "site"
+    target = site_root / "nested" / "shared.php"
+    target.parent.mkdir(parents=True)
+    target.write_text("<?php ?>", encoding="utf-8")
+    log = tmp_path / "access.log"
+    log.write_text(
+        "\n".join(
+            [
+                '1.1.1.1 - - [28/Jun/2026:08:15:30 +0800] "GET /other/shared.php HTTP/1.1" 200 1',
+                '2.2.2.2 - - [28/Jun/2026:08:15:31 +0800] "GET /nested/shared.php.backup HTTP/1.1" 200 1',
+                '3.3.3.3 - - [28/Jun/2026:08:15:32 +0800] "GET /nested/shared.php?cmd=1#fragment HTTP/1.1" 200 1',
+                '4.4.4.4 - - [28/Jun/2026:08:15:33 +0800] "GET /nested/shared.php/foo HTTP/1.1" 200 1',
+                '5.5.5.5 - - [28/Jun/2026:08:15:34 +0800] "GET /nested/%73hared.php?x=1 HTTP/1.1" 200 1',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    analyzer = LogAnalyzer(_Website(log, site_root), logger=logging.getLogger("test.paths"))
+    result = analyzer.analyze_shell_access(target)
+
+    assert result["suspicious_ips"] == {"3.3.3.3": 1, "4.4.4.4": 1, "5.5.5.5": 1}

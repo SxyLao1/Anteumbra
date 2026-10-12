@@ -14,6 +14,9 @@ service.  Nothing here starts a container, a network request or a forensics run.
 """
 
 import os
+import re
+from html import unescape
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -76,7 +79,13 @@ def test_page_loads_its_panel_and_the_dialog_container(client):
     body = client.get(ROUTE, headers={"HX-Request": "true"}).get_data(as_text=True)
 
     assert 'id="memory-shell-forensics-panel"' in body
-    assert f'hx-get="{PANEL_ROUTE}"' in body
+    panel = re.search(r'id="memory-shell-forensics-panel"\s+hx-get="([^"]+)"', body)
+    assert panel
+    parsed = urlsplit(unescape(panel.group(1)))
+    assert parsed.path == PANEL_ROUTE
+    assert parse_qs(parsed.query, keep_blank_values=True) == {
+        "site": [""], "site_id": [""], "kind": [""], "name": [""]
+    }
     assert 'hx-trigger="load"' in body
     assert 'id="memory-shell-dialog"' in body
     assert 'id="memory-shell-forensics-detail"' in body

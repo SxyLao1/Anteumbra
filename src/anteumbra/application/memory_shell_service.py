@@ -809,7 +809,7 @@ class MemoryShellService:
             class_reason = str(data.get("class_bytes_unavailable_reason") or "")
 
         heap = heap_from_payload(data.get("heap")) if heap_requested else None
-        heap_error = str(data.get("heap_error") or "")
+        heap_error = str(data.get("heap_error") or "") if heap_requested else ""
         skipped = "" if heap_requested else "heap_dump_disabled"
 
         failure = action_failure_reason(data)

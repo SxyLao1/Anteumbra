@@ -27,6 +27,7 @@ def build_runtime_container(
     from anteumbra.application.quarantine_service import QuarantineService
     from anteumbra.application.scan_history_service import ScanHistoryService
     from anteumbra.application.scan_state_service import ScanRuntimeState
+    from anteumbra.application.totp_service import TotpService
     from anteumbra.infrastructure.block_ledger import BlockLedger
     from anteumbra.infrastructure.config.provider import TomlConfigProvider
     from anteumbra.infrastructure.detection.file_cluster import FileClusterEngine
@@ -60,6 +61,7 @@ def build_runtime_container(
     provider = config_provider or TomlConfigProvider(config_path)
     runtime_logging = RuntimeLoggerFactory(provider)
     passwords = PasswordService(provider)
+    totp = TotpService(provider)
     config = provider.get()
     data_dir = normalize_path(config.get("paths", {}).get("data_dir", "data"))
     config_history = ConfigHistoryLogger(
@@ -220,6 +222,7 @@ def build_runtime_container(
         events=events,
         logging=runtime_logging,
         passwords=passwords,
+        totp=totp,
         config_history=config_history,
         scan_state=scan_state,
         scan_history=scan_history,

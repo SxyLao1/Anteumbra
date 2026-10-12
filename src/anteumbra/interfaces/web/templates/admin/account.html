@@ -15,7 +15,7 @@
       {% endif %}
 
       {% if success %}
-      <div style="background: rgba(0,255,65,0.08); border: 1px solid rgba(0,255,65,0.3); border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px; color: var(--color-safe); font-family: var(--font-mono); font-size: 12px; display: flex; align-items: center; gap: 8px;">
+      <div class="account-message" style="background: rgba(0,255,65,0.08); border: 1px solid rgba(0,255,65,0.3); border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px; color: var(--color-safe); font-family: var(--font-mono); font-size: 12px; display: flex; align-items: center; gap: 8px;">
         <span>✓</span> <span>{{ success }}</span>
       </div>
       {% endif %}
@@ -47,6 +47,67 @@
 
         <button type="submit" class="btn btn-primary account-submit">{{ _('UPDATE PASSWORD') }}</button>
       </form>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <div class="card-header" style="justify-content: center;">
+      <span style="font-size: 16px;">{{ _('🛡️ Administrator TOTP') }}</span>
+    </div>
+    <div class="card-body">
+      {% if totp_enabled %}
+      <p class="account-message" style="color: var(--color-safe); margin-bottom: 16px;">
+        {{ _('TOTP is enabled. Password plus an authenticator or one-time recovery code is required for new logins.') }}
+      </p>
+      <form method="POST" action="/admin/account/totp/disable">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label class="form-label">{{ _('Current Password') }}</label>
+          <input type="password" name="current_password" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ _('Authenticator or recovery code') }}</label>
+          <input type="text" name="totp_code" class="form-input" autocomplete="one-time-code" required>
+        </div>
+        <button type="submit" class="btn btn-danger">{{ _('DISABLE TOTP') }}</button>
+      </form>
+      {% elif totp_enrollment %}
+      <p style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 12px;">
+        {{ _('Add this secret to your authenticator, then verify one code. Recovery codes are shown only during this setup.') }}
+      </p>
+      <div class="badge" style="display:block; word-break:break-all; margin-bottom: 10px;">
+        <strong>{{ _('Setup secret') }}</strong><br><code data-totp-secret>{{ totp_enrollment.secret }}</code>
+      </div>
+      <div class="badge" style="display:block; word-break:break-all; margin-bottom: 10px;">
+        <strong>{{ _('Authenticator URI') }}</strong><br><code>{{ totp_enrollment.otpauth_uri }}</code>
+      </div>
+      <div class="badge" style="display:block; margin-bottom: 16px;">
+        <strong>{{ _('One-time recovery codes') }}</strong>
+        <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin-top:8px;">
+          {% for code in totp_enrollment.recovery_codes %}<code>{{ code }}</code>{% endfor %}
+        </div>
+      </div>
+      <form method="POST" action="/admin/account/totp/enable">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label class="form-label">{{ _('Authenticator code') }}</label>
+          <input type="text" name="totp_code" class="form-input" inputmode="numeric" autocomplete="one-time-code" required>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ _('ENABLE TOTP') }}</button>
+      </form>
+      {% else %}
+      <p style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 16px;">
+        {{ _('TOTP is disabled. Enable it to require a second factor after the administrator password.') }}
+      </p>
+      <form method="POST" action="/admin/account/totp/setup">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label class="form-label">{{ _('Current Password') }}</label>
+          <input type="password" name="current_password" class="form-input" required>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ _('START TOTP SETUP') }}</button>
+      </form>
+      {% endif %}
     </div>
   </div>
 </div>

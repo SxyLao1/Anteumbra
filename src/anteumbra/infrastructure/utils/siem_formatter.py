@@ -94,6 +94,7 @@ class SIEMFormatter:
                 "file_path": raw.get("file_path", ""),
                 "file_name": raw.get("display_name", ""),
                 "website": raw.get("website_name", "default"),
+                "site_id": raw.get("site_id", "legacy"),
             },
             # Detection context
             "detection": {

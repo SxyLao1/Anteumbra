@@ -1,0 +1,52 @@
+{% set zh = current_locale == 'zh' %}
+<section class="duty-queue" data-duty-view="{{ queue.view }}" data-duty-page="{{ queue.page }}">
+  <div class="duty-queue__toolbar" role="group" aria-label="{{ '值守分组' if zh else 'Duty groups' }}">
+    {% for view, label in [
+      ('active', '待研判' if zh else 'Active'),
+      ('missing', '文件缺失' if zh else 'Missing'),
+      ('quarantined', '已隔离待复核' if zh else 'Quarantined'),
+      ('reviewed', '已标记误报' if zh else 'Reviewed'),
+      ('unknown', '文件状态未知' if zh else 'File state unknown')
+    ] %}
+    <button class="btn btn-sm {{ 'btn-primary' if queue.view == view else 'btn-ghost' }}"
+            type="button" aria-pressed="{{ 'true' if queue.view == view else 'false' }}"
+            data-duty-filter="{{ view }}"
+            hx-get="{{ with_site('/admin/duty-queue?view=' ~ view) }}"
+            hx-target="#duty-queue" hx-swap="innerHTML"
+            {% if view == 'unknown' and not queue.counts[view] and queue.view != view %}hidden{% endif %}>{{ label }} <span>{{ queue.counts[view] }}</span></button>
+    {% endfor %}
+  </div>
+
+  {% if queue.view == 'active' %}<p class="duty-queue__hint">{{ '排序：累计通信优先' if zh else 'Order: cumulative communications first' }}</p>{% endif %}
+
+  <div class="duty-queue__records">
+    {% for record in queue.records %}
+    <article class="duty-card" data-site-id="{{ record.site_id or 'legacy' }}" data-file-path="{{ record.file_path|e }}">
+      <div class="duty-card__title">
+        <strong title="{{ record.file_path }}">{{ record.display_name }}</strong>
+        <span class="badge badge-gray">{{ '未归属' if zh and record.site_unassigned else ('Unassigned' if record.site_unassigned else record.site_name) }}</span>
+      </div>
+      <div class="duty-card__meta">
+        <span>{{ '规则' if zh else 'Rule' }}: {{ record.rule }}</span>
+        <span>{{ '时间' if zh else 'Time' }}: {{ record.display_time }}</span>
+        <span>{{ '通信' if zh else 'Comms' }}: {{ record.communication_count }}</span>
+      </div>
+
+      <div class="duty-card__actions">
+        <button class="btn btn-info btn-sm" type="button" data-action="records.detail-open"
+                data-site-id="{{ record.site_id or 'legacy' }}" data-file-path="{{ record.file_path|e }}">{{ '查看证据' if zh else 'View evidence' }}</button>
+      </div>
+    </article>
+    {% else %}
+    <div class="empty-state"><p>{{ '暂无记录' if zh else 'No records' }}</p></div>
+    {% endfor %}
+  </div>
+
+  {% if queue.total_pages > 1 %}
+  <nav class="pagination-bar" aria-label="{{ '值守队列分页' if zh else 'Duty queue pages' }}">
+    {% if queue.page > 1 %}<button class="btn btn-ghost btn-sm" type="button" hx-get="{{ with_site('/admin/duty-queue?view=' ~ queue.view ~ '&page=' ~ (queue.page - 1)) }}" hx-target="#duty-queue" hx-swap="innerHTML">{{ '上一页' if zh else 'Previous' }}</button>{% endif %}
+    <span class="page-info">{{ '第' if zh else 'Page' }} {{ queue.page }} / {{ queue.total_pages }} ({{ queue.total }} {{ '项' if zh else 'items' }})</span>
+    {% if queue.page < queue.total_pages %}<button class="btn btn-ghost btn-sm" type="button" hx-get="{{ with_site('/admin/duty-queue?view=' ~ queue.view ~ '&page=' ~ (queue.page + 1)) }}" hx-target="#duty-queue" hx-swap="innerHTML">{{ '下一页' if zh else 'Next' }}</button>{% endif %}
+  </nav>
+  {% endif %}
+</section>

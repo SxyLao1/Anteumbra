@@ -8,7 +8,7 @@
     <button class="btn btn-sm {{ 'btn-primary' if view == name else 'btn-ghost' }}" type="button"
             hx-get="/admin/config?tab=editor&view={{ name }}&q={{ query|urlencode }}&set_only={{ '1' if set_only else '0' }}&non_default={{ '1' if non_default_only else '0' }}"
             hx-target="#config-editor-root" hx-select="#config-editor-root"
-            hx-swap="innerHTML" hx-push-url="true">
+            hx-swap="innerHTML" hx-replace-url="true">
       {{ view_titles[name] }}
     </button>
     {% endfor %}

@@ -25,6 +25,10 @@ def register_blueprints(app: "Flask"):
 
     app.register_blueprint(admin_bp)
 
+    from anteumbra.interfaces.web.blueprints.admin_totp_bp import admin_totp_bp
+
+    app.register_blueprint(admin_totp_bp)
+
     from anteumbra.interfaces.web.blueprints.yara_bp import yara_bp
 
     app.register_blueprint(yara_bp)

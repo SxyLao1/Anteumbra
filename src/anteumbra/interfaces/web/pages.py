@@ -55,6 +55,8 @@ _NAV_TITLES = {
     # The advanced config editor lives at its own URL so the settings page can
     # link to it; the title is what the shell shows for that navigation.
     "config": "Config Editor",
+    "sites": "Sites & Protection",
+    "system": "System Maintenance",
 }
 
 
@@ -87,9 +89,9 @@ def _sse_token(username: str) -> str:
 
 
 def configured_sites() -> list[dict]:
-    """Return the enabled sites as ``{site_id, name}`` pairs, in config order."""
+    """Keep disabled sites selectable so their historical evidence stays reachable."""
     try:
-        websites = get_runtime().config.get_enabled_websites()
+        websites = get_runtime().config.get_websites()
     except Exception:  # pragma: no cover - a config failure must not break the shell
         logger.debug("enabled websites are unavailable for the site scope", exc_info=True)
         return []
@@ -106,6 +108,9 @@ def configured_sites() -> list[dict]:
                 "name": str(getattr(website, "name", "") or site_id),
             }
         )
+    # Unassigned records need an explicit scope too; never label it as a
+    # monitored website or silently widen it to the aggregate.
+    sites.append({"site_id": "legacy", "name": "未归属 / Unassigned"})
     return sites
 
 

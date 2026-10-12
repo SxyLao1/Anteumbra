@@ -32,7 +32,7 @@ profiles_bp = Blueprint("profiles", __name__, url_prefix="/admin")
 
 def _requested_site_id():
     value = request.args.get("site_id")
-    return str(value).strip().lower() if value else None
+    return str(value).strip().lower() if value else active_site_id()
 
 
 # ── Profile List ───────────────────────────────────────────
@@ -60,7 +60,7 @@ def profiles_list():
 
         sort = request.args.get("sort", "risk")
         if sort == "time":
-            all_profiles.sort(key=lambda p: p.last_seen or datetime.min, reverse=True)
+            all_profiles.sort(key=lambda p: p.last_seen.timestamp() if p.last_seen else 0, reverse=True)
         elif sort == "traffic":
             all_profiles.sort(key=lambda p: len(p.ip_pool) + len(p.target_urls), reverse=True)
 
@@ -76,7 +76,9 @@ def profiles_list():
         for p in paginated:
             hours_ago = None
             if p.last_seen:
-                hours_ago = round((now - p.last_seen).total_seconds() / 3600, 1)
+                # WAF sources may provide an explicit UTC offset; historical
+                # local detections use naive local time. Compare instants.
+                hours_ago = round((now.timestamp() - p.last_seen.timestamp()) / 3600, 1)
             if p.status == "active":
                 if hours_ago and hours_ago > 1:
                     p.status = "dormant"
@@ -375,6 +377,18 @@ def _annotate_clusters_with_sites(runtime, engine, clusters: list[dict]) -> list
     }
     for cluster in clusters:
         cluster.update(cluster_site_view(cluster, index, record_sites=record_sites))
+        # Cluster membership can cross sites. Member actions need the recorded
+        # site of this exact path so source/detail requests never widen or use
+        # a neighboring member's scope. Unknown samples remain explicitly
+        # unscoped rather than being guessed from the cluster aggregate.
+        cluster['sample_members'] = [
+            {
+                'path': str(path),
+                'site_id': str((record_sites.get(str(path)) or {}).get('site_id') or ''),
+                'site_name': str((record_sites.get(str(path)) or {}).get('site_name') or ''),
+            }
+            for path in cluster.get('sample_paths') or ()
+        ]
     return clusters
 
 

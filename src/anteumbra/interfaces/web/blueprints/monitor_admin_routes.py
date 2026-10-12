@@ -263,7 +263,10 @@ def session_list():
 def session_cleanup():
     """Clean up expired sessions"""
     try:
-        deleted = cleanup_sessions(current_app.config.get("SESSION_FILE_DIR"), days=7)
+        deleted = cleanup_sessions(
+            current_app.config.get("SESSION_FILE_DIR"),
+            lifetime_seconds=current_app.config.get("SESSION_LIFETIME_SECONDS", 7 * 86400),
+        )
         log_with_symbol(
             "notice", "info", f"Cleaned up expired sessions: {deleted}", current_app.logger
         )

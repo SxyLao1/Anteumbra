@@ -4,7 +4,7 @@
 
 # Anteumbra
 
-<img src="https://img.shields.io/badge/version-1.0.40-blue?style=flat-square" alt="Version">
+<img src="https://img.shields.io/badge/version-1.0.48-blue?style=flat-square" alt="Version">
 <img src="https://img.shields.io/badge/python-3.10%2B-green?style=flat-square" alt="Python">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
@@ -25,6 +25,10 @@ Anteumbra is installed as one product. PyPI users and source-install developers 
 ## Operational Scope
 
 Anteumbra is designed for one host or a small web workload: filesystem integrity monitoring, WebShell detection, local triage and response, and export to an existing security stack. It is not a replacement for an inline WAF, endpoint detection and response, a SIEM, centralized fleet management, or distributed high availability.
+
+## Administration Model
+
+The product currently runs with one operations administrator, similar to a single-operator host panel. The admin account supports password authentication and an optional TOTP second factor, including enrollment, login challenge, one-time recovery codes, disablement, failure handling, and audit records. User lists, role-based permissions, and multi-tenant accounts are outside the current product scope.
 
 ## Documentation
 
@@ -177,16 +181,23 @@ See [Contributing](CONTRIBUTING.md) for the full workflow.
 docker build -t anteumbra .
 docker run -d --name anteumbra \
   -p 127.0.0.1:18080:8080 \
-  -v $(pwd)/anteumbra-data:/app/data \
-  -v $(pwd)/anteumbra-logs:/app/logs \
+  -e ANTEUMBRA_HOME=/var/lib/anteumbra \
+  -v anteumbra-runtime:/var/lib/anteumbra \
   anteumbra
 docker logs anteumbra
 ```
 
-The container starts the same full runtime as `anteumbra run`, creates a
-Docker-friendly default config on first start, permits the local Docker gateway
-to reach the admin IP allowlist, and prints the initial admin password in
-`docker logs`. Open `http://127.0.0.1:18080/admin`.
+The named volume is the complete mutable runtime: `config.toml`, `.env`,
+`rules`, `data`, `logs`, and `sites`. On its first start the container creates
+the runtime from templates packaged in the image, permits the local Docker
+gateway to reach the admin IP allowlist, and prints the initial admin password
+in `docker logs`. Recreating the container with the same volume preserves
+configuration, secrets, and custom rules. Existing `/app` paths remain
+available for older bind-mount deployments; new deployments should mount the
+complete runtime volume at `/var/lib/anteumbra`. Open
+`http://127.0.0.1:18080/admin`.
+
+For a verified backup and restore procedure, see [Release Guide](docs/RELEASE.md#docker-runtime-backup-and-restore).
 
 ## Architecture
 
@@ -213,5 +224,5 @@ MIT License. Third-party tools bundled under `tools/` retain their original lice
 ---
 
 <div align="center">
-  <sub>Anteumbra v1.0.40 · MIT License</sub>
+  <sub>Anteumbra v1.0.48 · MIT License</sub>
 </div>

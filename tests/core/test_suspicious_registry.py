@@ -240,6 +240,35 @@ def test_failed_json_commit_stays_pending_and_replays_idempotently(registry_bund
     assert registry.get(path)["communication_count"] == 1
 
 
+def test_pending_wal_replays_after_registry_process_restart(registry_bundle, monkeypatch):
+    registry, wal, config, _, _ = registry_bundle
+    path = Path("/srv/alpha/restarted.php")
+    registry.add(path, ["eval"])
+    original_write = registry._atomic_write
+
+    def fail_primary(target, content):
+        if target == registry.path:
+            raise OSError("simulated process interruption")
+        original_write(target, content)
+
+    monkeypatch.setattr(registry, "_atomic_write", fail_primary)
+    with pytest.raises(RegistryPersistenceError, match="WAL transaction"):
+        registry.increment_access(path, "10.0.0.2")
+
+    # A new process reconstructs both dependencies from disk; the pending WAL
+    # record must carry the final state forward exactly once.
+    restarted_wal = WalManager(wal.path)
+    restarted = SuspiciousRegistry(
+        registry.path,
+        config=config,
+        wal=restarted_wal,
+        event_publisher=EventStub(),
+    )
+    assert restarted.replay_wal() == 1
+    assert restarted.get(path)["communication_count"] == 1
+    assert restarted.replay_wal() == 0
+
+
 def test_backup_recovers_corrupt_primary(registry_bundle):
     registry, wal, config, events, _ = registry_bundle
     path = Path("/srv/alpha/shell.php")

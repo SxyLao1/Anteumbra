@@ -1,4 +1,4 @@
-# Anteumbra v1.0.40 - Web Perimeter Threat Intelligence
+# Anteumbra v1.0.48 - Web Perimeter Threat Intelligence
 # Multi-stage build with a dedicated runtime virtualenv.
 
 FROM python:3.12-slim AS builder
@@ -46,7 +46,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="SxyLao1"
 LABEL org.opencontainers.image.title="Anteumbra"
-LABEL org.opencontainers.image.version="1.0.40"
+LABEL org.opencontainers.image.version="1.0.48"
 LABEL org.opencontainers.image.description="Web Perimeter Threat Intelligence - passive detection, attacker profiling, IP block"
 LABEL org.opencontainers.image.url="https://github.com/SxyLao1/Anteumbra"
 
@@ -72,12 +72,16 @@ COPY src/ ./src/
 COPY scripts/docker-entrypoint.sh /usr/local/bin/anteumbra-docker-entrypoint
 
 RUN pip install --no-cache-dir --no-deps . \
-    && mkdir -p data/registry data/quarantine data/wal data/sessions data/archives data/threat_intel data/siem logs sites/default rules \
-    && cp -r src/anteumbra/rules/webshell rules/webshell \
+    && mkdir -p /var/lib/anteumbra/data/registry /var/lib/anteumbra/data/quarantine \
+        /var/lib/anteumbra/data/wal /var/lib/anteumbra/data/sessions \
+        /var/lib/anteumbra/data/archives /var/lib/anteumbra/data/threat_intel \
+        /var/lib/anteumbra/data/siem /var/lib/anteumbra/logs \
+        /var/lib/anteumbra/sites/default /var/lib/anteumbra/rules \
+        data/registry data/quarantine data/wal data/sessions data/archives data/threat_intel data/siem logs sites/default rules \
     && sed -i 's/\r$//' /usr/local/bin/anteumbra-docker-entrypoint \
     && chmod +x /usr/local/bin/anteumbra-docker-entrypoint \
     && useradd --create-home --shell /bin/bash anteumbra \
-    && chown -R anteumbra:anteumbra /app /opt/venv
+    && chown -R anteumbra:anteumbra /app /var/lib/anteumbra /opt/venv
 
 USER anteumbra
 
