@@ -37,6 +37,10 @@ def test_paged_record_selection_exclusion_cancel_and_batch_result(real_instance)
     panel.get_by_role("button", name="Select page", exact=True).click()
     excluded.locator(".rec-checkbox").uncheck()
     panel.get_by_role("button", name="Next →", exact=True).click()
+    # The pagination control swaps the table asynchronously.  Wait for the
+    # visible page marker before selecting the first item, otherwise a slow
+    # mobile runner can still act on the old page-one checkbox.
+    expect(panel.locator(".page-info")).to_contain_text("Page 2 /")
     page_two_name = panel.locator(".record-title").first.inner_text()
     panel.locator(".rec-checkbox").first.check()
     expect(panel.locator(".rec-count")).to_contain_text("20 selected")
