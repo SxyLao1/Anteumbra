@@ -610,7 +610,7 @@
   function switchStatus(status) {
     var panel = document.querySelector('.records-panel[data-status]');
     if (!panel || !status) return;
-    requestRecords(panel, status, '');
+    requestRecords(panel, status, state.recordFilters[currentScopeKey()] || '');
   }
 
   function openProfileFromRecord(trigger) {
