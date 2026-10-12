@@ -3,7 +3,10 @@
   'use strict';
 
   var app = window.Anteumbra;
-  var state = { filter: 'all', page: 1, query: '', timer: null, devices: {}, selectedDevices: {}, ledgerRequestId: 0 };
+  var state = {
+    filter: 'all', page: 1, query: '', timer: null, devices: {}, selectedDevices: {},
+    selectedRows: new Map(), ledgerRequestId: 0, mountId: 0, scope: null, mounted: false, busy: false
+  };
   function scopeUrl(url) {
     var site = window.AnteumbraSite && window.AnteumbraSite.current();
     return site ? url + (url.indexOf('?') >= 0 ? '&' : '?') + 'site_id=' + encodeURIComponent(site) : url;
@@ -11,6 +14,26 @@
   function label(zh, en) { return document.documentElement.lang.indexOf('zh') === 0 ? zh : en; }
 
   function setText(id, value) { var node = document.getElementById(id); if (node) node.textContent = value; }
+
+  function pageScope() { return (window.AnteumbraSite && window.AnteumbraSite.current()) || ''; }
+  function rowKey(siteId, ip) { return String(siteId || 'legacy') + '\u0000' + String(ip || ''); }
+  function resetSelection() {
+    state.selectedRows.clear();
+    updateSelectionUi();
+  }
+  function selectedRows() { return Array.from(state.selectedRows.values()); }
+  function setBusy(value) {
+    state.busy = value;
+    updateSelectionUi();
+    document.querySelectorAll('.ledger-checkbox, [data-action="blocklist.select-page"], [data-action="blocklist.clear-selection"]').forEach(function (node) { node.disabled = value; });
+    document.querySelectorAll('[data-action="blocklist.device-toggle"]').forEach(function (node) { node.disabled = value || node.dataset.available === 'false'; });
+  }
+  function updateSelectionUi() {
+    var count = state.selectedRows.size;
+    setText('ledger-selected-count', app.t('%(count)s selected', { count: count }));
+    document.querySelectorAll('[data-action="blocklist.batch-block"], [data-action="blocklist.batch-unblock"], [data-action="blocklist.clear-selection"]').forEach(function (node) { node.disabled = state.busy || count === 0; });
+    document.querySelectorAll('.ledger-checkbox').forEach(function (node) { node.checked = state.selectedRows.has(rowKey(node.dataset.siteId, node.dataset.ip)); node.disabled = state.busy; });
+  }
 
   function loadLedger(filter) {
     state.filter = filter || state.filter;
@@ -32,14 +55,15 @@
     var target = document.getElementById('ledger-tbody');
     if (!target) return;
     var requestId = ++state.ledgerRequestId;
+    var mountId = state.mountId;
     target.textContent = 'Loading...';
     app.http.json(scopeUrl('/admin/blocklist/data?source=' + encodeURIComponent(state.filter) + '&page=' + state.page + '&q=' + encodeURIComponent(state.query)))
       .then(function (data) {
-        if (requestId !== state.ledgerRequestId || !target.isConnected) return;
+        if (requestId !== state.ledgerRequestId || mountId !== state.mountId || !target.isConnected) return;
         renderLedger(data);
       })
       .catch(function (error) {
-        if (requestId === state.ledgerRequestId && target.isConnected) target.textContent = 'Failed to load: ' + error.message;
+        if (requestId === state.ledgerRequestId && mountId === state.mountId && target.isConnected) target.textContent = 'Failed to load: ' + error.message;
       });
   }
 
@@ -60,6 +84,15 @@
     target.replaceChildren();
     (data.entries || []).forEach(function (entry) {
       var row = document.createElement('tr');
+      var siteId = entry.site_id || 'legacy';
+      row.dataset.siteName = entry.site_name || siteId;
+      var checkCell = document.createElement('td');
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox'; checkbox.className = 'ledger-checkbox';
+      checkbox.dataset.action = 'blocklist.ledger-selection';
+      checkbox.dataset.siteId = siteId; checkbox.dataset.ip = entry.ip || '';
+      checkbox.setAttribute('aria-label', label('选择 ' + (entry.ip || ''), 'Select ' + (entry.ip || '')));
+      checkCell.appendChild(checkbox); row.appendChild(checkCell);
       row.appendChild(tableCell(entry.ip));
       row.appendChild(tableCell(entry.site_name || entry.site_id || label('未归属', 'Unassigned')));
       row.appendChild(tableCell(entry.source));
@@ -71,16 +104,18 @@
       notes.dataset.siteId = entry.site_id || 'legacy';
       row.appendChild(notes);
       row.appendChild(tableCell((entry.blocked_at || '').slice(0, 16)));
+      row.appendChild(tableCell(entry.status || 'unknown'));
       row.appendChild(tableCell(entry.broadcast_status || 'unknown'));
       target.appendChild(row);
     });
     if (!target.childElementCount) {
       var empty = document.createElement('tr');
       var cell = tableCell(app.t('No block records found.'));
-      cell.colSpan = 7;
+      cell.colSpan = 9;
       empty.appendChild(cell);
       target.appendChild(empty);
     }
+    updateSelectionUi();
     renderPagination(data);
   }
 
@@ -134,6 +169,21 @@
     target.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message + '\n' + target.textContent;
   }
 
+  function appendBatchResult(item) {
+    var target = document.getElementById('ledger-batch-results');
+    if (!target) return;
+    target.hidden = false;
+    var row = document.createElement('div');
+    row.dataset.outcome = item.success ? 'success' : 'failed';
+    row.textContent = (item.success ? 'OK ' : 'FAIL ') + item.siteName + ' / ' + item.ip + ' / ' + item.device + (item.message ? ' - ' + item.message : '');
+    target.appendChild(row);
+  }
+
+  function updateBatchSummary(done, failed) {
+    var summary = document.getElementById('ledger-batch-summary');
+    if (summary) summary.textContent = app.t('%(done)s succeeded, %(failed)s failed', { done: done, failed: failed });
+  }
+
   function selectedDevices() {
     return Object.keys(state.selectedDevices).filter(function (name) { return state.selectedDevices[name]; });
   }
@@ -152,6 +202,7 @@
         button.className = 'btn btn-ghost btn-sm bl-dev-btn';
         button.textContent = device.name;
         button.disabled = !device.available;
+        button.dataset.available = device.available ? 'true' : 'false';
         button.dataset.action = 'blocklist.device-toggle';
         button.dataset.deviceName = device.name;
         target.appendChild(button);
@@ -160,9 +211,87 @@
   }
 
   function toggleDevice(button) {
+    if (state.busy) return;
     var name = button.dataset.deviceName;
     state.selectedDevices[name] = !state.selectedDevices[name];
     button.classList.toggle('active', state.selectedDevices[name]);
+  }
+
+  function selectedPage() {
+    document.querySelectorAll('.ledger-checkbox').forEach(function (checkbox) {
+      var key = rowKey(checkbox.dataset.siteId, checkbox.dataset.ip);
+      state.selectedRows.set(key, { siteId: checkbox.dataset.siteId || 'legacy', ip: checkbox.dataset.ip || '', siteName: checkbox.closest('tr').dataset.siteName || checkbox.dataset.siteId || 'legacy' });
+    });
+    updateSelectionUi();
+  }
+
+  function toggleRow(checkbox) {
+    if (state.busy) { checkbox.checked = state.selectedRows.has(rowKey(checkbox.dataset.siteId, checkbox.dataset.ip)); return; }
+    var key = rowKey(checkbox.dataset.siteId, checkbox.dataset.ip);
+    if (checkbox.checked) {
+      var row = checkbox.closest('tr');
+      state.selectedRows.set(key, { siteId: checkbox.dataset.siteId || 'legacy', ip: checkbox.dataset.ip || '', siteName: row && row.dataset.siteName ? row.dataset.siteName : (checkbox.dataset.siteId || 'legacy') });
+    } else state.selectedRows.delete(key);
+    updateSelectionUi();
+  }
+
+  function batchConfirmation(mode, rows, devices) {
+    var grouped = {};
+    var siteNames = {};
+    rows.forEach(function (item) { (grouped[item.siteId] || (grouped[item.siteId] = [])).push(item.ip); siteNames[item.siteId] = item.siteName || item.siteId; });
+    var lines = Object.keys(grouped).map(function (siteId) { return siteNames[siteId] + ' (' + siteId + '): ' + grouped[siteId].join(', '); });
+    var action = mode === 'block' ? label('封禁', 'Block') : label('解封', 'Unblock');
+    return action + ' ' + rows.length + ' ' + label('条台账记录？', 'ledger record(s)?') + '\n' + lines.join('\n') + '\n' + label('设备：', 'Devices: ') + devices.join(', ') + '\n' + label('设备按 IP 执行，使用这些设备的其他站点也可能受影响。', 'Devices act on IPs; other sites using these devices may be affected.');
+  }
+
+  function batchAction(mode) {
+    if (state.busy) return;
+    var rows = selectedRows();
+    var devices = selectedDevices();
+    if (!rows.length) return;
+    if (!devices.length) { appendBatchResult({ success: false, siteName: label('批量操作', 'Batch operation'), ip: '', device: '', message: label('请明确选择执行设备。', 'Select the devices to execute this operation.') }); return; }
+    var snapshot = rows.map(function (item) { return { siteId: item.siteId, ip: item.ip, siteName: item.siteName }; });
+    var deviceSnapshot = devices.slice();
+    var actionMountId = state.mountId;
+    if (!app.confirm(batchConfirmation(mode, snapshot, deviceSnapshot))) return;
+    var target = document.getElementById('ledger-batch-results');
+    if (target) {
+      target.querySelectorAll('[data-outcome]').forEach(function (item) { item.remove(); });
+      target.hidden = false;
+    }
+    setBusy(true); updateBatchSummary(0, 0);
+    var groups = {};
+    snapshot.forEach(function (item) { (groups[item.siteId] || (groups[item.siteId] = { siteId: item.siteId, siteName: item.siteName, ips: [] })).ips.push(item.ip); });
+    var done = 0; var failed = 0;
+    var siteIds = Object.keys(groups);
+    function submitGroup(index) {
+      if (actionMountId !== state.mountId || !state.mounted) return;
+      if (index >= siteIds.length) { setBusy(false); updateSelectionUi(); fetchLedger(); return; }
+      var group = groups[siteIds[index]];
+      var payload = { ips: group.ips.slice(), site_id: group.siteId, devices: deviceSnapshot.slice() };
+      if (mode === 'block') payload.reason = (document.getElementById('bl-reason-input') || {}).value || 'Batch block from Blocklist';
+      app.http.json('/admin/blocklist/' + mode, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(function (response) {
+        if (actionMountId !== state.mountId || !state.mounted) return;
+        group.ips.forEach(function (ip) {
+          var errors = (response.ledger_errors || []).filter(function (entry) { return entry.ip === ip; });
+          var allSuccess = deviceSnapshot.every(function (device) {
+            var receipt = (response.results || []).find(function (entry) { return entry.ip === ip && entry.device === device; });
+            var success = !!receipt && receipt.success === true && errors.length === 0;
+            appendBatchResult({ success: success, siteName: group.siteName, ip: ip, device: device, message: success ? '' : ((receipt && receipt.message) || (errors[0] && errors[0].error) || label('缺少成功回执', 'Missing successful receipt')) });
+            if (success) done++; else failed++;
+            return success;
+          });
+          if (allSuccess) state.selectedRows.delete(rowKey(group.siteId, ip));
+          updateBatchSummary(done, failed);
+        });
+        submitGroup(index + 1);
+      }).catch(function (error) {
+        if (actionMountId !== state.mountId || !state.mounted) return;
+        group.ips.forEach(function (ip) { deviceSnapshot.forEach(function (device) { failed++; appendBatchResult({ success: false, siteName: group.siteName, ip: ip, device: device, message: error.message }); }); updateBatchSummary(done, failed); });
+        submitGroup(index + 1);
+      });
+    }
+    submitGroup(0);
   }
 
   function showTargetSiteLedger(siteId) {
@@ -222,17 +351,28 @@
       'blocklist.export': { handler: function (context) { window.open(scopeUrl('/admin/blocklist/export?format=' + encodeURIComponent(context.element.dataset.format)), '_blank'); } },
       'blocklist.page': { handler: function (context) { state.page = Number(context.element.dataset.ledgerPage); fetchLedger(); } },
       'blocklist.notes-edit': { handler: function (context) { editNotes(context.element); } },
-      'blocklist.device-toggle': { handler: function (context) { toggleDevice(context.element); } }
+      'blocklist.device-toggle': { handler: function (context) { toggleDevice(context.element); } },
+      'blocklist.ledger-selection': { handler: function (context) { toggleRow(context.element); }, events: ['change'], preventDefault: false },
+      'blocklist.select-page': { handler: function () { selectedPage(); } },
+      'blocklist.clear-selection': { handler: function () { if (!state.busy) resetSelection(); } },
+      'blocklist.batch-block': { handler: function () { batchAction('block'); } },
+      'blocklist.batch-unblock': { handler: function () { batchAction('unblock'); } }
     },
     mount: function (root) {
       var page = root && (root.id === 'ledger-tbody' || root.querySelector && root.querySelector('#ledger-tbody'));
-      if (page) { loadDevices(); loadLedger('all'); }
+      if (page) {
+        var scope = pageScope();
+        if (!state.mounted || state.scope !== scope) { state.scope = scope; state.mounted = true; state.mountId++; state.ledgerRequestId = 0; resetSelection(); loadDevices(); }
+        updateSelectionUi();
+        if (!state.ledgerRequestId) loadLedger('all');
+      }
     },
     unmount: function (root) {
-      var page = root && (root.id === 'ledger-tbody' || root.querySelector && root.querySelector('#ledger-tbody'));
-      if (!page || state.timer === null) return;
-      window.clearTimeout(state.timer);
-      state.timer = null;
+      var page = root && (root.classList && root.classList.contains('blocklist-view') || root.querySelector && root.querySelector('.blocklist-view'));
+      if (!page) return;
+      state.mountId++; state.mounted = false; state.scope = null; state.ledgerRequestId++; state.busy = false;
+      resetSelection();
+      if (state.timer !== null) { window.clearTimeout(state.timer); state.timer = null; }
     },
     loadLedger: loadLedger
   });

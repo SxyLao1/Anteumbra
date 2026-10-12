@@ -92,7 +92,9 @@ absence of a finding is asserted on the completed scan, not inferred from a dela
 Maintenance cancellation is covered for registry compaction; stale-response guards
 are reviewed in source, not proven by a controlled browser race. Session checks do
 not seed expired sessions or prove crash recovery. Blocking supports multiple IPs
-in its action form; the ledger itself has no cross-page row selection control.
+in its action form, and the ledger supports site/IP-qualified cross-page selection,
+batch block/unblock, visible per-device receipts, and retry retention for partial
+failures. Device calls remain limited to the visible loopback lab controls.
 
 ## Manual development preview
 

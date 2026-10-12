@@ -270,7 +270,8 @@ def blocklist_data():
     search = request.args.get("q", "")
     status = request.args.get("status")
     page = max(1, request.args.get("page", 1, type=int))
-    per_page = 30
+    config = get_runtime().config.get()
+    per_page = max(1, int(config.get("web_admin", {}).get("items_per_page", 20)))
     site_id = _site_filter()
     entries, total = ledger.get_entries(
         limit=per_page,

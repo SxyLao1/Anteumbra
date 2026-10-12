@@ -24,8 +24,8 @@ def test_blocking_device_results_site_isolation_notes_exports(real_instance, ext
     row = page.locator("#ledger-tbody tr").filter(has_text="198.51.100.24")
     expect(row).to_contain_text("Portal test site")
     row.locator(".notes-cell").click()
-    row.locator("input").fill("Reviewed by browser")
-    row.locator("input").press("Enter")
+    row.locator(".ledger-note-input").fill("Reviewed by browser")
+    row.locator(".ledger-note-input").press("Enter")
     expect(row).to_contain_text("Reviewed by browser")
     receipt = download_text(page, page.get_by_role("button", name="Export JSON", exact=True))
     assert "portal" in receipt and "198.51.100.24" in receipt
