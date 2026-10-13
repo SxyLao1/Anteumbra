@@ -38,15 +38,27 @@ python -m build --wheel
 python scripts/verify_wheel_contents.py dist
 python -m venv .release-smoke
 .\.release-smoke\Scripts\python -m pip install dist\anteumbra-X.Y.Z-py3-none-any.whl
-.\.release-smoke\Scripts\anteumbra install .release-instance
-$env:ANTEUMBRA_HOME = (Resolve-Path .release-instance)
-.\.release-smoke\Scripts\anteumbra config validate
-.\.release-smoke\Scripts\anteumbra start
-.\.release-smoke\Scripts\anteumbra status
-Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
-.\.release-smoke\Scripts\anteumbra stop
-Remove-Item Env:ANTEUMBRA_HOME
+$smokeHome = Join-Path $releaseCheckout ".release-instance"
+if (Test-Path -LiteralPath $smokeHome) {
+    throw "Choose a fresh release checkout without an existing smoke instance: $smokeHome"
+}
+$smokeConfig = Join-Path $smokeHome "config.toml"
+.\.release-smoke\Scripts\anteumbra --home $smokeHome config init --output $smokeConfig --force
+.\.release-smoke\Scripts\anteumbra --home $smokeHome config validate
+.\.release-smoke\Scripts\anteumbra --home $smokeHome start --host 127.0.0.1 --port 18081
+.\.release-smoke\Scripts\anteumbra --home $smokeHome status
+Invoke-RestMethod http://127.0.0.1:18081/api/v1/health
+.\.release-smoke\Scripts\anteumbra --home $smokeHome stop
 ```
+
+This smoke instance is intentionally initialized with `config init` and an
+explicit `--home`; it is not registered as the host's default installation.
+Keep `--home $smokeHome` on every subsequent command so a machine that already
+has a registered Anteumbra instance cannot redirect the smoke test to that
+instance. `config init` creates the configuration, environment file, default
+site and bundled rules; `start` creates the runtime data, log and PID paths
+required for launch, while other subdirectories are created as components use
+them. The loopback port is deliberately separate from the normal 8080 service.
 
 The cleanup and Wheel/source parity check are mandatory for local releases.
 Setuptools can otherwise retain deleted modules from an old `build/lib`
