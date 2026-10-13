@@ -34,15 +34,24 @@ python -m build --wheel
 python scripts/verify_wheel_contents.py dist
 python -m venv .release-smoke
 .\.release-smoke\Scripts\python -m pip install dist\anteumbra-X.Y.Z-py3-none-any.whl
-.\.release-smoke\Scripts\anteumbra install .release-instance
-$env:ANTEUMBRA_HOME = (Resolve-Path .release-instance)
-.\.release-smoke\Scripts\anteumbra config validate
-.\.release-smoke\Scripts\anteumbra start
-.\.release-smoke\Scripts\anteumbra status
-Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
-.\.release-smoke\Scripts\anteumbra stop
-Remove-Item Env:ANTEUMBRA_HOME
+$smokeHome = Join-Path $releaseCheckout ".release-instance"
+if (Test-Path -LiteralPath $smokeHome) {
+    throw "请选择不含既有冒烟实例的新发布检出目录：$smokeHome"
+}
+$smokeConfig = Join-Path $smokeHome "config.toml"
+.\.release-smoke\Scripts\anteumbra --home $smokeHome config init --output $smokeConfig --force
+.\.release-smoke\Scripts\anteumbra --home $smokeHome config validate
+.\.release-smoke\Scripts\anteumbra --home $smokeHome start --host 127.0.0.1 --port 18081
+.\.release-smoke\Scripts\anteumbra --home $smokeHome status
+Invoke-RestMethod http://127.0.0.1:18081/api/v1/health
+.\.release-smoke\Scripts\anteumbra --home $smokeHome stop
 ```
+
+这个冒烟实例故意使用 `config init` 和显式 `--home` 初始化，不注册为主机的默认安装。
+后续每条命令都保留 `--home $smokeHome`，这样即使机器已有注册的 Anteumbra 实例，
+测试也不会误操作那个实例。`config init` 创建配置、环境文件、默认站点和内置规则；
+`start` 会创建启动所需的数据、日志和 PID 路径，其余子目录由运行组件按需创建。
+回环端口使用独立的 `18081`，不会占用常规的 `8080` 服务。
 
 本地发布必须执行清理与 Wheel/源码一致性检查。否则 Setuptools 可能保留旧
 `build/lib` 中已删除的模块，并悄悄把它们重新装入新 Wheel。
