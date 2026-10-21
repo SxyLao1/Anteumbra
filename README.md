@@ -219,7 +219,7 @@ Anteumbra is the successor to Trident. Existing `config.toml` and `data/` direct
 
 ## License
 
-MIT License. Third-party tools bundled under `tools/` retain their original licenses.
+[MIT License](LICENSE). Third-party tools bundled under `tools/` retain their original licenses.
 
 ---
 

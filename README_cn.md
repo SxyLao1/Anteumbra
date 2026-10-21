@@ -207,7 +207,7 @@ Anteumbra 是 Trident 的后继项目。现有 `config.toml` 和 `data/` 目录�
 
 ## 许可证
 
-MIT License。`tools/` 下捆绑的第三方工具保留其原始许可证。
+[MIT License](LICENSE)。`tools/` 下捆绑的第三方工具保留其原始许可证。
 
 ---
 
